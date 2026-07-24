@@ -57,6 +57,16 @@
     <Project Path="business/Securities/Acme.Securities.Domain/Acme.Securities.Domain.csproj" />
     <Project Path="business/Securities/Acme.Securities.Infrastructure/Acme.Securities.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/business/ChatSocial/">
+    <Project Path="business/ChatSocial/Acme.ChatSocial.Application/Acme.ChatSocial.Application.csproj" />
+    <Project Path="business/ChatSocial/Acme.ChatSocial.Domain/Acme.ChatSocial.Domain.csproj" />
+    <Project Path="business/ChatSocial/Acme.ChatSocial.Infrastructure/Acme.ChatSocial.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/DeviceConnect/">
+    <Project Path="business/DeviceConnect/Acme.DeviceConnect.Application/Acme.DeviceConnect.Application.csproj" />
+    <Project Path="business/DeviceConnect/Acme.DeviceConnect.Domain/Acme.DeviceConnect.Domain.csproj" />
+    <Project Path="business/DeviceConnect/Acme.DeviceConnect.Infrastructure/Acme.DeviceConnect.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/externals/">
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
   </Folder>
