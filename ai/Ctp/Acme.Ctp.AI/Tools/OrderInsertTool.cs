@@ -1,41 +1,41 @@
 using System.Threading.Tasks;
-using Acme.Ctp.Infrastructure;
-using Ctp.Net.Core.Trader;
+using Acme.Ctp.Application;
+using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.AI.Tools;
 
 public class OrderInsertTool
 {
-    private readonly CtpSessionService _session;
+    private readonly ICtpTradingService _service;
 
-    public OrderInsertTool(CtpSessionService session)
+    public OrderInsertTool(ICtpTradingService service)
     {
-        _session = session;
+        _service = service;
     }
 
     public async Task<string> OrderInsertAsync(
         string instrumentId,
-        Direction direction, OffsetFlag offsetFlag, OrderPriceType priceType,
+        CtpDirection direction, CtpOffsetFlag offsetFlag, CtpOrderPriceType priceType,
         double limitPrice, int volume, bool requireConfirmation = true)
     {
         if (requireConfirmation)
         {
-            var dirStr = direction == Direction.Buy ? "买" : "卖";
+            var dirStr = direction == CtpDirection.Buy ? "买" : "卖";
             var offsetStr = offsetFlag switch
             {
-                OffsetFlag.Open => "开",
-                OffsetFlag.Close => "平",
-                OffsetFlag.CloseToday => "平今",
+                CtpOffsetFlag.Open => "开",
+                CtpOffsetFlag.Close => "平",
+                CtpOffsetFlag.CloseToday => "平今",
                 _ => offsetFlag.ToString()
             };
-            var priceStr = priceType == OrderPriceType.Limit ? $"@{limitPrice}" : "市价";
+            var priceStr = priceType == CtpOrderPriceType.Limit ? $"@{limitPrice}" : "市价";
             return $"待确认: {dirStr}{offsetStr} {instrumentId} {volume}手 {priceStr}";
         }
 
-        var result = await _session.OrderInsertAsync(new OrderRequest
+        var result = await _service.PlaceOrderAsync(new CtpOrderRequest
         {
-            BrokerId = _session.BrokerId ?? "",
-            InvestorId = _session.UserId ?? "",
+            BrokerId = _service.BrokerId ?? "",
+            InvestorId = _service.UserId ?? "",
             InstrumentId = instrumentId,
             Direction = direction,
             OffsetFlag = offsetFlag,

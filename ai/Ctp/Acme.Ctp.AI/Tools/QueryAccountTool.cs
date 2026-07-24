@@ -1,20 +1,20 @@
 using System.Threading.Tasks;
-using Acme.Ctp.Infrastructure;
-using Ctp.Net.Core.Trader;
+using Acme.Ctp.Application;
+using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.AI.Tools;
 
 public class QueryAccountTool
 {
-    private readonly CtpSessionService _session;
+    private readonly ICtpTradingService _service;
 
-    public QueryAccountTool(CtpSessionService session)
+    public QueryAccountTool(ICtpTradingService service)
     {
-        _session = session;
+        _service = service;
     }
 
-    public async Task<global::Ctp.Net.Core.Trader.Account> QueryAccountAsync()
+    public async Task<CtpAccount> QueryAccountAsync()
     {
-        return await _session.QueryTradingAccountAsync(_session.BrokerId ?? "", _session.UserId ?? "");
+        return await _service.QueryAccountAsync();
     }
 }

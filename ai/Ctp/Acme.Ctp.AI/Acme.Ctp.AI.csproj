@@ -1,9 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
-    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\externals\Ctp.Net.Core\Ctp.Net.Core.csproj" />
+    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Application\Acme.Ctp.Application.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

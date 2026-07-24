@@ -1,21 +1,21 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Acme.Ctp.Infrastructure;
-using Ctp.Net.Core.Trader;
+using Acme.Ctp.Application;
+using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.AI.Tools;
 
 public class QueryPositionTool
 {
-    private readonly CtpSessionService _session;
+    private readonly ICtpTradingService _service;
 
-    public QueryPositionTool(CtpSessionService session)
+    public QueryPositionTool(ICtpTradingService service)
     {
-        _session = session;
+        _service = service;
     }
 
-    public async Task<IReadOnlyList<global::Ctp.Net.Core.Trader.Position>> QueryPositionsAsync(string? instrumentId = null)
+    public async Task<IReadOnlyList<CtpPosition>> QueryPositionsAsync(string? instrumentId = null)
     {
-        return await _session.QueryInvestorPositionAsync(_session.BrokerId ?? "", _session.UserId ?? "", instrumentId);
+        return await _service.QueryPositionAsync(instrumentId);
     }
 }

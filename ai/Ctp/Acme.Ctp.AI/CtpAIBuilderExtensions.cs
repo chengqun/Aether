@@ -1,6 +1,6 @@
 using System.Reflection;
 using Acme.Ctp.AI.Tools;
-using Acme.Ctp.Infrastructure;
+using Acme.Ctp.Application.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -8,24 +8,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Ctp.AI;
 
-/// <summary>
-/// DI entry point for the CTP AI adapter. <see cref="AddCtpTools"/> registers the
-/// 7 tools (no agent); <see cref="AddCtp"/> adds the ctp-trader agent on top.
-/// Tools inject <see cref="CtpSessionService"/> and use native CTP SDK types.
-/// </summary>
 public static class CtpAIBuilderExtensions
 {
-    /// <summary>The 7 CTP tool names (MEAI strips the "Async" suffix from method names).</summary>
     public static readonly string[] ToolNames = {
         "GetStatus", "QueryAccount", "QueryPositions",
         "OrderInsert", "OrderAction",
         "QueryLatestTick", "QueryAllLatestTicks"
     };
 
-    /// <summary>Registers the CTP tool classes + their AIFunctions (no agent).</summary>
-    public static AetherAIBuilder AddCtpTools(this AetherAIBuilder builder)
+    public static AetherAIBuilder AddCtpTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
     {
         var services = builder.Services;
+        services.AddCtpApplication(sqliteDbPath);
         services.AddTransient<CtpLoginTool>();
         services.AddTransient<QueryAccountTool>();
         services.AddTransient<QueryPositionTool>();
@@ -43,10 +37,9 @@ public static class CtpAIBuilderExtensions
         return builder;
     }
 
-    /// <summary>Registers the CTP tools + the ctp-trader agent.</summary>
-    public static AetherAIBuilder AddCtp(this AetherAIBuilder builder, string modelId)
+    public static AetherAIBuilder AddCtp(this AetherAIBuilder builder, string modelId, string? sqliteDbPath = null)
     {
-        AddCtpTools(builder);
+        AddCtpTools(builder, sqliteDbPath);
         builder.AddAgent("ctp-trader", a => a
             .Name("CTP Trader")
             .Instructions(

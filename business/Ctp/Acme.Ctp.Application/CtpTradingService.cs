@@ -7,11 +7,6 @@ using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.Application;
 
-/// <summary>
-/// <see cref="ICtpTradingService"/> 实现：薄编排层，把 UI 层对 CTP 交易的调用转发给
-/// <see cref="ICtpSession"/>（Infrastructure 实现），并把会话的报单/成交/连接事件原样转发。
-/// 连接状态检查与用户反馈留在 UI 层（ViewModel），本服务只做依赖方向隔离 + 事件桥接。
-/// </summary>
 public class CtpTradingService : ICtpTradingService
 {
     private readonly ICtpSession _session;
@@ -56,4 +51,10 @@ public class CtpTradingService : ICtpTradingService
 
     public Task CancelOrderAsync(CtpOrderRef orderRef, CancellationToken ct = default)
         => _session.OrderActionAsync(orderRef, ct);
+
+    public CtpTick? GetLatestTick(string instrumentId)
+        => _session.GetLatestTick(instrumentId);
+
+    public IReadOnlyDictionary<string, CtpTick> GetAllLatestTicks()
+        => _session.GetAllLatestTicks();
 }

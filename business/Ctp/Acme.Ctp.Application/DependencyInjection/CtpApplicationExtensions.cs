@@ -1,17 +1,14 @@
 using Acme.Ctp.Application;
+using Acme.Ctp.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Ctp.Application.DependencyInjection;
 
-/// <summary>
-/// DI entry point for the CTP Application layer. Registers the trading
-/// application service (thin orchestration over <c>ICtpSession</c>). Call
-/// alongside <c>AddCtpInfrastructure</c> (which registers <c>ICtpSession</c>).
-/// </summary>
 public static class CtpApplicationExtensions
 {
-    public static IServiceCollection AddCtpApplication(this IServiceCollection services)
+    public static IServiceCollection AddCtpApplication(this IServiceCollection services, string? sqliteDbPath = null)
     {
+        services.AddCtpInfrastructure(sqliteDbPath);
         services.AddSingleton<ICtpTradingService, CtpTradingService>();
         return services;
     }

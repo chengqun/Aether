@@ -1,28 +1,28 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Acme.Ctp.Infrastructure;
-using Ctp.Net.Core.MarketData;
+using Acme.Ctp.Application;
+using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.AI.Tools;
 
 public class QueryMarketDataTool
 {
-    private readonly CtpSessionService _session;
+    private readonly ICtpTradingService _service;
 
-    public QueryMarketDataTool(CtpSessionService session)
+    public QueryMarketDataTool(ICtpTradingService service)
     {
-        _session = session;
+        _service = service;
     }
 
-    public Task<TickData?> QueryLatestTickAsync(string instrumentId)
+    public Task<CtpTick?> QueryLatestTickAsync(string instrumentId)
     {
-        return Task.FromResult(_session.GetLatestTick(instrumentId));
+        return Task.FromResult(_service.GetLatestTick(instrumentId));
     }
 
-    public Task<IReadOnlyList<TickData>> QueryAllLatestTicksAsync()
+    public Task<IReadOnlyList<CtpTick>> QueryAllLatestTicksAsync()
     {
-        var ticks = _session.GetAllLatestTicks().Values.ToList();
-        return Task.FromResult<IReadOnlyList<TickData>>(ticks);
+        var ticks = _service.GetAllLatestTicks().Values.ToList();
+        return Task.FromResult<IReadOnlyList<CtpTick>>(ticks);
     }
 }
