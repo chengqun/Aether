@@ -1,5 +1,8 @@
+using Acme.Ctp.Domain;
+using Acme.Ctp.Infrastructure;
 using Acme.Ctp.AI;
 using Acme.Ctp.Infrastructure.DependencyInjection;
+using Ctp.Net.Core.Trader;
 using Acme.Llm.Domain;
 using Acme.Llm.Infrastructure;
 using Acme.Llm.Application;
@@ -182,7 +185,7 @@ static async Task RunOfflineSmokeAsync(string dbPath)
 
 static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider services)
 {
-    Console.WriteLine("Aether.AI live. Commands: 'sync-securities', 'login', 'whoami', 'configs', 'config', 'exit'.");
+    Console.WriteLine("Aether.AI live. Commands: 'ctp', 'ctp-login', 'ctp-status', 'sync-securities', 'login', 'whoami', 'configs', 'config', 'exit'.");
     Console.WriteLine("One assistant with all tools (qifu/ctp/quotes). Tool backends still need their own login/credentials.");
     Console.WriteLine(new string('-', 60));
 
@@ -190,6 +193,8 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
     var authService = services.GetRequiredService<IAppAuthService>();
     var currentUser = services.GetRequiredService<ICurrentUser>();
     var securitySync = services.GetRequiredService<ISecurityClientSyncService>();
+    var ctpConfigStore = services.GetRequiredService<ICtpConfigStore>();
+    var ctpSession = services.GetRequiredService<CtpSessionService>();
 
     var session = runtime.StartSession("assistant");
 
@@ -205,6 +210,24 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
         var cmd = input.Trim();
 
         if (cmd.Equals("exit", StringComparison.OrdinalIgnoreCase)) break;
+
+        if (cmd.Equals("ctp", StringComparison.OrdinalIgnoreCase))
+        {
+            await ConfigureCtpAsync(ctpConfigStore);
+            continue;
+        }
+        if (cmd.Equals("ctp-login", StringComparison.OrdinalIgnoreCase))
+        {
+            await CtpLoginAsync(ctpConfigStore, ctpSession);
+            continue;
+        }
+        if (cmd.Equals("ctp-status", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(ctpSession.IsConnected
+                ? $"CTP connected (交易日={ctpSession.LoginResult?.TradingDay}, FrontID={ctpSession.LoginResult?.FrontID}, SessionID={ctpSession.LoginResult?.SessionID})"
+                : "CTP not connected.");
+            continue;
+        }
 
         if (cmd.Equals("sync-securities", StringComparison.OrdinalIgnoreCase))
         {
@@ -260,6 +283,51 @@ static async Task SyncSecuritiesAsync(ISecurityClientSyncService securitySync)
     catch (Exception ex)
     {
         Console.WriteLine($"Sync failed: {ex.Message}");
+    }
+}
+
+static async Task ConfigureCtpAsync(ICtpConfigStore store)
+{
+    var existing = await store.GetAsync();
+    Console.WriteLine(existing is null
+        ? "No CTP config saved. Enter connection details:"
+        : "Enter CTP connection details (press Enter to keep current value):");
+    var config = new CtpConnectionConfig
+    {
+        FrontAddress = Prompt("FrontAddress (trading)", existing?.FrontAddress ?? ""),
+        MdFrontAddress = Prompt("MdFrontAddress (market data)", existing?.MdFrontAddress ?? ""),
+        BrokerId = Prompt("BrokerId", existing?.BrokerId ?? ""),
+        UserId = Prompt("UserId", existing?.UserId ?? ""),
+        Password = Prompt("Password", existing?.Password ?? ""),
+        AppId = Prompt("AppId", existing?.AppId ?? ""),
+        AuthCode = Prompt("AuthCode", existing?.AuthCode ?? "")
+    };
+    await store.SaveAsync(config);
+    Console.WriteLine("CTP config saved to SQLite.");
+}
+
+static async Task CtpLoginAsync(ICtpConfigStore store, CtpSessionService session)
+{
+    if (session.IsConnected) { Console.WriteLine("Already connected. Use 'ctp-status' or logout first."); return; }
+    var config = await store.GetAsync();
+    if (config is null) { Console.WriteLine("No CTP config saved. Run 'ctp' first."); return; }
+    try
+    {
+        var request = new CtpConnectRequest
+        {
+            FrontAddress = config.FrontAddress,
+            BrokerId = config.BrokerId,
+            UserId = config.UserId,
+            Password = config.Password,
+            AppId = config.AppId,
+            AuthCode = config.AuthCode
+        };
+        var result = await session.LoginAsync(request);
+        Console.WriteLine($"CTP login OK — 交易日={result.TradingDay} FrontID={result.FrontID} SessionID={result.SessionID}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"CTP login failed: {ex.Message}");
     }
 }
 
