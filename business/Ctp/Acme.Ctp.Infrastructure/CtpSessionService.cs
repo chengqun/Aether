@@ -1,0 +1,495 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Acme.Ctp.Domain;
+using Ctp.Net.Core.MarketData;
+using Ctp.Net.Core.Trader;
+
+namespace Acme.Ctp.Infrastructure;
+
+/// <summary>
+/// CTP 会话服务：封装 CtpTrader/CtpMarketData 生命周期，实现 <see cref="ICtpSession"/> 领域契约。
+/// 同时保留 Ctp.Net.Core 原生类型的 public 方法供本程序集内的 AI 工具（Tools/*）直接使用——
+/// 工具返回原生类型给 LLM；Application/UI 层只通过 <see cref="ICtpSession"/> 拿领域 DTO。
+/// </summary>
+/// <remarks>
+/// <b>断线/闭市处理</b>：CTP 前置只在交易时段开放，收盘会断连。本服务订阅 SDK 的
+/// <c>FrontDisconnected</c>/<c>FrontConnected</c>：断线时置 socket 失活并按 <see cref="CtpTradingCalendar"/>
+/// 判断是"盘中重连(Reconnecting)"还是"闭市等待(Closed)"；SDK 内置自动重连成功后用缓存的凭据自动重新登录 +
+/// 重新订阅行情（CTP 重连后会话失效，必须重登）。另有 30s 安全定时器在开盘后强制重建重登（兜底 SDK 放弃重连的情况）。
+/// </remarks>
+public class CtpSessionService : ICtpSession, IDisposable
+{
+    private CtpTrader? _trader;
+    private CtpMarketData? _md;
+    private LoginResult? _loginResult;
+    private string? _brokerId;
+    private string? _userId;
+    private readonly Dictionary<string, TickData> _latestTicks = new();
+    private readonly object _lock = new();
+
+    // —— 断线/重连状态 ——
+    private volatile bool _socketAlive;          // 交易 socket 是否存活（断线后 false，重连重登成功 true）
+    private volatile bool _hadLoggedIn;          // 是否曾成功登录过（区分首次连接 vs 重连）
+    private volatile bool _mdSocketAlive;        // 行情 socket 是否存活
+    private volatile bool _mdHadSubscribed;      // 是否曾成功订阅过行情（区分首次连接 vs 重连）
+    private CtpConnectionStatus _status = CtpConnectionStatus.Disconnected;
+    private CtpConnectRequest? _cachedTraderCreds;          // 重登用缓存凭据
+    private MdCreds? _cachedMdCreds;                          // 行情重订阅缓存
+    private readonly List<string> _cachedSymbols = new();    // 重订阅缓存合约
+    private readonly SemaphoreSlim _reconnectLock = new(1, 1);
+    private Timer? _safetyTimer;
+    private volatile bool _reconnecting;
+    private bool _disposed;
+
+    private sealed record MdCreds(string Front, string BrokerId, string UserId, string Password);
+
+    /// <summary>socket 存活 && 对象未释放才算已连接（修复"前置关闭后 IsConnected 仍 true"的假状态）。</summary>
+    public bool IsConnected => _trader != null && !_trader.IsDisposed && _socketAlive;
+
+    public bool IsMdSubscribed => _md != null && !_md.IsDisposed;
+
+    /// <summary>登录结果（Ctp.Net.Core 原生类型，供同程序集 AI 工具使用）。</summary>
+    public LoginResult? LoginResult => _loginResult;
+
+    /// <summary>登录结果（领域 DTO，<see cref="ICtpSession"/> 显式实现，避免与原生属性同名冲突）。</summary>
+    CtpLoginResult? ICtpSession.LoginResult => _loginResult is null ? null : CtpSessionMapper.ToDto(_loginResult);
+
+    public string? BrokerId => _brokerId;
+
+    public string? UserId => _userId;
+
+    // —— 事件：领域 DTO 类型（Application 层订阅；本程序集 AI 工具不订阅事件）——
+    public event EventHandler<CtpOrder>? OrderReceived;
+    public event EventHandler<CtpTrade>? TradeReceived;
+    public event EventHandler<CtpTick>? TickReceived;
+    public event EventHandler<CtpConnectionStatus>? ConnectionStateChanged;
+
+    /// <summary>登录（Ctp.Net.Core 原生请求，供同程序集 AI 工具 CtpLoginTool 使用）。</summary>
+    public async Task<LoginResult> LoginAsync(CtpConnectRequest request)
+    {
+        lock (_lock)
+        {
+            if (IsConnected)
+                throw new InvalidOperationException("已有活跃连接，请先登出");
+        }
+
+        var flowPath = Path.Combine(Path.GetTempPath(), "ctp_flow", Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(flowPath);
+
+        var trader = new CtpTrader(flowPath);
+        trader.OrderReceived += OnOrderReceived;
+        trader.TradeReceived += OnTradeReceived;
+        trader.FrontConnected += OnTraderFrontConnected;
+        trader.FrontDisconnected += OnTraderFrontDisconnected;
+
+        var result = await trader.LoginAsync(request);
+
+        lock (_lock)
+        {
+            _trader = trader;
+            _loginResult = result;
+            _brokerId = request.BrokerId;
+            _userId = request.UserId;
+            _cachedTraderCreds = request;
+            _socketAlive = true;
+            _hadLoggedIn = true;
+        }
+
+        StartSafetyTimer();
+        SetStatus(CtpConnectionStatus.Connected);
+        return result;
+    }
+
+    /// <summary>登录（领域 DTO，<see cref="ICtpSession"/> 实现）。</summary>
+    async Task<CtpLoginResult> ICtpSession.LoginAsync(CtpLoginRequest request, CancellationToken ct)
+    {
+        var sdk = new CtpConnectRequest
+        {
+            FrontAddress = request.FrontAddress,
+            BrokerId = request.BrokerId,
+            UserId = request.UserId,
+            Password = request.Password,
+            AppId = request.AppId,
+            AuthCode = request.AuthCode,
+        };
+
+        try
+        {
+            var result = await LoginAsync(sdk);
+            return CtpSessionMapper.ToDto(result);
+        }
+        catch (global::Ctp.Net.Core.Trader.CtpBusinessException ex)   // SDK 业务异常 → 领域异常（不泄漏 SDK 类型）
+        {
+            throw new global::Acme.Ctp.Domain.CtpBusinessException(ex.ErrorId, ex.ErrorMsg);
+        }
+        catch (global::Ctp.Net.Core.Trader.CtpException ex)           // SDK 通用异常 → 领域异常
+        {
+            throw new global::Acme.Ctp.Domain.CtpException(ex.Message);
+        }
+    }
+
+    public void Logout()
+    {
+        StopSafetyTimer();
+        lock (_lock)
+        {
+            _md?.Dispose();
+            _md = null;
+            _trader?.Dispose();
+            _trader = null;
+            _loginResult = null;
+            _brokerId = null;
+            _userId = null;
+            _latestTicks.Clear();
+            _cachedTraderCreds = null;
+            _cachedMdCreds = null;
+            _cachedSymbols.Clear();
+            _socketAlive = false;
+            _hadLoggedIn = false;
+            _mdSocketAlive = false;
+            _mdHadSubscribed = false;
+        }
+        SetStatus(CtpConnectionStatus.Disconnected);
+    }
+
+    internal CtpTrader GetTrader()
+    {
+        lock (_lock)
+        {
+            return _trader ?? throw new InvalidOperationException("CTP 未登录");
+        }
+    }
+
+    // —— 原生查询/交易方法（供同程序集 AI 工具使用）——
+
+    public async Task<Account> QueryTradingAccountAsync(string brokerId, string accountId)
+    {
+        var trader = GetTrader();
+        return await trader.QueryTradingAccountAsync(brokerId, accountId);
+    }
+
+    public async Task<IReadOnlyList<Position>> QueryInvestorPositionAsync(string brokerId, string investorId, string? instrumentId = null)
+    {
+        var trader = GetTrader();
+        return await trader.QueryInvestorPositionAsync(brokerId, investorId, instrumentId);
+    }
+
+    public async Task<OrderInsertResult> OrderInsertAsync(OrderRequest request)
+    {
+        var trader = GetTrader();
+        return await trader.OrderInsertAsync(request);
+    }
+
+    public async Task OrderActionAsync(string brokerId, string investorId, int frontId, int sessionId, string orderRef, string exchangeId)
+    {
+        var trader = GetTrader();
+        await trader.OrderActionAsync(brokerId, investorId, frontId, sessionId, orderRef, exchangeId);
+    }
+
+    public async Task<IReadOnlyList<Order>> QueryOrderAsync(string brokerId, string investorId, string? instrumentId = null)
+    {
+        var trader = GetTrader();
+        return await trader.QueryOrderAsync(brokerId, investorId, instrumentId);
+    }
+
+    public async Task SubscribeMarketDataAsync(string mdFrontAddress, string brokerId, string userId, string password, IReadOnlyList<string> symbols)
+    {
+        lock (_lock)
+        {
+            if (_md != null)
+            {
+                _md.FrontConnected -= OnMdFrontConnected;
+                _md.FrontDisconnected -= OnMdFrontDisconnected;
+                _md.Dispose();
+            }
+
+            var flow = Path.Combine(Path.GetTempPath(), "ctp_md_flow", Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(flow);
+            _md = new CtpMarketData(flow);
+            _md.TickReceived += OnTickReceived;
+            _md.FrontConnected += OnMdFrontConnected;
+            _md.FrontDisconnected += OnMdFrontDisconnected;
+            _cachedMdCreds = new MdCreds(mdFrontAddress, brokerId, userId, password);
+            _cachedSymbols.Clear();
+            _cachedSymbols.AddRange(symbols);
+        }
+
+        await _md!.LoginAsync(mdFrontAddress, brokerId, userId, password);
+        await _md.SubscribeMarketDataAsync(symbols);
+        _mdSocketAlive = true;
+        _mdHadSubscribed = true;   // 首次订阅完成——之后 FrontConnected 才视作重连，触发重订阅
+    }
+
+    public void UnsubscribeMarketData()
+    {
+        lock (_lock)
+        {
+            if (_md != null)
+            {
+                _md.FrontConnected -= OnMdFrontConnected;
+                _md.FrontDisconnected -= OnMdFrontDisconnected;
+                _md.Dispose();
+            }
+            _md = null;
+            _cachedMdCreds = null;
+            _cachedSymbols.Clear();
+            _mdSocketAlive = false;
+            _mdHadSubscribed = false;
+            _latestTicks.Clear();
+        }
+    }
+
+    public TickData? GetLatestTick(string instrumentId)
+    {
+        lock (_lock)
+        {
+            _latestTicks.TryGetValue(instrumentId, out var tick);
+            return tick;
+        }
+    }
+
+    public IReadOnlyDictionary<string, TickData> GetAllLatestTicks()
+    {
+        lock (_lock)
+        {
+            return new Dictionary<string, TickData>(_latestTicks);
+        }
+    }
+
+    // —— ICtpSession 领域 DTO 实现（Application 层调用面）——
+
+    async Task<CtpAccount> ICtpSession.QueryAccountAsync(CancellationToken ct)
+    {
+        var a = await QueryTradingAccountAsync(_brokerId ?? "", _userId ?? "");
+        return CtpSessionMapper.ToDto(a);
+    }
+
+    async Task<IReadOnlyList<CtpPosition>> ICtpSession.QueryPositionAsync(string? instrumentId, CancellationToken ct)
+    {
+        var list = await QueryInvestorPositionAsync(_brokerId ?? "", _userId ?? "", instrumentId);
+        return CtpSessionMapper.ToDtoList(list);
+    }
+
+    async Task<IReadOnlyList<CtpOrder>> ICtpSession.QueryOrderAsync(string? instrumentId, CancellationToken ct)
+    {
+        var list = await QueryOrderAsync(_brokerId ?? "", _userId ?? "", instrumentId);
+        return CtpSessionMapper.ToDtoList(list);
+    }
+
+    async Task<CtpOrderInsertResult> ICtpSession.OrderInsertAsync(CtpOrderRequest request, CancellationToken ct)
+    {
+        var r = await OrderInsertAsync(CtpSessionMapper.ToSdk(request));
+        return CtpSessionMapper.ToDto(r);
+    }
+
+    async Task ICtpSession.OrderActionAsync(CtpOrderRef orderRef, CancellationToken ct)
+    {
+        await OrderActionAsync(orderRef.BrokerId, orderRef.InvestorId,
+            orderRef.FrontId, orderRef.SessionId, orderRef.OrderRef, orderRef.ExchangeId);
+    }
+
+    async Task ICtpSession.SubscribeMarketDataAsync(CtpMarketDataConnect connect, IReadOnlyList<string> symbols, CancellationToken ct)
+    {
+        await SubscribeMarketDataAsync(connect.MdFrontAddress, connect.BrokerId, connect.UserId, connect.Password, symbols);
+    }
+
+    CtpTick? ICtpSession.GetLatestTick(string instrumentId)
+    {
+        var t = GetLatestTick(instrumentId);
+        return t is null ? null : CtpSessionMapper.ToDto(t);
+    }
+
+    IReadOnlyDictionary<string, CtpTick> ICtpSession.GetAllLatestTicks()
+        => CtpSessionMapper.ToDtoDict(GetAllLatestTicks());
+
+    // —— 内部事件桥接：SDK 原生事件 → 领域 DTO 事件 + tick 缓存 ——
+
+    private void OnOrderReceived(object? sender, Order order)
+    {
+        OrderReceived?.Invoke(this, CtpSessionMapper.ToDto(order));
+    }
+
+    private void OnTradeReceived(object? sender, Trade trade)
+    {
+        TradeReceived?.Invoke(this, CtpSessionMapper.ToDto(trade));
+    }
+
+    private void OnTickReceived(object? sender, TickData tick)
+    {
+        lock (_lock)
+        {
+            _latestTicks[tick.InstrumentId] = tick;
+        }
+        TickReceived?.Invoke(this, CtpSessionMapper.ToDto(tick));
+    }
+
+    // —— 断线 / 重连 / 闭市 ——
+
+    /// <summary>交易前置断线（收盘/网络）。置 socket 失活，按交易时段切 Reconnecting/Closed。</summary>
+    private void OnTraderFrontDisconnected(object? sender, int reason)
+    {
+        _socketAlive = false;
+        SetStatus(CtpTradingCalendar.IsTradingTime(DateTime.Now)
+            ? CtpConnectionStatus.Reconnecting
+            : CtpConnectionStatus.Closed);
+    }
+
+    /// <summary>交易前置（重）连上。若曾登录且 socket 失活 → 自动重新登录（CTP 重连后会话失效）。
+    /// marshal 到 ThreadPool——不在 native 回调线程里 Dispose trader（否则触发 C++ 纯虚调用崩溃）。</summary>
+    private void OnTraderFrontConnected(object? sender, EventArgs e)
+    {
+        if (_hadLoggedIn && !_socketAlive)
+            _ = Task.Run(ReconnectAsync);
+    }
+
+    /// <summary>行情前置断线：标记失活（行情不影响交易状态机，仅清 tick 缓存避免脏数据）。</summary>
+    private void OnMdFrontDisconnected(object? sender, int reason)
+    {
+        _mdSocketAlive = false;
+        lock (_lock) _latestTicks.Clear();
+    }
+
+    /// <summary>行情前置（重）连上：若曾订阅且 socket 失活 → 重新登录 + 重新订阅缓存合约。
+    /// 首次连接（_mdHadSubscribed=false）必须跳过——否则在 native 回调里 Dispose 正在回调的 _md → 纯虚崩溃。
+    /// marshal 到 ThreadPool 同上。</summary>
+    private void OnMdFrontConnected(object? sender, EventArgs e)
+    {
+        if (!_mdHadSubscribed || _mdSocketAlive) return;
+        var creds = _cachedMdCreds;
+        var symbols = _cachedSymbols;
+        if (creds == null || symbols.Count == 0) return;
+        _ = Task.Run(() => ReconnectMdAsync(creds, symbols));
+    }
+
+    /// <summary>安全定时器：30s 巡检。盘中失活 → 强制重建重登（兜底 SDK 放弃重连）；闭市 → 维持 Closed。</summary>
+    private void OnSafetyTimer(object? state)
+    {
+        if (!_hadLoggedIn || _socketAlive || _reconnecting) return;
+        if (!CtpTradingCalendar.IsTradingTime(DateTime.Now))
+        {
+            SetStatus(CtpConnectionStatus.Closed);
+            return;
+        }
+        _ = ReconnectAsync();
+    }
+
+    private void StartSafetyTimer() => _safetyTimer ??= new Timer(OnSafetyTimer, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    private void StopSafetyTimer()
+    {
+        var t = _safetyTimer;
+        _safetyTimer = null;
+        t?.Dispose();
+    }
+
+    /// <summary>
+    /// 重建交易前置 + 重新登录（重连兜底）。失败时保持失活，定时器/SDK 自动重连会继续尝试。
+    /// SemaphoreSlim 防并发重连。
+    /// </summary>
+    private async Task ReconnectAsync()
+    {
+        if (!await _reconnectLock.WaitAsync(0)) return; // 已有重连在进行，跳过
+        _reconnecting = true;
+        SetStatus(CtpConnectionStatus.Reconnecting);
+        try
+        {
+            var creds = _cachedTraderCreds;
+            if (creds == null) return;
+
+            // 旧连接已死，释放重建
+            lock (_lock)
+            {
+                if (_trader != null)
+                {
+                    try { _trader.FrontConnected -= OnTraderFrontConnected; } catch { }
+                    try { _trader.FrontDisconnected -= OnTraderFrontDisconnected; } catch { }
+                    _trader.Dispose();
+                    _trader = null;
+                }
+            }
+
+            var flowPath = Path.Combine(Path.GetTempPath(), "ctp_flow", Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(flowPath);
+            var trader = new CtpTrader(flowPath);
+            trader.OrderReceived += OnOrderReceived;
+            trader.TradeReceived += OnTradeReceived;
+            trader.FrontConnected += OnTraderFrontConnected;
+            trader.FrontDisconnected += OnTraderFrontDisconnected;
+
+            var result = await trader.LoginAsync(creds);
+
+            lock (_lock)
+            {
+                _trader = trader;
+                _loginResult = result;
+                _socketAlive = true;
+            }
+            SetStatus(CtpConnectionStatus.Connected);
+
+            // 重新订阅行情（若有缓存）
+            var md = _cachedMdCreds;
+            if (md != null && _cachedSymbols.Count > 0)
+                _ = ReconnectMdAsync(md, _cachedSymbols);
+        }
+        catch
+        {
+            // 重登失败：保持失活。盘中定时器继续重试；闭市切 Closed。
+            _socketAlive = false;
+            SetStatus(CtpTradingCalendar.IsTradingTime(DateTime.Now)
+                ? CtpConnectionStatus.Reconnecting
+                : CtpConnectionStatus.Closed);
+        }
+        finally
+        {
+            _reconnecting = false;
+            _reconnectLock.Release();
+        }
+    }
+
+    /// <summary>重建行情前置 + 重新登录 + 重新订阅。行情失败不影响交易状态。</summary>
+    private async Task ReconnectMdAsync(MdCreds creds, IReadOnlyList<string> symbols)
+    {
+        try
+        {
+            lock (_lock)
+            {
+                if (_md != null)
+                {
+                    try { _md.FrontConnected -= OnMdFrontConnected; } catch { }
+                    try { _md.FrontDisconnected -= OnMdFrontDisconnected; } catch { }
+                    _md.Dispose();
+                    _md = null;
+                }
+                var flow = Path.Combine(Path.GetTempPath(), "ctp_md_flow", Guid.NewGuid().ToString("N")[..8]);
+                Directory.CreateDirectory(flow);
+                _md = new CtpMarketData(flow);
+                _md.TickReceived += OnTickReceived;
+                _md.FrontConnected += OnMdFrontConnected;
+                _md.FrontDisconnected += OnMdFrontDisconnected;
+            }
+
+            await _md!.LoginAsync(creds.Front, creds.BrokerId, creds.UserId, creds.Password);
+            await _md.SubscribeMarketDataAsync(symbols);
+            _mdSocketAlive = true;
+        }
+        catch { /* 行情重订阅失败：SDK 自动重连会再触发；忽略避免影响交易状态 */ }
+    }
+
+    private void SetStatus(CtpConnectionStatus newStatus)
+    {
+        if (_status == newStatus) return;
+        _status = newStatus;
+        ConnectionStateChanged?.Invoke(this, newStatus);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        StopSafetyTimer();
+        Logout();
+        _reconnectLock.Dispose();
+    }
+}

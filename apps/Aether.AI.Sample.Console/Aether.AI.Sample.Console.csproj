@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Aether.AI is a standalone platform living in the sibling ../src folder.
+         This sample is a consumer (under apps/), not part of the platform src/. -->
+    <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
+    <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
+    <ProjectReference Include="..\..\src\Aether.AI.Core\Aether.AI.Core.csproj" />
+    <ProjectReference Include="..\..\business\Platform\Acme.Platform.Application\Acme.Platform.Application.csproj" />
+    <ProjectReference Include="..\..\business\Platform\Acme.Platform.Infrastructure\Acme.Platform.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
+    <ProjectReference Include="..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Application\Acme.Qifu.Application.csproj" />
+    <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Infrastructure\Acme.Qifu.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\ai\Qifu\Acme.Qifu.AI\Acme.Qifu.AI.csproj" />
+    <ProjectReference Include="..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
+    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
+    <ProjectReference Include="..\..\business\Securities\Acme.Securities.Infrastructure\Acme.Securities.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\business\Quotes\Acme.Quotes.Application\Acme.Quotes.Application.csproj" />
+    <ProjectReference Include="..\..\business\Quotes\Acme.Quotes.Infrastructure\Acme.Quotes.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\ai\Quotes\Acme.Quotes.AI\Acme.Quotes.AI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

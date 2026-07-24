@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aether.AI.Core\Aether.AI.Core.csproj" />
+    <ProjectReference Include="..\Aether.AI.Harness\Aether.AI.Harness.csproj" />
+    <ProjectReference Include="..\Aether.AI.Memory\Aether.AI.Memory.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
+    <!-- Microsoft.Extensions.* (DI, Options, Logging) flow transitively from
+         Microsoft.Agents.AI.OpenAI at the framework's pinned versions, so no
+         explicit versions are required here. -->
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>MAAI001</NoWarn>
+  </PropertyGroup>
+
+</Project>

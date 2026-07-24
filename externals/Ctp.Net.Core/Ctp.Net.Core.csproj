@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Ctp.Net.Core</RootNamespace>
+    <AssemblyName>Ctp.Net.Core</AssemblyName>
+  </PropertyGroup>
+
+  <!-- native 库随 ProjectReference 流到消费方输出目录（运行时 DllImport("ctp_native") 解析）。
+       glob 覆盖三平台：.dylib(Mac)/.so(Linux)/.dll(Windows) + CTP 运行时库（Linux/Win 的 thost*.so/dll 需随 wrapper 一起部署） -->
+  <ItemGroup>
+    <Content Include="build\native\*.dylib;build\native\*.so;build\native\*.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

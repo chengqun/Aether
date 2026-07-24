@@ -1,0 +1,16 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+
+## Build artifacts
+*.dll
+*.pdb
+*.exe
+
+## Local config / secrets
+appsettings.Development.json
+.env

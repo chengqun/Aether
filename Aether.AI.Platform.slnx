@@ -1,0 +1,64 @@
+<Solution>
+  <Folder Name="/ai/" />
+  <Folder Name="/ai/Ctp/">
+    <Project Path="ai/Ctp/Acme.Ctp.AI/Acme.Ctp.AI.csproj" />
+  </Folder>
+  <Folder Name="/ai/Qifu/">
+    <Project Path="ai/Qifu/Acme.Qifu.AI/Acme.Qifu.AI.csproj" />
+  </Folder>
+  <Folder Name="/ai/Quotes/">
+    <Project Path="ai/Quotes/Acme.Quotes.AI/Acme.Quotes.AI.csproj" />
+  </Folder>
+  <Folder Name="/apps/">
+    <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
+  </Folder>
+  <Folder Name="/business/" />
+  <Folder Name="/business/Ctp/">
+    <Project Path="business/Ctp/Acme.Ctp.Application/Acme.Ctp.Application.csproj" />
+    <Project Path="business/Ctp/Acme.Ctp.Domain/Acme.Ctp.Domain.csproj" />
+    <Project Path="business/Ctp/Acme.Ctp.Infrastructure/Acme.Ctp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Llm/">
+    <Project Path="business/Llm/Acme.Llm.Application/Acme.Llm.Application.csproj" />
+    <Project Path="business/Llm/Acme.Llm.Domain/Acme.Llm.Domain.csproj" />
+    <Project Path="business/Llm/Acme.Llm.Infrastructure/Acme.Llm.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Platform/">
+    <Project Path="business/Platform/Acme.Platform.Application/Acme.Platform.Application.csproj" />
+    <Project Path="business/Platform/Acme.Platform.Domain/Acme.Platform.Domain.csproj" />
+    <Project Path="business/Platform/Acme.Platform.Infrastructure/Acme.Platform.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Qifu/">
+    <Project Path="business/Qifu/Acme.Qifu.Application/Acme.Qifu.Application.csproj" />
+    <Project Path="business/Qifu/Acme.Qifu.Domain/Acme.Qifu.Domain.csproj" />
+    <Project Path="business/Qifu/Acme.Qifu.Infrastructure/Acme.Qifu.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Quotes/">
+    <Project Path="business/Quotes/Acme.Quotes.Application/Acme.Quotes.Application.csproj" />
+    <Project Path="business/Quotes/Acme.Quotes.Domain/Acme.Quotes.Domain.csproj" />
+    <Project Path="business/Quotes/Acme.Quotes.Infrastructure/Acme.Quotes.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Securities/">
+    <Project Path="business/Securities/Acme.Securities.Application/Acme.Securities.Application.csproj" />
+    <Project Path="business/Securities/Acme.Securities.Domain/Acme.Securities.Domain.csproj" />
+    <Project Path="business/Securities/Acme.Securities.Infrastructure/Acme.Securities.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/externals/">
+    <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Aether.AI.Core/Aether.AI.Core.csproj" />
+    <Project Path="src/Aether.AI.Harness/Aether.AI.Harness.csproj" />
+    <Project Path="src/Aether.AI.Hosting/Aether.AI.Hosting.csproj" />
+    <Project Path="src/Aether.AI.Memory/Aether.AI.Memory.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
+    <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.Platform.Infrastructure.Tests/Acme.Platform.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
+    <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />
+    <Project Path="tests/Aether.AI.Memory.Tests/Aether.AI.Memory.Tests.csproj" />
+  </Folder>
+</Solution>
