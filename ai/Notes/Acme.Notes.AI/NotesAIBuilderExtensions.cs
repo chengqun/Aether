@@ -1,0 +1,60 @@
+using System.Reflection;
+using Acme.Notes.Application.DependencyInjection;
+using Acme.Notes.Infrastructure.DependencyInjection;
+using Aether.AI.Hosting;
+using Aether.AI.Harness.Agents;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Notes.AI;
+
+/// <summary>
+/// DI entry point for the Notes AI adapter — 7 Markdown note tools.
+/// <see cref="AddNotesTools"/> registers the tools (no agent); <see cref="AddNotes"/>
+/// adds the notes-assistant agent on top. NoteTool injects INoteService (registered
+/// by AddNotesApplication).
+/// </summary>
+public static class NotesAIBuilderExtensions
+{
+    public static readonly string[] ToolNames = {
+        "CreateNote", "ReadNote", "AppendNote", "UpdateNote",
+        "SearchNotes", "ListNotes", "DeleteNote"
+    };
+
+    public static AetherAIBuilder AddNotesTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
+    {
+        var s = builder.Services;
+        s.AddNotesInfrastructure(sqliteDbPath);
+        s.AddNotesApplication();
+        s.AddTransient<NoteTool>();
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "CreateNote"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "ReadNote"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "AppendNote"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "UpdateNote"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "SearchNotes"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "ListNotes"));
+        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "DeleteNote"));
+        return builder;
+    }
+
+    public static AetherAIBuilder AddNotes(this AetherAIBuilder builder, string modelId, string? sqliteDbPath = null)
+    {
+        AddNotesTools(builder, sqliteDbPath);
+        builder.AddAgent("notes-assistant", a => a
+            .Name("Notes Assistant")
+            .Instructions(
+                "你是本地 Markdown 笔记助手。可用工具：新建/读取/追加/更新/搜索/列出/删除笔记。" +
+                "按用户意图调用合适的工具完成请求，简洁回复结果。")
+            .ModelId(modelId)
+            .WithTools(ToolNames));
+        return builder;
+    }
+
+    private static AIFunction Create<T>(IServiceProvider sp, string method) where T : class
+    {
+        var tool = sp.GetRequiredService<T>();
+        var m = typeof(T).GetMethod(method, BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException($"Tool method '{method}' not found on {typeof(T).Name}.");
+        return AIFunctionFactory.Create(m, tool);
+    }
+}

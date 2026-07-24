@@ -5,8 +5,6 @@
          This sample is a consumer (under apps/), not part of the platform src/. -->
     <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
-    <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
-    <ProjectReference Include="..\..\src\Aether.AI.Core\Aether.AI.Core.csproj" />
     <ProjectReference Include="..\..\business\Platform\Acme.Platform.Application\Acme.Platform.Application.csproj" />
     <ProjectReference Include="..\..\business\Platform\Acme.Platform.Infrastructure\Acme.Platform.Infrastructure.csproj" />
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
@@ -21,6 +19,9 @@
     <ProjectReference Include="..\..\business\Quotes\Acme.Quotes.Application\Acme.Quotes.Application.csproj" />
     <ProjectReference Include="..\..\business\Quotes\Acme.Quotes.Infrastructure\Acme.Quotes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\ai\Quotes\Acme.Quotes.AI\Acme.Quotes.AI.csproj" />
+    <ProjectReference Include="..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
+    <ProjectReference Include="..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
+    <ProjectReference Include="..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

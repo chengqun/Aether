@@ -1,13 +1,22 @@
 <Solution>
   <Folder Name="/ai/" />
+  <Folder Name="/ai/ApkParser/">
+    <Project Path="ai/ApkParser/Acme.ApkParser.AI/Acme.ApkParser.AI.csproj" />
+  </Folder>
   <Folder Name="/ai/Ctp/">
     <Project Path="ai/Ctp/Acme.Ctp.AI/Acme.Ctp.AI.csproj" />
+  </Folder>
+  <Folder Name="/ai/Notes/">
+    <Project Path="ai/Notes/Acme.Notes.AI/Acme.Notes.AI.csproj" />
   </Folder>
   <Folder Name="/ai/Qifu/">
     <Project Path="ai/Qifu/Acme.Qifu.AI/Acme.Qifu.AI.csproj" />
   </Folder>
   <Folder Name="/ai/Quotes/">
     <Project Path="ai/Quotes/Acme.Quotes.AI/Acme.Quotes.AI.csproj" />
+  </Folder>
+  <Folder Name="/ai/SystemTools/">
+    <Project Path="ai/SystemTools/Acme.SystemTools.AI/Acme.SystemTools.AI.csproj" />
   </Folder>
   <Folder Name="/apps/">
     <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
@@ -22,6 +31,11 @@
     <Project Path="business/Llm/Acme.Llm.Application/Acme.Llm.Application.csproj" />
     <Project Path="business/Llm/Acme.Llm.Domain/Acme.Llm.Domain.csproj" />
     <Project Path="business/Llm/Acme.Llm.Infrastructure/Acme.Llm.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Notes/">
+    <Project Path="business/Notes/Acme.Notes.Application/Acme.Notes.Application.csproj" />
+    <Project Path="business/Notes/Acme.Notes.Domain/Acme.Notes.Domain.csproj" />
+    <Project Path="business/Notes/Acme.Notes.Infrastructure/Acme.Notes.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/business/Platform/">
     <Project Path="business/Platform/Acme.Platform.Application/Acme.Platform.Application.csproj" />

@@ -2,6 +2,10 @@ using Acme.Ctp.Domain;
 using Acme.Ctp.Infrastructure;
 using Acme.Ctp.AI;
 using Acme.Ctp.Infrastructure.DependencyInjection;
+using Acme.SystemTools.AI;
+using Acme.ApkParser.AI;
+using Acme.Notes.AI;
+using Acme.Notes.Infrastructure.DependencyInjection;
 using Ctp.Net.Core.Trader;
 using Acme.Llm.Domain;
 using Acme.Llm.Infrastructure;
@@ -142,15 +146,21 @@ static void ComposeContexts(IServiceCollection services)
     // Quotes: market data + indicators + analysis (ACL-bridged to Securities via ai/Quotes).
     services.AddQuotesInfrastructure();
     services.AddQuotesApplication();
+    // Notes: local Markdown notes (SQLite tree store).
+    services.AddNotesInfrastructure();
 }
 
 static void RegisterAgents(AetherAIBuilder aether, string modelId)
 {
     // One agent with all tools from every context (no agent switching needed).
     aether.AddQifuTools().AddCtpTools().AddQuotesTools();
+    aether.AddSystemTools().AddApkParser().AddNotesTools();
     var allTools = QifuAIBuilderExtensions.ToolNames
         .Concat(CtpAIBuilderExtensions.ToolNames)
         .Concat(QuotesAIBuilderExtensions.ToolNames)
+        .Concat(SystemToolsAIBuilderExtensions.ToolNames)
+        .Concat(ApkParserAIBuilderExtensions.ToolNames)
+        .Concat(NotesAIBuilderExtensions.ToolNames)
         .ToArray();
     aether.AddAgent("assistant", a => a
         .Name("Aether Assistant")
