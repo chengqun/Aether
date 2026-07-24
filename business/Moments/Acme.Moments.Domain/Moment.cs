@@ -1,6 +1,6 @@
 using System;
 
-namespace Acme.ChatSocial.Domain;
+namespace Acme.Moments.Domain;
 
 public class Moment
 {

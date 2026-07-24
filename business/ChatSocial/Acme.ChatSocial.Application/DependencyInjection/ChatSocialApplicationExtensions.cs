@@ -12,7 +12,6 @@ public static class ChatSocialApplicationExtensions
         services.AddSingleton<IChatService, ChatService>();
         services.AddSingleton<IRelationshipService, RelationshipService>();
         services.AddSingleton<IGroupService, GroupService>();
-        services.AddSingleton<IMomentService, MomentService>();
         return services;
     }
 }

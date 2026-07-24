@@ -1,4 +1,4 @@
-using Acme.ChatSocial.Domain;
+using Acme.Moments.Domain;
 using Acme.Platform.Domain;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Acme.ChatSocial.Application;
+namespace Acme.Moments.Application;
 
 public class MomentService : IMomentService
 {

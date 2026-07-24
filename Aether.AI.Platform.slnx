@@ -62,10 +62,35 @@
     <Project Path="business/ChatSocial/Acme.ChatSocial.Domain/Acme.ChatSocial.Domain.csproj" />
     <Project Path="business/ChatSocial/Acme.ChatSocial.Infrastructure/Acme.ChatSocial.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/business/Moments/">
+    <Project Path="business/Moments/Acme.Moments.Application/Acme.Moments.Application.csproj" />
+    <Project Path="business/Moments/Acme.Moments.Domain/Acme.Moments.Domain.csproj" />
+    <Project Path="business/Moments/Acme.Moments.Infrastructure/Acme.Moments.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/Video/">
+    <Project Path="business/Video/Acme.Video.Application/Acme.Video.Application.csproj" />
+    <Project Path="business/Video/Acme.Video.Domain/Acme.Video.Domain.csproj" />
+    <Project Path="business/Video/Acme.Video.Infrastructure/Acme.Video.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/AppUpdate/">
+    <Project Path="business/AppUpdate/Acme.AppUpdate.Application/Acme.AppUpdate.Application.csproj" />
+    <Project Path="business/AppUpdate/Acme.AppUpdate.Domain/Acme.AppUpdate.Domain.csproj" />
+    <Project Path="business/AppUpdate/Acme.AppUpdate.Infrastructure/Acme.AppUpdate.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/ServiceAccount/">
+    <Project Path="business/ServiceAccount/Acme.ServiceAccount.Application/Acme.ServiceAccount.Application.csproj" />
+    <Project Path="business/ServiceAccount/Acme.ServiceAccount.Domain/Acme.ServiceAccount.Domain.csproj" />
+    <Project Path="business/ServiceAccount/Acme.ServiceAccount.Infrastructure/Acme.ServiceAccount.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/business/DeviceConnect/">
     <Project Path="business/DeviceConnect/Acme.DeviceConnect.Application/Acme.DeviceConnect.Application.csproj" />
     <Project Path="business/DeviceConnect/Acme.DeviceConnect.Domain/Acme.DeviceConnect.Domain.csproj" />
     <Project Path="business/DeviceConnect/Acme.DeviceConnect.Infrastructure/Acme.DeviceConnect.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/DeviceManagement/">
+    <Project Path="business/DeviceManagement/Acme.DeviceManagement.Application/Acme.DeviceManagement.Application.csproj" />
+    <Project Path="business/DeviceManagement/Acme.DeviceManagement.Domain/Acme.DeviceManagement.Domain.csproj" />
+    <Project Path="business/DeviceManagement/Acme.DeviceManagement.Infrastructure/Acme.DeviceManagement.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/externals/">
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />

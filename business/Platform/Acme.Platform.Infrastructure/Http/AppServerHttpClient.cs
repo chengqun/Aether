@@ -62,6 +62,27 @@ public sealed class AppServerHttpClient : IAppServerHttpClient
     }
 
     /// <inheritdoc/>
+    public async Task<T?> PostAsync<T>(string endpoint, object? body = null, CancellationToken ct = default) where T : class
+    {
+        try
+        {
+            var json = body is null ? "" : JsonSerializer.Serialize(body, JsonOptions);
+            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            using var response = await _httpClient.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode) return null;
+            var responseJson = await response.Content.ReadAsStringAsync(ct);
+            return JsonSerializer.Deserialize<T>(responseJson, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<HttpResponseMessage?> PostFormRawAsync(string endpoint, IDictionary<string, string> form, CancellationToken ct = default)
     {
         try

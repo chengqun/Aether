@@ -20,6 +20,9 @@ public interface IAppServerHttpClient
     /// <summary>GETs a relative endpoint and deserializes JSON to <typeparamref name="T"/>, or null.</summary>
     Task<T?> GetAsync<T>(string endpoint, CancellationToken ct = default) where T : class;
 
+    /// <summary>POSTs a JSON body to a relative endpoint and deserializes JSON to <typeparamref name="T"/>, or null.</summary>
+    Task<T?> PostAsync<T>(string endpoint, object? body = null, CancellationToken ct = default) where T : class;
+
     /// <summary>POSTs a form-urlencoded body (OAuth2 token endpoint use), returning the raw response.</summary>
     Task<HttpResponseMessage?> PostFormRawAsync(string endpoint, IDictionary<string, string> form, CancellationToken ct = default);
 }

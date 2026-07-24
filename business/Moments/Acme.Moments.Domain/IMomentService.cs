@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Acme.ChatSocial.Domain;
+namespace Acme.Moments.Domain;
 
 public interface IMomentService
 {
