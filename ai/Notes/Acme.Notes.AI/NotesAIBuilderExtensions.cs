@@ -19,13 +19,13 @@ public static class NotesAIBuilderExtensions
         var s = builder.Services;
         s.AddNotesApplication(sqliteDbPath);
         s.AddTransient<NoteTool>();
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "CreateNote"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "ReadNote"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "AppendNote"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "UpdateNote"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "SearchNotes"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "ListNotes"));
-        s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "DeleteNote"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "CreateNote"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ReadNote"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "AppendNote"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "UpdateNote"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "SearchNotes"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ListNotes"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "DeleteNote"));
         return builder;
     }
 
@@ -42,7 +42,7 @@ public static class NotesAIBuilderExtensions
         return builder;
     }
 
-    private static AIFunction Create<T>(IServiceProvider sp, string method) where T : class
+    private static AIFunction CreateTool<T>(IServiceProvider sp, string method) where T : class
     {
         var tool = sp.GetRequiredService<T>();
         var m = typeof(T).GetMethod(method, BindingFlags.Public | BindingFlags.Instance)

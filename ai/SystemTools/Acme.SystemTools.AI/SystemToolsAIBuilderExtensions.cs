@@ -34,22 +34,22 @@ public static class SystemToolsAIBuilderExtensions
         s.AddTransient<WebFetchTool>();
         s.AddTransient<FileDiffTool>();
 
-        s.AddSingleton<AIFunction>(sp => Create<FileReadTool>(sp, "ReadFile"));
-        s.AddSingleton<AIFunction>(sp => Create<FileWriteTool>(sp, "WriteFile"));
-        s.AddSingleton<AIFunction>(sp => Create<FileEditTool>(sp, "EditFile"));
-        s.AddSingleton<AIFunction>(sp => Create<FileLineEditTool>(sp, "LineEditFile"));
-        s.AddSingleton<AIFunction>(sp => Create<FileDeleteTool>(sp, "DeleteFile"));
-        s.AddSingleton<AIFunction>(sp => Create<GrepTool>(sp, "Grep"));
-        s.AddSingleton<AIFunction>(sp => Create<GlobTool>(sp, "Glob"));
-        s.AddSingleton<AIFunction>(sp => Create<CommandExecutorTool>(sp, "ExecuteCommand"));
-        s.AddSingleton<AIFunction>(sp => Create<DirectoryExplorerTool>(sp, "ExploreDirectory"));
-        s.AddSingleton<AIFunction>(sp => Create<ShellCommandTool>(sp, "ExecuteShellCommand"));
-        s.AddSingleton<AIFunction>(sp => Create<WebFetchTool>(sp, "FetchUrl"));
-        s.AddSingleton<AIFunction>(sp => Create<FileDiffTool>(sp, "DiffFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileReadTool>(sp, "ReadFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileWriteTool>(sp, "WriteFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileEditTool>(sp, "EditFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileLineEditTool>(sp, "LineEditFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileDeleteTool>(sp, "DeleteFile"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<GrepTool>(sp, "Grep"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<GlobTool>(sp, "Glob"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<CommandExecutorTool>(sp, "ExecuteCommand"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<DirectoryExplorerTool>(sp, "ExploreDirectory"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<FileDiffTool>(sp, "DiffFile"));
         return builder;
     }
 
-    private static AIFunction Create<T>(IServiceProvider sp, string method) where T : class
+    private static AIFunction CreateTool<T>(IServiceProvider sp, string method) where T : class
     {
         var tool = sp.GetRequiredService<T>();
         var m = typeof(T).GetMethod(method, BindingFlags.Public | BindingFlags.Instance)

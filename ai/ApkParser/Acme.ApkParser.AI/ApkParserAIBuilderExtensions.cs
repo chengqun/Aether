@@ -17,11 +17,11 @@ public static class ApkParserAIBuilderExtensions
         var s = builder.Services;
         s.AddSingleton<ApkInfoExtractor>();
         s.AddTransient<ApkInfoTool>();
-        s.AddSingleton<AIFunction>(sp => Create<ApkInfoTool>(sp, "GetApkInfo"));
+        s.AddSingleton<AIFunction>(sp => CreateTool<ApkInfoTool>(sp, "GetApkInfo"));
         return builder;
     }
 
-    private static AIFunction Create<T>(IServiceProvider sp, string method) where T : class
+    private static AIFunction CreateTool<T>(IServiceProvider sp, string method) where T : class
     {
         var tool = sp.GetRequiredService<T>();
         var m = typeof(T).GetMethod(method, BindingFlags.Public | BindingFlags.Instance)
