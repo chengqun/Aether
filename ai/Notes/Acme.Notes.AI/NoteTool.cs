@@ -1,23 +1,17 @@
 using System.ComponentModel;
-using Acme.Notes.Domain;
 using Acme.Notes.Application;
 
 namespace Acme.Notes.AI;
 
-/// <summary>
-/// 笔记工具（接入 Agent 工具池）。让动态 Agent 能创建/读取/追加/更新/搜索/列出/删除本地 Markdown 笔记。
-/// 依赖 INoteService（本地 SQLite，单用户设备，无 userId）。
-/// </summary>
 public class NoteTool
 {
     private readonly INoteService _service;
 
-    public NoteTool(INoteService repository)
+    public NoteTool(INoteService service)
     {
-        _service = repository;
+        _service = service;
     }
 
-    /// <summary>新建笔记返回结果</summary>
     public class CreateOutput
     {
         public string? Id { get; set; }
@@ -25,7 +19,6 @@ public class NoteTool
         public string? Error { get; set; }
     }
 
-    /// <summary>读取笔记返回结果</summary>
     public class ReadOutput
     {
         public string? Id { get; set; }
@@ -37,7 +30,6 @@ public class NoteTool
         public string? Error { get; set; }
     }
 
-    /// <summary>操作结果（追加/更新/删除）</summary>
     public class ActionOutput
     {
         public bool Success { get; set; }
@@ -46,7 +38,6 @@ public class NoteTool
         public string? Error { get; set; }
     }
 
-    /// <summary>列表/搜索返回结果</summary>
     public class ListOutput
     {
         public List<NoteSummary> Notes { get; set; } = new();
@@ -76,7 +67,7 @@ public class NoteTool
             if (string.IsNullOrWhiteSpace(title))
                 return new CreateOutput { Error = "标题不能为空" };
 
-            Guid? parentId = null;
+            string? parentId = null;
             if (!string.IsNullOrWhiteSpace(parentTitle))
             {
                 var all = await _service.GetAllAsync(cancellationToken);
@@ -86,16 +77,16 @@ public class NoteTool
                 parentId = parent.Id;
             }
 
-            var node = new NoteNode
+            var request = new CreateNoteRequest
             {
-                ParentId = parentId,
                 Title = title,
                 Content = content ?? string.Empty,
+                ParentId = parentId,
                 Syntax = string.IsNullOrWhiteSpace(syntax) ? null : syntax,
                 Tags = string.IsNullOrWhiteSpace(tags) ? null : tags,
             };
-            var created = await _service.CreateAsync(node, cancellationToken);
-            return new CreateOutput { Id = created.Id.ToString(), Title = created.Title };
+            var created = await _service.CreateAsync(request, cancellationToken);
+            return new CreateOutput { Id = created.Id, Title = created.Title };
         }
         catch (Exception ex)
         {
@@ -111,18 +102,18 @@ public class NoteTool
         try
         {
             var all = await _service.GetAllAsync(cancellationToken);
-            var node = all.FirstOrDefault(n => n.Title == title);
-            if (node == null)
+            var note = all.FirstOrDefault(n => n.Title == title);
+            if (note == null)
                 return new ReadOutput { Error = $"找不到笔记: {title}" };
 
             return new ReadOutput
             {
-                Id = node.Id.ToString(),
-                Title = node.Title,
-                Content = node.Content,
-                Syntax = node.Syntax,
-                Tags = node.Tags,
-                IsReadOnly = node.IsReadOnly,
+                Id = note.Id,
+                Title = note.Title,
+                Content = note.Content,
+                Syntax = note.Syntax,
+                Tags = note.Tags,
+                IsReadOnly = note.IsReadOnly,
             };
         }
         catch (Exception ex)
@@ -140,15 +131,23 @@ public class NoteTool
         try
         {
             var all = await _service.GetAllAsync(cancellationToken);
-            var node = all.FirstOrDefault(n => n.Title == title);
-            if (node == null)
+            var note = all.FirstOrDefault(n => n.Title == title);
+            if (note == null)
                 return new ActionOutput { Error = $"找不到笔记: {title}" };
-            if (node.IsReadOnly)
+            if (note.IsReadOnly)
                 return new ActionOutput { Error = $"笔记只读: {title}" };
 
-            node.Content = string.IsNullOrEmpty(node.Content) ? text : node.Content + "\n\n" + text;
-            await _service.UpdateAsync(node, cancellationToken);
-            return new ActionOutput { Success = true, Id = node.Id.ToString(), Title = node.Title };
+            var newContent = string.IsNullOrEmpty(note.Content) ? text : note.Content + "\n\n" + text;
+            var request = new UpdateNoteRequest
+            {
+                Id = note.Id,
+                Title = note.Title,
+                Content = newContent,
+                Syntax = note.Syntax,
+                Tags = note.Tags,
+            };
+            await _service.UpdateAsync(request, cancellationToken);
+            return new ActionOutput { Success = true, Id = note.Id, Title = note.Title };
         }
         catch (Exception ex)
         {
@@ -166,17 +165,22 @@ public class NoteTool
         try
         {
             var all = await _service.GetAllAsync(cancellationToken);
-            var node = all.FirstOrDefault(n => n.Title == title);
-            if (node == null)
+            var note = all.FirstOrDefault(n => n.Title == title);
+            if (note == null)
                 return new ActionOutput { Error = $"找不到笔记: {title}" };
-            if (node.IsReadOnly)
+            if (note.IsReadOnly)
                 return new ActionOutput { Error = $"笔记只读: {title}" };
 
-            node.Content = content ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(syntax))
-                node.Syntax = syntax;
-            await _service.UpdateAsync(node, cancellationToken);
-            return new ActionOutput { Success = true, Id = node.Id.ToString(), Title = node.Title };
+            var request = new UpdateNoteRequest
+            {
+                Id = note.Id,
+                Title = note.Title,
+                Content = content ?? string.Empty,
+                Syntax = syntax ?? note.Syntax,
+                Tags = note.Tags,
+            };
+            await _service.UpdateAsync(request, cancellationToken);
+            return new ActionOutput { Success = true, Id = note.Id, Title = note.Title };
         }
         catch (Exception ex)
         {
@@ -207,7 +211,7 @@ public class NoteTool
     {
         try
         {
-            Guid? parentId = null;
+            string? parentId = null;
             if (!string.IsNullOrWhiteSpace(parentTitle))
             {
                 var all = await _service.GetAllAsync(cancellationToken);
@@ -234,14 +238,12 @@ public class NoteTool
         try
         {
             var all = await _service.GetAllAsync(cancellationToken);
-            var node = all.FirstOrDefault(n => n.Title == title);
-            if (node == null)
+            var note = all.FirstOrDefault(n => n.Title == title);
+            if (note == null)
                 return new ActionOutput { Error = $"找不到笔记: {title}" };
 
-            // Agent/Workflow 文本源节点：连删配置表（注销）；普通笔记：仅删 NoteNode
-            // IAgentSourceService dropped in Aether port — always delete the NoteNode directly.
-            await _service.DeleteAsync(node.Id, cancellationToken);
-            return new ActionOutput { Success = true, Id = node.Id.ToString(), Title = node.Title };
+            await _service.DeleteAsync(note.Id, cancellationToken);
+            return new ActionOutput { Success = true, Id = note.Id, Title = note.Title };
         }
         catch (Exception ex)
         {
@@ -249,9 +251,9 @@ public class NoteTool
         }
     }
 
-    private static NoteSummary ToSummary(NoteNode n) => new()
+    private static NoteSummary ToSummary(NoteDto n) => new()
     {
-        Id = n.Id.ToString(),
+        Id = n.Id,
         Title = n.Title,
         Syntax = n.Syntax,
         Tags = n.Tags,

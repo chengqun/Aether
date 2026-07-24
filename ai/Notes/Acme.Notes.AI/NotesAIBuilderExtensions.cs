@@ -1,6 +1,5 @@
 using System.Reflection;
 using Acme.Notes.Application.DependencyInjection;
-using Acme.Notes.Infrastructure.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -8,12 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Notes.AI;
 
-/// <summary>
-/// DI entry point for the Notes AI adapter — 7 Markdown note tools.
-/// <see cref="AddNotesTools"/> registers the tools (no agent); <see cref="AddNotes"/>
-/// adds the notes-assistant agent on top. NoteTool injects INoteService (registered
-/// by AddNotesApplication).
-/// </summary>
 public static class NotesAIBuilderExtensions
 {
     public static readonly string[] ToolNames = {
@@ -24,8 +17,7 @@ public static class NotesAIBuilderExtensions
     public static AetherAIBuilder AddNotesTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
     {
         var s = builder.Services;
-        s.AddNotesInfrastructure(sqliteDbPath);
-        s.AddNotesApplication();
+        s.AddNotesApplication(sqliteDbPath);
         s.AddTransient<NoteTool>();
         s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "CreateNote"));
         s.AddSingleton<AIFunction>(sp => Create<NoteTool>(sp, "ReadNote"));

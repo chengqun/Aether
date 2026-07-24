@@ -1,9 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
-    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
   </ItemGroup>
 

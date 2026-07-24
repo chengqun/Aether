@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
+    <ProjectReference Include="..\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
