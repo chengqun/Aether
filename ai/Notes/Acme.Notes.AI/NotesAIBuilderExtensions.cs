@@ -1,5 +1,6 @@
 using System.Reflection;
 using Acme.Notes.Application.DependencyInjection;
+using Acme.Notes.Infrastructure.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -17,7 +18,8 @@ public static class NotesAIBuilderExtensions
     public static AetherAIBuilder AddNotesTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
     {
         var s = builder.Services;
-        s.AddNotesApplication(sqliteDbPath);
+        s.AddNotesInfrastructure(sqliteDbPath);
+        s.AddNotesApplication();
         s.AddTransient<NoteTool>();
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "CreateNote"));
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ReadNote"));

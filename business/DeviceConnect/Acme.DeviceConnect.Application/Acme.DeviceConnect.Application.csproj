@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.DeviceConnect.Domain\Acme.DeviceConnect.Domain.csproj" />
-    <ProjectReference Include="..\Acme.DeviceConnect.Infrastructure\Acme.DeviceConnect.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Video.Domain\Acme.Video.Domain.csproj" />
-    <ProjectReference Include="..\Acme.Video.Infrastructure\Acme.Video.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

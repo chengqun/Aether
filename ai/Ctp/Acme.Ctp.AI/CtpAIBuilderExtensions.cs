@@ -16,10 +16,10 @@ public static class CtpAIBuilderExtensions
         "QueryLatestTick", "QueryAllLatestTicks"
     };
 
-    public static AetherAIBuilder AddCtpTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
+    public static AetherAIBuilder AddCtpTools(this AetherAIBuilder builder)
     {
         var services = builder.Services;
-        services.AddCtpApplication(sqliteDbPath);
+        services.AddCtpApplication();
         services.AddTransient<CtpLoginTool>();
         services.AddTransient<QueryAccountTool>();
         services.AddTransient<QueryPositionTool>();
@@ -37,9 +37,9 @@ public static class CtpAIBuilderExtensions
         return builder;
     }
 
-    public static AetherAIBuilder AddCtp(this AetherAIBuilder builder, string modelId, string? sqliteDbPath = null)
+    public static AetherAIBuilder AddCtp(this AetherAIBuilder builder, string modelId)
     {
-        AddCtpTools(builder, sqliteDbPath);
+        AddCtpTools(builder);
         builder.AddAgent("ctp-trader", a => a
             .Name("CTP Trader")
             .Instructions(

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <!-- Aether.AI is a standalone platform living in the sibling ../src folder.
@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Infrastructure\Acme.Qifu.Infrastructure.csproj" />
     <ProjectReference Include="..\..\ai\Qifu\Acme.Qifu.AI\Acme.Qifu.AI.csproj" />
     <ProjectReference Include="..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
+    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Application\Acme.Ctp.Application.csproj" />
     <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
     <ProjectReference Include="..\..\business\Securities\Acme.Securities.Infrastructure\Acme.Securities.Infrastructure.csproj" />

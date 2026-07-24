@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Moments.Domain\Acme.Moments.Domain.csproj" />
-    <ProjectReference Include="..\Acme.Moments.Infrastructure\Acme.Moments.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

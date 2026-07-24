@@ -1,6 +1,7 @@
 using Acme.Ctp.Domain;
 using Acme.Ctp.Infrastructure;
 using Acme.Ctp.AI;
+using Acme.Ctp.Application.DependencyInjection;
 using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.SystemTools.AI;
 using Acme.ApkParser.AI;
@@ -140,6 +141,7 @@ static void ComposeContexts(IServiceCollection services)
     services.AddQifuApplication();
     // Ctp: futures broker session (self-contained, native CTP binding).
     services.AddCtpInfrastructure();
+    services.AddCtpApplication();
     // Securities: instruments master data + server sync.
     services.AddSecurityInfrastructure();
     services.AddSecurityApplication();

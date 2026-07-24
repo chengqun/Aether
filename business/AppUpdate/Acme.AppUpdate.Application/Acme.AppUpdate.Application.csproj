@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.AppUpdate.Domain\Acme.AppUpdate.Domain.csproj" />
-    <ProjectReference Include="..\Acme.AppUpdate.Infrastructure\Acme.AppUpdate.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

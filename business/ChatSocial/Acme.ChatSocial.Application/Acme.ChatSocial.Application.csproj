@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.ChatSocial.Domain\Acme.ChatSocial.Domain.csproj" />
-    <ProjectReference Include="..\Acme.ChatSocial.Infrastructure\Acme.ChatSocial.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,14 +1,13 @@
 using Acme.Notes.Application;
-using Acme.Notes.Infrastructure.DependencyInjection;
+using Acme.Notes.Domain;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Notes.Application.DependencyInjection;
 
 public static class NotesApplicationExtensions
 {
-    public static IServiceCollection AddNotesApplication(this IServiceCollection services, string? sqliteDbPath = null)
+    public static IServiceCollection AddNotesApplication(this IServiceCollection services)
     {
-        services.AddNotesInfrastructure(sqliteDbPath);
         services.AddSingleton<INoteService, NoteService>();
         return services;
     }
