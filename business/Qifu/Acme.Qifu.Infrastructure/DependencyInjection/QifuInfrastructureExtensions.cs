@@ -1,5 +1,5 @@
 using System.IO;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using Acme.Qifu.Domain.CloudDocs;
 using Acme.Qifu.Domain.Ports;
 using Acme.Qifu.Domain.Yushu;
@@ -15,7 +15,7 @@ namespace Acme.Qifu.Infrastructure.DependencyInjection;
 /// qifu-local <see cref="IQifuConfigCache"/> (SQLite) and the four qifu service
 /// implementations. The cross-cutting ports (<see cref="ICurrentUser"/>,
 /// <see cref="IAppServerHttpClient"/>) are provided by the Platform context —
-/// call <c>AddPlatformInfrastructure</c> at the composition root too. The
+/// call <c>AddAppAuthInfrastructure</c> at the composition root too. The
 /// token-sync Application services are registered by <c>AddQifuApplication</c>;
 /// the AI adapter by <c>AddQifu</c>.
 /// </summary>

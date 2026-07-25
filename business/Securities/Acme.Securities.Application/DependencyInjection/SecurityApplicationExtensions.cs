@@ -7,7 +7,7 @@ namespace Acme.Securities.Application.DependencyInjection;
 /// <summary>
 /// DI entry point for the Security Application services. Call alongside
 /// <c>AddSecurityInfrastructure</c> (registers ISecurityRepository + ISyncMetadataStore)
-/// and <c>AddPlatformInfrastructure</c> (IAppServerHttpClient for server sync).
+/// and <c>AddAppAuthInfrastructure</c> (IAppServerHttpClient for server sync).
 /// </summary>
 public static class SecurityApplicationExtensions
 {

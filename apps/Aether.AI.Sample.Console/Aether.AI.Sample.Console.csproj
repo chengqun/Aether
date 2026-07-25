@@ -5,8 +5,8 @@
          This sample is a consumer (under apps/), not part of the platform src/. -->
     <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
-    <ProjectReference Include="..\..\business\Platform\Acme.Platform.Application\Acme.Platform.Application.csproj" />
-    <ProjectReference Include="..\..\business\Platform\Acme.Platform.Infrastructure\Acme.Platform.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
+    <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
     <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Application\Acme.Qifu.Application.csproj" />

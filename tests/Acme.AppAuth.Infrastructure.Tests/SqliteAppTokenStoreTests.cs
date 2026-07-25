@@ -1,7 +1,7 @@
-using Acme.Platform.Domain;
-using Acme.Platform.Infrastructure.Persistence;
+using Acme.AppAuth.Domain;
+using Acme.AppAuth.Infrastructure.Persistence;
 
-namespace Acme.Platform.Infrastructure.Tests;
+namespace Acme.AppAuth.Infrastructure.Tests;
 
 public class SqliteAppTokenStoreTests
 {

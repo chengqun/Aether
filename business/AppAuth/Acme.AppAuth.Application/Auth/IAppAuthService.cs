@@ -1,4 +1,4 @@
-namespace Acme.Platform.Application.Auth;
+namespace Acme.AppAuth.Application.Auth;
 
 /// <summary>Result of a login/refresh attempt.</summary>
 public sealed class LoginResult
@@ -10,7 +10,7 @@ public sealed class LoginResult
 
 /// <summary>
 /// App-server authentication use case: log in (OAuth2 password grant), refresh,
-/// logout. Acquired tokens are persisted via <see cref="Acme.Platform.Domain.IAppTokenStore"/>
+/// logout. Acquired tokens are persisted via <see cref="Acme.AppAuth.Domain.IAppTokenStore"/>
 /// so the session survives restarts; subsequent app-server calls are
 /// authenticated automatically via the bearer HTTP client.
 /// </summary>

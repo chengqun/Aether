@@ -45,9 +45,9 @@ Aether/                                # root — single solution, everything he
 │       ├── Acme.Qifu.Application      # token-sync services (→ Domain, Platform.Domain)
 │       └── Acme.Qifu.Infrastructure   # CloudDocs/Yushu service impls + SqliteQifuConfigCache (→ Domain, Platform.Domain)
 ├── business/Platform/                 # foundation context: app-server auth + authenticated HTTP + current user
-│   ├── Acme.Platform.Domain           # ICurrentUser, IAppServerHttpClient, IAppTokenStore, AppServerOptions
-│   ├── Acme.Platform.Application      # IAppAuthService / AppAuthService (OAuth2 login/refresh/logout)
-│   └── Acme.Platform.Infrastructure   # SqliteAppTokenStore, BearerTokenDelegatingHandler, AppServerHttpClient, CurrentUserResolver
+│   ├── Acme.AppAuth.Domain           # ICurrentUser, IAppServerHttpClient, IAppTokenStore, AppServerOptions
+│   ├── Acme.AppAuth.Application      # IAppAuthService / AppAuthService (OAuth2 login/refresh/logout)
+│   └── Acme.AppAuth.Infrastructure   # SqliteAppTokenStore, BearerTokenDelegatingHandler, AppServerHttpClient, CurrentUserResolver
 ├── business/Llm/                      # bounded context: LLM provider configs (persist + sync from server)
 │   ├── Acme.Llm.Domain                # LlmConfig + ILlmConfigRepository port + LlmConfigDto (zero deps)
 │   ├── Acme.Llm.Application           # LlmConfigService (GetCached/SyncFromServer/SetConfig) (→ Domain, Platform.Domain)
@@ -72,7 +72,7 @@ Aether/                                # root — single solution, everything he
 ├── tests/                             # all test projects
 │   ├── Aether.AI.Harness.Tests / Aether.AI.Memory.Tests
 │   ├── Acme.Qifu.Infrastructure.Tests (SQLite config cache)
-│   ├── Acme.Platform.Infrastructure.Tests (SQLite session store)
+│   ├── Acme.AppAuth.Infrastructure.Tests (SQLite session store)
 │   ├── Acme.Llm.Infrastructure.Tests (SQLite llm_config)
 │   ├── Acme.Ctp.AI.Tests (CTP agent + 7 tools wiring)
 │   └── Acme.Quotes.AI.Tests (stock-analyst agent + 2 tools wiring)

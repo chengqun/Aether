@@ -1,5 +1,5 @@
 using Acme.Llm.Domain;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 
 namespace Acme.Llm.Application;
 

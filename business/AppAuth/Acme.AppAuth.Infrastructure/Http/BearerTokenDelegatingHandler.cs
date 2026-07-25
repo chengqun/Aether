@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 
-namespace Acme.Platform.Infrastructure.Http;
+namespace Acme.AppAuth.Infrastructure.Http;
 
 /// <summary>
 /// Attaches the current app-server bearer token to outgoing requests, and on

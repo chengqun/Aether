@@ -1,4 +1,4 @@
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using Acme.Qifu.Application.CloudDocs;
 using Acme.Qifu.Application.Yushu;
 using Acme.Qifu.Domain.CloudDocs;
@@ -12,7 +12,7 @@ namespace Acme.Qifu.Application.DependencyInjection;
 /// DI entry point for the qifu Application services — the cross-device token
 /// sync services. They depend on the Platform ports (<see cref="IAppServerHttpClient"/>,
 /// <see cref="ICurrentUser"/>) and qifu's <see cref="IQifuConfigCache"/>, all
-/// registered by <c>AddPlatformInfrastructure</c> + <c>AddQifuInfrastructure</c>.
+/// registered by <c>AddAppAuthInfrastructure</c> + <c>AddQifuInfrastructure</c>.
 /// </summary>
 public static class QifuApplicationExtensions
 {

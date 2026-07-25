@@ -1,13 +1,13 @@
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Llm.Application.DependencyInjection;
 
 /// <summary>
 /// DI entry point for the Llm Application service. Call alongside
-/// <c>AddLlmInfrastructure</c> (and <c>AddPlatformInfrastructure</c> for sync/auth)
+/// <c>AddLlmInfrastructure</c> (and <c>AddAppAuthInfrastructure</c> for sync/auth)
 /// at the composition root.
 /// </summary>
 public static class LlmApplicationExtensions

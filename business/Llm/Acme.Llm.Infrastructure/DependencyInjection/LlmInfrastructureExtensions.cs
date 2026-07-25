@@ -8,7 +8,7 @@ namespace Acme.Llm.Infrastructure.DependencyInjection;
 /// <summary>
 /// DI entry point for the Llm persistence layer. Registers the SQLite
 /// <see cref="ILlmConfigRepository"/>. Sync/auth come from the Platform context
-/// (call <c>AddPlatformInfrastructure</c> too); the application service is
+/// (call <c>AddAppAuthInfrastructure</c> too); the application service is
 /// registered by <c>AddLlmApplication</c>.
 /// </summary>
 public static class LlmInfrastructureExtensions

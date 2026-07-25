@@ -1,5 +1,5 @@
 using Acme.AppUpdate.Domain;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using System.Threading.Tasks;
 
 namespace Acme.AppUpdate.Application;

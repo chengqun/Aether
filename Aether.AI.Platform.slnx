@@ -37,10 +37,10 @@
     <Project Path="business/Notes/Acme.Notes.Domain/Acme.Notes.Domain.csproj" />
     <Project Path="business/Notes/Acme.Notes.Infrastructure/Acme.Notes.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/business/Platform/">
-    <Project Path="business/Platform/Acme.Platform.Application/Acme.Platform.Application.csproj" />
-    <Project Path="business/Platform/Acme.Platform.Domain/Acme.Platform.Domain.csproj" />
-    <Project Path="business/Platform/Acme.Platform.Infrastructure/Acme.Platform.Infrastructure.csproj" />
+  <Folder Name="/business/AppAuth/">
+    <Project Path="business/AppAuth/Acme.AppAuth.Application/Acme.AppAuth.Application.csproj" />
+    <Project Path="business/AppAuth/Acme.AppAuth.Domain/Acme.AppAuth.Domain.csproj" />
+    <Project Path="business/AppAuth/Acme.AppAuth.Infrastructure/Acme.AppAuth.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/business/Qifu/">
     <Project Path="business/Qifu/Acme.Qifu.Application/Acme.Qifu.Application.csproj" />
@@ -104,7 +104,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
     <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
-    <Project Path="tests/Acme.Platform.Infrastructure.Tests/Acme.Platform.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />

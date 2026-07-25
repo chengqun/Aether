@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.IO;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using Microsoft.Data.Sqlite;
 
-namespace Acme.Platform.Infrastructure.Persistence;
+namespace Acme.AppAuth.Infrastructure.Persistence;
 
 /// <summary>
 /// SQLite-backed <see cref="IAppTokenStore"/>. Caches the current app-server

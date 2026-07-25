@@ -1,4 +1,4 @@
-namespace Acme.Platform.Domain;
+namespace Acme.AppAuth.Domain;
 
 /// <summary>
 /// Refreshes the app-server access token using the stored refresh token.

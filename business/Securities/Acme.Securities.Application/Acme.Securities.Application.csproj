@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Securities.Domain\Acme.Securities.Domain.csproj" />
-    <ProjectReference Include="..\..\Platform\Acme.Platform.Domain\Acme.Platform.Domain.csproj" />
+    <ProjectReference Include="..\..\AppAuth\Acme.AppAuth.Domain\Acme.AppAuth.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

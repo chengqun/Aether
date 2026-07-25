@@ -1,4 +1,4 @@
-namespace Acme.Platform.Domain;
+namespace Acme.AppAuth.Domain;
 
 /// <summary>
 /// An app-server session token (OAuth2 access + refresh), cached locally so the

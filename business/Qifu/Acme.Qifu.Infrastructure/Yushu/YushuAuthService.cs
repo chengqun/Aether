@@ -1,4 +1,4 @@
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using Acme.Qifu.Domain.Yushu;
 using Acme.Qifu.Domain.Ports;
 using System;

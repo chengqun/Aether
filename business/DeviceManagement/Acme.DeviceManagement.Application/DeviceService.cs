@@ -1,5 +1,5 @@
 using Acme.DeviceManagement.Domain;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 

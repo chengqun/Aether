@@ -1,4 +1,4 @@
-namespace Acme.Platform.Domain;
+namespace Acme.AppAuth.Domain;
 
 /// <summary>
 /// Resolves the current application user identifier. This is the app-server

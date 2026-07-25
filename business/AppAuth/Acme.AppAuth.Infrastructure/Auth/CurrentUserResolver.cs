@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 
-namespace Acme.Platform.Infrastructure.Auth;
+namespace Acme.AppAuth.Infrastructure.Auth;
 
 /// <summary>
 /// Resolves the current user id from the cached app-server access token's JWT

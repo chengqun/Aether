@@ -1,9 +1,9 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 
-namespace Acme.Platform.Infrastructure.Http;
+namespace Acme.AppAuth.Infrastructure.Http;
 
 /// <summary>
 /// Authenticated HTTP client for the company app server. Wraps an

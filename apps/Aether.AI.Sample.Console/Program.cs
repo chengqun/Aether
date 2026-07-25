@@ -13,12 +13,12 @@ using Acme.Llm.Infrastructure;
 using Acme.Llm.Application;
 using Acme.Llm.Application.DependencyInjection;
 using Acme.Llm.Infrastructure.DependencyInjection;
-using Acme.Platform.Domain;
-using Acme.Platform.Application;
-using Acme.Platform.Application.Auth;
-using Acme.Platform.Application.DependencyInjection;
-using Acme.Platform.Infrastructure;
-using Acme.Platform.Infrastructure.DependencyInjection;
+using Acme.AppAuth.Domain;
+using Acme.AppAuth.Application;
+using Acme.AppAuth.Application.Auth;
+using Acme.AppAuth.Application.DependencyInjection;
+using Acme.AppAuth.Infrastructure;
+using Acme.AppAuth.Infrastructure.DependencyInjection;
 using Acme.Qifu.AI;
 using Acme.Qifu.Application;
 using Acme.Qifu.Application.DependencyInjection;
@@ -125,14 +125,14 @@ static void ComposeContexts(IServiceCollection services)
     // Platform: app auth + authenticated HTTP + current user.
     // Defaults mirror AlphaAgent's stockapp (overridable via APP_BASEURL / APP_CLIENT_ID /
     // APP_CLIENT_SECRET / APP_TENANT env vars).
-    services.AddPlatformInfrastructure(o =>
+    services.AddAppAuthInfrastructure(o =>
     {
         o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL") ?? "https://117.72.186.128/";
         o.ClientId = Environment.GetEnvironmentVariable("APP_CLIENT_ID") ?? "alphaagent_chat";
         o.ClientSecret = Environment.GetEnvironmentVariable("APP_CLIENT_SECRET") ?? "chat_secret";
         o.Tenant = Environment.GetEnvironmentVariable("APP_TENANT") ?? "stockapp";
     });
-    services.AddPlatformApplication();
+    services.AddAppAuthApplication();
     // Llm: LLM config in SQLite.
     services.AddLlmInfrastructure();
     services.AddLlmApplication();

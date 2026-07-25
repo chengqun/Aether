@@ -1,6 +1,6 @@
 using System.Net.Http;
 
-namespace Acme.Platform.Domain;
+namespace Acme.AppAuth.Domain;
 
 /// <summary>
 /// Authenticated HTTP client for the company app server (ABP). Outgoing

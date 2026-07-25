@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Platform\Acme.Platform.Domain\Acme.Platform.Domain.csproj" />
+    <ProjectReference Include="..\..\AppAuth\Acme.AppAuth.Domain\Acme.AppAuth.Domain.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

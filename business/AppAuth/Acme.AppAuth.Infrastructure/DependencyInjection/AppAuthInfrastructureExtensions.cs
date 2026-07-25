@@ -1,11 +1,11 @@
 using System.IO;
-using Acme.Platform.Domain;
-using Acme.Platform.Infrastructure.Auth;
-using Acme.Platform.Infrastructure.Http;
-using Acme.Platform.Infrastructure.Persistence;
+using Acme.AppAuth.Domain;
+using Acme.AppAuth.Infrastructure.Auth;
+using Acme.AppAuth.Infrastructure.Http;
+using Acme.AppAuth.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Acme.Platform.Infrastructure.DependencyInjection;
+namespace Acme.AppAuth.Infrastructure.DependencyInjection;
 
 /// <summary>
 /// DI entry point for the Platform (app-server foundation) context. Registers
@@ -16,7 +16,7 @@ namespace Acme.Platform.Infrastructure.DependencyInjection;
 /// </summary>
 public static class PlatformInfrastructureExtensions
 {
-    public static IServiceCollection AddPlatformInfrastructure(
+    public static IServiceCollection AddAppAuthInfrastructure(
         this IServiceCollection services,
         Action<AppServerOptions>? configure = null)
     {

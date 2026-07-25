@@ -1,16 +1,16 @@
-using Acme.Platform.Application.Auth;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Application.Auth;
+using Acme.AppAuth.Domain;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Acme.Platform.Application.DependencyInjection;
+namespace Acme.AppAuth.Application.DependencyInjection;
 
 /// <summary>
 /// DI entry point for the Platform Application services (auth use cases).
-/// Call alongside <c>AddPlatformInfrastructure</c> at the composition root.
+/// Call alongside <c>AddAppAuthInfrastructure</c> at the composition root.
 /// </summary>
 public static class PlatformApplicationExtensions
 {
-    public static IServiceCollection AddPlatformApplication(this IServiceCollection services)
+    public static IServiceCollection AddAppAuthApplication(this IServiceCollection services)
     {
         // AppAuthService uses a plain HttpClient (base address only, NO bearer
         // handler) for connect/token — routing login/refresh through the

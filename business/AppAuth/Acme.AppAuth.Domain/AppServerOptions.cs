@@ -1,4 +1,4 @@
-namespace Acme.Platform.Domain;
+namespace Acme.AppAuth.Domain;
 
 /// <summary>
 /// Configuration for the Platform (app-server) context: the ABP server base

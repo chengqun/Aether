@@ -1,8 +1,8 @@
 using System.Net.Http;
 using System.Text.Json;
-using Acme.Platform.Domain;
+using Acme.AppAuth.Domain;
 
-namespace Acme.Platform.Application.Auth;
+namespace Acme.AppAuth.Application.Auth;
 
 /// <summary>
 /// App-server authentication via OAuth2 password grant (ABP <c>connect/token</c>).
