@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 /// <summary>
 /// 行号定位文件编辑工具 — 支持按行号插入、删除、替换代码段。

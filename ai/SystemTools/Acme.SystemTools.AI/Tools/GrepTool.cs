@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 public class GrepTool
 {

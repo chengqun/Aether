@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 /// <summary>
 /// Shell 命令执行工具 — 支持管道(|)、重定向(>)、链式操作(&&)等 Shell 特性。

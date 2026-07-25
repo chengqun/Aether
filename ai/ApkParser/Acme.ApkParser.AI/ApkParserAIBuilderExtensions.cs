@@ -1,4 +1,5 @@
 using System.Reflection;
+using Acme.ApkParser.AI.Tools;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;

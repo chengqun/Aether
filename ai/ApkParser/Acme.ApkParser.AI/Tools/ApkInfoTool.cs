@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.ApkParser.AI;
+namespace Acme.ApkParser.AI.Tools;
 
 /// <summary>
 /// APK 信息工具（接入 Agent 工具池，类别"APK 工具"）。让动态 Agent 能解析一个 .apk 文件，

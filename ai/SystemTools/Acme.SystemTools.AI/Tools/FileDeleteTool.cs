@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 /// <summary>
 /// 文件删除工具，供 AI Agent 删除本地文件（如查询结果 CSV）。

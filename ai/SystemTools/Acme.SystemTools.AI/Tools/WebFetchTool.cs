@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 /// <summary>
 /// Web 内容获取工具 — 获取指定 URL 的内容，用于查阅 API 文档、NuGet 包说明、代码示例等。

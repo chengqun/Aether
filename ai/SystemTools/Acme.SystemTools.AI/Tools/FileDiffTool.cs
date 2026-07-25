@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Acme.SystemTools.AI;
+namespace Acme.SystemTools.AI.Tools;
 
 /// <summary>
 /// 文件变更差异工具 — 比较两段内容或文件编辑前后的差异，生成统一格式 (unified) 的 diff 输出。

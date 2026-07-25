@@ -46,6 +46,7 @@ A multi-context DDD platform built on **Microsoft Agent Framework** (`Microsoft.
 Every adapter is the same shape (mirror `ai/Ctp`):
 - csproj: `Aether.AI.Hosting` + the context's **Application** project (never Infrastructure/Domain directly).
 - `XxxAIBuilderExtensions.cs` at project root: `AddXxxTools(this AetherAIBuilder)` (registers tools only) + `AddXxx(this AetherAIBuilder, string modelId)` (tools + agent). `ToolNames[]`, `CreateTool<T>` helper using `AIFunctionFactory.Create`.
+- Tool classes live in a `Tools/` subfolder, namespace `Acme.<Context>.AI.Tools` (all 8 adapters follow this). The builder extension adds `using Acme.<Context>.AI.Tools;`. Non-tool adapters (e.g. Quotes' `SecurityLookupAdapter` ACL bridge) stay at the project root.
 - Tool classes inject the context's **Application** service (`IXxxService`), with `[Description]`-annotated methods. Tools call Application contracts, never Domain/Infrastructure.
 - **`AddXxxTools` registers TOOLS ONLY — it must NOT register business layers.** The host composition root wires business layers (`AddXxxInfrastructure` + `AddXxxApplication`). Tests using `AddXxx(modelId)` register business layers themselves (see `tests/Acme.Ctp.AI.Tests`).
 - MEAI `AIFunctionFactory.Create` **strips the `Async` suffix** from method names — a method `QueryAccountAsync` becomes tool `QueryAccount`. `ToolNames` uses the stripped names.

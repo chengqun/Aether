@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Acme.ApkParser.AI;
+namespace Acme.ApkParser.AI.Tools;
 
 /// <summary>
 /// APK 解析结果。app_name=应用名（已解析 @string 引用），app_code=包名（package），

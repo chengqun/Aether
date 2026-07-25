@@ -2,7 +2,7 @@ using System.ComponentModel;
 using Acme.Automation.Application.Interfaces;
 using Acme.Automation.Domain;
 
-namespace Acme.Automation.AI;
+namespace Acme.Automation.AI.Tools;
 
 /// <summary>
 /// Automation tools exposed to the agent: manage scheduled automation tasks (CRUD) and

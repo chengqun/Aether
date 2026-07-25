@@ -5,7 +5,7 @@ using System.Linq;
 using AlphaOmega.Debug;
 using AlphaOmega.Debug.Manifest;
 
-namespace Acme.ApkParser.AI;
+namespace Acme.ApkParser.AI.Tools;
 
 /// <summary>
 /// APK 信息提取器：基于 <see cref="ApkFile"/>（AlphaOmega.ApkReader 库）解析 APK，

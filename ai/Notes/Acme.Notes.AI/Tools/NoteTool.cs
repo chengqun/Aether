@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Acme.Notes.Application;
 
-namespace Acme.Notes.AI;
+namespace Acme.Notes.AI.Tools;
 
 public class NoteTool
 {
