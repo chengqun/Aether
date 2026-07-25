@@ -77,6 +77,11 @@
     <Project Path="business/AppUpdate/Acme.AppUpdate.Domain/Acme.AppUpdate.Domain.csproj" />
     <Project Path="business/AppUpdate/Acme.AppUpdate.Infrastructure/Acme.AppUpdate.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/business/Automation/">
+    <Project Path="business/Automation/Acme.Automation.Application/Acme.Automation.Application.csproj" />
+    <Project Path="business/Automation/Acme.Automation.Domain/Acme.Automation.Domain.csproj" />
+    <Project Path="business/Automation/Acme.Automation.Infrastructure/Acme.Automation.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/business/ServiceAccount/">
     <Project Path="business/ServiceAccount/Acme.ServiceAccount.Application/Acme.ServiceAccount.Application.csproj" />
     <Project Path="business/ServiceAccount/Acme.ServiceAccount.Domain/Acme.ServiceAccount.Domain.csproj" />
