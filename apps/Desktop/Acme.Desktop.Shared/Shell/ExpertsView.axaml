@@ -1,0 +1,211 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.ExpertsView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Border.expert-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="16,14"/>
+    </Style>
+    <Style Selector="Button.top-tab">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="Button.top-tab:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#FF5252"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="TextBox.edit-field">
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="ListBox.cat-tabs">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem.cat-tab-item">
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBoxItem.cat-tab-item:selected">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- 顶部标题栏 -->
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <TextBlock Grid.Column="0" Text="🤖 专家" FontSize="16" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="从 Notes Agent 笔记加载的自定义助手" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="16,0,0,0" />
+        <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick" Padding="14,6" />
+      </Grid>
+    </Border>
+
+    <!-- 编辑面板 -->
+    <Border DockPanel.Dock="Top" IsVisible="{Binding IsEditing}" Padding="20,16" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="12" MaxWidth="600">
+        <TextBlock Text="编辑专家" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <StackPanel Spacing="8">
+          <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Classes="edit-field" Text="{Binding EditingItem.Name}" PlaceholderText="输入专家名称" />
+        </StackPanel>
+        <StackPanel Spacing="8">
+          <TextBlock Text="描述" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Classes="edit-field" Text="{Binding EditingItem.Description}" PlaceholderText="简要描述专家功能" />
+        </StackPanel>
+        <StackPanel Spacing="8">
+          <TextBlock Text="类别" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Classes="edit-field" Text="{Binding EditingItem.Category}" PlaceholderText="如：普通对话、股票分析" />
+        </StackPanel>
+        <StackPanel Spacing="8">
+          <TextBlock Text="工具（逗号分隔，留空表示不绑定工具）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Classes="edit-field" Text="{Binding EditingItem.ToolsText}" PlaceholderText="如：NoteQuery, NoteCreate, StockQuery" />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+          <StackPanel Spacing="8" Grid.Column="0">
+            <TextBlock Text="记忆模式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <ComboBox SelectedItem="{Binding EditingItem.Memory}"
+                      ItemsSource="{x:Static shell:AgentMemoryModeValues.All}"
+                      HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Spacing="8" Grid.Column="1">
+            <TextBlock Text="最大历史条数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBox Classes="edit-field" Text="{Binding EditingItem.MaxHistory}" />
+          </StackPanel>
+        </Grid>
+        <StackPanel Spacing="8">
+          <TextBlock Text="系统提示词" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Classes="edit-field" Text="{Binding EditingItem.SystemPrompt}" PlaceholderText="输入系统提示词（System Prompt）"
+                   AcceptsReturn="True" TextWrapping="Wrap" Height="120" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="保存" Classes="primary" Click="OnSaveExpertClick" Padding="20,8" />
+          <Button Content="取消" Click="OnCancelEditClick" Padding="20,8" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- 类别 Tab -->
+    <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White" IsVisible="{Binding !IsEditing}">
+      <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
+               SelectedItem="{Binding SelectedCategory}">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="8" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemContainerTheme>
+          <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+          </ControlTheme>
+        </ListBox.ItemContainerTheme>
+      </ListBox>
+    </Border>
+
+    <!-- 专家卡片列表 -->
+    <ScrollViewer Padding="20,16" IsVisible="{Binding !IsEditing}">
+      <StackPanel>
+        <!-- 空状态 -->
+        <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"
+                Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                HorizontalAlignment="Center" Margin="0,40">
+          <StackPanel Spacing="8" HorizontalAlignment="Center">
+            <TextBlock Text="🧩" FontSize="40" HorizontalAlignment="Center" />
+            <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+            <TextBlock Text="点击右上角「+ 添加专家」创建 Agent" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <!-- 卡片网格 -->
+        <ItemsControl ItemsSource="{Binding VisibleExperts}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="expert-card" Margin="0,0,12,12" Width="280">
+                <StackPanel Spacing="6">
+                  <!-- 标题行 -->
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding DisplayIcon}" FontSize="18" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border CornerRadius="4" Padding="5,1" Background="#FFF3E0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="#E65100" />
+                    </Border>
+                  </StackPanel>
+                  <!-- 描述 -->
+                  <TextBlock Text="{Binding Description}" FontSize="12"
+                             Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
+                  <!-- 类别 -->
+                  <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB" HorizontalAlignment="Left" Margin="0,2,0,0">
+                    <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
+                  </Border>
+                  <!-- 记忆模式 + 工具数 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                    <TextBlock Text="{Binding MemoryLabel}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="{Binding Tools.Count, StringFormat='工具 {0}'}" />
+                  </StackPanel>
+                  <!-- 操作按钮 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                    <Button Content="召唤" Classes="primary" Click="OnToggleSummonClick" Tag="{Binding}"
+                            Padding="12,4" FontSize="12"
+                            IsVisible="{Binding !IsSummoned}" />
+                    <Button Content="取消召唤" Click="OnToggleSummonClick" Tag="{Binding}"
+                            Padding="12,4" FontSize="12"
+                            IsVisible="{Binding IsSummoned}" />
+                    <Button Content="编辑" Click="OnEditClick" Tag="{Binding}"
+                            Padding="12,4" FontSize="12" />
+                    <Button Content="删除" Classes="danger" Click="OnDeleteClick" Tag="{Binding}"
+                            Padding="12,4" FontSize="12" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

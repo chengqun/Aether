@@ -40,6 +40,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider);
+        Experts = new ExpertsViewModel(serviceProvider);
+        Experts.SummonChanged += RefreshAgentSelectItems;
 
         SubscribeToConnectionStateChanges();
     }
@@ -158,11 +160,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是笔记页</summary>
     public bool IsNotesPage => CurrentPage == "notes";
 
-    /// <summary>是否是占位页（非聊天且非笔记）</summary>
-    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage;
+    /// <summary>是否是专家页</summary>
+    public bool IsExpertsPage => CurrentPage == "experts";
+
+    /// <summary>是否是占位页（非聊天/笔记/专家）</summary>
+    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage;
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
+
+    /// <summary>专家页 ViewModel</summary>
+    public ExpertsViewModel Experts { get; }
 
     /// <summary>导航项集合（租户填充）。</summary>
     public ObservableCollection<NavItem> NavItems { get; } = new();
@@ -171,6 +179,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         OnPropertyChanged(nameof(IsChatPage));
         OnPropertyChanged(nameof(IsNotesPage));
+        OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsPlaceholderPage));
     }
 
@@ -235,6 +244,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
         await LoadLlmConfigsAsync();
         await Notes.LoadAsync();
+        await Experts.LoadAsync();
+        RefreshAgentSelectItems();
         await TryAutoConnectDeviceAsync();
     }
 
@@ -256,6 +267,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         catch
         {
         }
+    }
+
+    /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家）。</summary>
+    private void RefreshAgentSelectItems()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            AgentSelectItems.Clear();
+            foreach (var e in Experts.GetSummonedExperts())
+                AgentSelectItems.Add(e);
+        });
     }
 
     private async Task TryAutoConnectDeviceAsync()

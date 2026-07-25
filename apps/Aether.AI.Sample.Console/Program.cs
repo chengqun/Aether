@@ -167,7 +167,7 @@ static void RegisterAgents(AetherAIBuilder aether, string modelId)
 {
     // One agent with all tools from every context (no agent switching needed).
     aether.AddQifuTools().AddCtpTools().AddQuotesTools().AddTradingTools();
-    aether.AddSystemTools().AddApkParser().AddNotesTools();
+    aether.AddSystemTools().AddApkParserTools().AddNotesTools();
     var allTools = QifuAIBuilderExtensions.ToolNames
         .Concat(CtpAIBuilderExtensions.ToolNames)
         .Concat(QuotesAIBuilderExtensions.ToolNames)

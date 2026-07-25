@@ -82,7 +82,7 @@ public static class DesktopCompositionExtensions
         services.AddDeviceManagementApplication();
 
         // —— 公共 AI 工具（两租户共用）——
-        aether.AddSystemTools().AddApkParser().AddNotesTools().AddAutomationTools();
+        aether.AddSystemTools().AddApkParserTools().AddNotesTools().AddAutomationTools();
 
         // 登录对话框服务（从 Application.Current 取主窗口弹模态登录窗）
         services.AddSingleton<ILoginDialogService, LoginDialogService>();

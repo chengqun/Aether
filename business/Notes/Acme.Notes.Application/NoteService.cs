@@ -45,6 +45,7 @@ public sealed class NoteService : INoteService
             Content = request.Content,
             Syntax = request.Syntax,
             Tags = request.Tags,
+            NodeType = request.NodeType,
         };
 
         var created = await _repository.CreateAsync(node, ct);
@@ -66,6 +67,8 @@ public sealed class NoteService : INoteService
             node.Syntax = request.Syntax;
         if (request.Tags is not null)
             node.Tags = request.Tags;
+        if (request.NodeType.HasValue)
+            node.NodeType = request.NodeType.Value;
 
         await _repository.UpdateAsync(node, ct);
     }
@@ -92,5 +95,6 @@ public sealed class NoteService : INoteService
         Syntax = node.Syntax,
         Tags = node.Tags,
         IsReadOnly = node.IsReadOnly,
+        NodeType = node.NodeType,
     };
 }
