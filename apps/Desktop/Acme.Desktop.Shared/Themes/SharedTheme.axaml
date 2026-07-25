@@ -37,6 +37,12 @@
       <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
       <SolidColorBrush x:Key="UserBubbleBrush" Color="{StaticResource UserBubbleBg}"/>
       <SolidColorBrush x:Key="AgentBubbleBrush" Color="{StaticResource AgentBubbleBg}"/>
+      <SolidColorBrush x:Key="ToolCallBrush" Color="#EEF0FB"/>
+      <SolidColorBrush x:Key="ToolCallBorderBrush" Color="#D1D5F0"/>
+      <SolidColorBrush x:Key="ToolCallTextBrush" Color="#3D40B5"/>
+      <SolidColorBrush x:Key="ToolResultBrush" Color="#ECF8F0"/>
+      <SolidColorBrush x:Key="ToolResultBorderBrush" Color="#C2E8CF"/>
+      <SolidColorBrush x:Key="ToolResultTextBrush" Color="#1F8A4C"/>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -160,6 +166,75 @@
     <Setter Property="Background" Value="{DynamicResource AgentBubbleBrush}"/>
     <Setter Property="CornerRadius" Value="14"/>
     <Setter Property="Padding" Value="16,12"/>
+  </Style>
+
+  <!-- ChatGPT 风格输入框卡片 -->
+  <Style Selector="Border.chat-input-card">
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="18"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="BoxShadow" Value="0 4 12 0 #14000000"/>
+  </Style>
+
+  <!-- 输入框文本区 -->
+  <Style Selector="TextBox.chat-text">
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="14,12,52,12"/>
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="LineHeight" Value="20"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    <Setter Property="AcceptsReturn" Value="True"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+    <Setter Property="Height" Value="88"/>
+    <Setter Property="MaxHeight" Value="88"/>
+  </Style>
+
+  <!-- 工具条芯片容器 -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="#F3F4F6"/>
+    <Setter Property="CornerRadius" Value="13"/>
+    <Setter Property="Padding" Value="10,4"/>
+    <Setter Property="Height" Value="26"/>
+  </Style>
+  <Style Selector="Border.chip:pointerover">
+    <Setter Property="Background" Value="#E5E7EB"/>
+  </Style>
+
+  <!-- 发送按钮 -->
+  <Style Selector="Button.send-btn">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="Width" Value="34"/>
+    <Setter Property="Height" Value="34"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="16"/>
+  </Style>
+  <Style Selector="Button.send-btn:disabled">
+    <Setter Property="Background" Value="#D1D5DB"/>
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
+  <!-- 紧凑 ComboBox -->
+  <Style Selector="ComboBox.compact">
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  </Style>
+
+  <!-- 工具卡片 -->
+  <Style Selector="Border.tool-card">
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="12,8"/>
+    <Setter Property="MaxWidth" Value="640"/>
+    <Setter Property="BorderThickness" Value="1"/>
   </Style>
 
 </Styles>

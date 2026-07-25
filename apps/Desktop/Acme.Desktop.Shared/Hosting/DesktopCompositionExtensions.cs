@@ -72,8 +72,11 @@ public static class DesktopCompositionExtensions
         services.AddChatSocialInfrastructure();
         services.AddChatSocialApplication();
 
-        services.AddDeviceConnectInfrastructure();
-        services.AddDeviceConnectApplication();
+        services.AddDeviceConnectInfrastructure(Path.Combine(tenantDir, "device.db"));
+        services.AddDeviceConnectApplication(o =>
+        {
+            o.Tenant = tenant;
+        });
 
         services.AddDeviceManagementInfrastructure(Path.Combine(tenantDir, "device.db"));
         services.AddDeviceManagementApplication();
@@ -83,6 +86,10 @@ public static class DesktopCompositionExtensions
 
         // 登录对话框服务（从 Application.Current 取主窗口弹模态登录窗）
         services.AddSingleton<ILoginDialogService, LoginDialogService>();
+
+        // 设置对话框服务
+        services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
+        services.AddTransient<SettingsViewModel>();
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;

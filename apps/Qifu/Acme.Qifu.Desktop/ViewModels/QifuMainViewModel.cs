@@ -1,6 +1,9 @@
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Desktop.Shared.Shell;
+using Acme.DeviceConnect.Domain;
+using Acme.Llm.Application;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Qifu.Desktop.ViewModels;
 
@@ -10,8 +13,8 @@ namespace Acme.Qifu.Desktop.ViewModels;
 /// </summary>
 public sealed class QifuMainViewModel : MainViewModelBase
 {
-    public QifuMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog)
-        : base(auth, currentUser, loginDialog)
+    public QifuMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService)
+        : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService, "qifu")
     {
         AddNav("chat", "✨", "新聊天");
         AddNav("experts", "🧪", "专家");

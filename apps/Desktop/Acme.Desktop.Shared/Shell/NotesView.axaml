@@ -1,0 +1,137 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.NotesView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Border.note-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="16,14"/>
+    </Style>
+    <Style Selector="Button.notes-tool">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="Button.notes-tool:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Background" Value="#F5F5F5"/>
+    </Style>
+    <Style Selector="Button.notes-primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="12,4"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- 顶栏 -->
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="📝 笔记" FontSize="15" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="本地 Markdown 笔记（右键菜单操作）" FontSize="12"
+                     Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <!-- 主体：左树 + 右编辑 -->
+    <Grid ColumnDefinitions="260,*" Margin="20,12,20,16">
+
+      <!-- 左：笔记树 -->
+      <Border Grid.Column="0" Classes="note-card" Padding="0">
+        <DockPanel>
+          <!-- 工具条 -->
+          <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Content="➕ 新建" Classes="notes-tool" Command="{Binding CreateRootNoteCommand}" />
+              <Button Content="📁 子节点" Classes="notes-tool" Command="{Binding CreateChildNoteCommand}" />
+              <Button Content="🗑 删除" Classes="notes-tool" Command="{Binding DeleteNoteCommand}" />
+            </StackPanel>
+          </Border>
+          <!-- 树 -->
+          <TreeView ItemsSource="{Binding Roots}"
+                    SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{Binding Icon}" FontSize="14" />
+                  <TextBlock Text="{Binding Title}" FontSize="13"
+                             Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+            <TreeView.Styles>
+              <Style Selector="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="Padding" Value="4,2"/>
+              </Style>
+            </TreeView.Styles>
+          </TreeView>
+        </DockPanel>
+      </Border>
+
+      <!-- 右：编辑区 -->
+      <Border Grid.Column="1" Classes="note-card" Margin="12,0,0,0" Padding="0">
+        <Grid>
+          <!-- 空状态 -->
+          <Border IsVisible="{Binding !SelectedNode}">
+            <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <TextBlock Text="📝" FontSize="40" HorizontalAlignment="Center" />
+              <TextBlock Text="选择左侧一条笔记，或点击「新建」开始" FontSize="13"
+                         Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+
+          <!-- 编辑区 -->
+          <DockPanel IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+            <!-- 工具条 -->
+            <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding SelectedNode.Icon}" FontSize="16" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding SelectedNode.Title}" BorderThickness="0" FontSize="16"
+                           FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
+                           Padding="0" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="{Binding IsPreviewMode, Converter={x:Static shell:BoolToTextConverter.EditPreview}}"
+                        Classes="notes-tool" Command="{Binding TogglePreviewCommand}" />
+                <Button Grid.Column="2" Content="💾 保存" Classes="notes-primary" Command="{Binding SaveNoteCommand}" />
+              </Grid>
+            </Border>
+
+            <!-- 内容区 -->
+            <Grid>
+              <!-- 编辑模式 -->
+              <TextBox IsVisible="{Binding !IsPreviewMode}"
+                       Text="{Binding SelectedNode.Content, Mode=TwoWay}"
+                       AcceptsReturn="True" TextWrapping="Wrap" BorderThickness="0"
+                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="13"
+                       Padding="12,8" />
+              <!-- 预览模式：简单纯文本渲染（避免额外依赖） -->
+              <TextBox IsVisible="{Binding IsPreviewMode}"
+                       Text="{Binding SelectedNode.Content}"
+                       IsReadOnly="True" BorderThickness="0"
+                       TextWrapping="Wrap" FontSize="13"
+                       Padding="12,8" Foreground="{DynamicResource TextPrimaryBrush}" />
+            </Grid>
+          </DockPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

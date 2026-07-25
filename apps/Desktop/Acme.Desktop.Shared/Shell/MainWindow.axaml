@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.MainWindow"
         Title="Aether 桌面"
         Width="1200" Height="800"
@@ -39,7 +40,7 @@
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
-              <MenuItem Header="设置" IsEnabled="False" ToolTip.Tip="（待实现）"/>
+              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
@@ -49,7 +50,10 @@
               <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <TextBlock Text="{Binding UserName}" FontSize="13" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Vertical" Spacing="2">
+              <TextBlock Text="{Binding UserName}" FontSize="13" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding Tenant}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
           </StackPanel>
         </Button>
       </Grid>
@@ -80,7 +84,7 @@
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
-              <MenuItem Header="设置" IsEnabled="False" ToolTip.Tip="（待实现）"/>
+              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
@@ -93,12 +97,16 @@
       </Grid>
     </Border>
 
-    <!-- ═══ 内容区（骨架占位；功能 phase 注入真实 View） ═══ -->
+    <!-- ═══ 内容区（View 实例驻留，IsVisible 切换，保持状态） ═══ -->
     <Grid Grid.Column="1" Background="{DynamicResource ContentBgBrush}">
-      <TextBlock Text="{Binding CurrentPageLabel}"
+      <shell:ChatView x:Name="ChatViewInstance" DataContext="{Binding}" IsVisible="{Binding IsChatPage}" />
+      <shell:NotesView x:Name="NotesViewInstance" DataContext="{Binding Notes}"
+          IsVisible="{Binding DataContext.IsNotesPage, RelativeSource={RelativeSource AncestorType=Window}}" />
+      <TextBlock x:Name="PlaceholderView" Text="即将上线…"
                  FontSize="20" FontWeight="SemiBold"
                  Foreground="{DynamicResource TextSecondaryBrush}"
-                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 IsVisible="{Binding IsPlaceholderPage}" />
     </Grid>
 
   </Grid>

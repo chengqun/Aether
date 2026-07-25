@@ -1,0 +1,189 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Desktop.Shared.Shell"
+             xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
+             x:Class="Acme.Desktop.Shared.Shell.ChatView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Resources>
+    <conv:DictToStringConverter x:Key="DictToString" />
+
+    <DataTemplate x:Key="MsgTemplate" DataType="vm:ChatMessageItem">
+      <Grid Margin="0,6">
+        <Border Classes="bubble-user" HorizontalAlignment="Right" IsVisible="{Binding IsUserText}">
+          <StackPanel Spacing="3" HorizontalAlignment="Right">
+            <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" Foreground="White"/>
+            <TextBlock FontSize="10" Foreground="#E0E0FF" HorizontalAlignment="Right" Opacity="0.9">
+              <Run Text="{Binding Sender}" /><Run Text=" · " /><Run Text="{Binding Time}" />
+            </TextBlock>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
+                IsVisible="{Binding IsAgentStreamingText}" PointerPressed="OnStreamingCardTapped">
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="🤔" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock Text="深度思考中" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsStreamingExpanded}" />
+              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsStreamingExpanded}" />
+            </StackPanel>
+            <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsStreamingExpanded}" Margin="0,2,0,0">
+              <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                            ScrollChanged="OnStreamingScrollChanged">
+                <TextBlock Text="{Binding Content}" FontSize="12" TextWrapping="Wrap"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+              </ScrollViewer>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="bubble-agent" HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentMarkdownText}">
+          <StackPanel Spacing="6" HorizontalAlignment="Left">
+            <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9">
+              <Run Text="{Binding Sender}" /><Run Text=" · " /><Run Text="{Binding Time}" />
+            </TextBlock>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
+                IsVisible="{Binding IsToolCall}" PointerPressed="OnToolCardTapped">
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="🔧" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center">
+                <Run Text="调用 " /><Run Text="{Binding ToolName}" />
+              </TextBlock>
+              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+            </StackPanel>
+            <TextBlock Text="{Binding Input, Converter={StaticResource DictToString}}" FontSize="11" MaxLines="2" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" IsVisible="{Binding !IsExpanded}" />
+            <Border Background="#FFFFFF" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
+              <TextBlock Text="{Binding Input, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
+                         FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolResultBrush}" BorderBrush="{DynamicResource ToolResultBorderBrush}"
+                IsVisible="{Binding IsToolResult}" PointerPressed="OnToolCardTapped">
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="✅" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolResultTextBrush}" VerticalAlignment="Center">
+                <Run Text="结果 " /><Run Text="{Binding ToolName}" />
+              </TextBlock>
+              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+            </StackPanel>
+            <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" MaxLines="2" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" IsVisible="{Binding !IsExpanded}" />
+            <Border Background="#FFFFFF" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
+              <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
+                         FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="bubble-agent" HorizontalAlignment="Left" IsVisible="{Binding IsThinking}">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Content}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" FontStyle="Italic" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource CardBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Ellipse Width="9" Height="9" Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
+          <TextBlock Text="{Binding ConnectionLabel}" FontSize="13" FontWeight="Medium"
+                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+        <Button Grid.Column="1" Content="⚙️" Click="OnDeviceConfigClick"
+                Background="Transparent" BorderThickness="0" Padding="0"
+                Width="32" Height="32" FontSize="17"
+                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Margin="6,0,0,0" ToolTip.Tip="设备连接配置" />
+        <TextBlock Grid.Column="2" Text="{Binding TokenInfo}" VerticalAlignment="Center" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,0,0,0" />
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Padding="16,10,16,8" Background="{DynamicResource ContentBgBrush}">
+      <StackPanel Spacing="6">
+        <Border Classes="chat-input-card">
+          <Grid RowDefinitions="Auto,*">
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="10,10,0,8" HorizontalAlignment="Left">
+              <Border Classes="chip">
+                <ComboBox Classes="compact" ItemsSource="{Binding AgentSelectItems}" SelectedItem="{Binding SelectedAgentItem}" PlaceholderText="选择专家">
+                  <ComboBox.SelectionBoxItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Text="🤖" FontSize="11" /><TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.SelectionBoxItemTemplate>
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name}" FontSize="13" />
+                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="Gray" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </Border>
+              <Border Classes="chip">
+                <ComboBox Classes="compact" ItemsSource="{Binding LlmSelectItems}" SelectedItem="{Binding SelectedLlmItem}" PlaceholderText="选择 LLM">
+                  <ComboBox.SelectionBoxItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Text="⚡" FontSize="11" /><TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.SelectionBoxItemTemplate>
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate><TextBlock Text="{Binding Name}" FontSize="13" /></DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </Border>
+            </StackPanel>
+            <Grid Grid.Row="1">
+              <TextBox Classes="chat-text" Text="{Binding InputText}" PlaceholderText="输入消息与助手对话…"
+                       IsEnabled="{Binding CanSendInput}" CaretBrush="{DynamicResource TextPrimaryBrush}">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding SendInputCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+              <Button Classes="send-btn" Command="{Binding SendInputCommand}" IsEnabled="{Binding CanSendInput}"
+                      HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8">
+                <PathIcon Width="16" Height="16"><PathIcon.Data><Geometry>M2 21l21-9L2 3v7l15 2-15 2v7z</Geometry></PathIcon.Data></PathIcon>
+              </Button>
+            </Grid>
+          </Grid>
+        </Border>
+        <TextBlock Text="内容由 AI 生成，请核实重要信息" FontSize="11"
+                   Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.7" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}">
+      <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MsgTemplate}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Orientation="Vertical" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

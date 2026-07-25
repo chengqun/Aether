@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.LlmConfigEditWindow"
+        Title="LLM 配置"
+        Width="500" Height="500"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid Margin="20">
+    <StackPanel>
+      <TextBlock Text="{Binding WindowTitle}" FontSize="18" FontWeight="Bold" Margin="0,0,0,16"/>
+
+      <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="配置名称" FontSize="13" 
+                   VerticalAlignment="Center" Margin="0,0,0,8"/>
+        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" 
+                 Margin="8,0,0,8" PlaceholderText="如 DeepSeek、GPT-4o"
+                 Classes="input"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="模型名称" FontSize="13" 
+                   VerticalAlignment="Center" Margin="0,0,0,8"/>
+        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ModelName}" 
+                 Margin="8,0,0,8" PlaceholderText="如 deepseek-chat"
+                 Classes="input"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="API Key" FontSize="13" 
+                   VerticalAlignment="Center" Margin="0,0,0,8"/>
+        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ApiKey}" 
+                 Margin="8,0,0,8" PlaceholderText="API 密钥"
+                 Classes="input"/>
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Endpoint" FontSize="13" 
+                   VerticalAlignment="Center" Margin="0,0,0,8"/>
+        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Endpoint}" 
+                 Margin="8,0,0,8" PlaceholderText="如 https://api.deepseek.com/v1"
+                 Classes="input"/>
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="Temperature" FontSize="13" 
+                   VerticalAlignment="Center" Margin="0,0,0,8"/>
+        <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding Temperature}"
+                       Minimum="0" Maximum="2" Increment="0.1" Margin="8,0,0,8"/>
+
+        <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" 
+                    Margin="0,0,0,8" Spacing="8">
+          <CheckBox IsChecked="{Binding IsDefault}">
+            <TextBlock Text="设为默认配置" FontSize="13"/>
+          </CheckBox>
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}"
+                 FontSize="12" Margin="0,0,0,12" IsVisible="{Binding HasError}"/>
+
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="取消" Command="{Binding CancelCommand}"/>
+        <Button Content="保存" Classes="primary" 
+                Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}"/>
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>
