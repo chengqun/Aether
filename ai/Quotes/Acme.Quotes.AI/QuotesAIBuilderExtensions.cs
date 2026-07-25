@@ -30,6 +30,12 @@ public static class QuotesAIBuilderExtensions
         services.AddTransient<TechnicalAnalysisTool>();
         services.AddSingleton<AIFunction>(sp => CreateTool<SecurityQueryTool>(sp, nameof(SecurityQueryTool.QuerySecurity)));
         services.AddSingleton<AIFunction>(sp => CreateTool<TechnicalAnalysisTool>(sp, nameof(TechnicalAnalysisTool.CalculateIndicators)));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "股票行情";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

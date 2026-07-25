@@ -59,13 +59,17 @@ public static class AetherAIServiceCollectionExtensions
             return client.GetChatClient(options.OpenAI.ModelId).AsIChatClient();
         });
 
-        // Tools
+        // Tools — collect metadata (categories, etc.) from each adapter's contributor, then build.
         services.AddSingleton<ToolRegistry>(sp =>
         {
             var registry = new ToolRegistry();
             foreach (var tool in sp.GetServices<AIFunction>())
             {
                 registry.Register(tool);
+            }
+            foreach (var contributor in sp.GetServices<IToolRegistryContributor>())
+            {
+                contributor.Contribute(registry);
             }
             return registry;
         });

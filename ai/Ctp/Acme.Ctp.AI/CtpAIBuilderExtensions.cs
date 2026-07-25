@@ -33,6 +33,12 @@ public static class CtpAIBuilderExtensions
         services.AddSingleton<AIFunction>(sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)));
         services.AddSingleton<AIFunction>(sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)));
         services.AddSingleton<AIFunction>(sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "期货交易";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

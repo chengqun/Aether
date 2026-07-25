@@ -39,6 +39,20 @@ public class ToolRegistryTests
         Assert.False(registry.Contains("GetWeather"));
     }
 
+    [Fact]
+    public void GetAllMetas_returns_category_and_description()
+    {
+        var registry = new ToolRegistry();
+        registry.RegisterFunction((Func<string, string>)GetWeather, category: "test");
+
+        var metas = registry.GetAllMetas();
+
+        Assert.Single(metas);
+        Assert.Equal("GetWeather", metas[0].Name);
+        Assert.Equal("test", metas[0].Category);
+        Assert.Equal("Get the weather for a city.", metas[0].Description);
+    }
+
     [Description("Get the weather for a city.")]
     static string GetWeather([Description("The city.")] string city) => $"{city}: sunny";
 }

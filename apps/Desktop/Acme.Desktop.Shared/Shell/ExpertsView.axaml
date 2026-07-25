@@ -12,17 +12,6 @@
       <Setter Property="CornerRadius" Value="12"/>
       <Setter Property="Padding" Value="16,14"/>
     </Style>
-    <Style Selector="Button.top-tab">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="14,6"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    </Style>
-    <Style Selector="Button.top-tab:disabled">
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="White"/>
@@ -34,12 +23,6 @@
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="CornerRadius" Value="6"/>
-    </Style>
-    <Style Selector="TextBox.edit-field">
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="10,6"/>
-      <Setter Property="FontSize" Value="13"/>
     </Style>
     <Style Selector="ListBox.cat-tabs">
       <Setter Property="Background" Value="Transparent"/>
@@ -70,53 +53,8 @@
       </Grid>
     </Border>
 
-    <!-- 编辑面板 -->
-    <Border DockPanel.Dock="Top" IsVisible="{Binding IsEditing}" Padding="20,16" Background="White"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <StackPanel Spacing="12" MaxWidth="600">
-        <TextBlock Text="编辑专家" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-        <StackPanel Spacing="8">
-          <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Classes="edit-field" Text="{Binding EditingItem.Name}" PlaceholderText="输入专家名称" />
-        </StackPanel>
-        <StackPanel Spacing="8">
-          <TextBlock Text="描述" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Classes="edit-field" Text="{Binding EditingItem.Description}" PlaceholderText="简要描述专家功能" />
-        </StackPanel>
-        <StackPanel Spacing="8">
-          <TextBlock Text="类别" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Classes="edit-field" Text="{Binding EditingItem.Category}" PlaceholderText="如：普通对话、股票分析" />
-        </StackPanel>
-        <StackPanel Spacing="8">
-          <TextBlock Text="工具（逗号分隔，留空表示不绑定工具）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Classes="edit-field" Text="{Binding EditingItem.ToolsText}" PlaceholderText="如：NoteQuery, NoteCreate, StockQuery" />
-        </StackPanel>
-        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-          <StackPanel Spacing="8" Grid.Column="0">
-            <TextBlock Text="记忆模式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-            <ComboBox SelectedItem="{Binding EditingItem.Memory}"
-                      ItemsSource="{x:Static shell:AgentMemoryModeValues.All}"
-                      HorizontalAlignment="Stretch" />
-          </StackPanel>
-          <StackPanel Spacing="8" Grid.Column="1">
-            <TextBlock Text="最大历史条数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-            <TextBox Classes="edit-field" Text="{Binding EditingItem.MaxHistory}" />
-          </StackPanel>
-        </Grid>
-        <StackPanel Spacing="8">
-          <TextBlock Text="系统提示词" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Classes="edit-field" Text="{Binding EditingItem.SystemPrompt}" PlaceholderText="输入系统提示词（System Prompt）"
-                   AcceptsReturn="True" TextWrapping="Wrap" Height="120" />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Content="保存" Classes="primary" Click="OnSaveExpertClick" Padding="20,8" />
-          <Button Content="取消" Click="OnCancelEditClick" Padding="20,8" />
-        </StackPanel>
-      </StackPanel>
-    </Border>
-
     <!-- 类别 Tab -->
-    <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White" IsVisible="{Binding !IsEditing}">
+    <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White">
       <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
                SelectedItem="{Binding SelectedCategory}">
         <ListBox.ItemsPanel>
@@ -137,7 +75,7 @@
     </Border>
 
     <!-- 专家卡片列表 -->
-    <ScrollViewer Padding="20,16" IsVisible="{Binding !IsEditing}">
+    <ScrollViewer Padding="20,16">
       <StackPanel>
         <!-- 空状态 -->
         <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"

@@ -23,6 +23,12 @@ public static class ApkParserAIBuilderExtensions
         s.AddSingleton<ApkInfoExtractor>();
         s.AddTransient<ApkInfoTool>();
         s.AddSingleton<AIFunction>(sp => CreateTool<ApkInfoTool>(sp, "GetApkInfo"));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "APK 解析";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

@@ -31,6 +31,12 @@ public static class AutomationAIBuilderExtensions
         services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.DeleteAutomationTaskAsync)));
         services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StartSchedulerAsync)));
         services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StopSchedulerAsync)));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "自动化";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

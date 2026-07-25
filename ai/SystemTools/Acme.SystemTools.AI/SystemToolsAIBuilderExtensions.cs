@@ -47,6 +47,12 @@ public static class SystemToolsAIBuilderExtensions
         s.AddSingleton<AIFunction>(sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"));
         s.AddSingleton<AIFunction>(sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
         s.AddSingleton<AIFunction>(sp => CreateTool<FileDiffTool>(sp, "DiffFile"));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "系统工具";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

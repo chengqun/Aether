@@ -3,6 +3,21 @@ using Microsoft.Extensions.AI;
 
 namespace Aether.AI.Harness.Tools;
 
+/// <summary>工具元数据（名称 + 描述 + 分类），供 UI 选择展示。</summary>
+public sealed class ToolMeta
+{
+    public string Name { get; }
+    public string Description { get; }
+    public string Category { get; }
+
+    public ToolMeta(string name, string description, string category)
+    {
+        Name = name;
+        Description = description;
+        Category = category;
+    }
+}
+
 /// <summary>
 /// Registry of <see cref="AIFunction"/> tools, keyed by tool name. Tools are
 /// registered once at startup and resolved by name when building an agent from
@@ -17,13 +32,21 @@ namespace Aether.AI.Harness.Tools;
 public sealed class ToolRegistry
 {
     private readonly ConcurrentDictionary<string, AIFunction> _tools = new();
+    private readonly ConcurrentDictionary<string, string> _categories = new();
 
     /// <summary>Registers a tool, keyed by <see cref="AIFunction.Name"/>.</summary>
-    public ToolRegistry Register(AIFunction tool)
+    public ToolRegistry Register(AIFunction tool, string category = "未分类")
     {
         if (tool is null) throw new ArgumentNullException(nameof(tool));
         _tools[tool.Name] = tool;
+        _categories[tool.Name] = category;
         return this;
+    }
+
+    /// <summary>设置某个工具的分类（用于已注册工具的分类补充）。</summary>
+    public void SetCategory(string toolName, string category)
+    {
+        _categories[toolName] = category;
     }
 
     /// <summary>
@@ -31,11 +54,26 @@ public sealed class ToolRegistry
     /// (and parameters) should be annotated with <c>[Description]</c> so the
     /// model understands how to call it.
     /// </summary>
-    public ToolRegistry RegisterFunction(Delegate method, string? name = null)
+    public ToolRegistry RegisterFunction(Delegate method, string? name = null, string category = "未分类")
     {
         if (method is null) throw new ArgumentNullException(nameof(method));
         var tool = AIFunctionFactory.Create(method, name);
-        return Register(tool);
+        return Register(tool, category);
+    }
+
+    /// <summary>获取所有工具的元数据（名称 + 描述 + 分类），供 UI 选择展示。</summary>
+    public IReadOnlyList<ToolMeta> GetAllMetas()
+    {
+        var result = new List<ToolMeta>();
+        foreach (var kv in _tools)
+        {
+            var name = kv.Key;
+            var tool = kv.Value;
+            var desc = tool.Description ?? string.Empty;
+            var cat = _categories.TryGetValue(name, out var c) ? c : "未分类";
+            result.Add(new ToolMeta(name, desc, cat));
+        }
+        return result.OrderBy(t => t.Category).ThenBy(t => t.Name).ToList();
     }
 
     /// <summary>Resolves a tool by name, or <c>null</c> if not registered.</summary>

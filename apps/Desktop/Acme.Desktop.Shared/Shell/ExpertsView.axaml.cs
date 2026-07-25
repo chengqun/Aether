@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -12,14 +13,21 @@ public partial class ExpertsView : UserControl
 
     private ExpertsViewModel? VM => DataContext as ExpertsViewModel;
 
-    private void OnAddExpertClick(object sender, RoutedEventArgs e)
-        => VM?.AddExpertCommand.Execute(null);
+    private Window? GetOwnerWindow() => TopLevel.GetTopLevel(this) as Window;
 
-    private void OnSaveExpertClick(object sender, RoutedEventArgs e)
-        => VM?.SaveExpertCommand.Execute(null);
-
-    private void OnCancelEditClick(object sender, RoutedEventArgs e)
-        => VM?.CancelEditCommand.Execute(null);
+    private async void OnAddExpertClick(object sender, RoutedEventArgs e)
+    {
+        if (VM == null) return;
+        try
+        {
+            var vm = VM.CreateEditViewModel(null);
+            await ShowDialogAsync(vm);
+        }
+        catch (Exception ex)
+        {
+            VM.StatusMessage = $"打开编辑窗口失败：{ex.Message}";
+        }
+    }
 
     private void OnToggleSummonClick(object sender, RoutedEventArgs e)
     {
@@ -27,15 +35,54 @@ public partial class ExpertsView : UserControl
             VM.ToggleSummonCommand.Execute(item);
     }
 
-    private void OnEditClick(object sender, RoutedEventArgs e)
+    private async void OnEditClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is ExpertItem item && VM != null)
-            VM.EditExpertCommand.Execute(item);
+        {
+            try
+            {
+                var vm = VM.CreateEditViewModel(item);
+                await ShowDialogAsync(vm);
+            }
+            catch (Exception ex)
+            {
+                VM.StatusMessage = $"打开编辑窗口失败：{ex.Message}";
+            }
+        }
     }
 
     private void OnDeleteClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is ExpertItem item && VM != null)
             VM.DeleteExpertCommand.Execute(item);
+    }
+
+    private async System.Threading.Tasks.Task ShowDialogAsync(ExpertEditViewModel vm)
+    {
+        if (VM == null) return;
+        try
+        {
+            var window = new ExpertEditWindow { DataContext = vm };
+            var owner = GetOwnerWindow();
+
+            vm.SaveRequested += async saved =>
+            {
+                var result = await VM.SaveAsync(saved);
+                if (result.Success)
+                    window.Close();
+                else
+                    vm.Error = result.Error;
+            };
+            vm.CancelRequested += () => window.Close();
+
+            if (owner != null)
+                await window.ShowDialog(owner);
+            else
+                window.Show();
+        }
+        catch (Exception ex)
+        {
+            VM.StatusMessage = $"显示窗口失败：{ex.Message}";
+        }
     }
 }

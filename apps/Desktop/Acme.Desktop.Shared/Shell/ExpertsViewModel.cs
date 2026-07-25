@@ -9,13 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>提供 AgentMemoryMode 枚举值列表供 UI 绑定。</summary>
-public static class AgentMemoryModeValues
-{
-    public static AgentMemoryMode[] All { get; } =
-        { AgentMemoryMode.SlidingWindow, AgentMemoryMode.Full, AgentMemoryMode.Off };
-}
-
 /// <summary>专家（Agent）卡片行模型。</summary>
 public sealed partial class ExpertItem : ObservableObject
 {
@@ -32,14 +25,6 @@ public sealed partial class ExpertItem : ObservableObject
 
     /// <summary>滑动窗口最大历史条数。</summary>
     [ObservableProperty] private int _maxHistory = 20;
-
-    /// <summary>工具列表的文本表示（逗号分隔，供 UI 编辑）。</summary>
-    public string ToolsText
-    {
-        get => Tools.Count == 0 ? string.Empty : string.Join(", ", Tools);
-        set => Tools = value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-    }
 
     public string DisplayIcon => "🤖";
     public string SourceBadge => "本地";
@@ -68,8 +53,6 @@ public partial class ExpertsViewModel : ObservableObject
 
     [ObservableProperty] private string _selectedCategory = "全部";
     [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isEditing;
-    [ObservableProperty] private ExpertItem? _editingItem;
 
     /// <summary>召唤变化事件（聊天页订阅）。</summary>
     public event Action? SummonChanged;
@@ -114,7 +97,6 @@ public partial class ExpertsViewModel : ObservableObject
                     }
                     else
                     {
-                        // 解析失败也展示，用标题当名称
                         var item = new ExpertItem
                         {
                             Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid(),
@@ -153,102 +135,69 @@ public partial class ExpertsViewModel : ObservableObject
 
     partial void OnSelectedCategoryChanged(string value) => RefreshVisibleExperts();
 
-    /// <summary>新建 Agent（保存为 NoteNodeType=Agent 的笔记）。</summary>
-    [RelayCommand]
-    private async Task AddExpertAsync()
+    /// <summary>创建新专家（仅在用户点保存后才落库）。</summary>
+    public ExpertItem CreateNew()
     {
-        try
+        return new ExpertItem
         {
-            var name = "新专家";
-            var source = AgentSourceParser.Template(name);
-            var dto = await NoteService.CreateAsync(new CreateNoteRequest
-            {
-                Title = name,
-                Content = source,
-                NodeType = NoteNodeType.Agent,
-            });
-            await LoadAsync();
-            StatusMessage = $"已创建：{name}";
-            SummonChanged?.Invoke();
-
-            // 打开编辑
-            if (Guid.TryParse(dto.Id, out var newId))
-            {
-                var created = Experts.FirstOrDefault(e => e.Id == newId);
-                if (created != null) BeginEdit(created);
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"创建失败：{ex.Message}";
-        }
-    }
-
-    private void BeginEdit(ExpertItem item)
-    {
-        EditingItem = new ExpertItem
-        {
-            Id = item.Id,
-            Name = item.Name,
-            Description = item.Description,
-            Category = item.Category,
-            SystemPrompt = item.SystemPrompt,
-            Tools = new List<string>(item.Tools),
-            Memory = item.Memory,
-            MaxHistory = item.MaxHistory,
-            IsSummoned = item.IsSummoned,
+            Id = Guid.NewGuid(),
+            Name = string.Empty,
+            Description = string.Empty,
+            Category = "普通对话",
+            SystemPrompt = string.Empty,
+            Tools = new List<string>(),
+            Memory = AgentMemoryMode.SlidingWindow,
+            MaxHistory = 20,
         };
-        IsEditing = true;
     }
 
-    [RelayCommand]
-    private void EditExpert(ExpertItem item)
+    /// <summary>保存专家（新增或更新）。</summary>
+    public async Task<(bool Success, string Error)> SaveAsync(ExpertItem item)
     {
-        if (item == null) return;
-        BeginEdit(item);
-    }
-
-    [RelayCommand]
-    private async Task SaveExpertAsync()
-    {
-        if (EditingItem == null || string.IsNullOrWhiteSpace(EditingItem.Name)) return;
+        if (item == null || string.IsNullOrWhiteSpace(item.Name))
+            return (false, "名称不能为空");
 
         try
         {
             var source = AgentSourceParser.Serialize(
-                EditingItem.Name,
-                EditingItem.Description,
-                EditingItem.Category,
-                EditingItem.Tools,
-                EditingItem.Memory,
-                EditingItem.MaxHistory,
-                EditingItem.SystemPrompt);
+                item.Name,
+                item.Description,
+                item.Category,
+                item.Tools,
+                item.Memory,
+                item.MaxHistory,
+                item.SystemPrompt);
 
-            await NoteService.UpdateAsync(new UpdateNoteRequest
+            var existing = Experts.FirstOrDefault(e => e.Id == item.Id);
+            if (existing == null)
             {
-                Id = EditingItem.Id.ToString(),
-                Title = EditingItem.Name,
-                Content = source,
-                NodeType = NoteNodeType.Agent,
-            });
+                await NoteService.CreateAsync(new CreateNoteRequest
+                {
+                    Title = item.Name,
+                    Content = source,
+                    NodeType = NoteNodeType.Agent,
+                });
+            }
+            else
+            {
+                await NoteService.UpdateAsync(new UpdateNoteRequest
+                {
+                    Id = item.Id.ToString(),
+                    Title = item.Name,
+                    Content = source,
+                    NodeType = NoteNodeType.Agent,
+                });
+            }
 
             await LoadAsync();
-            IsEditing = false;
-            EditingItem = null;
-            StatusMessage = "已保存";
+            StatusMessage = existing == null ? $"已创建：{item.Name}" : "已保存";
             SummonChanged?.Invoke();
+            return (true, string.Empty);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"保存失败：{ex.Message}";
+            return (false, $"保存失败：{ex.Message}");
         }
-    }
-
-    [RelayCommand]
-    private void CancelEdit()
-    {
-        IsEditing = false;
-        EditingItem = null;
     }
 
     [RelayCommand]
@@ -285,4 +234,19 @@ public partial class ExpertsViewModel : ObservableObject
 
     /// <summary>获取已召唤的专家列表。</summary>
     public List<ExpertItem> GetSummonedExperts() => Experts.Where(e => e.IsSummoned).ToList();
+
+    /// <summary>创建编辑弹窗 ViewModel（从 ToolRegistry 加载工具列表）。</summary>
+    public ExpertEditViewModel CreateEditViewModel(ExpertItem? existing)
+    {
+        try
+        {
+            var registry = _serviceProvider.GetService<Aether.AI.Harness.Tools.ToolRegistry>();
+            var tools = registry?.GetAllMetas() ?? Array.Empty<Aether.AI.Harness.Tools.ToolMeta>();
+            return new ExpertEditViewModel(existing, tools);
+        }
+        catch
+        {
+            return new ExpertEditViewModel(existing, Array.Empty<Aether.AI.Harness.Tools.ToolMeta>());
+        }
+    }
 }

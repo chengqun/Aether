@@ -44,6 +44,12 @@ public static class QifuAIBuilderExtensions
         services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.ReadResult)));
         services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.CleanResults)));
         services.AddSingleton<AIFunction>(sp => CreateTool<TeamsMessageTool>(sp, nameof(TeamsMessageTool.SendTeamsMessage)));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "企服平台";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

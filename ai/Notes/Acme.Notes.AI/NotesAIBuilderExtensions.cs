@@ -27,6 +27,12 @@ public static class NotesAIBuilderExtensions
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "SearchNotes"));
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ListNotes"));
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "DeleteNote"));
+
+        builder.ConfigureToolRegistry(registry =>
+        {
+            const string cat = "笔记工具";
+            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+        });
         return builder;
     }
 

@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.ExpertEditWindow"
+        Title="专家配置"
+        Width="560" Height="620"
+        CanResize="True"
+        MinWidth="480" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid Margin="20">
+    <StackPanel>
+      <TextBlock Text="{Binding WindowTitle}" FontSize="18" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="12">
+          <StackPanel Spacing="6">
+            <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBox Text="{Binding Name}" PlaceholderText="输入专家名称"
+                     BorderBrush="{DynamicResource BorderBrush}" CornerRadius="6"
+                     Padding="10,6" FontSize="13" />
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="描述" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBox Text="{Binding Description}" PlaceholderText="简要描述专家功能"
+                     BorderBrush="{DynamicResource BorderBrush}" CornerRadius="6"
+                     Padding="10,6" FontSize="13" />
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="类别" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBox Text="{Binding Category}" PlaceholderText="如：普通对话、股票分析"
+                     BorderBrush="{DynamicResource BorderBrush}" CornerRadius="6"
+                     Padding="10,6" FontSize="13" />
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="工具（按分类选择）" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6"
+                    Background="White" Padding="8" MaxHeight="220">
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding FlatTools}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <CheckBox IsChecked="{Binding IsEnabled}"
+                                Content="{Binding DisplayName}"
+                                Padding="0,2"
+                                FontSize="12"/>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Border>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="系统提示词" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBox Text="{Binding SystemPrompt}" PlaceholderText="输入系统提示词（System Prompt）"
+                     AcceptsReturn="True" TextWrapping="Wrap" Height="140"
+                     BorderBrush="{DynamicResource BorderBrush}" CornerRadius="6"
+                     Padding="10,6" FontSize="13" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+
+      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}"
+                 FontSize="12" Margin="0,8,0,8" IsVisible="{Binding HasError}"/>
+
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8"/>
+        <Button Content="保存" Background="{DynamicResource AccentBrush}"
+                Foreground="White" BorderThickness="0" CornerRadius="6"
+                Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}"
+                Padding="20,8"/>
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>
