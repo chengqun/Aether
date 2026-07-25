@@ -74,7 +74,9 @@
     <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
   </Style>
 
-  <!-- 侧边栏导航项（透明背景 + 深色文字，激活态靛蓝，水平占满） -->
+  <!-- ═══ 侧边栏样式（展开/收起各一套自包含样式，不靠 class 覆盖，避免层叠混乱）═══ -->
+
+  <!-- 展开态：导航项 / 收起按钮（图标+文字，左对齐） -->
   <Style Selector="Button.settings-nav">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
@@ -89,6 +91,46 @@
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Foreground" Value="White"/>
     <Setter Property="Opacity" Value="1"/>
+  </Style>
+
+  <!-- 收起态 rail：导航项 / 收起按钮（仅图标，居中） -->
+  <Style Selector="Button.nav-rail">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="0,9"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Margin" Value="6,2"/>
+  </Style>
+  <Style Selector="Button.nav-rail:disabled">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
+  <!-- 展开态账户芯片（头像+用户名，左对齐，底部留白） -->
+  <Style Selector="Button.account-chip">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="10,8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Margin" Value="10,2,10,12"/>
+  </Style>
+
+  <!-- 收起态账户芯片（仅头像，居中，底部留白） -->
+  <Style Selector="Button.account-rail">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Margin" Value="0,0,0,12"/>
   </Style>
 
   <!-- 一级 Tab 按钮 -->
