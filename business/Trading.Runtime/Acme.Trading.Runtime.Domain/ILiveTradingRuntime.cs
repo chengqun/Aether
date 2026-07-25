@@ -1,0 +1,65 @@
+namespace Acme.Trading.Runtime.Domain;
+
+/// <summary>
+/// CTP 行情前置连接参数（Lean/CTP-中性，纯字符串）。Runtime.Lean 映射到 <c>Acme.Ctp.Domain.CtpMarketDataConnect</c>。
+/// 实盘行情前置是 CTP 独立连接（不依赖交易登录），故显式传入。
+/// </summary>
+public sealed class MarketDataConnectInput
+{
+    public string? MdFrontAddress { get; set; }   // 行情前置 tcp://ip:port
+    public string? BrokerId { get; set; }
+    public string? UserId { get; set; }
+    public string? Password { get; set; }
+}
+
+/// <summary>实盘策略运行状态。引擎生命周期镜像于此，UI 据此显示。</summary>
+public enum LiveTradingRuntimeStatus
+{
+    Idle, Starting, Running, Stopping, Stopped, Error,
+}
+
+/// <summary>
+/// 实盘运行请求（Lean/CTP-中性）。合约以代码给出（如 ag2610），CTP 自行解析。
+/// 交易凭据由 DI 注入的 <c>ICtpSession</c>（CtpView 登录后共享）提供，不在请求里。
+/// </summary>
+public sealed class LiveTradingRuntimeRequest
+{
+    /// <summary>订阅合约代码列表（如 ag2610 / rb2510）。</summary>
+    public IReadOnlyList<string> Instruments { get; set; } = Array.Empty<string>();
+
+    /// <summary>策略名（StrategyRegistry 注册的 key）。P1 阶段策略只出信号不下单。</summary>
+    public string StrategyName { get; set; } = "SmaCross";
+
+    /// <summary>初始资金（CNY）。实盘账户真实资金由 brokerage.GetCashBalance 查询覆盖。</summary>
+    public decimal InitialCash { get; set; } = 1_000_000m;
+
+    public int FastPeriod { get; set; } = 10;
+    public int SlowPeriod { get; set; } = 30;
+
+    /// <summary>K 线分辨率，默认 Minute（tick 聚合）。</summary>
+    public BarResolution Resolution { get; set; } = BarResolution.Minute;
+
+    /// <summary>CTP 行情前置连接参数（独立于交易登录）。</summary>
+    public MarketDataConnectInput? MarketDataConnect { get; set; }
+}
+
+/// <summary>
+/// 实盘运行时契约：进程内启停引擎实时引擎，引擎经 CtpBrokerage 桥接 <c>ICtpSession</c>（交易+行情一体）。
+/// 实现位于 Acme.Trading.Runtime.Lean（LeanLiveTradingService : ILiveTradingRuntime）——Lean 源码只在该叶子内引用。
+/// 调用方不依赖 Lean 类型。前置：ICtpSession 已登录。
+/// </summary>
+public interface ILiveTradingRuntime
+{
+    LiveTradingRuntimeStatus Status { get; }
+    bool IsRunning { get; }
+
+    event EventHandler<LiveTradingRuntimeStatus>? StatusChanged;
+    /// <summary>日志/信号输出（引擎日志 + 策略信号 + CTP 行情回报），一行一条。</summary>
+    event EventHandler<string>? LogReceived;
+
+    /// <summary>启动实盘引擎。前置：ICtpSession 已登录；否则失败。</summary>
+    Task<(bool Success, string? Error)> StartAsync(LiveTradingRuntimeRequest request, CancellationToken ct = default);
+
+    /// <summary>停止实盘引擎（触发算法 Quit，等待后台线程结束）。</summary>
+    Task StopAsync(CancellationToken ct = default);
+}

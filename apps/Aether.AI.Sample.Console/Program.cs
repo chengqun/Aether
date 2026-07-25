@@ -30,6 +30,8 @@ using Acme.Quotes.Infrastructure.DependencyInjection;
 using Acme.Securities.Application;
 using Acme.Securities.Application.DependencyInjection;
 using Acme.Securities.Infrastructure.DependencyInjection;
+using Acme.Trading.AI;
+using Acme.Trading.Runtime.Lean.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +150,9 @@ static void ComposeContexts(IServiceCollection services)
     // Quotes: market data + indicators + analysis (ACL-bridged to Securities via ai/Quotes).
     services.AddQuotesInfrastructure();
     services.AddQuotesApplication();
+    // Trading: backtest + live trading runtime backed by in-process Lean engine.
+    // Consumes ICtpSession (Ctp) + IAnalysisManager (Quotes); Lean source confined to Runtime.Lean.
+    services.AddTradingRuntimeLean();
     // Notes: local Markdown notes (SQLite tree store).
     services.AddNotesInfrastructure();
 }
@@ -155,11 +160,12 @@ static void ComposeContexts(IServiceCollection services)
 static void RegisterAgents(AetherAIBuilder aether, string modelId)
 {
     // One agent with all tools from every context (no agent switching needed).
-    aether.AddQifuTools().AddCtpTools().AddQuotesTools();
+    aether.AddQifuTools().AddCtpTools().AddQuotesTools().AddTradingTools();
     aether.AddSystemTools().AddApkParser().AddNotesTools();
     var allTools = QifuAIBuilderExtensions.ToolNames
         .Concat(CtpAIBuilderExtensions.ToolNames)
         .Concat(QuotesAIBuilderExtensions.ToolNames)
+        .Concat(TradingAIBuilderExtensions.ToolNames)
         .Concat(SystemToolsAIBuilderExtensions.ToolNames)
         .Concat(ApkParserAIBuilderExtensions.ToolNames)
         .Concat(NotesAIBuilderExtensions.ToolNames)
@@ -168,7 +174,8 @@ static void RegisterAgents(AetherAIBuilder aether, string modelId)
         .Name("Aether Assistant")
         .Instructions(
             "你是企业助手，可调用工具：证券查询/技术指标、CTP 期货（账户/持仓/行情/下单/撤单）、" +
-            "毓数异步 SQL、360Teams 云文档/消息通知。按需调用工具，简洁回复。下单/撤单默认仅预览。")
+            "量化回测（SMA 策略历史回测，返回收益/风险统计）、毓数异步 SQL、360Teams 云文档/消息通知。" +
+            "按需调用工具，简洁回复。下单/撤单默认仅预览。")
         .ModelId(modelId)
         .WithTools(allTools));
 }

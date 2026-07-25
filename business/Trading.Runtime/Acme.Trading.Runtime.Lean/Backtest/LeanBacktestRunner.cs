@@ -1,0 +1,297 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Acme.Quotes.Domain;
+using Acme.Trading.Domain;
+using Acme.Trading.Runtime.Domain;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
+using QuantConnect;
+using QuantConnect.Configuration;
+using QuantConnect.Lean.Engine;
+using QuantConnect.Logging;
+using QuantConnect.Packets;
+using QuantConnect.Util;
+
+// 消歧：Acme.Trading.Domain.BacktestResult 与 QuantConnect.Packets.BacktestResult 同名，本文件用的是领域结果类型。
+using BacktestResult = Acme.Trading.Domain.BacktestResult;
+
+namespace Acme.Trading.Runtime.Lean;
+
+/// <summary>
+/// 进程内运行一次 QuantConnect LEAN 回测，实现 <see cref="IBacktestRuntime"/>。
+/// 镜像 lean-trading Launcher/Program.cs 的编排：Initializer.Start → GetSystemHandlers → JobQueue.NextJob →
+/// GetAlgorithmHandlers → AlgorithmManager → Engine.Engine.Run。同步阻塞，调用方应自行 Task.Run 卸载。
+/// 数据链路：engine.Run 之前用 <see cref="LocalDataPreFetcher"/> 预取 IAnalysisManager 历史 K 线写本地 CSV，
+/// 供 CtpBar 自定义数据源读取——复用 Quotes 行情数据链，不走 LEAN 自带数据、不走外部 API。
+/// </summary>
+public sealed class LeanBacktestRunner : IBacktestRuntime
+{
+    private readonly ILogger<LeanBacktestRunner>? _logger;
+    private readonly string? _defaultDataFolder;
+    private readonly LocalDataPreFetcher _preFetcher;
+
+    // Lean 全局只初始化一次（同进程多次回测复用）。per-run 状态都在 RunAsync 局部，避免并发串数据。
+    private static bool _leanInitialized;
+    private static readonly object _initLock = new();
+
+    public LeanBacktestRunner(
+        IAnalysisManager? analysisManager = null,
+        ILogger<LeanBacktestRunner>? logger = null,
+        string? defaultDataFolder = null)
+    {
+        _logger = logger;
+        _defaultDataFolder = defaultDataFolder;
+        _preFetcher = new LocalDataPreFetcher(analysisManager);
+    }
+
+    /// <inheritdoc />
+    public async Task<BacktestResult> RunAsync(BacktestRuntimeRequest request, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // —— per-run 状态（局部）——
+        var resultsDir = Path.Combine(Path.GetTempPath(), "AetherBacktests", Guid.NewGuid().ToString("N"));
+        var logs = new List<string>();
+
+        WorkerThread.Instance = new FreshWorkerThread();
+        Composer.Instance.Reset();
+
+        TradingGateway.Reset();
+        TradingGateway.LogSink = msg => logs.Add(msg);
+
+        string? preFetchError = await PrepareLocalDataAsync(request, resultsDir, logs);
+        if (preFetchError != null)
+        {
+            TradingGateway.Reset();
+            return Failed(request, preFetchError, logs);
+        }
+
+        ConfigureLean(request, resultsDir);
+
+        lock (_initLock)
+        {
+            if (!_leanInitialized)
+            {
+                Initializer.Start();
+                _leanInitialized = true;
+            }
+        }
+
+        Log.LogHandler = new BacktestLogForwarder(Log.LogHandler, msg => logs.Add(msg));
+
+        var systemHandlers = Initializer.GetSystemHandlers();
+
+        var job = systemHandlers.JobQueue.NextJob(out var assemblyPath) as BacktestNodePacket;
+        if (job == null)
+        {
+            TradingGateway.Reset();
+            return Failed(request, "LEAN JobQueue 未能产出 BacktestNodePacket（检查 Config algorithm-type-name/algorithm-location）", logs);
+        }
+
+        var algorithmHandlers = Initializer.GetAlgorithmHandlers();
+        var algorithmManager = new AlgorithmManager(Globals.LiveMode, job);
+        systemHandlers.LeanManager.Initialize(systemHandlers, algorithmHandlers, job, algorithmManager);
+
+        var resultHandler = algorithmHandlers.Results as CapturingBacktestResultHandler;
+        string? error = null;
+        AlgorithmStatus status = AlgorithmStatus.RuntimeError;
+        try
+        {
+            var engine = new Engine(systemHandlers, algorithmHandlers, Globals.LiveMode);
+            engine.Run(job, algorithmManager, assemblyPath, WorkerThread.Instance);
+            status = algorithmManager.State;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "LEAN 回测运行异常");
+            error = ex.Message;
+            status = algorithmManager?.State ?? AlgorithmStatus.RuntimeError;
+        }
+        finally
+        {
+            if (status != AlgorithmStatus.Completed && error == null)
+            {
+                error = resultHandler?.LastError;
+            }
+            systemHandlers.DisposeSafely();
+            algorithmHandlers.DisposeSafely();
+            TradingGateway.Reset();
+        }
+
+        if (resultHandler == null)
+        {
+            return new BacktestResult
+            {
+                IsSuccess = false,
+                Error = error ?? "未能创建 BacktestingResultHandler",
+                AlgorithmStatus = status.ToString(),
+                Logs = logs,
+            };
+        }
+
+        var stats = resultHandler.StatisticsResults();
+        return new BacktestResult
+        {
+            IsSuccess = status == AlgorithmStatus.Completed && error == null,
+            Error = error,
+            AlgorithmStatus = status.ToString(),
+            Statistics = BacktestResultMapper.MapStatistics(stats),
+            EquityCurve = BacktestResultMapper.MapEquityCurve(resultHandler),
+            Logs = logs,
+        };
+    }
+
+    private static BacktestResult Failed(BacktestRuntimeRequest request, string error, List<string> logs) =>
+        new()
+        {
+            IsSuccess = false,
+            Error = error,
+            AlgorithmStatus = AlgorithmStatus.RuntimeError.ToString(),
+            Logs = logs,
+        };
+
+    /// <summary>
+    /// 本地数据预取：用 LocalDataPreFetcher 取 IAnalysisManager 历史 K 线（期货，cache-first）写本地 CSV，
+    /// 并把路径写入 LEAN Config（key=local-data-file:&lt;symbol&gt;，CtpBar.GetSource 据此读）。
+    /// 返回错误信息（null 表示成功）。
+    /// </summary>
+    private async Task<string?> PrepareLocalDataAsync(BacktestRuntimeRequest request, string resultsDir, List<string> logs)
+    {
+        var freq = ResolutionToLean(request.Resolution).Freq;
+        var csvDir = Path.Combine(resultsDir, "local-data");
+        _logger?.LogInformation("[LeanBacktestRunner] PrepareLocalData - Symbol: {Symbol}, Resolution: {Resolution}, Freq: {Freq}, Range: {Start}~{End}, CsvDir: {CsvDir}",
+            request.Symbol, request.Resolution, freq, request.StartDate, request.EndDate, csvDir);
+
+        var (csvPath, barCount, error) = await _preFetcher.FetchAndWriteAsync(
+            request.Symbol, freq, request.StartDate, request.EndDate, csvDir);
+
+        _logger?.LogInformation("[LeanBacktestRunner] PrepareLocalData - CsvPath={CsvPath}, BarCount={BarCount}, Error={Error}",
+            csvPath, barCount, error ?? "null");
+
+        if (error != null) return error;
+
+        // key 必须与算法 AddData<CtpBar>(ticker) 的 ticker 一致（= request.Symbol）
+        Config.Set($"local-data-file:{request.Symbol}", csvPath);
+        _logger?.LogInformation("[LeanBacktestRunner] Config set: local-data-file:{Symbol} = {CsvPath}", request.Symbol, csvPath);
+        return null;
+    }
+
+    /// <summary>把 BacktestRuntimeRequest 落到 LEAN 全局 Config（JobQueue/Handlers 都从 Config 读）。</summary>
+    private void ConfigureLean(BacktestRuntimeRequest request, string resultsDir)
+    {
+        // 算法程序集：共享宿主在本叶子（回测/实盘共用 TradingHostAlgorithm）
+        var algorithmLocation = typeof(TradingHostAlgorithm).Assembly.Location;
+
+        var dataFolder = !string.IsNullOrWhiteSpace(_defaultDataFolder)
+            ? _defaultDataFolder
+            : BacktestEnvironment.LocateLeanDataFolder();
+
+        var (leanRes, _) = ResolutionToLean(request.Resolution);
+
+        Config.Set("environment", "backtesting");
+        // object-store-root 必须设绝对可写路径：LEAN 默认 "./storage" 按进程 cwd 解析，双击启动 cwd="/" 会解析成只读 /storage 崩。
+        Config.Set("object-store-root", Path.Combine(resultsDir, "storage"));
+        // 通用宿主：algorithm-type-name 恒为 TradingHostAlgorithm（回测/实盘共用，常量无跨 run 泄漏）。
+        // strategy 走 per-run parameters（Config "parameters" 每次 run 整体覆盖）。host 用 GetParameter 读。
+        Config.Set("algorithm-type-name", "Acme.Trading.Runtime.Lean.TradingHostAlgorithm");
+        Config.Set("algorithm-language", "CSharp");
+        Config.Set("algorithm-location", algorithmLocation);
+        Config.Set("data-folder", dataFolder);
+        Config.Set("results-destination-folder", resultsDir);
+        Config.Set("log-handler", "QuantConnect.Logging.CompositeLogHandler");
+        Config.Set("messaging-handler", "QuantConnect.Messaging.Messaging");
+        Config.Set("job-queue-handler", "QuantConnect.Queues.JobQueue");
+        Config.Set("api-handler", "QuantConnect.Api.Api");
+        Config.Set("result-handler", "Acme.Trading.Runtime.Lean.CapturingBacktestResultHandler");
+        Config.Set("data-provider", "QuantConnect.Lean.Engine.DataFeeds.DefaultDataProvider");
+        Config.Set("data-channel-provider", "DataChannelProvider");
+        Config.Set("object-store", "QuantConnect.Lean.Engine.Storage.LocalObjectStore");
+        Config.Set("map-file-provider", "QuantConnect.Data.Auxiliary.LocalDiskMapFileProvider");
+        Config.Set("factor-file-provider", "QuantConnect.Data.Auxiliary.LocalDiskFactorFileProvider");
+        Config.Set("data-aggregator", "QuantConnect.Lean.Engine.DataFeeds.AggregationManager");
+        Config.Set("setup-handler", "QuantConnect.Lean.Engine.Setup.BacktestingSetupHandler");
+        Config.Set("history-provider", "QuantConnect.Lean.Engine.HistoricalData.SubscriptionDataReaderHistoryProvider");
+        Config.Set("real-time-handler", "QuantConnect.Lean.Engine.RealTime.BacktestingRealTimeHandler");
+        Config.Set("transaction-handler", "QuantConnect.Lean.Engine.TransactionHandlers.BacktestingTransactionHandler");
+
+        // 透传策略参数 + per-run 的 strategy（host 用 GetParameter 读，避免 Config 跨 run 泄漏）。
+        // Config.Set 内部走 Newtonsoft JToken 动态赋值，Dictionary 无法隐式转 JToken，必须显式转 JObject。
+        var parameters = new Dictionary<string, string>
+        {
+            ["strategy"] = request.StrategyName,
+            ["start"] = request.StartDate.ToString("yyyy-MM-dd"),
+            ["end"] = request.EndDate.ToString("yyyy-MM-dd"),
+            ["cash"] = request.InitialCash.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["symbol"] = request.Symbol,
+            ["resolution"] = leanRes,
+            ["fast"] = request.FastPeriod.ToString(),
+            ["slow"] = request.SlowPeriod.ToString(),
+        };
+        Config.Set("parameters", JObject.FromObject(parameters));
+    }
+
+    /// <summary>BarResolution → (Lean Resolution 字符串, IAnalysisManager freq)。freq：101=日K, 60=小时, 1=1分钟。</summary>
+    private static (string LeanRes, string Freq) ResolutionToLean(BarResolution r) => r switch
+    {
+        BarResolution.Daily => ("Daily", "101"),
+        BarResolution.Hour => ("Hour", "60"),
+        BarResolution.Minute => ("Minute", "1"),
+        BarResolution.Second => ("Second", "1"),
+        BarResolution.Tick => ("Tick", "1"),
+        _ => ("Daily", "101"),
+    };
+}
+
+/// <summary>
+/// WorkerThread 的 public-ctor 子类（WorkerThread() 是 protected），用于同进程多次回测时重置静态 Instance。
+/// </summary>
+internal sealed class FreshWorkerThread : WorkerThread
+{
+    public FreshWorkerThread() : base() { }
+}
+
+/// <summary>
+/// 把 Lean 的 <see cref="Log"/> 转发到回测日志列表（结果可见），同时委托给原 handler（保留 console/file）。
+/// </summary>
+internal sealed class BacktestLogForwarder : ILogHandler
+{
+    private readonly ILogHandler _inner;
+    private readonly Action<string> _forward;
+
+    public BacktestLogForwarder(ILogHandler inner, Action<string> forward)
+    {
+        _inner = inner;
+        _forward = forward;
+    }
+
+    public void Error(string text)
+    {
+        _inner.Error(text);
+        _forward("[LEAN-E] " + text);
+    }
+
+    public void Debug(string text) => _inner.Debug(text);
+
+    public void Report(string text)
+    {
+        _inner.Report(text);
+        _forward("[LEAN-R] " + text);
+    }
+
+    public void Trace(string text)
+    {
+        _inner.Trace(text);
+        if (text != null && (text.Contains("Error") || text.Contains("error") || text.Contains("Exception")
+            || text.Contains("Engine.Run") || text.Contains("Initialize") || text.Contains("Setup")
+            || text.Contains("Brokerage") || text.Contains("Ctp") || text.Contains("DataFeed")
+            || text.Contains("Subscribe") || text.Contains("algorithm") || text.Contains("JobQueue")
+            || text.Contains("Loader") || text.Contains("History") || text.Contains("Storage")))
+        {
+            _forward("[LEAN] " + text);
+        }
+    }
+
+    public void Dispose() => _inner.Dispose();
+}

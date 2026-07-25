@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.Trading.Runtime.Lean</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 本上下文 -->
+    <ProjectReference Include="..\Acme.Trading.Runtime.Domain\Acme.Trading.Runtime.Domain.csproj" />
+    <ProjectReference Include="..\..\Trading\Acme.Trading.Domain\Acme.Trading.Domain.csproj" />
+
+    <!-- 外部业务契约（Runtime.Lean → Quotes + Ctp，方向与架构文档一致） -->
+    <ProjectReference Include="..\..\Quotes\Acme.Quotes.Domain\Acme.Quotes.Domain.csproj" />
+    <ProjectReference Include="..\..\Ctp\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
+
+    <!-- LEAN 源码引用（进程内跑回测/实盘引擎）。QuantConnect.* 类型只在本叶子内可见。
+         Engine 传递引用其余 LEAN 子项目；显式再引 Algorithm/Brokerages/Configuration/Logging/Common/Queues/Messaging 便于直接使用。
+         镜像 AlphaAgent Infrastructure.Backtest + Infrastructure.CtpLean 的引用集。 -->
+    <ProjectReference Include="..\..\..\externals\Lean\Engine\QuantConnect.Lean.Engine.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Algorithm\QuantConnect.Algorithm.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Brokerages\QuantConnect.Brokerages.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Configuration\QuantConnect.Configuration.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Logging\QuantConnect.Logging.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Common\QuantConnect.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Queues\QuantConnect.Queues.csproj" />
+    <ProjectReference Include="..\..\..\externals\Lean\Messaging\QuantConnect.Messaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

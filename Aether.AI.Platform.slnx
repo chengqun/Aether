@@ -18,6 +18,9 @@
   <Folder Name="/ai/SystemTools/">
     <Project Path="ai/SystemTools/Acme.SystemTools.AI/Acme.SystemTools.AI.csproj" />
   </Folder>
+  <Folder Name="/ai/Trading/">
+    <Project Path="ai/Trading/Acme.Trading.AI/Acme.Trading.AI.csproj" />
+  </Folder>
   <Folder Name="/apps/">
     <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
   </Folder>
@@ -97,6 +100,14 @@
     <Project Path="business/DeviceManagement/Acme.DeviceManagement.Domain/Acme.DeviceManagement.Domain.csproj" />
     <Project Path="business/DeviceManagement/Acme.DeviceManagement.Infrastructure/Acme.DeviceManagement.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/business/Trading/">
+    <Project Path="business/Trading/Acme.Trading.Application/Acme.Trading.Application.csproj" />
+    <Project Path="business/Trading/Acme.Trading.Domain/Acme.Trading.Domain.csproj" />
+  </Folder>
+  <Folder Name="/business/Trading.Runtime/">
+    <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Domain/Acme.Trading.Runtime.Domain.csproj" />
+    <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Lean/Acme.Trading.Runtime.Lean.csproj" />
+  </Folder>
   <Folder Name="/externals/">
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
   </Folder>
@@ -114,5 +125,7 @@
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />
     <Project Path="tests/Aether.AI.Memory.Tests/Aether.AI.Memory.Tests.csproj" />
+    <Project Path="tests/Acme.Trading.Domain.Tests/Acme.Trading.Domain.Tests.csproj" />
+    <Project Path="tests/Acme.Trading.Runtime.Tests/Acme.Trading.Runtime.Tests.csproj" />
   </Folder>
 </Solution>
