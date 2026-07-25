@@ -6,6 +6,7 @@ using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.SystemTools.AI;
 using Acme.ApkParser.AI;
 using Acme.Notes.AI;
+using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Ctp.Net.Core.Trader;
 using Acme.Llm.Domain;
@@ -32,6 +33,7 @@ using Acme.Securities.Application.DependencyInjection;
 using Acme.Securities.Infrastructure.DependencyInjection;
 using Acme.Trading.AI;
 using Acme.Trading.Application;
+using Acme.Trading.Application.DependencyInjection;
 using Acme.Trading.Runtime.Domain;
 using Acme.Trading.Runtime.Lean.DependencyInjection;
 using Aether.AI.Hosting;
@@ -41,8 +43,8 @@ using Microsoft.Extensions.Hosting;
 
 // ---- Aether.AI integrated Console demo -----------------------------------
 // Composes every context: Platform (app auth/HTTP) + Llm (LLM config) + Qifu +
-// Ctp + Securities + Quotes + Aether.AI. Three agents are wired (qifu / ctp /
-// stock-analyst), each with its tools. 'sync-securities' pulls instruments
+// Ctp + Securities + Quotes + Trading + Notes + Aether.AI. One assistant agent
+// aggregates all tools. 'sync-securities' pulls instruments
 // from the app server; 'use <agent>' switches the active agent.
 
 var dbPath = Environment.GetEnvironmentVariable("LLM_DB_PATH")
@@ -154,9 +156,11 @@ static void ComposeContexts(IServiceCollection services)
     services.AddQuotesApplication();
     // Trading: backtest + live trading runtime backed by in-process Lean engine.
     // Consumes ICtpSession (Ctp) + IAnalysisManager (Quotes); Lean source confined to Runtime.Lean.
+    services.AddTradingApplication();
     services.AddTradingRuntimeLean();
     // Notes: local Markdown notes (SQLite tree store).
     services.AddNotesInfrastructure();
+    services.AddNotesApplication();
 }
 
 static void RegisterAgents(AetherAIBuilder aether, string modelId)

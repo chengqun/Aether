@@ -1,6 +1,5 @@
 using System.Reflection;
 using Acme.Trading.AI.Tools;
-using Acme.Trading.Application.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -18,11 +17,11 @@ public static class TradingAIBuilderExtensions
     /// <summary>The Trading tool names. MEAI AIFunctionFactory.Create keeps the method name as-is (RunBacktest).</summary>
     public static readonly string[] ToolNames = { "RunBacktest" };
 
-    /// <summary>Registers the Trading application services + the backtest tool (no agent).</summary>
+    /// <summary>Registers the backtest tool only (no agent). Business layer
+    /// (<c>AddTradingApplication</c>) is wired by the host.</summary>
     public static AetherAIBuilder AddTradingTools(this AetherAIBuilder builder)
     {
         var services = builder.Services;
-        services.AddTradingApplication();
         services.AddTransient<BacktestTool>();
         services.AddSingleton<AIFunction>(sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
         return builder;

@@ -1,6 +1,4 @@
 using System.Reflection;
-using Acme.Notes.Application.DependencyInjection;
-using Acme.Notes.Infrastructure.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -15,11 +13,11 @@ public static class NotesAIBuilderExtensions
         "SearchNotes", "ListNotes", "DeleteNote"
     };
 
-    public static AetherAIBuilder AddNotesTools(this AetherAIBuilder builder, string? sqliteDbPath = null)
+    /// <summary>Registers the Notes tools only. Business layers (Notes.Infrastructure/Application)
+    /// are wired by the host composition root — the AI adapter must not reach into Infrastructure.</summary>
+    public static AetherAIBuilder AddNotesTools(this AetherAIBuilder builder)
     {
         var s = builder.Services;
-        s.AddNotesInfrastructure(sqliteDbPath);
-        s.AddNotesApplication();
         s.AddTransient<NoteTool>();
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "CreateNote"));
         s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ReadNote"));
@@ -31,9 +29,9 @@ public static class NotesAIBuilderExtensions
         return builder;
     }
 
-    public static AetherAIBuilder AddNotes(this AetherAIBuilder builder, string modelId, string? sqliteDbPath = null)
+    public static AetherAIBuilder AddNotes(this AetherAIBuilder builder, string modelId)
     {
-        AddNotesTools(builder, sqliteDbPath);
+        AddNotesTools(builder);
         builder.AddAgent("notes-assistant", a => a
             .Name("Notes Assistant")
             .Instructions(

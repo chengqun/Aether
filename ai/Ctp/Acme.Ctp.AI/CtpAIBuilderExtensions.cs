@@ -1,6 +1,5 @@
 using System.Reflection;
 using Acme.Ctp.AI.Tools;
-using Acme.Ctp.Application.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
@@ -16,10 +15,10 @@ public static class CtpAIBuilderExtensions
         "QueryLatestTick", "QueryAllLatestTicks"
     };
 
+    /// <summary>Registers the CTP tools only. Business layer (<c>AddCtpApplication</c>) is wired by the host.</summary>
     public static AetherAIBuilder AddCtpTools(this AetherAIBuilder builder)
     {
         var services = builder.Services;
-        services.AddCtpApplication();
         services.AddTransient<CtpLoginTool>();
         services.AddTransient<QueryAccountTool>();
         services.AddTransient<QueryPositionTool>();

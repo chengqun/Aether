@@ -1,4 +1,5 @@
 using Acme.Ctp.AI;
+using Acme.Ctp.Application.DependencyInjection;
 using Acme.Ctp.Infrastructure;
 using Acme.Ctp.Infrastructure.DependencyInjection;
 using Aether.AI.Hosting;
@@ -18,6 +19,7 @@ public class CtpWiringTests
         var aether = builder.Services.AddAetherAI();
         aether.Configure(o => { o.OpenAI.ApiKey = "offline"; o.OpenAI.ModelId = "offline"; });
         builder.Services.AddCtpInfrastructure();
+        builder.Services.AddCtpApplication();
         aether.AddCtp("offline");
 
         using var app = builder.Build();

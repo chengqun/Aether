@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Automation.Domain\Acme.Automation.Domain.csproj" />
-    <ProjectReference Include="..\..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
   </ItemGroup>
 
   <ItemGroup>

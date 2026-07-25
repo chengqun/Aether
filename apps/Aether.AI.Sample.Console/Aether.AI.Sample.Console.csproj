@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
     <ProjectReference Include="..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
     <ProjectReference Include="..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
+    <ProjectReference Include="..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
