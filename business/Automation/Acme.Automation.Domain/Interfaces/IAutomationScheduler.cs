@@ -1,4 +1,4 @@
-namespace Acme.Automation.Application.Interfaces;
+namespace Acme.Automation.Domain.Interfaces;
 
 public interface IAutomationScheduler
 {

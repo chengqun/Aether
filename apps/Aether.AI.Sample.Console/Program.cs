@@ -1,5 +1,5 @@
 using Acme.Ctp.Domain;
-using Acme.Ctp.Infrastructure;
+using Acme.Ctp.Application;
 using Acme.Ctp.AI;
 using Acme.Ctp.Application.DependencyInjection;
 using Acme.Ctp.Infrastructure.DependencyInjection;
@@ -206,7 +206,7 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
     var currentUser = services.GetRequiredService<ICurrentUser>();
     var securitySync = services.GetRequiredService<ISecurityClientSyncService>();
     var ctpConfigStore = services.GetRequiredService<ICtpConfigStore>();
-    var ctpSession = services.GetRequiredService<CtpSessionService>();
+    var ctpSession = services.GetRequiredService<ICtpTradingService>();
 
     var session = runtime.StartSession("assistant");
 
@@ -236,7 +236,7 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
         if (cmd.Equals("ctp-status", StringComparison.OrdinalIgnoreCase))
         {
             Console.WriteLine(ctpSession.IsConnected
-                ? $"CTP connected (交易日={ctpSession.LoginResult?.TradingDay}, FrontID={ctpSession.LoginResult?.FrontID}, SessionID={ctpSession.LoginResult?.SessionID})"
+                ? $"CTP connected (交易日={ctpSession.LoginResult?.TradingDay}, FrontID={ctpSession.LoginResult?.FrontId}, SessionID={ctpSession.LoginResult?.SessionId})"
                 : "CTP not connected.");
             continue;
         }
@@ -318,24 +318,25 @@ static async Task ConfigureCtpAsync(ICtpConfigStore store)
     Console.WriteLine("CTP config saved to SQLite.");
 }
 
-static async Task CtpLoginAsync(ICtpConfigStore store, CtpSessionService session)
+static async Task CtpLoginAsync(ICtpConfigStore store, ICtpTradingService tradingService)
 {
-    if (session.IsConnected) { Console.WriteLine("Already connected. Use 'ctp-status' or logout first."); return; }
+    if (tradingService.IsConnected) { Console.WriteLine("Already connected. Use 'ctp-status' or logout first."); return; }
     var config = await store.GetAsync();
     if (config is null) { Console.WriteLine("No CTP config saved. Run 'ctp' first."); return; }
     try
     {
-        var request = new CtpConnectRequest
+        var request = new CtpLoginRequest
         {
             FrontAddress = config.FrontAddress,
+            MdFrontAddress = config.MdFrontAddress ?? "",
             BrokerId = config.BrokerId,
             UserId = config.UserId,
             Password = config.Password,
             AppId = config.AppId,
             AuthCode = config.AuthCode
         };
-        var result = await session.LoginAsync(request);
-        Console.WriteLine($"CTP login OK — 交易日={result.TradingDay} FrontID={result.FrontID} SessionID={result.SessionID}");
+        var result = await tradingService.LoginAsync(request);
+        Console.WriteLine($"CTP login OK — 交易日={result.TradingDay} FrontID={result.FrontId} SessionID={result.SessionId}");
     }
     catch (Exception ex)
     {

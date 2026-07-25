@@ -1,4 +1,3 @@
-using Acme.Automation.Application.Interfaces;
 using Acme.Automation.Domain;
 using Acme.Automation.Domain.Interfaces;
 

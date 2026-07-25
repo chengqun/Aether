@@ -1,4 +1,3 @@
-using Acme.Automation.Application.Interfaces;
 using Acme.Automation.Domain.Interfaces;
 using Acme.Automation.Infrastructure.Persistence;
 using Acme.Automation.Infrastructure.Scheduling;
@@ -13,6 +12,7 @@ public static class AutomationInfrastructureExtensions
         services.AddSingleton<IAutomationTaskRepository>(_ => 
             new SqliteAutomationTaskRepository($"Data Source={sqliteDbPath}"));
         services.AddSingleton<IAutomationScheduler, AutomationScheduler>();
+        services.AddSingleton<IAgentExecutor, HarnessAgentExecutor>();
         return services;
     }
 }
