@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.MainWindow"
+        Title="Aether 桌面"
+        Width="1200" Height="800"
+        MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid ColumnDefinitions="200,*">
+
+    <!-- ═══ 左侧导航栏 ═══ -->
+    <Border Grid.Column="0" Background="{DynamicResource SidebarBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <!-- 设置按钮（底部，骨架阶段占位，功能 phase 接 Settings 窗） -->
+        <Button DockPanel.Dock="Bottom" Classes="settings-nav" Margin="10,0,10,14"
+                IsEnabled="False" ToolTip.Tip="设置（待实现）">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="⚙️" FontSize="16" VerticalAlignment="Center" />
+            <TextBlock Text="设置" FontSize="14" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <!-- 导航项（数据驱动，租户填充 NavItems） -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,14,0,0">
+          <ItemsControl ItemsSource="{Binding NavItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="settings-nav"
+                        Command="{Binding Command}"
+                        CommandParameter="{Binding Key}"
+                        IsEnabled="{Binding !IsCurrent}">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Icon}" FontSize="16" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- 最近会话占位（功能 phase 接 Chat 会话列表） -->
+        <TextBlock Text="最近会话（待实现）" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}"
+                   Margin="24,14,0,0" />
+      </DockPanel>
+    </Border>
+
+    <!-- ═══ 内容区（骨架占位；功能 phase 注入真实 View） ═══ -->
+    <Grid Grid.Column="1" Background="{DynamicResource ContentBgBrush}">
+      <TextBlock Text="{Binding CurrentPageLabel}"
+                 FontSize="20" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextSecondaryBrush}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Grid>
+
+  </Grid>
+</Window>

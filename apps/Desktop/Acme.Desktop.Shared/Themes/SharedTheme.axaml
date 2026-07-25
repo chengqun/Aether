@@ -1,0 +1,123 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- 设计 Token：配色（浅色科技风），从 AlphaAgent App.axaml 搬运 -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <Color x:Key="AccentColor">#5B5FC7</Color>
+      <Color x:Key="AccentHoverColor">#4A4EAE</Color>
+      <Color x:Key="AccentLightColor">#7B7FEB</Color>
+      <Color x:Key="DangerColor">#EF4444</Color>
+      <Color x:Key="SidebarBg">#F7F7F8</Color>
+      <Color x:Key="SidebarHoverBg">#EDEDEF</Color>
+      <Color x:Key="SidebarActiveBg">#5B5FC7</Color>
+      <Color x:Key="SidebarIconColor">#6B6B70</Color>
+      <Color x:Key="SidebarText">#2D2D32</Color>
+      <Color x:Key="ContentBg">#FFFFFF</Color>
+      <Color x:Key="CardBg">#FFFFFF</Color>
+      <Color x:Key="BorderColor">#E8E8EC</Color>
+      <Color x:Key="TextPrimary">#1A1A1F</Color>
+      <Color x:Key="TextSecondary">#6B6B70</Color>
+      <Color x:Key="UserBubbleBg">#5B5FC7</Color>
+      <Color x:Key="AgentBubbleBg">#F7F7F8</Color>
+
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+      <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
+      <SolidColorBrush x:Key="AccentLightBrush" Color="{StaticResource AccentLightColor}"/>
+      <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+      <SolidColorBrush x:Key="SidebarBgBrush" Color="{StaticResource SidebarBg}"/>
+      <SolidColorBrush x:Key="SidebarHoverBrush" Color="{StaticResource SidebarHoverBg}"/>
+      <SolidColorBrush x:Key="SidebarActiveBrush" Color="{StaticResource SidebarActiveBg}"/>
+      <SolidColorBrush x:Key="SidebarIconBrush" Color="{StaticResource SidebarIconColor}"/>
+      <SolidColorBrush x:Key="SidebarTextBrush" Color="{StaticResource SidebarText}"/>
+      <SolidColorBrush x:Key="ContentBgBrush" Color="{StaticResource ContentBg}"/>
+      <SolidColorBrush x:Key="CardBgBrush" Color="{StaticResource CardBg}"/>
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+      <SolidColorBrush x:Key="UserBubbleBrush" Color="{StaticResource UserBubbleBg}"/>
+      <SolidColorBrush x:Key="AgentBubbleBrush" Color="{StaticResource AgentBubbleBg}"/>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- 主按钮 -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="20,8"/>
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="Button.primary:disabled">
+    <Setter Property="Opacity" Value="0.5"/>
+  </Style>
+
+  <!-- 危险按钮 -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="20,8"/>
+    <Setter Property="FontSize" Value="14"/>
+  </Style>
+
+  <!-- 普通输入框 -->
+  <Style Selector="TextBox.input">
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="10,7"/>
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+  </Style>
+
+  <!-- 侧边栏导航项（透明背景 + 深色文字，激活态靛蓝，水平占满） -->
+  <Style Selector="Button.settings-nav">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="14,11"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Margin" Value="10,2,10,0"/>
+  </Style>
+  <Style Selector="Button.settings-nav:disabled">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
+  <!-- 一级 Tab 按钮 -->
+  <Style Selector="Button.top-tab">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="16,8"/>
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+  </Style>
+  <Style Selector="Button.top-tab:disabled">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+
+  <!-- 消息气泡 -->
+  <Style Selector="Border.bubble-user">
+    <Setter Property="Background" Value="{DynamicResource UserBubbleBrush}"/>
+    <Setter Property="CornerRadius" Value="18,18,4,18"/>
+    <Setter Property="Padding" Value="14,10"/>
+    <Setter Property="MaxWidth" Value="640"/>
+  </Style>
+  <Style Selector="Border.bubble-agent">
+    <Setter Property="Background" Value="{DynamicResource AgentBubbleBrush}"/>
+    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="Padding" Value="16,12"/>
+  </Style>
+
+</Styles>

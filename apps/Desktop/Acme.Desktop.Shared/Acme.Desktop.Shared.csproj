@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AI 平台 + 公共业务上下文（两租户共用）+ 公共 ai/ 适配器。租户专属上下文由各租户入口项目引用。 -->
+    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Infrastructure\Acme.Automation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\ChatSocial\Acme.ChatSocial.Application\Acme.ChatSocial.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\ChatSocial\Acme.ChatSocial.Infrastructure\Acme.ChatSocial.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceConnect\Acme.DeviceConnect.Application\Acme.DeviceConnect.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceConnect\Acme.DeviceConnect.Infrastructure\Acme.DeviceConnect.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Application\Acme.DeviceManagement.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Infrastructure\Acme.DeviceManagement.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Automation\Acme.Automation.AI\Acme.Automation.AI.csproj" />
+  </ItemGroup>
+
+</Project>

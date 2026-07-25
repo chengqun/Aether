@@ -27,6 +27,15 @@
   <Folder Name="/apps/">
     <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
   </Folder>
+  <Folder Name="/apps/Desktop/">
+    <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />
+  </Folder>
+  <Folder Name="/apps/Qifu/">
+    <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/apps/Stockapp/">
+    <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
+  </Folder>
   <Folder Name="/business/" />
   <Folder Name="/business/Ctp/">
     <Project Path="business/Ctp/Acme.Ctp.Application/Acme.Ctp.Application.csproj" />

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 共享 shell + 公共组合；stockapp 租户专属上下文（不含 qifu）+ AI 工具 -->
+    <ProjectReference Include="..\..\Desktop\Acme.Desktop.Shared\Acme.Desktop.Shared.csproj" />
+    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Application\Acme.Ctp.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Infrastructure\Acme.Securities.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Quotes\Acme.Quotes.Application\Acme.Quotes.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Quotes\Acme.Quotes.Infrastructure\Acme.Quotes.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Trading\Acme.Trading.Application\Acme.Trading.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Lean\Acme.Trading.Runtime.Lean.csproj" />
+    <ProjectReference Include="..\..\..\ai\Quotes\Acme.Quotes.AI\Acme.Quotes.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Trading\Acme.Trading.AI\Acme.Trading.AI.csproj" />
+  </ItemGroup>
+
+</Project>
