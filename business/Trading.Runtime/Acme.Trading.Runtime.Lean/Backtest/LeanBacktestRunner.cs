@@ -51,6 +51,12 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
     {
         ct.ThrowIfCancellationRequested();
 
+        // Lean 的算法/结果处理器在 setup 阶段可能 Console.SetOut 把算法的 Console 输出收进日志存储，
+        // 导致回测后宿主进程的 Console 输出写到 Lean 的 TextWriter（而非原 stdout），输出"丢失"。
+        // 保存原 stdout/stderr，在 finally 里恢复，保证回测后 Console 仍指向真实终端/重定向目标。
+        var origOut = Console.Out;
+        var origErr = Console.Error;
+
         // —— per-run 状态（局部）——
         var resultsDir = Path.Combine(Path.GetTempPath(), "AetherBacktests", Guid.NewGuid().ToString("N"));
         var logs = new List<string>();
@@ -118,6 +124,9 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
             systemHandlers.DisposeSafely();
             algorithmHandlers.DisposeSafely();
             TradingGateway.Reset();
+            // 恢复 Lean setup 可能重定向过的 Console 输出，避免宿主回测后 Console 输出丢失。
+            Console.SetOut(origOut);
+            Console.SetError(origErr);
         }
 
         if (resultHandler == null)
@@ -131,14 +140,31 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
             };
         }
 
-        var stats = resultHandler.StatisticsResults();
+        // 结果分析（StatisticsResults 会重跑 ResultsAnalyzer，含 equity curve 解析）可能与自定义数据
+        // 回测的稀疏权益曲线冲突抛 "Sequence contains no elements"。它是引擎完成后的后处理，不应让整次
+        // 回测失败——引擎已跑完、STATISTICS 已由 Lean 打印。包一层，分析失败时仍返回成功 + 日志 + 备注。
+        BacktestStatistics? stats = null;
+        IReadOnlyList<EquityPoint> equity = System.Array.Empty<EquityPoint>();
+        string? analysisError = null;
+        try
+        {
+            var sr = resultHandler.StatisticsResults();
+            stats = BacktestResultMapper.MapStatistics(sr);
+            equity = BacktestResultMapper.MapEquityCurve(resultHandler);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "LEAN 回测结果分析失败（equity curve 等），引擎已完成的统计仍返回");
+            analysisError = $"结果分析部分失败: {ex.Message}";
+        }
+
         return new BacktestResult
         {
             IsSuccess = status == AlgorithmStatus.Completed && error == null,
-            Error = error,
+            Error = error ?? analysisError,
             AlgorithmStatus = status.ToString(),
-            Statistics = BacktestResultMapper.MapStatistics(stats),
-            EquityCurve = BacktestResultMapper.MapEquityCurve(resultHandler),
+            Statistics = stats,
+            EquityCurve = equity,
             Logs = logs,
         };
     }

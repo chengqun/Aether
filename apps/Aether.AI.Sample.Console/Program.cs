@@ -31,6 +31,8 @@ using Acme.Securities.Application;
 using Acme.Securities.Application.DependencyInjection;
 using Acme.Securities.Infrastructure.DependencyInjection;
 using Acme.Trading.AI;
+using Acme.Trading.Application;
+using Acme.Trading.Runtime.Domain;
 using Acme.Trading.Runtime.Lean.DependencyInjection;
 using Aether.AI.Hosting;
 using Aether.AI.Harness;
@@ -204,7 +206,7 @@ static async Task RunOfflineSmokeAsync(string dbPath)
 
 static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider services)
 {
-    Console.WriteLine("Aether.AI live. Commands: 'ctp', 'ctp-login', 'ctp-status', 'sync-securities', 'login', 'whoami', 'configs', 'config', 'exit'.");
+    Console.WriteLine("Aether.AI live. Commands: 'ctp', 'ctp-login', 'ctp-status', 'sync-securities', 'backtest', 'login', 'whoami', 'configs', 'config', 'exit'.");
     Console.WriteLine("One assistant with all tools (qifu/ctp/quotes). Tool backends still need their own login/credentials.");
     Console.WriteLine(new string('-', 60));
 
@@ -214,6 +216,7 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
     var securitySync = services.GetRequiredService<ISecurityClientSyncService>();
     var ctpConfigStore = services.GetRequiredService<ICtpConfigStore>();
     var ctpSession = services.GetRequiredService<ICtpTradingService>();
+    var backtestService = services.GetRequiredService<IBacktestApplicationService>();
 
     var session = runtime.StartSession("assistant");
 
@@ -251,6 +254,12 @@ static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider 
         if (cmd.Equals("sync-securities", StringComparison.OrdinalIgnoreCase))
         {
             await SyncSecuritiesAsync(securitySync);
+            continue;
+        }
+
+        if (cmd.Equals("backtest", StringComparison.OrdinalIgnoreCase))
+        {
+            await RunBacktestAsync(backtestService);
             continue;
         }
 
@@ -302,6 +311,81 @@ static async Task SyncSecuritiesAsync(ISecurityClientSyncService securitySync)
     catch (Exception ex)
     {
         Console.WriteLine($"Sync failed: {ex.Message}");
+    }
+}
+
+/// <summary>
+/// Functional test for the Trading backtest path: prompts for params, runs one Lean backtest
+/// via IBacktestApplicationService, prints stats or the error. Lean engine blocks, so offload
+/// to a background thread. Needs quote data for the symbol — run 'sync-securities' first and
+/// ensure the Quotes provider can fetch the contract (e.g. ag2610).
+/// </summary>
+static async Task RunBacktestAsync(IBacktestApplicationService backtestService)
+{
+    var symbol = Prompt("Symbol (期货合约, 如 ag2610)", "ag2610");
+    var startDate = Prompt("StartDate (yyyy-MM-dd)", "2024-01-01");
+    var endDate = Prompt("EndDate (yyyy-MM-dd)", "2024-12-31");
+    var strategy = Prompt("Strategy (SmaCross/Test)", "SmaCross");
+    var cash = decimal.TryParse(Prompt("InitialCash", "100000"), out var c) ? c : 100_000m;
+    var fast = int.TryParse(Prompt("FastPeriod", "10"), out var f) ? f : 10;
+    var slow = int.TryParse(Prompt("SlowPeriod", "30"), out var s) ? s : 30;
+    var resolutionStr = Prompt("Resolution (Daily/Hour/Minute)", "Daily");
+    if (!Enum.TryParse<BarResolution>(resolutionStr, ignoreCase: true, out var resolution))
+        resolution = BarResolution.Daily;
+
+    if (!DateTime.TryParse(startDate, out var start) || !DateTime.TryParse(endDate, out var end))
+    {
+        Console.WriteLine("日期格式无效。");
+        return;
+    }
+
+    var input = new BacktestRunInput
+    {
+        Symbol = symbol,
+        StrategyName = strategy,
+        StartDate = start,
+        EndDate = end,
+        InitialCash = cash,
+        FastPeriod = fast,
+        SlowPeriod = slow,
+        Resolution = resolution,
+    };
+
+    Console.WriteLine($"回测运行中… {symbol} {strategy} {start:yyyy-MM-dd}~{end:yyyy-MM-dd} {resolution} cash={cash} fast={fast} slow={slow}");
+    Console.WriteLine(new string('-', 60));
+
+    Acme.Trading.Domain.BacktestResult result;
+    try
+    {
+        // Lean engine.Run 是同步阻塞 CPU 活，卸载到后台线程避免卡住命令循环。
+        result = await Task.Run(() => backtestService.RunAsync(input));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"回测异常: {ex.Message}");
+        return;
+    }
+
+    if (!result.IsSuccess)
+    {
+        Console.WriteLine($"回测未成功: {result.Error ?? "(无错误信息)"}  状态={result.AlgorithmStatus}");
+        if (result.Logs.Count > 0)
+        {
+            Console.WriteLine("日志（末 20 行）:");
+            foreach (var line in result.Logs.TakeLast(20)) Console.WriteLine($"  {line}");
+        }
+        return;
+    }
+
+    var st = result.Statistics;
+    Console.WriteLine($"回测成功！状态={result.AlgorithmStatus}  权益点数={result.EquityCurve.Count}");
+    Console.WriteLine($"  净收益={st?.NetProfit}  总收益={st?.TotalReturn}  年化={st?.Cagr}");
+    Console.WriteLine($"  Sharpe={st?.SharpeRatio}  Sortino={st?.SortinoRatio}  最大回撤={st?.MaxDrawdown}");
+    Console.WriteLine($"  胜率={st?.WinRate}  交易次数={st?.TotalTrades}  Alpha={st?.Alpha}  Beta={st?.Beta}");
+    if (result.Logs.Count > 0)
+    {
+        Console.WriteLine("信号日志（末 10 行）:");
+        foreach (var line in result.Logs.TakeLast(10)) Console.WriteLine($"  {line}");
     }
 }
 

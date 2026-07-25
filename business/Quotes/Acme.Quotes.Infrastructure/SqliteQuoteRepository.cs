@@ -109,13 +109,13 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
         {
             list.Add(new Quote(
                 reader.GetInt32(0),
-                DateTime.Parse(reader.GetString(1), CultureInfo.InvariantCulture),
+                DateTime.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
                 (decimal)reader.GetDouble(3),
                 (decimal)reader.GetDouble(4),
                 (decimal)reader.GetDouble(5),
                 (decimal)reader.GetDouble(6),
                 (decimal)reader.GetDouble(7),
-                reader.GetString(2)));
+                reader.GetString(1)));
         }
         return list;
     }
