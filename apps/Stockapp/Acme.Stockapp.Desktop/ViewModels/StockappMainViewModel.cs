@@ -1,3 +1,5 @@
+using Acme.AppAuth.Application.Auth;
+using Acme.AppAuth.Domain;
 using Acme.Desktop.Shared.Shell;
 
 namespace Acme.Stockapp.Desktop.ViewModels;
@@ -8,7 +10,8 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 /// </summary>
 public sealed class StockappMainViewModel : MainViewModelBase
 {
-    public StockappMainViewModel()
+    public StockappMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog)
+        : base(auth, currentUser, loginDialog)
     {
         AddNav("chat", "✨", "新聊天");
         AddNav("experts", "🧪", "专家");

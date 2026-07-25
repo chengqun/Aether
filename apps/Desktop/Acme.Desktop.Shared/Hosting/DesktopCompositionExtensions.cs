@@ -81,6 +81,9 @@ public static class DesktopCompositionExtensions
         // —— 公共 AI 工具（两租户共用）——
         aether.AddSystemTools().AddApkParser().AddNotesTools().AddAutomationTools();
 
+        // 登录对话框服务（从 Application.Current 取主窗口弹模态登录窗）
+        services.AddSingleton<ILoginDialogService, LoginDialogService>();
+
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
     }

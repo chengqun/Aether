@@ -1,3 +1,5 @@
+using Acme.AppAuth.Application.Auth;
+using Acme.AppAuth.Domain;
 using Acme.Desktop.Shared.Shell;
 
 namespace Acme.Qifu.Desktop.ViewModels;
@@ -8,14 +10,14 @@ namespace Acme.Qifu.Desktop.ViewModels;
 /// </summary>
 public sealed class QifuMainViewModel : MainViewModelBase
 {
-    public QifuMainViewModel()
+    public QifuMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog)
+        : base(auth, currentUser, loginDialog)
     {
         AddNav("chat", "✨", "新聊天");
         AddNav("experts", "🧪", "专家");
         AddNav("automation", "⏰", "自动化");
         AddNav("notes", "📝", "笔记");
 
-        // 默认进聊天页
         NavigateToCommand.Execute("chat");
     }
 }

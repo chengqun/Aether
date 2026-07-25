@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.LoginWindow"
+        Title="登录"
+        Width="380" Height="320"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="28,24,28,20">
+
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+      <TextBlock Text="登录到 Aether" FontSize="20" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}"/>
+      <TextBlock Text="使用应用服务器账号登录" FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Spacing="12">
+      <TextBox Text="{Binding Username}" Watermark="用户名" Classes="input"
+               WatermarkForeground="gray"/>
+      <TextBox Text="{Binding Password}" PasswordChar="●" Watermark="密码" Classes="input"
+               WatermarkForeground="gray"/>
+      <TextBlock Text="{Binding Error}" FontSize="12"
+                 Foreground="{DynamicResource DangerBrush}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="取消" Click="OnCancel" Padding="20,8" />
+      <Button Content="登录" Classes="primary"
+              Command="{Binding LoginCommand}"
+              IsEnabled="{Binding !IsBusy}"/>
+    </StackPanel>
+
+  </Grid>
+</Window>

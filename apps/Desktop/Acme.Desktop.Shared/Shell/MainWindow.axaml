@@ -6,33 +6,36 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
-  <Grid ColumnDefinitions="200,*">
+  <Grid ColumnDefinitions="Auto,*">
 
-    <!-- ═══ 左侧导航栏 ═══ -->
-    <Border Grid.Column="0" Background="{DynamicResource SidebarBgBrush}"
+    <!-- ═══ 侧边栏（宽度绑定 SidebarWidth，可收起） ═══ -->
+    <Border Grid.Column="0" Width="{Binding SidebarWidth}"
+            Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <DockPanel>
-        <!-- 设置按钮（底部，骨架阶段占位，功能 phase 接 Settings 窗） -->
-        <Button DockPanel.Dock="Bottom" Classes="settings-nav" Margin="10,0,10,14"
-                IsEnabled="False" ToolTip.Tip="设置（待实现）">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="⚙️" FontSize="16" VerticalAlignment="Center" />
-            <TextBlock Text="设置" FontSize="14" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
+      <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- 导航项（数据驱动，租户填充 NavItems） -->
-        <StackPanel DockPanel.Dock="Top" Margin="0,14,0,0">
-          <ItemsControl ItemsSource="{Binding NavItems}">
+        <!-- 顶部：收起按钮 + 导航项 -->
+        <StackPanel Grid.Row="0" Margin="0,10,0,0">
+          <Button Command="{Binding ToggleSidebarCommand}" Classes="settings-nav"
+                  HorizontalAlignment="Stretch" ToolTip.Tip="收起/展开侧边栏">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <!-- 收起/展开指示：两个 TextBlock 按 IsSidebarExpanded 切换 -->
+              <TextBlock Text="☰" FontSize="15" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+
+          <ItemsControl ItemsSource="{Binding NavItems}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="settings-nav"
                         Command="{Binding Command}"
                         CommandParameter="{Binding Key}"
-                        IsEnabled="{Binding !IsCurrent}">
+                        IsEnabled="{Binding !IsCurrent}"
+                        ToolTip.Tip="{Binding Title}">
                   <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="{Binding Icon}" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Icon}" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center"
+                               IsVisible="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
                   </StackPanel>
                 </Button>
               </DataTemplate>
@@ -40,11 +43,41 @@
           </ItemsControl>
         </StackPanel>
 
-        <!-- 最近会话占位（功能 phase 接 Chat 会话列表） -->
-        <TextBlock Text="最近会话（待实现）" FontSize="12"
+        <!-- 中部：最近会话占位（功能 phase 接 Chat 会话列表） -->
+        <TextBlock Grid.Row="1" Text="最近会话（待实现）" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}"
-                   Margin="24,14,0,0" />
-      </DockPanel>
+                   Margin="24,14,0,0"
+                   IsVisible="{Binding IsSidebarExpanded}"/>
+
+        <!-- 底部：账户芯片（Codex 风：左下角，点击弹菜单：设置/登录/退出） -->
+        <Button Grid.Row="2" Classes="settings-nav" Margin="10,0,10,12"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                ToolTip.Tip="{Binding UserName}">
+          <Button.Flyout>
+            <MenuFlyout Placement="Top">
+              <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
+              <MenuItem Header="设置" IsEnabled="False" ToolTip.Tip="（待实现）"/>
+              <MenuItem Header="登录…" Command="{Binding LoginCommand}"
+                        IsVisible="{Binding !IsLoggedIn}"/>
+              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}"
+                        IsVisible="{Binding IsLoggedIn}"/>
+            </MenuFlyout>
+          </Button.Flyout>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <!-- 头像圆 -->
+            <Border Width="28" Height="28" CornerRadius="14"
+                    Background="{DynamicResource AccentBrush}">
+              <TextBlock Text="{Binding UserInitial}" Foreground="White"
+                         FontSize="13" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <TextBlock Text="{Binding UserName}" FontSize="13"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding IsSidebarExpanded}"/>
+          </StackPanel>
+        </Button>
+
+      </Grid>
     </Border>
 
     <!-- ═══ 内容区（骨架占位；功能 phase 注入真实 View） ═══ -->

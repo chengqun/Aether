@@ -31,6 +31,8 @@ public partial class App : global::Avalonia.Application
         {
             var vm = Services.GetRequiredService<QifuMainViewModel>();
             desktop.MainWindow = new MainWindow { DataContext = vm };
+            // 窗口打开后异步初始化登录态（检查已缓存 token，刷新账户显示），不阻塞 UI
+            _ = vm.InitializeAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
