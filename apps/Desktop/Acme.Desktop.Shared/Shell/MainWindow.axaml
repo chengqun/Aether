@@ -56,13 +56,22 @@
           </ItemsControl>
         </StackPanel>
 
-        <!-- 最近会话（LastChild 填充剩余，可滚动） -->
+        <!-- 最近会话（LastChild 填充剩余，可滚动；标题可点展开/收起） -->
         <DockPanel Margin="10,14,10,6">
-          <TextBlock DockPanel.Dock="Top" Text="最近会话" FontSize="12" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TextSecondaryBrush}" Margin="4,0,0,4"/>
+          <Button DockPanel.Dock="Top" Command="{Binding ToggleRecentExpandedCommand}"
+                  Classes="settings-nav" Padding="4,2" Margin="0,0,0,4" HorizontalAlignment="Left"
+                  ToolTip.Tip="展开/收起最近会话">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding RecentCaret}" FontSize="10"
+                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              <TextBlock Text="最近会话" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+            </DockPanel>
+          </Button>
           <TextBlock Text="暂无会话" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                     Margin="14,4" IsVisible="{Binding !HasConversations}"/>
-          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                     Margin="14,4" IsVisible="{Binding IsRecentEmptyVisible}"/>
+          <ScrollViewer IsVisible="{Binding IsRecentExpanded}"
+                        HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Conversations}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>

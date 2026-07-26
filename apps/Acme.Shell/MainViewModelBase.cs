@@ -171,6 +171,25 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否有最近会话（控制空状态"暂无会话"显示）。</summary>
     [ObservableProperty] private bool _hasConversations;
 
+    /// <summary>最近会话列表是否展开（ChatGPT 风，可收起）。</summary>
+    [ObservableProperty] private bool _isRecentExpanded = true;
+
+    public bool IsRecentEmptyVisible => IsRecentExpanded && !HasConversations;
+
+    public string RecentCaret => IsRecentExpanded ? "▼" : "▶";
+
+    partial void OnIsRecentExpandedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsRecentEmptyVisible));
+        OnPropertyChanged(nameof(RecentCaret));
+        _ = _preferences.SetAsync("recentExpanded", value ? "1" : "0");
+    }
+
+    partial void OnHasConversationsChanged(bool value) => OnPropertyChanged(nameof(IsRecentEmptyVisible));
+
+    [RelayCommand]
+    private void ToggleRecentExpanded() => IsRecentExpanded = !IsRecentExpanded;
+
     [RelayCommand]
     private void NewChat()
     {
@@ -463,6 +482,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 ? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid)
                 : null;
             SelectedAgentItem = saved ?? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault();
+
+            // 恢复最近会话展开状态
+            var expanded = await _preferences.GetAsync("recentExpanded");
+            if (expanded == "0") IsRecentExpanded = false;
         }
         catch { /* 偏好恢复失败不阻塞 */ }
     }
