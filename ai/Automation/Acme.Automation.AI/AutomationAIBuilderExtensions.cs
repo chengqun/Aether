@@ -26,16 +26,20 @@ public static class AutomationAIBuilderExtensions
     {
         var services = builder.Services;
         services.AddTransient<AutomationTool>();
-        services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.ListAutomationTasksAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.CreateAutomationTaskAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.DeleteAutomationTaskAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StartSchedulerAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StopSchedulerAsync)));
 
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "自动化";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "自动化";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("ListAutomationTasks", "列出自动化任务", cat,
+                sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.ListAutomationTasksAsync)));
+            reg.Register("CreateAutomationTask", "新建自动化任务", cat,
+                sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.CreateAutomationTaskAsync)));
+            reg.Register("DeleteAutomationTask", "删除自动化任务", cat,
+                sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.DeleteAutomationTaskAsync)));
+            reg.Register("StartScheduler", "启动调度器", cat,
+                sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StartSchedulerAsync)));
+            reg.Register("StopScheduler", "停止调度器", cat,
+                sp => CreateTool<AutomationTool>(sp, nameof(AutomationTool.StopSchedulerAsync)));
         });
         return builder;
     }

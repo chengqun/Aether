@@ -26,18 +26,23 @@ public static class CtpAIBuilderExtensions
         services.AddTransient<OrderActionTool>();
         services.AddTransient<QueryMarketDataTool>();
 
-        services.AddSingleton<AIFunction>(sp => CreateTool<CtpLoginTool>(sp, nameof(CtpLoginTool.GetStatus)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<QueryAccountTool>(sp, nameof(QueryAccountTool.QueryAccountAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<QueryPositionTool>(sp, nameof(QueryPositionTool.QueryPositionsAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)));
-
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "期货交易";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "期货交易";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("GetStatus", "查询 CTP 连接状态", cat,
+                sp => CreateTool<CtpLoginTool>(sp, nameof(CtpLoginTool.GetStatus)));
+            reg.Register("QueryAccount", "查询资金账户", cat,
+                sp => CreateTool<QueryAccountTool>(sp, nameof(QueryAccountTool.QueryAccountAsync)));
+            reg.Register("QueryPositions", "查询持仓", cat,
+                sp => CreateTool<QueryPositionTool>(sp, nameof(QueryPositionTool.QueryPositionsAsync)));
+            reg.Register("OrderInsert", "报单（下单）", cat,
+                sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)));
+            reg.Register("OrderAction", "撤单", cat,
+                sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)));
+            reg.Register("QueryLatestTick", "查询最新行情快照", cat,
+                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)));
+            reg.Register("QueryAllLatestTicks", "查询所有订阅行情快照", cat,
+                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)));
         });
         return builder;
     }

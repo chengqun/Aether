@@ -59,20 +59,11 @@ public static class AetherAIServiceCollectionExtensions
             return client.GetChatClient(options.OpenAI.ModelId).AsIChatClient();
         });
 
-        // Tools — collect metadata (categories, etc.) from each adapter's contributor, then build.
-        services.AddSingleton<ToolRegistry>(sp =>
-        {
-            var registry = new ToolRegistry();
-            foreach (var tool in sp.GetServices<AIFunction>())
-            {
-                registry.Register(tool);
-            }
-            foreach (var contributor in sp.GetServices<IToolRegistryContributor>())
-            {
-                contributor.Contribute(registry);
-            }
-            return registry;
-        });
+        // Tools — ToolRegistry collects metadata (name/description/category) + factory
+        // from each adapter's IToolRegistryContributor. Factories are only invoked
+        // when resolving tools for an agent, so GetAllMetas() never instantiates
+        // AIFunction and never fails due to missing DI dependencies.
+        services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp));
 
         // Harness
         services.AddSingleton<AgentFactory>(sp =>

@@ -1,15 +1,15 @@
 using System.Reflection;
 using Acme.SystemTools.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.AI;
 
 namespace Acme.SystemTools.AI;
 
 /// <summary>
 /// DI entry point for the SystemTools AI adapter — 12 file/shell/web tools.
-/// Stateless tools (no DI deps); register + expose as AIFunctions.
+/// Registers tool metadata + factory into ToolRegistry (no AIFunction instantiated
+/// at DI time; factory invoked lazily when an agent resolves its tools).
 /// </summary>
 public static class SystemToolsAIBuilderExtensions
 {
@@ -22,6 +22,12 @@ public static class SystemToolsAIBuilderExtensions
     public static AetherAIBuilder AddSystemTools(this AetherAIBuilder builder)
     {
         var s = builder.Services;
+        s.AddHttpClient();
+        s.AddTransient<WebFetchTool>(sp =>
+        {
+            var factory = sp.GetRequiredService<IHttpClientFactory>();
+            return new WebFetchTool(factory.CreateClient());
+        });
         s.AddTransient<FileReadTool>();
         s.AddTransient<FileWriteTool>();
         s.AddTransient<FileEditTool>();
@@ -32,26 +38,35 @@ public static class SystemToolsAIBuilderExtensions
         s.AddTransient<CommandExecutorTool>();
         s.AddTransient<DirectoryExplorerTool>();
         s.AddTransient<ShellCommandTool>();
-        s.AddTransient<WebFetchTool>();
         s.AddTransient<FileDiffTool>();
 
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileReadTool>(sp, "ReadFile"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileWriteTool>(sp, "WriteFile"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileEditTool>(sp, "EditFile"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileLineEditTool>(sp, "LineEditFile"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileDeleteTool>(sp, "DeleteFile"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<GrepTool>(sp, "Grep"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<GlobTool>(sp, "Glob"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<CommandExecutorTool>(sp, "ExecuteCommand"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<DirectoryExplorerTool>(sp, "ExploreDirectory"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<FileDiffTool>(sp, "DiffFile"));
-
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "系统工具";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "系统工具";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("ReadFile", "读取文件内容（文本/图片）", cat,
+                sp => CreateTool<FileReadTool>(sp, "ReadFile"));
+            reg.Register("WriteFile", "写入文件内容", cat,
+                sp => CreateTool<FileWriteTool>(sp, "WriteFile"));
+            reg.Register("EditFile", "编辑文件（字符串替换）", cat,
+                sp => CreateTool<FileEditTool>(sp, "EditFile"));
+            reg.Register("LineEditFile", "按行编辑文件", cat,
+                sp => CreateTool<FileLineEditTool>(sp, "LineEditFile"));
+            reg.Register("DeleteFile", "删除文件", cat,
+                sp => CreateTool<FileDeleteTool>(sp, "DeleteFile"));
+            reg.Register("Grep", "正则搜索文件内容", cat,
+                sp => CreateTool<GrepTool>(sp, "Grep"));
+            reg.Register("Glob", "按模式匹配文件（如 *.cs）", cat,
+                sp => CreateTool<GlobTool>(sp, "Glob"));
+            reg.Register("ExecuteCommand", "执行命令行程序", cat,
+                sp => CreateTool<CommandExecutorTool>(sp, "ExecuteCommand"));
+            reg.Register("ExploreDirectory", "浏览目录结构", cat,
+                sp => CreateTool<DirectoryExplorerTool>(sp, "ExploreDirectory"));
+            reg.Register("ExecuteShellCommand", "执行 Shell 命令", cat,
+                sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"));
+            reg.Register("FetchUrl", "抓取网页内容", cat,
+                sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
+            reg.Register("DiffFile", "比较文件差异", cat,
+                sp => CreateTool<FileDiffTool>(sp, "DiffFile"));
         });
         return builder;
     }

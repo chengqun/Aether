@@ -23,12 +23,12 @@ public static class TradingAIBuilderExtensions
     {
         var services = builder.Services;
         services.AddTransient<BacktestTool>();
-        services.AddSingleton<AIFunction>(sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
 
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "量化回测";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "量化回测";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("RunBacktest", "运行策略历史回测", cat,
+                sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
         });
         return builder;
     }

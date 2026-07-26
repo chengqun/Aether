@@ -2,50 +2,44 @@ using System.Collections.ObjectModel;
 using Acme.Notes.AgentSource;
 using Aether.AI.Harness.Tools;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>工具分类组。</summary>
-public sealed partial class ToolCategoryGroup : ObservableObject
+/// <summary>工具选项（工具池项，供自定义 Agent 勾选）。</summary>
+public partial class ToolOption : ObservableObject
 {
-    public string Category { get; }
-    public ObservableCollection<ToolToggleItem> Tools { get; } = new();
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ExpandIndicator))]
-    private bool _isExpanded = true;
-
-    public string ExpandIndicator => IsExpanded ? "▼" : "▶";
-    public int ToolCount => Tools.Count;
-
-    public ToolCategoryGroup(string category)
-    {
-        Category = category;
-    }
-
-    [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    [ObservableProperty] private bool _isSelected;
 }
 
-/// <summary>可勾选的工具项。</summary>
-public sealed partial class ToolToggleItem : ObservableObject
+/// <summary>工具类别分组（UI 分组展示用，支持类别整体勾选）。</summary>
+public partial class ToolCategoryGroup : ObservableObject
 {
-    [ObservableProperty]
-    private bool _isEnabled;
+    public string Category { get; set; } = string.Empty;
+    public ObservableCollection<ToolOption> Tools { get; } = new();
 
-    public string Name { get; }
-    public string Description { get; }
-    public string Category { get; }
-    public string DisplayName => $"[{Category}] {Name}";
-
-    public ToolToggleItem(string name, string description, string category, bool isEnabled = false)
+    /// <summary>类别是否全选（双向：设 true 全选该类工具，工具变化时反向更新）。</summary>
+    public bool IsAllSelected
     {
-        Name = name;
-        Description = description;
-        Category = category;
-        IsEnabled = isEnabled;
+        get => Tools.Count > 0 && Tools.All(t => t.IsSelected);
+        set
+        {
+            foreach (var t in Tools) t.IsSelected = value;
+            OnPropertyChanged();
+        }
     }
+
+    /// <summary>工具变化时刷新 IsAllSelected。</summary>
+    public void RefreshIsAllSelected() => OnPropertyChanged(nameof(IsAllSelected));
+}
+
+/// <summary>记忆模式下拉选项（值 + 中文显示）。</summary>
+public class MemoryModeOption
+{
+    public AgentMemoryMode Value { get; set; }
+    public string Display { get; set; } = string.Empty;
 }
 
 public sealed partial class ExpertEditViewModel : ObservableObject
@@ -54,20 +48,29 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     {
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
 
-        var groups = new Dictionary<string, ToolCategoryGroup>();
+        // 按分类分组构建工具列表
         foreach (var meta in allTools)
         {
-            if (!groups.TryGetValue(meta.Category, out var group))
+            var opt = new ToolOption
             {
-                group = new ToolCategoryGroup(meta.Category);
-                groups[meta.Category] = group;
-            }
-            group.Tools.Add(new ToolToggleItem(meta.Name, meta.Description, meta.Category, selectedSet.Contains(meta.Name)));
-        }
+                Name = meta.Name,
+                Description = meta.Description,
+                Category = meta.Category,
+                IsSelected = selectedSet.Contains(meta.Name),
+            };
 
-        ToolGroups = new ObservableCollection<ToolCategoryGroup>(groups.Values.OrderBy(g => g.Category));
-        FlatTools = new ObservableCollection<ToolToggleItem>(
-            groups.Values.SelectMany(g => g.Tools).OrderBy(t => t.Category).ThenBy(t => t.Name));
+            var group = ToolCategories.FirstOrDefault(g => g.Category == meta.Category);
+            if (group == null)
+            {
+                group = new ToolCategoryGroup { Category = meta.Category };
+                ToolCategories.Add(group);
+            }
+
+            // 工具选中变化时刷新所属类别的全选状态
+            opt.PropertyChanged += (_, _) => group.RefreshIsAllSelected();
+            Tools.Add(opt);
+            group.Tools.Add(opt);
+        }
 
         if (existing != null)
         {
@@ -96,45 +99,63 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     public Guid Id { get; }
     public bool IsEditing { get; }
 
-    public string WindowTitle => IsEditing ? "编辑专家" : "新建专家";
+    public string WindowTitle => IsEditing ? "编辑专家" : "创建专家";
 
-    [ObservableProperty]
-    private string _name = string.Empty;
+    [ObservableProperty] private string _name = string.Empty;
+    [ObservableProperty] private string _description = string.Empty;
+    [ObservableProperty] private string _category = "普通对话";
+    [ObservableProperty] private string _systemPrompt = string.Empty;
+    [ObservableProperty] private AgentMemoryMode _memory = AgentMemoryMode.SlidingWindow;
+    [ObservableProperty] private int _maxHistory = 20;
+    [ObservableProperty] private string? _error;
 
-    [ObservableProperty]
-    private string _description = string.Empty;
+    /// <summary>扁平工具列表（所有工具，含选中状态）。</summary>
+    public ObservableCollection<ToolOption> Tools { get; } = new();
 
-    [ObservableProperty]
-    private string _category = "普通对话";
+    /// <summary>按类别分组的工具列表（UI 分组展示用）。</summary>
+    public ObservableCollection<ToolCategoryGroup> ToolCategories { get; } = new();
 
-    [ObservableProperty]
-    private string _systemPrompt = string.Empty;
+    /// <summary>选中工具数量。</summary>
+    public int SelectedToolCount => Tools.Count(t => t.IsSelected);
 
-    [ObservableProperty]
-    private AgentMemoryMode _memory = AgentMemoryMode.SlidingWindow;
+    /// <summary>记忆模式可选列表。</summary>
+    public static MemoryModeOption[] MemoryModeOptions { get; } =
+    {
+        new() { Value = AgentMemoryMode.Off, Display = "无记忆 · 每次独立运行" },
+        new() { Value = AgentMemoryMode.SlidingWindow, Display = "滑动窗口 · 仅最近 N 条（推荐）" },
+        new() { Value = AgentMemoryMode.Full, Display = "完整记忆 · 保留全部历史" },
+    };
 
-    [ObservableProperty]
-    private int _maxHistory = 20;
+    /// <summary>当前选中的记忆模式选项。</summary>
+    public MemoryModeOption? SelectedMemoryModeOption
+    {
+        get => MemoryModeOptions.FirstOrDefault(o => o.Value == Memory);
+        set
+        {
+            if (value != null && value.Value != Memory)
+            {
+                Memory = value.Value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
-    [ObservableProperty]
-    private string? _error;
+    /// <summary>窗口大小输入框是否可见（仅滑动窗口时需要配置 N）。</summary>
+    public bool IsWindowVisible => Memory == AgentMemoryMode.SlidingWindow;
 
-    /// <summary>按分类分组的可勾选工具列表。</summary>
-    public ObservableCollection<ToolCategoryGroup> ToolGroups { get; }
-
-    /// <summary>扁平化的工具列表（简化版UI用）。</summary>
-    public ObservableCollection<ToolToggleItem> FlatTools { get; }
+    partial void OnMemoryChanged(AgentMemoryMode value)
+    {
+        OnPropertyChanged(nameof(IsWindowVisible));
+        OnPropertyChanged(nameof(SelectedMemoryModeOption));
+    }
 
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool CanSave => !string.IsNullOrWhiteSpace(Name);
 
-    public AgentMemoryMode[] MemoryModes { get; } =
-        { AgentMemoryMode.SlidingWindow, AgentMemoryMode.Full, AgentMemoryMode.Off };
-
     public event Action<ExpertItem>? SaveRequested;
     public event Action? CancelRequested;
 
-    [RelayCommand]
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void Save()
     {
         if (!CanSave)
@@ -143,11 +164,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             return;
         }
 
-        var toolList = ToolGroups
-            .SelectMany(g => g.Tools)
-            .Where(t => t.IsEnabled)
-            .Select(t => t.Name)
-            .ToList();
+        var toolList = Tools.Where(t => t.IsSelected).Select(t => t.Name).ToList();
 
         var item = new ExpertItem
         {
@@ -164,7 +181,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         SaveRequested?.Invoke(item);
     }
 
-    [RelayCommand]
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void Cancel()
     {
         CancelRequested?.Invoke();

@@ -1,7 +1,21 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aether.AI.Harness.Tools;
+
+/// <summary>工具注册表贡献者接口——每个适配器通过此接口贡献工具元数据 + 工厂。</summary>
+public interface IToolRegistryContributor
+{
+    void Contribute(ToolRegistry registry);
+}
+
+public sealed class DelegateToolRegistryContributor : IToolRegistryContributor
+{
+    private readonly Action<ToolRegistry> _configure;
+    public DelegateToolRegistryContributor(Action<ToolRegistry> configure) => _configure = configure;
+    public void Contribute(ToolRegistry registry) => _configure(registry);
+}
 
 /// <summary>工具元数据（名称 + 描述 + 分类），供 UI 选择展示。</summary>
 public sealed class ToolMeta
@@ -20,84 +34,90 @@ public sealed class ToolMeta
 
 /// <summary>
 /// Registry of <see cref="AIFunction"/> tools, keyed by tool name. Tools are
-/// registered once at startup and resolved by name when building an agent from
-/// an <see cref="Aether.AI.Core.Agents.AgentDefinition"/> (which lists tool
-/// names, not tool instances).
-/// <para>
-/// This deliberately wraps MEAI's <c>AIFunction</c> rather than defining a
-/// competing <c>ITool</c> abstraction — Microsoft Agent Framework already
-/// provides the tool model.
-/// </para>
+/// registered with metadata (name/description/category) + a factory at startup.
+/// The factory is only invoked when resolving tools for an agent — GetAllMetas()
+/// returns metadata without instantiating any AIFunction, so UI tool selection
+/// never fails due to missing DI dependencies.
 /// </summary>
 public sealed class ToolRegistry
 {
-    private readonly ConcurrentDictionary<string, AIFunction> _tools = new();
-    private readonly ConcurrentDictionary<string, string> _categories = new();
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ConcurrentDictionary<string, ToolEntry> _entries = new();
 
-    /// <summary>Registers a tool, keyed by <see cref="AIFunction.Name"/>.</summary>
-    public ToolRegistry Register(AIFunction tool, string category = "未分类")
-    {
-        if (tool is null) throw new ArgumentNullException(nameof(tool));
-        _tools[tool.Name] = tool;
-        _categories[tool.Name] = category;
-        return this;
-    }
+    public ToolRegistry() : this(NullServiceProvider.Instance) { }
 
-    /// <summary>设置某个工具的分类（用于已注册工具的分类补充）。</summary>
-    public void SetCategory(string toolName, string category)
+    public ToolRegistry(IServiceProvider serviceProvider)
     {
-        _categories[toolName] = category;
+        _serviceProvider = serviceProvider;
+
+        // 执行各 AddXxx 模块通过 ConfigureToolRegistry 注册的元数据 + 工厂
+        if (serviceProvider is NullServiceProvider) return;
+        foreach (var contributor in serviceProvider.GetServices<IToolRegistryContributor>())
+        {
+            try { contributor.Contribute(this); }
+            catch { /* skip */ }
+        }
     }
 
     /// <summary>
-    /// Creates a tool from a delegate and registers it. The delegate's method
-    /// (and parameters) should be annotated with <c>[Description]</c> so the
-    /// model understands how to call it.
+    /// Registers a tool's metadata + factory. The factory is only invoked when
+    /// the tool is resolved for an agent — not at registration time.
     /// </summary>
-    public ToolRegistry RegisterFunction(Delegate method, string? name = null, string category = "未分类")
+    public ToolRegistry Register(string name, string description, string category,
+        Func<IServiceProvider, AIFunction> factory)
     {
-        if (method is null) throw new ArgumentNullException(nameof(method));
-        var tool = AIFunctionFactory.Create(method, name);
-        return Register(tool, category);
+        _entries[name] = new ToolEntry(name, description, category, factory);
+        return this;
     }
 
-    /// <summary>获取所有工具的元数据（名称 + 描述 + 分类），供 UI 选择展示。</summary>
+    /// <summary>获取所有工具的元数据（名称 + 描述 + 分类），不实例化 AIFunction。</summary>
     public IReadOnlyList<ToolMeta> GetAllMetas()
-    {
-        var result = new List<ToolMeta>();
-        foreach (var kv in _tools)
-        {
-            var name = kv.Key;
-            var tool = kv.Value;
-            var desc = tool.Description ?? string.Empty;
-            var cat = _categories.TryGetValue(name, out var c) ? c : "未分类";
-            result.Add(new ToolMeta(name, desc, cat));
-        }
-        return result.OrderBy(t => t.Category).ThenBy(t => t.Name).ToList();
-    }
+        => _entries.Values
+            .Select(t => new ToolMeta(t.Name, t.Description, t.Category))
+            .OrderBy(t => t.Category).ThenBy(t => t.Name)
+            .ToList();
 
-    /// <summary>Resolves a tool by name, or <c>null</c> if not registered.</summary>
-    public AIFunction? Resolve(string name)
-        => _tools.TryGetValue(name, out var tool) ? tool : null;
-
-    /// <summary>Resolves every tool whose name appears in <paramref name="names"/>.</summary>
+    /// <summary>Resolves tools by name, invoking factories lazily.</summary>
     public IReadOnlyList<AIFunction> ResolveAll(IEnumerable<string> names)
     {
         var resolved = new List<AIFunction>();
         foreach (var name in names)
         {
-            if (_tools.TryGetValue(name, out var tool))
-                resolved.Add(tool);
+            if (_entries.TryGetValue(name, out var entry))
+            {
+                try { resolved.Add(entry.Factory(_serviceProvider)); }
+                catch { /* skip tools that fail to instantiate */ }
+            }
         }
         return resolved;
     }
 
-    /// <summary>All registered tools.</summary>
-    public IReadOnlyCollection<AIFunction> All => _tools.Values.ToList();
-
-    /// <summary>Removes a tool by name. Returns <c>true</c> if removed.</summary>
-    public bool Remove(string name) => _tools.TryRemove(name, out _);
-
     /// <summary>Whether a tool with the given name is registered.</summary>
-    public bool Contains(string name) => _tools.ContainsKey(name);
+    public bool Contains(string name) => _entries.ContainsKey(name);
+
+    /// <summary>All registered tool names.</summary>
+    public IReadOnlyCollection<string> AllNames => _entries.Keys.ToList();
+
+    private sealed class ToolEntry
+    {
+        public string Name { get; }
+        public string Description { get; }
+        public string Category { get; }
+        public Func<IServiceProvider, AIFunction> Factory { get; }
+
+        public ToolEntry(string name, string description, string category,
+            Func<IServiceProvider, AIFunction> factory)
+        {
+            Name = name;
+            Description = description;
+            Category = category;
+            Factory = factory;
+        }
+    }
+
+    private sealed class NullServiceProvider : IServiceProvider
+    {
+        public static readonly NullServiceProvider Instance = new();
+        public object? GetService(Type serviceType) => null;
+    }
 }

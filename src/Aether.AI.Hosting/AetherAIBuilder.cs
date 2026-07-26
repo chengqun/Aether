@@ -69,25 +69,12 @@ public sealed class AetherAIBuilder
     }
 
     /// <summary>
-    /// 配置 ToolRegistry（设置工具分类等元数据）。
-    /// 每个 AI 适配器在 AddXxxTools 中调用此方法为自己的工具设置分类。
+    /// 配置 ToolRegistry（注册工具元数据 + 工厂）。
+    /// 每个 AI 适配器在 AddXxxTools 中调用此方法注册自己的工具。
     /// </summary>
     public AetherAIBuilder ConfigureToolRegistry(Action<ToolRegistry> configure)
     {
         _services.AddSingleton<IToolRegistryContributor>(new DelegateToolRegistryContributor(configure));
         return this;
     }
-}
-
-/// <summary>工具注册表贡献者接口——每个适配器通过此接口贡献工具元数据。</summary>
-public interface IToolRegistryContributor
-{
-    void Contribute(ToolRegistry registry);
-}
-
-internal sealed class DelegateToolRegistryContributor : IToolRegistryContributor
-{
-    private readonly Action<ToolRegistry> _configure;
-    public DelegateToolRegistryContributor(Action<ToolRegistry> configure) => _configure = configure;
-    public void Contribute(ToolRegistry registry) => _configure(registry);
 }

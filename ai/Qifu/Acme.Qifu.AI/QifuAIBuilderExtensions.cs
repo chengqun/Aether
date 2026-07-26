@@ -32,23 +32,33 @@ public static class QifuAIBuilderExtensions
         services.AddTransient<YushuSqlQueryTool>();
         services.AddTransient<TeamsMessageTool>();
 
-        services.AddSingleton<AIFunction>(sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.LoginCloudDocs)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.CheckCloudDocsLogin)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.UploadCloudDocsFolder)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.UploadCloudDocsFile)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.ListCloudDocsFolders)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.AsyncSqlQuery)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.FetchSqlTaskStatus)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.PollSqlTaskStatus)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.DownloadResult)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.ReadResult)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.CleanResults)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<TeamsMessageTool>(sp, nameof(TeamsMessageTool.SendTeamsMessage)));
-
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "企服平台";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "企服平台";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("LoginCloudDocs", "登录 360Teams 云文档", cat,
+                sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.LoginCloudDocs)));
+            reg.Register("CheckCloudDocsLogin", "检查云文档登录状态", cat,
+                sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.CheckCloudDocsLogin)));
+            reg.Register("UploadCloudDocsFolder", "上传文件夹到云文档", cat,
+                sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.UploadCloudDocsFolder)));
+            reg.Register("UploadCloudDocsFile", "上传文件到云文档", cat,
+                sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.UploadCloudDocsFile)));
+            reg.Register("ListCloudDocsFolders", "列出云文档目录", cat,
+                sp => CreateTool<CloudDocsUploadTool>(sp, nameof(CloudDocsUploadTool.ListCloudDocsFolders)));
+            reg.Register("AsyncSqlQuery", "毓数异步 SQL 查询", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.AsyncSqlQuery)));
+            reg.Register("FetchSqlTaskStatus", "获取 SQL 任务状态", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.FetchSqlTaskStatus)));
+            reg.Register("PollSqlTaskStatus", "轮询 SQL 任务状态", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.PollSqlTaskStatus)));
+            reg.Register("DownloadResult", "下载查询结果", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.DownloadResult)));
+            reg.Register("ReadResult", "读取查询结果", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.ReadResult)));
+            reg.Register("CleanResults", "清理查询结果", cat,
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.CleanResults)));
+            reg.Register("SendTeamsMessage", "发送 360Teams 消息", cat,
+                sp => CreateTool<TeamsMessageTool>(sp, nameof(TeamsMessageTool.SendTeamsMessage)));
         });
         return builder;
     }

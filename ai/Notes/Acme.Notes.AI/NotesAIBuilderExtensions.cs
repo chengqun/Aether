@@ -20,18 +20,24 @@ public static class NotesAIBuilderExtensions
     {
         var s = builder.Services;
         s.AddTransient<NoteTool>();
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "CreateNote"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ReadNote"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "AppendNote"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "UpdateNote"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "SearchNotes"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "ListNotes"));
-        s.AddSingleton<AIFunction>(sp => CreateTool<NoteTool>(sp, "DeleteNote"));
 
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "笔记工具";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "笔记工具";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("CreateNote", "新建笔记", cat,
+                sp => CreateTool<NoteTool>(sp, "CreateNote"));
+            reg.Register("ReadNote", "读取笔记内容", cat,
+                sp => CreateTool<NoteTool>(sp, "ReadNote"));
+            reg.Register("AppendNote", "追加内容到笔记", cat,
+                sp => CreateTool<NoteTool>(sp, "AppendNote"));
+            reg.Register("UpdateNote", "更新笔记内容", cat,
+                sp => CreateTool<NoteTool>(sp, "UpdateNote"));
+            reg.Register("SearchNotes", "搜索笔记", cat,
+                sp => CreateTool<NoteTool>(sp, "SearchNotes"));
+            reg.Register("ListNotes", "列出笔记", cat,
+                sp => CreateTool<NoteTool>(sp, "ListNotes"));
+            reg.Register("DeleteNote", "删除笔记", cat,
+                sp => CreateTool<NoteTool>(sp, "DeleteNote"));
         });
         return builder;
     }

@@ -28,13 +28,14 @@ public static class QuotesAIBuilderExtensions
 
         services.AddTransient<SecurityQueryTool>();
         services.AddTransient<TechnicalAnalysisTool>();
-        services.AddSingleton<AIFunction>(sp => CreateTool<SecurityQueryTool>(sp, nameof(SecurityQueryTool.QuerySecurity)));
-        services.AddSingleton<AIFunction>(sp => CreateTool<TechnicalAnalysisTool>(sp, nameof(TechnicalAnalysisTool.CalculateIndicators)));
 
-        builder.ConfigureToolRegistry(registry =>
+        const string cat = "股票行情";
+        builder.ConfigureToolRegistry(reg =>
         {
-            const string cat = "股票行情";
-            foreach (var name in ToolNames) registry.SetCategory(name, cat);
+            reg.Register("QuerySecurity", "按关键词搜索证券代码/名称", cat,
+                sp => CreateTool<SecurityQueryTool>(sp, nameof(SecurityQueryTool.QuerySecurity)));
+            reg.Register("CalculateIndicators", "计算技术指标（SMA/EMA/RSI/MACD/BB/SAR/KDJ/ADX）", cat,
+                sp => CreateTool<TechnicalAnalysisTool>(sp, nameof(TechnicalAnalysisTool.CalculateIndicators)));
         });
         return builder;
     }
