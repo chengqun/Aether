@@ -417,19 +417,22 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         IsConnected = _deviceChatClient.IsConnected;
         StatusText = IsConnected ? "已连接" : "未连接";
 
-        await LoadLlmConfigsAsync();
-        await Notes.LoadAsync();
-        await Experts.LoadAsync();
-        await RestoreSummonedAndSelectedAsync();
-        RefreshAgentSelectItems();
-        await RefreshConversationsAsync();
+        _isInitializing = true;
+        try
+        {
+            await LoadLlmConfigsAsync();
+            await Notes.LoadAsync();
+            await Experts.LoadAsync();
+            await RestoreSummonedAndSelectedAsync();
+            await RefreshConversationsAsync();
+        }
+        finally { _isInitializing = false; }
         await TryAutoConnectDeviceAsync();
     }
 
-    /// <summary>从偏好恢复召唤状态与选中专家（跨重启保留）。</summary>
+    /// <summary>从偏好恢复召唤状态与选中专家（跨重启保留），并保证启动时有一个默认选中。</summary>
     private async Task RestoreSummonedAndSelectedAsync()
     {
-        _isInitializing = true;
         try
         {
             // 召唤列表
@@ -442,16 +445,30 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     e.IsSummoned = set.Contains(e.Id.ToString());
             }
 
-            // 选中专家
+            // 无任何召唤专家时，自动召唤第一个，保证下拉非空、有默认 agent
+            if (Experts.GetSummonedExperts().Count == 0 && Experts.Experts.Count > 0)
+            {
+                Experts.Experts[0].IsSummoned = true;
+                var ids = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToArray();
+                await _preferences.SetAsync("summonedAgentIds", System.Text.Json.JsonSerializer.Serialize(ids));
+            }
+
+            // 同步填充下拉（此时已在 UI 线程；不依赖后续的 RefreshAgentSelectItems）
+            AgentSelectItems.Clear();
+            foreach (var e in Experts.GetSummonedExperts())
+                AgentSelectItems.Add(e);
+
+            // 选中：已保存的 → 回退到第一个召唤的专家
             var selectedId = await _preferences.GetAsync("selectedAgentId");
-            if (Guid.TryParse(selectedId, out var aid))
-                SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid);
+            var saved = Guid.TryParse(selectedId, out var aid)
+                ? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid)
+                : null;
+            SelectedAgentItem = saved ?? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault();
         }
         catch { /* 偏好恢复失败不阻塞 */ }
-        finally { _isInitializing = false; }
     }
 
-    /// <summary>加载 LLM 配置列表到下拉框</summary>
+    /// <summary>加载 LLM 配置列表到下拉框，并恢复上次选中的 LLM（跨重启保留）。</summary>
     private async Task LoadLlmConfigsAsync()
     {
         try
@@ -462,13 +479,26 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             {
                 foreach (var c in configs)
                     LlmSelectItems.Add(c);
-                // 默认选中 IsDefault 的，否则选第一个
-                SelectedLlmItem = configs.FirstOrDefault(c => c.IsDefault) ?? configs.FirstOrDefault();
+
+                // 选中：上次保存的 → IsDefault → 第一个
+                var savedId = await _preferences.GetAsync("selectedLlmId");
+                var saved = Guid.TryParse(savedId, out var lid)
+                    ? configs.FirstOrDefault(c => c.Id == lid)
+                    : null;
+                SelectedLlmItem = saved ?? configs.FirstOrDefault(c => c.IsDefault) ?? configs.FirstOrDefault();
             }
         }
         catch
         {
         }
+    }
+
+    /// <summary>选中 LLM 变化时持久化（启动期 _isInitializing 抑制）。</summary>
+    partial void OnSelectedLlmItemChanged(LlmConfigDto? value)
+    {
+        if (_isInitializing) return;
+        if (value is not null)
+            _ = _preferences.SetAsync("selectedLlmId", value.Id.ToString());
     }
 
     /// <summary>召唤变化：刷新下拉 + 持久化召唤列表。</summary>
@@ -493,14 +523,20 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
     }
 
-    /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家）。</summary>
+    /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家），保留当前选中。</summary>
     private void RefreshAgentSelectItems()
     {
         Dispatcher.UIThread.Post(() =>
         {
+            var current = SelectedAgentItem as ExpertItem;
             AgentSelectItems.Clear();
             foreach (var e in Experts.GetSummonedExperts())
                 AgentSelectItems.Add(e);
+
+            // 当前仍在召唤列表 → 保持选中；否则回退第一个（避免清空导致选中丢失）
+            SelectedAgentItem = (current is not null && AgentSelectItems.Contains(current))
+                ? current
+                : AgentSelectItems.OfType<ExpertItem>().FirstOrDefault();
         });
     }
 
