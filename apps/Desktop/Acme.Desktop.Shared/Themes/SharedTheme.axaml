@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:cb="clr-namespace:ColorTextBlock.Avalonia;assembly=ColorTextBlock.Avalonia">
 
   <!-- 设计 Token：配色（浅色科技风），从 AlphaAgent App.axaml 搬运 -->
   <Styles.Resources>
@@ -235,6 +236,18 @@
     <Setter Property="Padding" Value="12,8"/>
     <Setter Property="MaxWidth" Value="640"/>
     <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+
+  <!-- Markdown.Avalonia 代码块跨平台等宽字体（避免 macOS 无 Consolas 崩溃） -->
+  <Style Selector="TextBlock.CodeBlock">
+    <Setter Property="FontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"/>
+  </Style>
+  <!-- Markdown.Avalonia 行内代码（ColorTextBlock.CCode）等宽字体。
+       CCode.MonospaceFontFamily 默认取 TryGetMonospace()，在装了 Office 的 macOS 上会命中
+       Consolas（系统枚举得到但 Avalonia 无法加载其字形文件），无 fallback 时 Measure 阶段抛
+       “Could not create glyphTypeface”导致整页崩溃，故显式覆盖为带 fallback 的等宽字体列表。 -->
+  <Style Selector="cb|CCode">
+    <Setter Property="MonospaceFontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Courier New,monospace"/>
   </Style>
 
 </Styles>

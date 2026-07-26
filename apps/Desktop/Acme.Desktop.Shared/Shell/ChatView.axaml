@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Shell"
              xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -42,8 +43,8 @@
 
         <Border Classes="bubble-agent" HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentMarkdownText}">
           <StackPanel Spacing="6" HorizontalAlignment="Left">
-            <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <ctl:SelectableMarkdownViewer Markdown="{Binding Content}" MarkdownStyleName="Standard"
+                                          SelectionEnabled="True" SelectionBrush="#3300A2ED" />
             <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9">
               <Run Text="{Binding Sender}" /><Run Text=" · " /><Run Text="{Binding Time}" />
             </TextBlock>
