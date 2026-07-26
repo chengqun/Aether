@@ -15,6 +15,12 @@ public sealed class Conversation
 
     public string? UserId { get; init; }
 
+    /// <summary>The logical id of the agent bound to this conversation (e.g. a custom agent's Guid).</summary>
+    public string AgentId { get; set; } = string.Empty;
+
+    /// <summary>Display name of the agent bound to this conversation.</summary>
+    public string AgentName { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;

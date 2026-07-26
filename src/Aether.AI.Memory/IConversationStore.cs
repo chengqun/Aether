@@ -13,6 +13,9 @@ public interface IConversationStore
 
     Task<Conversation?> GetAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns lightweight summaries (no full transcript) for list views.</summary>
+    Task<IReadOnlyList<ConversationSummary>> GetSummariesAsync(string userId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Conversation>> FindByUserAsync(string userId, CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(Guid conversationId, CancellationToken cancellationToken = default);

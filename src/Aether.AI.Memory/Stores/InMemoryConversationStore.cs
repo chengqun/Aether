@@ -24,6 +24,18 @@ public sealed class InMemoryConversationStore : IConversationStore
         return Task.FromResult(conversation);
     }
 
+    public Task<IReadOnlyList<ConversationSummary>> GetSummariesAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var results = _conversations.Values
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.UpdatedAt)
+            .Select(c => new ConversationSummary(
+                c.ConversationId, c.Title, c.AgentId, c.AgentName, c.UpdatedAt,
+                c.Messages.Count == 0 ? string.Empty : c.Messages[^1].Content))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<ConversationSummary>>(results);
+    }
+
     public Task<IReadOnlyList<Conversation>> FindByUserAsync(string userId, CancellationToken cancellationToken = default)
     {
         var results = _conversations.Values

@@ -3,6 +3,8 @@ using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Agents.Shell;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Memory;
+using Aether.AI.Memory.Stores;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
@@ -92,6 +94,9 @@ public static class DesktopCompositionExtensions
         // 桌面端模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端
         services.AddSingleton<IModelSource, LlmConfigModelSource>();
         services.AddSingleton<IChatClientFactory, DesktopChatClientFactory>();
+        // 会话持久化（覆盖平台默认的 InMemoryConversationStore）+ 偏好持久化（跨重启保留召唤/选中）
+        services.AddSingleton<IConversationStore>(sp => SqliteConversationStore.ForFile(Path.Combine(tenantDir, "conversations.db")));
+        services.AddSingleton<IPreferencesStore>(sp => new JsonPreferencesStore(tenantDir));
         // UI 线程调度抽象（供 UI 无关的 ExpertsViewModel 使用）
         services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
 

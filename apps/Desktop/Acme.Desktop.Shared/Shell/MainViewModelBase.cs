@@ -4,9 +4,12 @@ using Acme.Agents.AI;
 using Acme.Agents.Shell;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
+using Acme.Desktop.Shared.Hosting;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
+using Aether.AI.Core.Conversations;
+using Aether.AI.Memory;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,6 +33,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly ILlmConfigService _llmService;
     private readonly ICustomAgentRunner _agentRunner;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IConversationStore _conversationStore;
+    private readonly IPreferencesStore _preferences;
+
+    // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
+    private Guid _currentConversationId = Guid.Empty;
+    private bool _isInitializing;
 
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
@@ -43,6 +52,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _llmService = llmService;
         _agentRunner = serviceProvider.GetRequiredService<ICustomAgentRunner>();
         _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
+        _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
+        _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider);
@@ -50,7 +61,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
             _dispatcher);
-        Experts.SummonChanged += RefreshAgentSelectItems;
+        Experts.SummonChanged += OnSummonChanged;
 
         SubscribeToConnectionStateChanges();
     }
@@ -115,7 +126,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await Dispatcher.UIThread.InvokeAsync(() => Messages.Add(assistantMsg));
             try
             {
-                await _agentRunner.RunStreamingAsync(expert.Id, msg.Content,
+                await _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content,
                     async (token, _) =>
                     {
                         await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
@@ -149,6 +160,112 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     // —— 聊天消息列表 ——
     public ObservableCollection<ChatMessageItem> Messages { get; } = new();
+
+    // —— 最近会话列表（侧边栏）——
+    public ObservableCollection<ConversationItem> Conversations { get; } = new();
+
+    [RelayCommand]
+    private void NewChat()
+    {
+        // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
+        _currentConversationId = Guid.Empty;
+        Messages.Clear();
+        foreach (var c in Conversations) c.IsCurrent = false;
+        CurrentPage = "chat";
+    }
+
+    [RelayCommand]
+    private async Task ResumeConversationAsync(ConversationItem item)
+    {
+        if (item is null) return;
+        try
+        {
+            var conv = await _conversationStore.GetAsync(item.Id);
+            _currentConversationId = item.Id;
+            foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
+
+            _isInitializing = true;
+            // 恢复时把下拉选中切到该会话绑定的专家（抑制变更回调，避免触发持久化/新建）
+            if (Guid.TryParse(item.AgentId, out var aid))
+                SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid);
+            _isInitializing = false;
+
+            Messages.Clear();
+            if (conv is not null)
+            {
+                foreach (var m in conv.Messages)
+                {
+                    Messages.Add(new ChatMessageItem
+                    {
+                        Side = m.Role == Aether.AI.Core.Messages.MessageRole.User ? ChatMessageSide.Right : ChatMessageSide.Left,
+                        ItemType = "text",
+                        Sender = m.Role == Aether.AI.Core.Messages.MessageRole.User ? "我" : item.AgentName,
+                        Content = m.Content,
+                        IsStreaming = false,
+                    });
+                }
+            }
+            CurrentPage = "chat";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"加载会话失败：{ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteConversationAsync(ConversationItem item)
+    {
+        if (item is null) return;
+        try
+        {
+            await _conversationStore.DeleteAsync(item.Id);
+            Conversations.Remove(item);
+            if (_currentConversationId == item.Id)
+            {
+                _currentConversationId = Guid.Empty;
+                Messages.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"删除会话失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>从存储加载最近会话列表（按 UpdatedAt 倒序）。</summary>
+    private async Task RefreshConversationsAsync()
+    {
+        try
+        {
+            var summaries = await _conversationStore.GetSummariesAsync(string.Empty);
+            await _dispatcher.InvokeAsync(() =>
+            {
+                Conversations.Clear();
+                foreach (var s in summaries)
+                {
+                    Conversations.Add(new ConversationItem
+                    {
+                        Id = s.ConversationId,
+                        Title = string.IsNullOrWhiteSpace(s.Title) ? "新会话" : s.Title,
+                        Preview = s.LastMessagePreview ?? string.Empty,
+                        DisplayTime = FormatTime(s.UpdatedAt),
+                        AgentId = s.AgentId,
+                        AgentName = s.AgentName,
+                        IsCurrent = s.ConversationId == _currentConversationId,
+                    });
+                }
+            });
+        }
+        catch { /* 启动期失败不阻塞 */ }
+    }
+
+    private static string FormatTime(DateTimeOffset t)
+    {
+        var local = t.LocalDateTime;
+        if (local.Date == DateTime.Today) return local.ToString("HH:mm");
+        return local.ToString("MM-dd HH:mm");
+    }
 
     [ObservableProperty]
     private string _inputText = string.Empty;
@@ -286,8 +403,35 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await LoadLlmConfigsAsync();
         await Notes.LoadAsync();
         await Experts.LoadAsync();
+        await RestoreSummonedAndSelectedAsync();
         RefreshAgentSelectItems();
+        await RefreshConversationsAsync();
         await TryAutoConnectDeviceAsync();
+    }
+
+    /// <summary>从偏好恢复召唤状态与选中专家（跨重启保留）。</summary>
+    private async Task RestoreSummonedAndSelectedAsync()
+    {
+        _isInitializing = true;
+        try
+        {
+            // 召唤列表
+            var summonedJson = await _preferences.GetAsync("summonedAgentIds");
+            if (!string.IsNullOrWhiteSpace(summonedJson))
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<string[]>(summonedJson) ?? Array.Empty<string>();
+                var set = new HashSet<string>(ids);
+                foreach (var e in Experts.Experts)
+                    e.IsSummoned = set.Contains(e.Id.ToString());
+            }
+
+            // 选中专家
+            var selectedId = await _preferences.GetAsync("selectedAgentId");
+            if (Guid.TryParse(selectedId, out var aid))
+                SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid);
+        }
+        catch { /* 偏好恢复失败不阻塞 */ }
+        finally { _isInitializing = false; }
     }
 
     /// <summary>加载 LLM 配置列表到下拉框</summary>
@@ -307,6 +451,28 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         catch
         {
+        }
+    }
+
+    /// <summary>召唤变化：刷新下拉 + 持久化召唤列表。</summary>
+    private async void OnSummonChanged()
+    {
+        RefreshAgentSelectItems();
+        try
+        {
+            var ids = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToArray();
+            await _preferences.SetAsync("summonedAgentIds", System.Text.Json.JsonSerializer.Serialize(ids));
+        }
+        catch { /* 偏好持久化失败不阻塞 */ }
+    }
+
+    /// <summary>选中专家变化时持久化（启动期 _isInitializing 抑制）。</summary>
+    partial void OnSelectedAgentItemChanged(object? value)
+    {
+        if (_isInitializing) return;
+        if (value is ExpertItem expert)
+        {
+            _ = _preferences.SetAsync("selectedAgentId", expert.Id.ToString());
         }
     }
 
@@ -374,6 +540,35 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 选中已召唤的自定义专家时，本地流式运行（不走 SignalR）
         if (SelectedAgentItem is ExpertItem expert)
         {
+            // 待新聊天 → 首次发送才落库创建会话
+            if (_currentConversationId == Guid.Empty)
+            {
+                _currentConversationId = Guid.NewGuid();
+                var conv = new Conversation
+                {
+                    ConversationId = _currentConversationId,
+                    AgentId = expert.Id.ToString(),
+                    AgentName = expert.Name,
+                    Title = content.Length > 20 ? content[..20] + "…" : content,
+                };
+                conv.Append(Aether.AI.Core.Messages.Message.User(content));
+                await _conversationStore.SaveAsync(conv);
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    Conversations.Insert(0, new ConversationItem
+                    {
+                        Id = conv.ConversationId,
+                        Title = conv.Title,
+                        Preview = content,
+                        DisplayTime = FormatTime(conv.UpdatedAt),
+                        AgentId = conv.AgentId,
+                        AgentName = conv.AgentName,
+                        IsCurrent = true,
+                    });
+                    foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
+                });
+            }
+
             var assistantMsg = new ChatMessageItem
             {
                 Side = ChatMessageSide.Left,
@@ -383,16 +578,19 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 IsStreaming = true,
             };
             Messages.Add(assistantMsg);
+            var fullText = new System.Text.StringBuilder();
             try
             {
-                await _agentRunner.RunStreamingAsync(expert.Id, content,
+                await _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content,
                     async (token, _) =>
                     {
+                        fullText.Append(token);
                         await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
                     });
             }
             catch (Exception ex)
             {
+                fullText.Append($"\n\n[运行失败：{ex.Message}]");
                 await _dispatcher.InvokeAsync(() =>
                     assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
             }
@@ -400,6 +598,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             {
                 await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
             }
+
+            // 持久化 transcript（user + assistant）并乐观 bump 侧栏项
+            await PersistTurnAsync(expert, content, fullText.ToString());
             return;
         }
 
@@ -438,5 +639,37 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 IsStreaming = false
             });
         }
+    }
+
+    /// <summary>把本轮 user+assistant 消息追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>
+    private async Task PersistTurnAsync(ExpertItem expert, string userContent, string assistantContent)
+    {
+        if (_currentConversationId == Guid.Empty) return;
+        try
+        {
+            var conv = await _conversationStore.GetAsync(_currentConversationId);
+            if (conv is null) return;
+            // user 已在创建时追加过；非首轮回补
+            var last = conv.Messages.Count > 0 ? conv.Messages[^1] : null;
+            if (last is null || last.Role != Aether.AI.Core.Messages.MessageRole.User || last.Content != userContent)
+                conv.Append(Aether.AI.Core.Messages.Message.User(userContent));
+            if (!string.IsNullOrWhiteSpace(assistantContent))
+                conv.Append(Aether.AI.Core.Messages.Message.Assistant(assistantContent));
+            await _conversationStore.SaveAsync(conv);
+
+            await _dispatcher.InvokeAsync(() =>
+            {
+                var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
+                if (item is not null)
+                {
+                    item.Preview = assistantContent.Length > 40 ? assistantContent[..40] + "…" : assistantContent;
+                    item.DisplayTime = FormatTime(conv.UpdatedAt);
+                    // 移到顶部
+                    Conversations.Remove(item);
+                    Conversations.Insert(0, item);
+                }
+            });
+        }
+        catch { /* transcript 持久化失败不阻塞对话 */ }
     }
 }

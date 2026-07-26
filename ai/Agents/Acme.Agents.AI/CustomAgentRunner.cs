@@ -15,7 +15,8 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
 {
     private readonly HarnessRuntime _runtime;
     private readonly ICustomAgentCatalog _catalog;
-    private readonly ConcurrentDictionary<Guid, Guid> _sessionsByAgent = new(); // agentId -> sessionId
+    // conversationId -> (runtime sessionId, agentId)：每会话独立运行时会话，多会话记忆隔离。
+    private readonly ConcurrentDictionary<Guid, (Guid sessionId, Guid agentId)> _sessionsByConversation = new();
 
     public CustomAgentRunner(HarnessRuntime runtime, ICustomAgentCatalog catalog)
     {
@@ -24,6 +25,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
     }
 
     public async Task RunStreamingAsync(
+        Guid conversationId,
         Guid agentId,
         string message,
         Func<string, CancellationToken, Task>? onToken = null,
@@ -42,14 +44,18 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             _runtime.RegisterAgent(ToAgentDefinition(id, def));
         }
 
-        var sessionId = _sessionsByAgent.GetOrAdd(agentId, _ => _runtime.StartSession(id).SessionId);
+        var sessionId = _sessionsByConversation.GetOrAdd(
+            conversationId,
+            _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
         await _runtime.RunStreamingAsync(sessionId, message, onToken, cancellationToken);
     }
 
     public void Invalidate(Guid agentId)
     {
-        _sessionsByAgent.TryRemove(agentId, out _);
+        // 清掉该 agent 的所有会话（编辑配置后丢弃旧记忆）
+        foreach (var kv in _sessionsByConversation.Where(x => x.Value.agentId == agentId).ToList())
+            _sessionsByConversation.TryRemove(kv.Key, out _);
         _runtime.Invalidate(agentId.ToString());
     }
 

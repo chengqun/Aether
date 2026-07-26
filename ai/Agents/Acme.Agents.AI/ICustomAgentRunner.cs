@@ -7,17 +7,18 @@ namespace Acme.Agents.AI;
 public interface ICustomAgentRunner
 {
     /// <summary>
-    /// 运行一轮对话，流式回调每个 token。首次运行会按需注册 agent；
-    /// 同一 agentId 的后续轮次复用会话（多轮记忆）。
+    /// 运行一轮对话，流式回调每个 token。每个 conversationId 拥有独立的运行时会话
+    /// （多会话间记忆隔离）；同一会话的后续轮次复用其会话（多轮记忆）。首次运行会按需注册 agent。
     /// </summary>
     Task RunStreamingAsync(
+        Guid conversationId,
         Guid agentId,
         string message,
         Func<string, CancellationToken, Task>? onToken = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 使该 agent 的缓存失效（编辑/删除后调用，下次运行将用最新配置重建 agent 与会话）。
+    /// 使该 agent 的缓存失效（编辑/删除后调用，清掉该 agent 所有会话，下次运行重建 agent 与会话）。
     /// </summary>
     void Invalidate(Guid agentId);
 }
