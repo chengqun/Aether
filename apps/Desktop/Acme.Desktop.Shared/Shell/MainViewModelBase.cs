@@ -9,6 +9,7 @@ using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Aether.AI.Core.Conversations;
+using Aether.AI.Hosting;
 using Aether.AI.Memory;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -35,6 +36,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly IUiDispatcher _dispatcher;
     private readonly IConversationStore _conversationStore;
     private readonly IPreferencesStore _preferences;
+    private readonly IConversationTitleService _titleService;
 
     // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
     private Guid _currentConversationId = Guid.Empty;
@@ -54,6 +56,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
         _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
+        _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider);
@@ -62,6 +65,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _agentRunner,
             _dispatcher);
         Experts.SummonChanged += OnSummonChanged;
+
+        Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
         SubscribeToConnectionStateChanges();
     }
@@ -163,6 +168,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     // —— 最近会话列表（侧边栏）——
     public ObservableCollection<ConversationItem> Conversations { get; } = new();
+
+    /// <summary>是否有最近会话（控制空状态"暂无会话"显示）。</summary>
+    [ObservableProperty] private bool _hasConversations;
 
     [RelayCommand]
     private void NewChat()
@@ -344,6 +352,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [RelayCommand]
     private void NavigateTo(string pageKey)
     {
+        // “新聊天”导航项（chat）真正开一个新会话，而非仅跳页
+        if (pageKey == "chat")
+        {
+            NewChat();
+            foreach (var item in NavItems)
+                item.IsCurrent = item.Key == pageKey;
+            return;
+        }
+
         CurrentPage = pageKey;
         foreach (var item in NavItems)
             item.IsCurrent = item.Key == pageKey;
@@ -540,9 +557,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 选中已召唤的自定义专家时，本地流式运行（不走 SignalR）
         if (SelectedAgentItem is ExpertItem expert)
         {
+            var justCreated = false;
             // 待新聊天 → 首次发送才落库创建会话
             if (_currentConversationId == Guid.Empty)
             {
+                justCreated = true;
                 _currentConversationId = Guid.NewGuid();
                 var conv = new Conversation
                 {
@@ -601,6 +620,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
             // 持久化 transcript（user + assistant）并乐观 bump 侧栏项
             await PersistTurnAsync(expert, content, fullText.ToString());
+
+            // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
+            if (justCreated)
+                _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
             return;
         }
 
@@ -639,6 +662,29 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 IsStreaming = false
             });
         }
+    }
+
+    /// <summary>异步用 LLM 生成标题并更新当前会话（持久化 + 侧栏项）。</summary>
+    private async Task GenerateAndApplyTitleAsync(string userMessage, string assistantReply)
+    {
+        if (_currentConversationId == Guid.Empty) return;
+        try
+        {
+            var title = await _titleService.GenerateTitleAsync(userMessage, assistantReply);
+            if (string.IsNullOrWhiteSpace(title)) return;
+
+            var conv = await _conversationStore.GetAsync(_currentConversationId);
+            if (conv is null) return;
+            conv.Title = title;
+            await _conversationStore.SaveAsync(conv);
+
+            await _dispatcher.InvokeAsync(() =>
+            {
+                var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
+                if (item is not null) item.Title = title;
+            });
+        }
+        catch { /* 标题生成失败不影响主流程 */ }
     }
 
     /// <summary>把本轮 user+assistant 消息追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>

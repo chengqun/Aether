@@ -13,69 +13,9 @@
     <Border Grid.Column="0" Width="220" IsVisible="{Binding IsSidebarExpanded}"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*,Auto">
-        <StackPanel Grid.Row="0" Margin="0,10,0,0">
-          <Button Command="{Binding ToggleSidebarCommand}" Classes="settings-nav" ToolTip.Tip="收起侧边栏">
-            <TextBlock Text="☰" FontSize="15"/>
-          </Button>
-          <ItemsControl ItemsSource="{Binding NavItems}" Margin="0,6,0,0">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Button Classes="settings-nav" Command="{Binding Command}" CommandParameter="{Binding Key}"
-                        IsEnabled="{Binding !IsCurrent}" ToolTip.Tip="{Binding Title}">
-                  <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="{Binding Icon}" FontSize="16"/>
-                    <TextBlock Text="{Binding Title}" FontSize="14"/>
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <Button Classes="settings-nav" Command="{Binding NewChatCommand}" Margin="0,8,0,0"
-                  ToolTip.Tip="新聊天">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock Text="✏️" FontSize="16"/>
-              <TextBlock Text="新聊天" FontSize="14"/>
-            </StackPanel>
-          </Button>
-        </StackPanel>
-
-        <!-- 最近会话列表 -->
-        <ScrollViewer Grid.Row="1" Margin="8,8,8,8" HorizontalScrollBarVisibility="Disabled">
-          <ItemsControl ItemsSource="{Binding Conversations}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Button Classes="conv-item" HorizontalAlignment="Stretch"
-                        Command="{Binding DataContext.ResumeConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                        CommandParameter="{Binding}">
-                  <Button.ContextFlyout>
-                    <MenuFlyout>
-                      <MenuItem Header="删除"
-                                Command="{Binding DataContext.DeleteConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                CommandParameter="{Binding}"/>
-                    </MenuFlyout>
-                  </Button.ContextFlyout>
-                  <Grid Margin="2,0">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*"/>
-                      <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Spacing="1" HorizontalAlignment="Left">
-                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
-                                 TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                      <TextBlock Text="{Binding Preview}" FontSize="11" TextTrimming="CharacterEllipsis"
-                                 Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Text="{Binding DisplayTime}" FontSize="10"
-                               Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Top"/>
-                  </Grid>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
-
-        <Button Grid.Row="2" Classes="account-chip" ToolTip.Tip="{Binding UserName}">
+      <DockPanel>
+        <!-- 账户区（底部） -->
+        <Button DockPanel.Dock="Bottom" Classes="account-chip" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
@@ -95,7 +35,66 @@
             </StackPanel>
           </StackPanel>
         </Button>
-      </Grid>
+
+        <!-- 顶部导航（收起按钮 + 导航项；导航项含"新聊天"=chat） -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,10,0,0">
+          <Button Command="{Binding ToggleSidebarCommand}" Classes="settings-nav" ToolTip.Tip="收起侧边栏">
+            <TextBlock Text="☰" FontSize="15"/>
+          </Button>
+          <ItemsControl ItemsSource="{Binding NavItems}" Margin="0,6,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="settings-nav" Command="{Binding Command}" CommandParameter="{Binding Key}"
+                        ToolTip.Tip="{Binding Title}">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Icon}" FontSize="16"/>
+                    <TextBlock Text="{Binding Title}" FontSize="14"/>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- 最近会话（LastChild 填充剩余，可滚动） -->
+        <DockPanel Margin="10,14,10,6">
+          <TextBlock DockPanel.Dock="Top" Text="最近会话" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextSecondaryBrush}" Margin="4,0,0,4"/>
+          <TextBlock Text="暂无会话" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                     Margin="14,4" IsVisible="{Binding !HasConversations}"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Conversations}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Button Classes="settings-nav" HorizontalAlignment="Stretch" Margin="0,2"
+                          Command="{Binding DataContext.ResumeConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                          CommandParameter="{Binding}">
+                    <Button.ContextFlyout>
+                      <MenuFlyout>
+                        <MenuItem Header="删除"
+                                  Command="{Binding DataContext.DeleteConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  CommandParameter="{Binding}"/>
+                      </MenuFlyout>
+                    </Button.ContextFlyout>
+                    <StackPanel Spacing="2" HorizontalAlignment="Left">
+                      <DockPanel>
+                        <TextBlock Text="{Binding DisplayTime}" DockPanel.Dock="Right"
+                                   FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"/>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                      </DockPanel>
+                      <TextBlock Text="{Binding Preview}" FontSize="11"
+                                 Foreground="{DynamicResource TextSecondaryBrush}"
+                                 TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </DockPanel>
     </Border>
 
     <!-- ═══ 收起态侧边栏（48px，纯图标 rail） ═══ -->
@@ -111,7 +110,7 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
-                        IsEnabled="{Binding !IsCurrent}" ToolTip.Tip="{Binding Title}">
+                        ToolTip.Tip="{Binding Title}">
                   <TextBlock Text="{Binding Icon}" FontSize="16"/>
                 </Button>
               </DataTemplate>

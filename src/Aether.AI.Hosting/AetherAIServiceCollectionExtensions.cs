@@ -95,6 +95,9 @@ public static class AetherAIServiceCollectionExtensions
         services.AddSingleton<IConversationStore, InMemoryConversationStore>();
         services.AddSingleton<MemoryService>();
 
+        // 会话标题自动生成（LLM，首轮后异步补；无 key 时退化为 no-op）
+        services.AddSingleton<IConversationTitleService, ConversationTitleService>();
+
         return new AetherAIBuilder(services);
     }
 }
