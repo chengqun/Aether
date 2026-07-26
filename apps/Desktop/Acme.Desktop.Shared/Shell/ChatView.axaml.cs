@@ -1,3 +1,4 @@
+using Acme.Shell;
 using System;
 using System.Collections.Specialized;
 using Avalonia.Controls;
@@ -77,9 +78,4 @@ public partial class ChatView : UserControl
         if (settingsDialog == null) return;
         _ = settingsDialog.ShowSettingsAsync();
     }
-}
-
-public interface IChatViewModel
-{
-    System.Collections.ObjectModel.ObservableCollection<ChatMessageItem> Messages { get; }
 }

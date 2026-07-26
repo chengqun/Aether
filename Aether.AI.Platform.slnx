@@ -33,8 +33,8 @@
   <Folder Name="/apps/Desktop/">
     <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />
   </Folder>
-  <Folder Name="/apps/Acme.Agents.Shell/">
-    <Project Path="apps/Acme.Agents.Shell/Acme.Agents.Shell.csproj" />
+  <Folder Name="/apps/Acme.Shell/">
+    <Project Path="apps/Acme.Shell/Acme.Shell.csproj" />
   </Folder>
   <Folder Name="/apps/Qifu/">
     <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />

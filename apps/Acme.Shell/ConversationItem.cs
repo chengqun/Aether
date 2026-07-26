@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 /// <summary>最近会话列表行（侧边栏）。</summary>
 public sealed partial class ConversationItem : ObservableObject

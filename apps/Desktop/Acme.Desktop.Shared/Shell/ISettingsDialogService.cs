@@ -1,15 +1,12 @@
+using Acme.Shell;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>弹出设置对话框。</summary>
-public interface ISettingsDialogService
-{
-    Task ShowSettingsAsync();
-}
-
 /// <summary>
-/// 默认实现：从 Application.Current.ApplicationLifetime 取主窗口，
+/// <see cref="ISettingsDialogService"/> 的 Avalonia 实现：从 Application.Current 取主窗口，
 /// 把 SettingsWindow 作为模态对话框弹出。供两租户共用。
 /// </summary>
 public sealed class SettingsDialogService : ISettingsDialogService
@@ -21,7 +18,7 @@ public sealed class SettingsDialogService : ISettingsDialogService
 
     public async Task ShowSettingsAsync()
     {
-        if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
             || desktop.MainWindow is null)
         {
             return;
@@ -43,7 +40,7 @@ public sealed class SettingsDialogService : ISettingsDialogService
 
     private void RefreshMainViewModelConnectionState()
     {
-        if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
             || desktop.MainWindow is null)
         {
             return;

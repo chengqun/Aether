@@ -13,6 +13,14 @@
   <ItemGroup>
     <!-- 自定义 Agent 目录 + 运行器（UI 无关）。不引用任何 UI 框架。 -->
     <ProjectReference Include="..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <!-- chat shell VM 用到的业务 Application/Domain 契约（UI 无关） -->
+    <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
+    <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
+    <ProjectReference Include="..\..\business\DeviceConnect\Acme.DeviceConnect.Domain\Acme.DeviceConnect.Domain.csproj" />
+    <ProjectReference Include="..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <!-- 平台：会话存储 + 标题服务 -->
+    <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
+    <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
   </ItemGroup>
 
 </Project>

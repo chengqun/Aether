@@ -1,18 +1,13 @@
 using Acme.AppAuth.Application.Auth;
+using Acme.Shell;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>弹出登录对话框，返回是否登录成功。</summary>
-public interface ILoginDialogService
-{
-    Task<bool> ShowLoginAsync();
-}
-
 /// <summary>
-/// 默认实现：从 <see cref="Application.Current"/>.ApplicationLifetime 取主窗口，
-/// 把 <see cref="LoginWindow"/> 作为模态对话框弹出。供两租户共用，无需各租户再实现。
+/// <see cref="ILoginDialogService"/> 的 Avalonia 实现：从 Application.Current 取主窗口，
+/// 把 LoginWindow 作为模态对话框弹出。供两租户共用。
 /// </summary>
 public sealed class LoginDialogService : ILoginDialogService
 {

@@ -38,8 +38,8 @@
     <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Automation\Acme.Automation.AI\Acme.Automation.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
-    <!-- UI 无关的自定义 Agent ViewModel 库（Avalonia/MAUI/WPF 共用） -->
-    <ProjectReference Include="..\..\Acme.Agents.Shell\Acme.Agents.Shell.csproj" />
+    <!-- UI 无关 shell VM 库（聊天/专家/笔记 VM，Avalonia/MAUI/WPF 共用） -->
+    <ProjectReference Include="..\..\Acme.Shell\Acme.Shell.csproj" />
   </ItemGroup>
 
 </Project>

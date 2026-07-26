@@ -3,7 +3,7 @@ using Acme.Agents.AI;
 using Acme.Notes.AgentSource;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Agents.Shell;
+namespace Acme.Shell;
 
 /// <summary>工具选项（工具池项，供自定义 Agent 勾选）。</summary>
 public partial class ToolOption : ObservableObject

@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Acme.Desktop.Shared.Shell"
+             xmlns:vm="using:Acme.Shell"
              xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
              Background="{DynamicResource ContentBgBrush}">

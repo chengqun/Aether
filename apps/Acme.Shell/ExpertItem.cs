@@ -1,7 +1,7 @@
 using Acme.Notes.AgentSource;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Agents.Shell;
+namespace Acme.Shell;
 
 /// <summary>专家（Agent）卡片行模型。</summary>
 public sealed partial class ExpertItem : ObservableObject

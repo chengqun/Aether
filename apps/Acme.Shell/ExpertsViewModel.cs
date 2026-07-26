@@ -4,7 +4,7 @@ using Acme.Notes.AgentSource;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Agents.Shell;
+namespace Acme.Shell;
 
 /// <summary>专家页面 ViewModel：从自定义 Agent 目录加载，展示为专家卡片。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject

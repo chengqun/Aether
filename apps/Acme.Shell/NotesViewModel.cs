@@ -1,17 +1,17 @@
 using System.Collections.ObjectModel;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 /// <summary>笔记页面 ViewModel：左侧树状笔记列表 + 右侧 Markdown 编辑。</summary>
 public partial class NotesViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly IUiDispatcher _dispatcher;
 
     private INoteService NoteService => _noteService ??= _serviceProvider.GetRequiredService<INoteService>();
     private INoteService? _noteService;
@@ -30,9 +30,10 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>笔记数据变化事件（专家页等订阅刷新）。</summary>
     public event Action? NotesChanged;
 
-    public NotesViewModel(IServiceProvider serviceProvider)
+    public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
     {
         _serviceProvider = serviceProvider;
+        _dispatcher = dispatcher;
     }
 
     /// <summary>加载全部笔记并构建树。</summary>
@@ -43,7 +44,7 @@ public partial class NotesViewModel : ObservableObject
             var all = await NoteService.GetAllAsync();
             var vms = all.Select(NoteNodeVM.FromDto).ToList();
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            await _dispatcher.InvokeAsync(() =>
             {
                 // 先按 ParentId 分组
                 var byParent = new Dictionary<Guid, List<NoteNodeVM>>();

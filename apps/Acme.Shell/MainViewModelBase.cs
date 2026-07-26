@@ -1,22 +1,19 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Acme.Agents.AI;
-using Acme.Agents.Shell;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
-using Acme.Desktop.Shared.Hosting;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Hosting;
 using Aether.AI.Memory;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 /// <summary>
 /// 桌面 shell 主 ViewModel 基类：可收起侧边栏 + 导航 + 账户/登录态（Codex/ChatGPT 风）。
@@ -37,6 +34,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly IConversationStore _conversationStore;
     private readonly IPreferencesStore _preferences;
     private readonly IConversationTitleService _titleService;
+    private readonly IDeviceAutoConnectService _autoConnect;
 
     // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
     private Guid _currentConversationId = Guid.Empty;
@@ -57,9 +55,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
+        _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         Tenant = tenant;
 
-        Notes = new NotesViewModel(serviceProvider);
+        Notes = new NotesViewModel(serviceProvider, _dispatcher);
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
@@ -79,7 +78,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         _deviceChatClient.ConnectionStateChanged += status =>
         {
-            Dispatcher.UIThread.Post(() =>
+            _dispatcher.Post(() =>
             {
                 IsConnected = _deviceChatClient.IsConnected;
                 StatusText = IsConnected ? string.Empty : status;
@@ -91,7 +90,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     public void RefreshConnectionState()
     {
-        Dispatcher.UIThread.Post(() =>
+        _dispatcher.Post(() =>
         {
             IsConnected = _deviceChatClient.IsConnected;
             StatusText = IsConnected ? "已连接" : "未连接";
@@ -106,7 +105,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _recentConversationId = msg.ConversationId;
 
         // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent）
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        await _dispatcher.InvokeAsync(() =>
         {
             Messages.Add(new ChatMessageItem
             {
@@ -128,7 +127,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 Content = string.Empty,
                 IsStreaming = true,
             };
-            await Dispatcher.UIThread.InvokeAsync(() => Messages.Add(assistantMsg));
+            await _dispatcher.InvokeAsync(() => Messages.Add(assistantMsg));
             try
             {
                 await _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content,
@@ -150,7 +149,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
 
         // 未选用专家时本地简单回复
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        await _dispatcher.InvokeAsync(() =>
         {
             Messages.Add(new ChatMessageItem
             {
@@ -526,7 +525,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家），保留当前选中。</summary>
     private void RefreshAgentSelectItems()
     {
-        Dispatcher.UIThread.Post(() =>
+        _dispatcher.Post(() =>
         {
             var current = SelectedAgentItem as ExpertItem;
             AgentSelectItems.Clear();
@@ -544,9 +543,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         try
         {
-            var vm = _serviceProvider.GetRequiredService<SettingsViewModel>();
-            await vm.LoadAsync();
-            await vm.AutoConnectIfEnabledAsync();
+            await _autoConnect.LoadAndAutoConnectAsync();
         }
         catch
         {

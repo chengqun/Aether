@@ -3,7 +3,7 @@ using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 /// <summary>笔记树节点 ViewModel（可观测，支持子节点展开）。</summary>
 public sealed partial class NoteNodeVM : ObservableObject

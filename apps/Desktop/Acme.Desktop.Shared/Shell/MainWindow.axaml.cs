@@ -1,3 +1,4 @@
+using Acme.Shell;
 using Avalonia.Controls;
 
 namespace Acme.Desktop.Shared.Shell;

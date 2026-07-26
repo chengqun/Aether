@@ -1,7 +1,7 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 /// <summary>
 /// 导航项（数据驱动，租户在 MainViewModelBase 子类里 Populate，天然支持租户差异——

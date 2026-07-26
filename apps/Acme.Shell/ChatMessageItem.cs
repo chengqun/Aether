@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 public enum ChatMessageSide
 {

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Acme.Desktop.Shared.Hosting;
+using Acme.Shell;
 using Acme.Desktop.Shared.Shell;
 using Acme.Qifu.AI;
 using Acme.Qifu.Application.DependencyInjection;

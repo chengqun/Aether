@@ -2,7 +2,7 @@ using Acme.Llm.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Shell;
 
 public sealed partial class LlmConfigEditViewModel : ObservableObject
 {

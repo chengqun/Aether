@@ -1,4 +1,4 @@
-namespace Acme.Desktop.Shared.Hosting;
+namespace Acme.Shell;
 
 /// <summary>
 /// 轻量键值偏好存储（客户端 UI 状态，单用户）。用于跨重启保留选中 agent、召唤列表等。

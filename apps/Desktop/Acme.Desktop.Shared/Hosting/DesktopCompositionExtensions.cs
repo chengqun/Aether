@@ -1,7 +1,7 @@
 using System.IO;
 using Acme.ApkParser.AI;
 using Acme.Agents.AI;
-using Acme.Agents.Shell;
+using Acme.Shell;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
@@ -99,6 +99,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IPreferencesStore>(sp => new JsonPreferencesStore(tenantDir));
         // UI 线程调度抽象（供 UI 无关的 ExpertsViewModel 使用）
         services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
+        // 启动期设备自动连接（委托给 SettingsViewModel）
+        services.AddSingleton<IDeviceAutoConnectService, DeviceAutoConnectService>();
 
         // 登录对话框服务（从 Application.Current 取主窗口弹模态登录窗）
         services.AddSingleton<ILoginDialogService, LoginDialogService>();
