@@ -1,7 +1,6 @@
 using System.Reflection;
 using Acme.Ctp.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,20 +43,6 @@ public static class CtpAIBuilderExtensions
             reg.Register("QueryAllLatestTicks", "查询所有订阅行情快照", cat,
                 sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)));
         });
-        return builder;
-    }
-
-    public static AetherAIBuilder AddCtp(this AetherAIBuilder builder, string modelId)
-    {
-        AddCtpTools(builder);
-        builder.AddAgent("ctp-trader", a => a
-            .Name("CTP Trader")
-            .Instructions(
-                "你是期货交易助手，通过 CTP 工具操作期货账户。" +
-                "可查询连接状态/资金账户/持仓/最新行情，可下单/撤单。" +
-                "下单与撤单默认仅预览（requireConfirmation=true），需用户确认后才设 requireConfirmation=false 执行。")
-            .ModelId(modelId)
-            .WithTools(ToolNames));
         return builder;
     }
 

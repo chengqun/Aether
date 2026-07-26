@@ -1,16 +1,14 @@
 using System.Reflection;
 using Acme.ApkParser.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.ApkParser.AI;
 
 /// <summary>
-/// DI entry point for the ApkParser AI adapter.
-/// <see cref="AddApkParserTools"/> registers the tool (no agent);
-/// <see cref="AddApkParser"/> adds the apk-parser agent on top.
+/// DI entry point for the ApkParser AI adapter. Registers the tool only — no agent.
+/// Agents are built dynamically by the host/page from the tool pool.
 /// </summary>
 public static class ApkParserAIBuilderExtensions
 {
@@ -29,20 +27,6 @@ public static class ApkParserAIBuilderExtensions
             reg.Register("GetApkInfo", "解析 APK 文件信息（包名/版本/权限/组件）", cat,
                 sp => CreateTool<ApkInfoTool>(sp, "GetApkInfo"));
         });
-        return builder;
-    }
-
-    /// <summary>Registers the ApkParser tools + the apk-parser agent.</summary>
-    public static AetherAIBuilder AddApkParser(this AetherAIBuilder builder, string modelId)
-    {
-        AddApkParserTools(builder);
-        builder.AddAgent("apk-parser", a => a
-            .Name("APK Parser")
-            .Instructions(
-                "你是 APK 解析助手。可用工具：GetApkInfo（解析 APK 文件包名、版本、权限、组件等信息）。" +
-                "按需调用工具，简洁回复结果。")
-            .ModelId(modelId)
-            .WithTools(ToolNames));
         return builder;
     }
 

@@ -1,17 +1,14 @@
 using System.Reflection;
 using Acme.Qifu.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Qifu.AI;
 
 /// <summary>
-/// DI entry point for the qifu AI adapter. <see cref="AddQifuTools"/> registers
-/// the 12 tools (no agent); <see cref="AddQifu"/> adds the qifu-assistant agent on
-/// top. A host that wants one combined agent with tools from many contexts calls
-/// <c>AddQifuTools</c> (+ other contexts' AddXxxTools) and registers its own agent.
+/// DI entry point for the qifu AI adapter. Registers the 12 tools only — no agent.
+/// Agents are built dynamically by the host/page from the tool pool.
 /// </summary>
 public static class QifuAIBuilderExtensions
 {
@@ -60,20 +57,6 @@ public static class QifuAIBuilderExtensions
             reg.Register("SendTeamsMessage", "发送 360Teams 消息", cat,
                 sp => CreateTool<TeamsMessageTool>(sp, nameof(TeamsMessageTool.SendTeamsMessage)));
         });
-        return builder;
-    }
-
-    /// <summary>Registers the qifu tools + the qifu-assistant agent.</summary>
-    public static AetherAIBuilder AddQifu(this AetherAIBuilder builder, string modelId)
-    {
-        AddQifuTools(builder);
-        builder.AddAgent("qifu-assistant", a => a
-            .Name("Qifu Assistant")
-            .Instructions(
-                "你是 qifu 内部平台集成助手。可用工具：毓数异步 SQL 查询/状态/下载/预览/清理、" +
-                "360Teams 云文档登录/上传/列目录、360Teams 消息通知。按需调用工具完成用户请求，简洁回复。")
-            .ModelId(modelId)
-            .WithTools(ToolNames));
         return builder;
     }
 

@@ -1,5 +1,7 @@
 using System.IO;
 using Acme.ApkParser.AI;
+using Acme.Agents.AI;
+using Acme.Agents.Shell;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
@@ -83,6 +85,11 @@ public static class DesktopCompositionExtensions
 
         // —— 公共 AI 工具（两租户共用）——
         aether.AddSystemTools().AddApkParserTools().AddNotesTools().AddAutomationTools();
+
+        // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
+        aether.AddCustomAgents();
+        // UI 线程调度抽象（供 UI 无关的 ExpertsViewModel 使用）
+        services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
 
         // 登录对话框服务（从 Application.Current 取主窗口弹模态登录窗）
         services.AddSingleton<ILoginDialogService, LoginDialogService>();

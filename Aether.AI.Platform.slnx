@@ -24,11 +24,17 @@
   <Folder Name="/ai/Automation/">
     <Project Path="ai/Automation/Acme.Automation.AI/Acme.Automation.AI.csproj" />
   </Folder>
+  <Folder Name="/ai/Agents/">
+    <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
+  </Folder>
   <Folder Name="/apps/">
     <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
   </Folder>
   <Folder Name="/apps/Desktop/">
     <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />
+  </Folder>
+  <Folder Name="/apps/Acme.Agents.Shell/">
+    <Project Path="apps/Acme.Agents.Shell/Acme.Agents.Shell.csproj" />
   </Folder>
   <Folder Name="/apps/Qifu/">
     <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />
@@ -135,6 +141,7 @@
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
+    <Project Path="tests/Acme.Agents.AI.Tests/Acme.Agents.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />
     <Project Path="tests/Aether.AI.Memory.Tests/Aether.AI.Memory.Tests.csproj" />
     <Project Path="tests/Acme.Trading.Domain.Tests/Acme.Trading.Domain.Tests.csproj" />

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 自定义 Agent 目录 + 运行器（UI 无关）。不引用任何 UI 框架。 -->
+    <ProjectReference Include="..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -36,6 +36,9 @@
     <ProjectReference Include="..\..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Automation\Acme.Automation.AI\Acme.Automation.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <!-- UI 无关的自定义 Agent ViewModel 库（Avalonia/MAUI/WPF 共用） -->
+    <ProjectReference Include="..\..\Acme.Agents.Shell\Acme.Agents.Shell.csproj" />
   </ItemGroup>
 
 </Project>

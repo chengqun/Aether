@@ -1,7 +1,6 @@
 using System.Reflection;
 using Acme.Notes.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,19 +38,6 @@ public static class NotesAIBuilderExtensions
             reg.Register("DeleteNote", "删除笔记", cat,
                 sp => CreateTool<NoteTool>(sp, "DeleteNote"));
         });
-        return builder;
-    }
-
-    public static AetherAIBuilder AddNotes(this AetherAIBuilder builder, string modelId)
-    {
-        AddNotesTools(builder);
-        builder.AddAgent("notes-assistant", a => a
-            .Name("Notes Assistant")
-            .Instructions(
-                "你是本地 Markdown 笔记助手。可用工具：新建/读取/追加/更新/搜索/列出/删除笔记。" +
-                "按用户意图调用合适的工具完成请求，简洁回复结果。")
-            .ModelId(modelId)
-            .WithTools(ToolNames));
         return builder;
     }
 

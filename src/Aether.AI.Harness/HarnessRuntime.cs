@@ -56,6 +56,17 @@ public sealed class HarnessRuntime
     /// <summary>True if an agent with the given id is registered.</summary>
     public bool HasAgent(string agentId) => _definitions.ContainsKey(agentId);
 
+    /// <summary>
+    /// 使已注册 agent 的缓存失效：移除其定义与已构建的 agent 实例，下次运行时重建。
+    /// 用于自定义 Agent 被编辑后丢弃旧配置。会话线程由调用方（runner）丢弃并新建。
+    /// </summary>
+    public HarnessRuntime Invalidate(string agentId)
+    {
+        _definitions.TryRemove(agentId, out _);
+        _agents.TryRemove(agentId, out _);
+        return this;
+    }
+
     /// <summary>Starts a new runtime session for the named agent.</summary>
     public AetherSession StartSession(string agentId)
     {

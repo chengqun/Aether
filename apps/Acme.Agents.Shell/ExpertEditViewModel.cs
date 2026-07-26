@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
+using Acme.Agents.AI;
 using Acme.Notes.AgentSource;
-using Aether.AI.Harness.Tools;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Desktop.Shared.Shell;
+namespace Acme.Agents.Shell;
 
 /// <summary>工具选项（工具池项，供自定义 Agent 勾选）。</summary>
 public partial class ToolOption : ObservableObject
@@ -44,7 +44,7 @@ public class MemoryModeOption
 
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
-    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<ToolMeta> allTools)
+    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools)
     {
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
 
@@ -148,6 +148,9 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         OnPropertyChanged(nameof(IsWindowVisible));
         OnPropertyChanged(nameof(SelectedMemoryModeOption));
     }
+
+    /// <summary>Name 变化时刷新保存按钮可用性（CanSave 是计算属性，需手动通知）。</summary>
+    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(CanSave));
 
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool CanSave => !string.IsNullOrWhiteSpace(Name);

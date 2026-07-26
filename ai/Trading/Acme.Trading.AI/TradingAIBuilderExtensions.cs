@@ -1,16 +1,14 @@
 using System.Reflection;
 using Acme.Trading.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Trading.AI;
 
 /// <summary>
-/// DI entry point for the Trading AI adapter. <see cref="AddTradingTools"/> registers the backtest tool
-/// (no agent); <see cref="AddTrading"/> adds the trading-backtest agent on top.
-/// Mirrors the Ctp/Quotes AI adapter pattern (AIFunctionFactory.Create).
+/// DI entry point for the Trading AI adapter. Registers the backtest tool only — no agent.
+/// Agents are built dynamically by the host/page from the tool pool.
 /// </summary>
 public static class TradingAIBuilderExtensions
 {
@@ -30,20 +28,6 @@ public static class TradingAIBuilderExtensions
             reg.Register("RunBacktest", "运行策略历史回测", cat,
                 sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
         });
-        return builder;
-    }
-
-    /// <summary>Registers the Trading tools + the trading-backtest agent.</summary>
-    public static AetherAIBuilder AddTrading(this AetherAIBuilder builder, string modelId)
-    {
-        AddTradingTools(builder);
-        builder.AddAgent("trading-backtest", a => a
-            .Name("Trading Backtest")
-            .Instructions(
-                "你是量化回测助手。可用工具：RunBacktest（用 SMA 双线交叉等策略跑一次历史回测，" +
-                "返回收益/风险统计：Sharpe/最大回撤/净收益/胜率/交易次数）。按需调用工具，简洁回复。")
-            .ModelId(modelId)
-            .WithTools(ToolNames));
         return builder;
     }
 

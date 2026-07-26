@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Acme.Agents.AI;
+using Acme.Agents.Shell;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.DeviceConnect.Domain;
@@ -26,6 +28,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly IServiceProvider _serviceProvider;
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
+    private readonly ICustomAgentRunner _agentRunner;
+    private readonly IUiDispatcher _dispatcher;
 
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
@@ -37,10 +41,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _serviceProvider = serviceProvider;
         _deviceChatClient = deviceChatClient;
         _llmService = llmService;
+        _agentRunner = serviceProvider.GetRequiredService<ICustomAgentRunner>();
+        _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider);
-        Experts = new ExpertsViewModel(serviceProvider);
+        Experts = new ExpertsViewModel(
+            serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
+            _agentRunner,
+            _dispatcher);
         Experts.SummonChanged += RefreshAgentSelectItems;
 
         SubscribeToConnectionStateChanges();
@@ -92,7 +101,39 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             });
         });
 
-        // TODO: Agent 流式处理（后续集成），暂用简单回复
+        // 选中已召唤的自定义专家时，用该专家流式回复
+        if (SelectedAgentItem is ExpertItem expert)
+        {
+            var assistantMsg = new ChatMessageItem
+            {
+                Side = ChatMessageSide.Left,
+                ItemType = "text",
+                Sender = expert.Name,
+                Content = string.Empty,
+                IsStreaming = true,
+            };
+            await Dispatcher.UIThread.InvokeAsync(() => Messages.Add(assistantMsg));
+            try
+            {
+                await _agentRunner.RunStreamingAsync(expert.Id, msg.Content,
+                    async (token, _) =>
+                    {
+                        await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
+                    });
+            }
+            catch (Exception ex)
+            {
+                await _dispatcher.InvokeAsync(() =>
+                    assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
+            }
+            finally
+            {
+                await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
+            }
+            return;
+        }
+
+        // 未选用专家时本地简单回复
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             Messages.Add(new ChatMessageItem
@@ -329,6 +370,38 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Sender = "我",
             Content = content
         });
+
+        // 选中已召唤的自定义专家时，本地流式运行（不走 SignalR）
+        if (SelectedAgentItem is ExpertItem expert)
+        {
+            var assistantMsg = new ChatMessageItem
+            {
+                Side = ChatMessageSide.Left,
+                ItemType = "text",
+                Sender = expert.Name,
+                Content = string.Empty,
+                IsStreaming = true,
+            };
+            Messages.Add(assistantMsg);
+            try
+            {
+                await _agentRunner.RunStreamingAsync(expert.Id, content,
+                    async (token, _) =>
+                    {
+                        await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
+                    });
+            }
+            catch (Exception ex)
+            {
+                await _dispatcher.InvokeAsync(() =>
+                    assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
+            }
+            finally
+            {
+                await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
+            }
+            return;
+        }
 
         // 通过 SignalR 发送到服务端（若已连接）
         if (_deviceChatClient.IsConnected)
