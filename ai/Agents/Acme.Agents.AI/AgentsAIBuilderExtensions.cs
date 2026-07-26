@@ -15,6 +15,8 @@ public static class AgentsAIBuilderExtensions
     public static AetherAIBuilder AddCustomAgents(this AetherAIBuilder builder)
     {
         var services = builder.Services;
+        // 模型源默认仅"默认"；宿主可注册自己的 IModelSource 覆盖（如桌面端的 LLM 配置源）。
+        services.AddSingleton<IModelSource, DefaultModelSource>();
         services.AddSingleton<ICustomAgentCatalog, CustomAgentCatalog>();
         services.AddSingleton<ICustomAgentRunner, CustomAgentRunner>();
         return builder;

@@ -11,6 +11,8 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string _category = "普通对话";
     [ObservableProperty] private string _systemPrompt = string.Empty;
+    [ObservableProperty] private string _modelId = string.Empty;
+    [ObservableProperty] private string _modelName = string.Empty;
     [ObservableProperty] private List<string> _tools = new();
     [ObservableProperty] private bool _isSummoned;
 

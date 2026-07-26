@@ -13,11 +13,13 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 {
     private readonly INoteService _notes;
     private readonly ToolRegistry _toolRegistry;
+    private readonly IModelSource _modelSource;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry)
+    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, IModelSource modelSource)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+        _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
     }
 
     public async Task<IReadOnlyList<CustomAgentDefinition>> ListAsync(CancellationToken ct = default)
@@ -55,6 +57,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             definition.Tools,
             definition.Memory,
             definition.MaxHistory,
+            definition.ModelId,
             definition.SystemPrompt);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
@@ -87,6 +90,9 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category))
             .ToList();
 
+    public IReadOnlyList<CustomModelOption> GetAvailableModels()
+        => _modelSource.GetModels();
+
     private static CustomAgentDefinition ToDefinition(string noteId, AgentSourceFields fields)
         => new()
         {
@@ -95,6 +101,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             Description = fields.Description,
             Category = string.IsNullOrWhiteSpace(fields.Category) ? "普通对话" : fields.Category,
             SystemPrompt = fields.Prompt,
+            ModelId = fields.Model,
             Tools = fields.Tools,
             Memory = fields.Memory,
             MaxHistory = fields.MaxHistory,

@@ -38,8 +38,8 @@
                AcceptsReturn="True" TextWrapping="Wrap" Height="120" />
     </StackPanel>
 
-    <!-- 记忆模式 + 窗口大小 -->
-    <Grid Grid.Row="3" ColumnDefinitions="*,12,Auto" Margin="20,0,20,12">
+    <!-- 记忆模式 + 模型 + 窗口大小 -->
+    <Grid Grid.Row="3" ColumnDefinitions="*,12,*,12,Auto" Margin="20,0,20,12">
       <StackPanel Grid.Column="0" Spacing="4">
         <TextBlock Text="记忆模式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
         <ComboBox ItemsSource="{Binding MemoryModeOptions}"
@@ -52,7 +52,19 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
       </StackPanel>
-      <StackPanel Grid.Column="2" Spacing="4" Width="120"
+      <StackPanel Grid.Column="2" Spacing="4">
+        <TextBlock Text="模型" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <ComboBox ItemsSource="{Binding AvailableModels}"
+                  SelectedItem="{Binding SelectedModelOption}"
+                  HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </StackPanel>
+      <StackPanel Grid.Column="4" Spacing="4" Width="120"
                   IsVisible="{Binding IsWindowVisible}">
         <TextBlock Text="窗口大小" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
         <NumericUpDown Value="{Binding MaxHistory}"

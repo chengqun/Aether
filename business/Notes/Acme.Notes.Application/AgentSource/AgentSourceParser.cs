@@ -19,6 +19,8 @@ public sealed class AgentSourceFields
     public List<string> Tools { get; set; } = new();
     public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
     public int MaxHistory { get; set; } = 20;
+    /// <summary>模型标识（宿主解析，如 LLM 配置 Id；空=默认）。</summary>
+    public string Model { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
 }
 
@@ -120,6 +122,9 @@ public static class AgentSourceParser
                     if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mh))
                         result.MaxHistory = mh;
                     break;
+                case "model":
+                    result.Model = value;
+                    break;
                 case "tools":
                     var tools = new List<string>();
                     if (value.StartsWith('[') && value.EndsWith(']'))
@@ -172,13 +177,14 @@ category: 普通对话
 tools: []
 memory: SlidingWindow
 max_history: 20
+model:
 ---
 （在此写系统提示词）";
     }
 
     /// <summary>反向序列化：把字段组装成源文本。</summary>
     public static string Serialize(string name, string description, string category,
-        IEnumerable<string> tools, AgentMemoryMode memory, int maxHistory, string prompt)
+        IEnumerable<string> tools, AgentMemoryMode memory, int maxHistory, string model, string prompt)
     {
         var toolList = tools?.ToList() ?? new List<string>();
         var toolsLine = toolList.Count == 0
@@ -192,6 +198,7 @@ category: {category}
 {toolsLine}
 memory: {memory}
 max_history: {maxHistory}
+model: {model ?? string.Empty}
 ---
 {prompt}";
     }

@@ -29,4 +29,16 @@ public sealed class AgentDefinition
     /// Names of tools (registered with the ToolRegistry) the agent may invoke.
     /// </summary>
     public IReadOnlyList<string> Tools { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Conversation memory policy. Defaults to <see cref="AgentMemoryMode.Full"/>.
+    /// Enforced by the Harness via the framework's chat-history provider.
+    /// </summary>
+    public AgentMemoryMode Memory { get; init; } = AgentMemoryMode.Full;
+
+    /// <summary>
+    /// For <see cref="AgentMemoryMode.SlidingWindow"/>: how many of the most
+    /// recent messages to retain. Ignored by other modes.
+    /// </summary>
+    public int MaxHistory { get; init; } = 20;
 }

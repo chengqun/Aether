@@ -27,7 +27,7 @@ public class CustomAgentCatalogTests : IDisposable
     public async Task Save_List_Get_Update_Delete_round_trip()
     {
         var notes = _provider.GetRequiredService<INoteService>();
-        var catalog = new CustomAgentCatalog(notes, new ToolRegistry());
+        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new DefaultModelSource());
 
         var def = new CustomAgentDefinition
         {
@@ -36,6 +36,7 @@ public class CustomAgentCatalogTests : IDisposable
             Description = "单元测试用",
             Category = "测试",
             SystemPrompt = "你是测试助手。",
+            ModelId = "abc-123",
             Tools = new[] { "ReadFile", "Grep" },
             Memory = AgentMemoryMode.SlidingWindow,
             MaxHistory = 10,
@@ -50,6 +51,7 @@ public class CustomAgentCatalogTests : IDisposable
         Assert.Equal("测试助手", saved.Name);
         Assert.Equal("测试", saved.Category);
         Assert.Equal("你是测试助手。", saved.SystemPrompt);
+        Assert.Equal("abc-123", saved.ModelId);
         Assert.Equal(new[] { "ReadFile", "Grep" }, saved.Tools);
         Assert.Equal(AgentMemoryMode.SlidingWindow, saved.Memory);
         Assert.Equal(10, saved.MaxHistory);
@@ -86,7 +88,7 @@ public class CustomAgentCatalogTests : IDisposable
         registry.Register("ReadFile", "读取文件", "系统工具", _ => null!);
         registry.Register("QueryAccount", "查询账户", "期货交易", _ => null!);
 
-        var catalog = new CustomAgentCatalog(notes, registry);
+        var catalog = new CustomAgentCatalog(notes, registry, new DefaultModelSource());
         var tools = catalog.GetAvailableTools();
 
         Assert.Equal(2, tools.Count);

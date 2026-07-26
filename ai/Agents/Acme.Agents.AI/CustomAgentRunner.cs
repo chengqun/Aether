@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
+using Acme.Notes.AgentSource;
+using NotesAgentMemoryMode = Acme.Notes.AgentSource.AgentMemoryMode;
 
 namespace Acme.Agents.AI;
 
@@ -58,7 +60,17 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             Name = def.Name,
             Instructions = def.SystemPrompt,
             Tools = def.Tools,
-            // 当前使用全局 IChatClient（见计划缺口：每 agent ModelId 未接通）
-            ModelId = string.Empty,
+            ModelId = def.ModelId ?? string.Empty,
+            Memory = MapMemory(def.Memory),
+            MaxHistory = def.MaxHistory,
+        };
+
+    /// <summary>Notes 的 <see cref="NotesAgentMemoryMode"/> 与平台 <see cref="Aether.AI.Core.Agents.AgentMemoryMode"/> 同名同序，直接映射。</summary>
+    private static Aether.AI.Core.Agents.AgentMemoryMode MapMemory(NotesAgentMemoryMode memory)
+        => memory switch
+        {
+            NotesAgentMemoryMode.SlidingWindow => Aether.AI.Core.Agents.AgentMemoryMode.SlidingWindow,
+            NotesAgentMemoryMode.Off => Aether.AI.Core.Agents.AgentMemoryMode.Off,
+            _ => Aether.AI.Core.Agents.AgentMemoryMode.Full,
         };
 }

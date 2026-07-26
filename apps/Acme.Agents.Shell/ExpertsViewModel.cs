@@ -36,6 +36,7 @@ public partial class ExpertsViewModel : ObservableObject
         try
         {
             var all = await _catalog.ListAsync();
+            var modelNames = _catalog.GetAvailableModels().ToDictionary(m => m.Id, m => m.Name);
 
             await _dispatcher.InvokeAsync(() =>
             {
@@ -51,6 +52,8 @@ public partial class ExpertsViewModel : ObservableObject
                         Description = def.Description,
                         Category = string.IsNullOrWhiteSpace(def.Category) ? "普通对话" : def.Category,
                         SystemPrompt = def.SystemPrompt,
+                        ModelId = def.ModelId,
+                        ModelName = modelNames.TryGetValue(def.ModelId ?? string.Empty, out var mn) ? mn : string.Empty,
                         Tools = def.Tools.ToList(),
                         Memory = def.Memory,
                         MaxHistory = def.MaxHistory,
@@ -118,6 +121,7 @@ public partial class ExpertsViewModel : ObservableObject
                 Description = item.Description,
                 Category = string.IsNullOrWhiteSpace(item.Category) ? "普通对话" : item.Category,
                 SystemPrompt = item.SystemPrompt,
+                ModelId = item.ModelId ?? string.Empty,
                 Tools = item.Tools,
                 Memory = item.Memory,
                 MaxHistory = item.MaxHistory,
@@ -173,10 +177,11 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>获取已召唤的专家列表。</summary>
     public List<ExpertItem> GetSummonedExperts() => Experts.Where(e => e.IsSummoned).ToList();
 
-    /// <summary>创建编辑弹窗 ViewModel（从目录加载可用工具列表）。</summary>
+    /// <summary>创建编辑弹窗 ViewModel（从目录加载可用工具与模型列表）。</summary>
     public ExpertEditViewModel CreateEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
-        return new ExpertEditViewModel(existing, tools);
+        var models = _catalog.GetAvailableModels();
+        return new ExpertEditViewModel(existing, tools, models);
     }
 }

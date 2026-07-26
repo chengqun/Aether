@@ -44,8 +44,10 @@ public class MemoryModeOption
 
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
-    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools)
+    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels)
     {
+        AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
+
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
 
         // 按分类分组构建工具列表
@@ -79,6 +81,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Description = existing.Description;
             Category = existing.Category;
             SystemPrompt = existing.SystemPrompt;
+            ModelId = existing.ModelId;
             Memory = existing.Memory;
             MaxHistory = existing.MaxHistory;
             IsEditing = true;
@@ -90,10 +93,14 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Description = string.Empty;
             Category = "普通对话";
             SystemPrompt = string.Empty;
+            ModelId = string.Empty;
             Memory = AgentMemoryMode.SlidingWindow;
             MaxHistory = 20;
             IsEditing = false;
         }
+
+        SelectedModelOption = AvailableModels.FirstOrDefault(m => m.Id == ModelId)
+            ?? AvailableModels.FirstOrDefault();
     }
 
     public Guid Id { get; }
@@ -105,9 +112,29 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string _category = "普通对话";
     [ObservableProperty] private string _systemPrompt = string.Empty;
+    [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private AgentMemoryMode _memory = AgentMemoryMode.SlidingWindow;
     [ObservableProperty] private int _maxHistory = 20;
     [ObservableProperty] private string? _error;
+
+    /// <summary>可选模型列表（由目录 IModelSource 提供）。</summary>
+    public IReadOnlyList<CustomModelOption> AvailableModels { get; }
+
+    /// <summary>当前选中的模型选项（双向：设置时同步 ModelId）。</summary>
+    public CustomModelOption? SelectedModelOption
+    {
+        get => AvailableModels.FirstOrDefault(m => m.Id == ModelId);
+        set
+        {
+            if (value is not null && value.Id != ModelId)
+            {
+                ModelId = value.Id;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    partial void OnModelIdChanged(string value) => OnPropertyChanged(nameof(SelectedModelOption));
 
     /// <summary>扁平工具列表（所有工具，含选中状态）。</summary>
     public ObservableCollection<ToolOption> Tools { get; } = new();
@@ -176,6 +203,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Description = Description.Trim(),
             Category = string.IsNullOrWhiteSpace(Category) ? "普通对话" : Category.Trim(),
             SystemPrompt = SystemPrompt,
+            ModelId = ModelId ?? string.Empty,
             Tools = toolList,
             Memory = Memory,
             MaxHistory = MaxHistory,

@@ -41,7 +41,7 @@ public class HarnessRuntimeTests
     {
         // A null chat client is fine here — these tests never invoke the model,
         // they only exercise registration and session creation.
-        return new AgentFactory(() => new NullChatClient(), new ToolRegistry());
+        return new AgentFactory(new NullChatClientFactory(), new ToolRegistry());
     }
 
     /// <summary>A minimal IChatClient that never produces responses; used only
@@ -54,5 +54,11 @@ public class HarnessRuntimeTests
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    }
+
+    /// <summary>An IChatClientFactory that always hands back a NullChatClient.</summary>
+    private sealed class NullChatClientFactory : IChatClientFactory
+    {
+        public IChatClient Create(string? modelId) => new NullChatClient();
     }
 }

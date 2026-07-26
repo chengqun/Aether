@@ -66,10 +66,11 @@ public static class AetherAIServiceCollectionExtensions
         services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp));
 
         // Harness
+        services.AddSingleton<IChatClientFactory, DefaultChatClientFactory>();
         services.AddSingleton<AgentFactory>(sp =>
         {
             var factory = new AgentFactory(
-                () => sp.GetRequiredService<IChatClient>(),
+                sp.GetRequiredService<IChatClientFactory>(),
                 sp.GetRequiredService<ToolRegistry>(),
                 sp.GetService<ILoggerFactory>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;

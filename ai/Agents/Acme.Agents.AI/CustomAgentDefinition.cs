@@ -21,6 +21,12 @@ public sealed class CustomAgentDefinition
     /// <summary>系统提示词。</summary>
     public string SystemPrompt { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 模型标识（opaque）：桌面端存 LLM 配置的 Id；空表示用宿主默认模型。
+    /// 由 <c>IChatClientFactory</c> 解析为具体的 <c>IChatClient</c>。
+    /// </summary>
+    public string ModelId { get; set; } = string.Empty;
+
     /// <summary>勾选启用的工具名（对应 ToolRegistry 中的工具）。</summary>
     public IReadOnlyList<string> Tools { get; set; } = Array.Empty<string>();
 

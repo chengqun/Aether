@@ -18,10 +18,16 @@ namespace Aether.AI.Harness.Agents;
 /// <see cref="ChatClientAgent"/> instead, which skips the Harness pipeline
 /// entirely.
 /// </para>
+/// <para>
+/// The agent's <see cref="AgentDefinition.ModelId"/> is resolved to an
+/// <see cref="IChatClient"/> via <see cref="IChatClientFactory"/>, and its
+/// <see cref="AgentDefinition.Memory"/> policy is enforced by configuring the
+/// framework's chat-history provider at build time.
+/// </para>
 /// </summary>
 public sealed class AgentFactory
 {
-    private readonly Func<IChatClient> _chatClientFactory;
+    private readonly IChatClientFactory _chatClientFactory;
     private readonly ToolRegistry _toolRegistry;
     private readonly ILoggerFactory? _loggerFactory;
 
@@ -32,11 +38,10 @@ public sealed class AgentFactory
     public bool UseChatClientAgent { get; set; } = false;
 
     /// <param name="chatClientFactory">
-    /// A factory that returns the <see cref="IChatClient"/>. Resolved lazily so
-    /// that constructing an <see cref="AgentFactory"/> (and thus the runtime)
-    /// does not eagerly build the chat client — which may require an API key.
+    /// Resolves the <see cref="IChatClient"/> for a given agent model id.
+    /// Invoked lazily per agent so the runtime does not eagerly build a client.
     /// </param>
-    public AgentFactory(Func<IChatClient> chatClientFactory, ToolRegistry toolRegistry, ILoggerFactory? loggerFactory = null)
+    public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, ILoggerFactory? loggerFactory = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
@@ -51,13 +56,14 @@ public sealed class AgentFactory
         // AIFunction derives from AITool, but List<AIFunction> is not assignable
         // to IList<AITool>; widen to IList<AITool> for the framework APIs.
         IList<AITool> tools = _toolRegistry.ResolveAll(definition.Tools).Cast<AITool>().ToList();
+        var historyProvider = BuildHistoryProvider(definition);
 
         return UseChatClientAgent
-            ? BuildChatClientAgent(definition, tools)
-            : BuildHarnessAgent(definition, tools);
+            ? BuildChatClientAgent(definition, tools, historyProvider)
+            : BuildHarnessAgent(definition, tools, historyProvider);
     }
 
-    private AIAgent BuildHarnessAgent(AgentDefinition definition, IList<AITool> tools)
+    private AIAgent BuildHarnessAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
     {
         var options = new HarnessAgentOptions
         {
@@ -75,21 +81,56 @@ public sealed class AgentFactory
             DisableAgentSkillsProvider = true,
             DisableOpenTelemetry = true,
             ChatOptions = BuildChatOptions(definition, tools),
+            ChatHistoryProvider = historyProvider,
         };
 
-        return _chatClientFactory().AsHarnessAgent(options, _loggerFactory);
+        return _chatClientFactory.Create(definition.ModelId).AsHarnessAgent(options, _loggerFactory);
     }
 
-    private AIAgent BuildChatClientAgent(AgentDefinition definition, IList<AITool> tools)
+    private AIAgent BuildChatClientAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
     {
-        return new ChatClientAgent(
-            _chatClientFactory(),
-            instructions: definition.Instructions,
-            name: definition.Name,
-            description: $"Aether.AI agent '{definition.Id}'.",
-            tools: tools,
-            loggerFactory: _loggerFactory);
+        var client = _chatClientFactory.Create(definition.ModelId);
+
+        // When no custom history provider is needed (Full), use the lightweight
+        // ctor which defaults to InMemoryChatHistoryProvider. Otherwise wire the
+        // provider through ChatClientAgentOptions.
+        if (historyProvider is null)
+        {
+            return new ChatClientAgent(
+                client,
+                instructions: definition.Instructions,
+                name: definition.Name,
+                description: $"Aether.AI agent '{definition.Id}'.",
+                tools: tools,
+                loggerFactory: _loggerFactory);
+        }
+
+        var agentOptions = new ChatClientAgentOptions
+        {
+            Name = definition.Name,
+            Description = $"Aether.AI agent '{definition.Id}'.",
+            ChatOptions = BuildChatOptions(definition, tools),
+            ChatHistoryProvider = historyProvider,
+        };
+        return new ChatClientAgent(client, agentOptions, _loggerFactory);
     }
+
+    /// <summary>
+    /// Builds the framework chat-history provider that enforces the agent's
+    /// memory policy. <c>null</c> (Full) lets the framework use its default
+    /// unbounded in-memory provider.
+    /// </summary>
+    private static ChatHistoryProvider? BuildHistoryProvider(AgentDefinition definition)
+        => definition.Memory switch
+        {
+            AgentMemoryMode.Off => new NoMemoryChatHistoryProvider(),
+            AgentMemoryMode.SlidingWindow => new InMemoryChatHistoryProvider(
+                new InMemoryChatHistoryProviderOptions
+                {
+                    ChatReducer = new SlidingWindowChatReducer(definition.MaxHistory),
+                }),
+            _ => null, // Full = framework default
+        };
 
     private static ChatOptions BuildChatOptions(AgentDefinition definition, IList<AITool> tools)
     {
