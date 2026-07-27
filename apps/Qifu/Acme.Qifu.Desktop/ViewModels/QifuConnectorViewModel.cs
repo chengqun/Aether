@@ -14,23 +14,39 @@ public sealed partial class QifuConnectorViewModel : ObservableObject, IConnecto
 {
     private readonly IYushuAuthService _yushuAuth;
     private readonly ICloudDocsAuthService _cloudDocsAuth;
+    private readonly IYushuTokenSyncService? _yushuTokenSyncService;
+    private readonly ICloudDocsTokenSyncService? _cloudDocsTokenSyncService;
 
-    public QifuConnectorViewModel(IYushuAuthService yushuAuth, ICloudDocsAuthService cloudDocsAuth)
+    public QifuConnectorViewModel(
+        IYushuAuthService yushuAuth,
+        ICloudDocsAuthService cloudDocsAuth,
+        IYushuTokenSyncService? yushuTokenSyncService = null,
+        ICloudDocsTokenSyncService? cloudDocsTokenSyncService = null)
     {
         _yushuAuth = yushuAuth ?? throw new ArgumentNullException(nameof(yushuAuth));
         _cloudDocsAuth = cloudDocsAuth ?? throw new ArgumentNullException(nameof(cloudDocsAuth));
+        _yushuTokenSyncService = yushuTokenSyncService;
+        _cloudDocsTokenSyncService = cloudDocsTokenSyncService;
         _ = CheckAllAsync();
     }
 
     // —— 毓数平台 ——
-    [ObservableProperty] private bool _isYushuAuthenticated;
+    [ObservableProperty] 
+    [NotifyPropertyChangedFor(nameof(ShowYushuSync))]
+    private bool _isYushuAuthenticated;
     [ObservableProperty] private string _yushuStatusText = "未登录";
     [ObservableProperty] private bool _isYushuLoggingIn;
 
     // —— 云文档 ——
-    [ObservableProperty] private bool _isCloudDocsAuthenticated;
+    [ObservableProperty] 
+    [NotifyPropertyChangedFor(nameof(ShowCloudDocsSync))]
+    private bool _isCloudDocsAuthenticated;
     [ObservableProperty] private string _cloudDocsStatusText = "未登录";
     [ObservableProperty] private bool _isCloudDocsLoggingIn;
+
+    // —— 同步按钮可见性 ——
+    public bool ShowYushuSync => _yushuTokenSyncService != null && IsYushuAuthenticated;
+    public bool ShowCloudDocsSync => _cloudDocsTokenSyncService != null && IsCloudDocsAuthenticated;
 
     /// <summary>切到连接器 tab 时刷新全部状态。</summary>
     public async Task RefreshAsync()
@@ -97,5 +113,32 @@ public sealed partial class QifuConnectorViewModel : ObservableObject, IConnecto
         }
         catch (Exception ex) { CloudDocsStatusText = $"登录失败：{ex.Message}"; }
         finally { IsCloudDocsLoggingIn = false; }
+    }
+
+    // —— 同步命令 ——
+    [RelayCommand]
+    private async Task YushuSyncToServerAsync()
+    {
+        if (_yushuTokenSyncService == null) return;
+        YushuStatusText = "同步中…";
+        try
+        {
+            var success = await _yushuTokenSyncService.SyncToServerAsync();
+            YushuStatusText = success ? "已同步到服务器" : "同步失败";
+        }
+        catch (Exception ex) { YushuStatusText = $"同步失败：{ex.Message}"; }
+    }
+
+    [RelayCommand]
+    private async Task CloudDocsSyncToServerAsync()
+    {
+        if (_cloudDocsTokenSyncService == null) return;
+        CloudDocsStatusText = "同步中…";
+        try
+        {
+            var success = await _cloudDocsTokenSyncService.SyncToServerAsync();
+            CloudDocsStatusText = success ? "已同步到服务器" : "同步失败";
+        }
+        catch (Exception ex) { CloudDocsStatusText = $"同步失败：{ex.Message}"; }
     }
 }
