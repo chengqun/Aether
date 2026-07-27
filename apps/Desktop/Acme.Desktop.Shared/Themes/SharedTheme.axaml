@@ -47,6 +47,11 @@
     </ResourceDictionary>
   </Styles.Resources>
 
+  <!-- 全局字体：文本用 Inter/系统字体，emoji 回退到 Apple Color Emoji / Segoe UI Emoji（避免 emoji 被裁切/ tofu） -->
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="Inter,Segoe UI,system-ui,-apple-system,Helvetica,Arial,Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji"/>
+  </Style>
+
   <!-- 主按钮 -->
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>

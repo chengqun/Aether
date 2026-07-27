@@ -19,6 +19,7 @@ public static class AgentsAIBuilderExtensions
         services.AddSingleton<IModelSource, DefaultModelSource>();
         services.AddSingleton<ICustomAgentCatalog, CustomAgentCatalog>();
         services.AddSingleton<ICustomAgentRunner, CustomAgentRunner>();
+        services.AddSingleton<IAgentMarketplaceService, AgentMarketplaceService>();
         return builder;
     }
 }

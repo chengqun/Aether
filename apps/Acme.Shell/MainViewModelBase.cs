@@ -62,7 +62,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
-            _dispatcher);
+            _dispatcher,
+            serviceProvider.GetRequiredService<IAgentMarketplaceService>(),
+            _auth,
+            serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;

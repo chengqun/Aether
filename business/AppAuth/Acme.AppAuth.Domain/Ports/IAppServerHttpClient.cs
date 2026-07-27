@@ -17,6 +17,9 @@ public interface IAppServerHttpClient
     /// <summary>POSTs a JSON body to a relative endpoint, returning the raw response (or null on transport failure).</summary>
     Task<HttpResponseMessage?> PostRawAsync(string endpoint, object? body = null, CancellationToken ct = default);
 
+    /// <summary>GETs a relative endpoint, returning the raw response (or null on transport failure). Lets callers read status/body/headers for error surfacing.</summary>
+    Task<HttpResponseMessage?> GetRawAsync(string endpoint, CancellationToken ct = default);
+
     /// <summary>GETs a relative endpoint and deserializes JSON to <typeparamref name="T"/>, or null.</summary>
     Task<T?> GetAsync<T>(string endpoint, CancellationToken ct = default) where T : class;
 

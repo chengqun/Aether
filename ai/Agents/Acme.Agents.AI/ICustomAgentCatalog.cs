@@ -12,6 +12,9 @@ public interface ICustomAgentCatalog
     /// <summary>按 id 取单个 Agent；不存在返回 null。</summary>
     Task<CustomAgentDefinition?> GetAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>按市场云端 Id 取本地副本（已召唤的市场 agent）；不存在返回 null。</summary>
+    Task<CustomAgentDefinition?> GetByMarketplaceIdAsync(Guid marketplaceId, CancellationToken ct = default);
+
     /// <summary>新增或更新（按 id 是否已存在判定）。</summary>
     Task SaveAsync(CustomAgentDefinition definition, CancellationToken ct = default);
 

@@ -46,26 +46,23 @@ public class CloudDocsTokenSyncService : ICloudDocsTokenSyncService
 
             // 读取本地 sid
             var sidItem = await _configRepository.GetAsync(userId, SidConfigKey);
-            if (sidItem == null) return false; // 本地无 sid，不上传
+            if (sidItem == null)
+                throw new InvalidOperationException("本地无云文档 sid，请先登录云文档");
 
             string sid;
             string env = "prod";
             string? capturedAt = null;
-            try
+            using (var doc = JsonDocument.Parse(sidItem.ConfigJson))
             {
-                using var doc = JsonDocument.Parse(sidItem.ConfigJson);
                 sid = doc.RootElement.TryGetProperty("sid", out var s) ? s.GetString() ?? "" : "";
                 if (doc.RootElement.TryGetProperty("env", out var e) && e.ValueKind == JsonValueKind.String)
                     env = e.GetString() ?? "prod";
                 if (doc.RootElement.TryGetProperty("captured_at", out var c) && c.ValueKind == JsonValueKind.String)
                     capturedAt = c.GetString();
             }
-            catch
-            {
-                return false;
-            }
 
-            if (string.IsNullOrEmpty(sid)) return false;
+            if (string.IsNullOrEmpty(sid))
+                throw new InvalidOperationException("本地云文档 sid 为空，请先登录云文档");
 
             // 使用 camelCase 匿名类型，匹配服务端 SaveCloudDocsTokenDto 的 camelCase JSON 约定
             var body = new
@@ -78,28 +75,25 @@ public class CloudDocsTokenSyncService : ICloudDocsTokenSyncService
             var response = await _syncHttp.PostRawAsync("api/app/cloud-docs-token/save-my-token", body);
 
             if (response == null)
-            {
-                System.Diagnostics.Debug.WriteLine("[CloudDocsTokenSync] 上传 sid 失败：请求异常（网络错误或连接超时）");
-                return false;
-            }
+                throw new InvalidOperationException("上传 sid 失败：请求异常（网络错误或连接超时，可能未登录 App）");
 
             if (!response.IsSuccessStatusCode)
             {
                 var statusCode = (int)response.StatusCode;
                 var errorContent = await response.Content.ReadAsStringAsync(ct);
-                System.Diagnostics.Debug.WriteLine($"[CloudDocsTokenSync] 上传 sid 失败：HTTP {statusCode}，响应：{errorContent}");
-                return false;
+                throw new InvalidOperationException($"上传 sid 失败：HTTP {statusCode}，响应：{Truncate(errorContent, 300)}");
             }
 
-            System.Diagnostics.Debug.WriteLine("[CloudDocsTokenSync] sid 已成功上传到服务器");
             return true;
         }
+        catch (InvalidOperationException) { throw; }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CloudDocsTokenSync] 上传 sid 异常：{ex.GetType().Name}: {ex.Message}");
-            return false;
+            throw new InvalidOperationException($"上传 sid 异常：{ex.Message}", ex);
         }
     }
+
+    private static string Truncate(string? s, int max) => string.IsNullOrEmpty(s) ? string.Empty : (s.Length <= max ? s : s[..max]);
 
     /// <inheritdoc />
     public async Task<bool> SyncFromServerAsync(CancellationToken ct = default)

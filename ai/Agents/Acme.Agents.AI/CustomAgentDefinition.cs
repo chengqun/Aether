@@ -34,4 +34,16 @@ public sealed class CustomAgentDefinition
     public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
 
     public int MaxHistory { get; set; } = 20;
+
+    /// <summary>来源："Local"（本地自建）|"Marketplace"（从市场召唤）。空=本地。</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>市场 agent 的云端 Id（召唤来源 / 发布结果）。空=未关联市场。</summary>
+    public Guid? MarketplaceId { get; set; }
+
+    /// <summary>上次同步市场时的云端 LastModifiedAt（用于检测更新）。</summary>
+    public DateTimeOffset? MarketplaceSyncedAt { get; set; }
+
+    /// <summary>市场原名（本地 Name 会加" [市场]"后缀，此字段保留原名）。</summary>
+    public string DisplayName { get; set; } = string.Empty;
 }

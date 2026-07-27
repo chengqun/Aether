@@ -1,5 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Stockapp.Desktop.ViewModels"
+             xmlns:views="using:Acme.Stockapp.Desktop.Views"
              x:Class="Acme.Stockapp.Desktop.App"
              RequestedThemeVariant="Default">
 
@@ -7,5 +9,11 @@
         <FluentTheme />
         <StyleInclude Source="avares://Acme.Desktop.Shared/Themes/SharedTheme.axaml"/>
     </Application.Styles>
+
+    <Application.DataTemplates>
+        <DataTemplate DataType="vm:CtpConnectorViewModel">
+            <views:ConnectorView />
+        </DataTemplate>
+    </Application.DataTemplates>
 
 </Application>

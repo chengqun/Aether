@@ -141,7 +141,18 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     }
 
     /// <summary>POSTs a form to a relative endpoint on the plain (no-auth) client.
+    /// Adds the <c>__tenant</c> HEADER (mirrors AlphaAgent's TenantHeaderDelegatingHandler on its
+    /// authenticated login client) so ABP resolves the tenant on the token endpoint and issues a
+    /// tenant-scoped JWT — form-field alone is unreliable for refresh_token grant.
     /// Throws on transport failure — callers handle (login surfaces the message, refresh returns false).</summary>
     private async Task<HttpResponseMessage> PostFormAsync(string endpoint, IDictionary<string, string> form, CancellationToken ct)
-        => await _http.PostAsync(endpoint, new FormUrlEncodedContent(form), ct);
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
+        if (!string.IsNullOrWhiteSpace(_options.Tenant))
+            request.Headers.Add("__tenant", _options.Tenant);
+        return await _http.SendAsync(request, ct);
+    }
 }

@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Acme.Qifu.Desktop.Views.ConnectorView"
+             Background="Transparent">
+
+  <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+
+    <!-- 毓数平台认证 卡片 -->
+    <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            CornerRadius="16" Padding="20">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="44" Height="44" CornerRadius="22" Background="#E3F2FD">
+            <TextBlock Text="🔢" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel>
+            <TextBlock Text="毓数平台认证" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Text="连接毓数平台以使用 SQL 数据查询功能" FontSize="11"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </StackPanel>
+
+        <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0" HorizontalAlignment="Left">
+          <TextBlock Text="{Binding YushuStatusText}" FontSize="12"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="登录毓数平台" Classes="primary" Command="{Binding YushuLoginCommand}"
+                  IsEnabled="{Binding !IsYushuLoggingIn}" Padding="14,6" FontSize="12" />
+          <Button Content="同步到服务器" Command="{Binding YushuSyncToServerCommand}"
+                  IsVisible="{Binding ShowYushuSync}" Padding="14,6" FontSize="12" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- 云文档认证 卡片 -->
+    <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            CornerRadius="16" Padding="20">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="44" Height="44" CornerRadius="22" Background="#E8F5E9">
+            <TextBlock Text="☁️" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel>
+            <TextBlock Text="云文档认证" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Text="连接 360Teams 云文档以使用文件上传功能" FontSize="11"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </StackPanel>
+
+        <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0" HorizontalAlignment="Left">
+          <TextBlock Text="{Binding CloudDocsStatusText}" FontSize="12"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="浏览器登录云文档" Classes="primary" Command="{Binding CloudDocsLoginCommand}"
+                  IsEnabled="{Binding !IsCloudDocsLoggingIn}" Padding="14,6" FontSize="12" />
+          <Button Content="同步到服务器" Command="{Binding CloudDocsSyncToServerCommand}"
+                  IsVisible="{Binding ShowCloudDocsSync}" Padding="14,6" FontSize="12" />
+        </StackPanel>
+        <TextBlock Text="登录会打开浏览器完成 SSO 并捕获 sid；首次在本机需已安装 Chromium（playwright install chromium）"
+                   FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

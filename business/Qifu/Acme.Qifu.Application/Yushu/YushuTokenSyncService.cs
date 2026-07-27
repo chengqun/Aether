@@ -43,7 +43,8 @@ public class YushuTokenSyncService : IYushuTokenSyncService
 
             // 读取本地 token
             var tokenItem = await _configRepository.GetAsync(userId, "token");
-            if (tokenItem == null) return false; // 本地无 token，不上传
+            if (tokenItem == null)
+                throw new InvalidOperationException("本地无毓数 token，请先登录毓数平台");
 
             var tokenData = JsonSerializer.Deserialize<JsonElement>(tokenItem.ConfigJson, JsonOptions);
 
@@ -66,28 +67,25 @@ public class YushuTokenSyncService : IYushuTokenSyncService
             var response = await _syncHttp.PostRawAsync("api/app/yushu-token/save-my-token", body);
 
             if (response == null)
-            {
-                System.Diagnostics.Debug.WriteLine("[YushuTokenSync] 上传 token 失败：请求异常（网络错误或连接超时）");
-                return false;
-            }
+                throw new InvalidOperationException("上传 token 失败：请求异常（网络错误或连接超时，可能未登录 App）");
 
             if (!response.IsSuccessStatusCode)
             {
                 var statusCode = (int)response.StatusCode;
                 var errorContent = await response.Content.ReadAsStringAsync(ct);
-                System.Diagnostics.Debug.WriteLine($"[YushuTokenSync] 上传 token 失败：HTTP {statusCode}，响应：{errorContent}");
-                return false;
+                throw new InvalidOperationException($"上传 token 失败：HTTP {statusCode}，响应：{Truncate(errorContent, 300)}");
             }
 
-            System.Diagnostics.Debug.WriteLine("[YushuTokenSync] Token 已成功上传到服务器");
             return true;
         }
+        catch (InvalidOperationException) { throw; }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[YushuTokenSync] 上传 token 异常：{ex.GetType().Name}: {ex.Message}");
-            return false;
+            throw new InvalidOperationException($"上传 token 异常：{ex.Message}", ex);
         }
     }
+
+    private static string Truncate(string? s, int max) => string.IsNullOrEmpty(s) ? string.Empty : (s.Length <= max ? s : s[..max]);
 
     /// <inheritdoc />
     public async Task<bool> SyncFromServerAsync(CancellationToken ct = default)

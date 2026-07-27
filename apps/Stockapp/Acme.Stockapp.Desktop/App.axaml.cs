@@ -69,6 +69,9 @@ public partial class App : global::Avalonia.Application
         var aether = services.AddDesktopCommon("stockapp", tenantDir);
         aether.AddQuotesTools().AddCtpTools().AddTradingTools();   // stockapp 租户专属 AI 工具
 
+        // CTP 连接器（Stockapp 专属；注入 ExpertsViewModel 的 Connector tab）
+        services.AddSingleton<IConnectorViewModel, CtpConnectorViewModel>();
+
         // shell 主 ViewModel
         services.AddSingleton<StockappMainViewModel>();
         services.AddSingleton<MainViewModelBase>(sp => sp.GetRequiredService<StockappMainViewModel>());

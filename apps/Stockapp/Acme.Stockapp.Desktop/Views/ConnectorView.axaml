@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
+             x:Class="Acme.Stockapp.Desktop.Views.ConnectorView"
+             Background="Transparent">
+
+  <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+
+    <!-- CTP 期货交易 卡片 -->
+    <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            CornerRadius="16" Padding="20">
+      <StackPanel Spacing="10">
+        <!-- 标题 -->
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="44" Height="44" CornerRadius="22" Background="#E8F5E9">
+            <TextBlock Text="📈" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel>
+            <TextBlock Text="CTP 期货交易" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Text="连接期货柜台，供交易/行情工具调用" FontSize="11"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- 状态 + 操作 -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Ellipse Width="8" Height="8"
+                       Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
+              <TextBlock Text="{Binding StatusText}" FontSize="12"
+                         Foreground="{DynamicResource TextPrimaryBrush}" />
+            </StackPanel>
+          </Border>
+          <Button Content="连接设置" Classes="primary" Click="OnCtpSettingsClick" Padding="14,6" FontSize="12" />
+          <Button Content="断开" Command="{Binding DisconnectCommand}" Padding="14,6" FontSize="12"
+                  IsVisible="{Binding IsConnected}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

@@ -21,6 +21,19 @@ public sealed class AgentSourceFields
     public int MaxHistory { get; set; } = 20;
     /// <summary>模型标识（宿主解析，如 LLM 配置 Id；空=默认）。</summary>
     public string Model { get; set; } = string.Empty;
+
+    /// <summary>来源："Local"|"Marketplace"。空=本地。</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>市场云端 Id。</summary>
+    public Guid? MarketplaceId { get; set; }
+
+    /// <summary>上次同步市场的云端 LastModifiedAt。</summary>
+    public DateTimeOffset? MarketplaceSyncedAt { get; set; }
+
+    /// <summary>市场原名。</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
     public string Prompt { get; set; } = string.Empty;
 }
 
@@ -125,6 +138,19 @@ public static class AgentSourceParser
                 case "model":
                     result.Model = value;
                     break;
+                case "source":
+                    result.Source = value;
+                    break;
+                case "marketplaceid":
+                    if (Guid.TryParse(value, out var mid)) result.MarketplaceId = mid;
+                    break;
+                case "marketplacesyncedat":
+                    if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var msync))
+                        result.MarketplaceSyncedAt = msync;
+                    break;
+                case "displayname":
+                    result.DisplayName = value;
+                    break;
                 case "tools":
                     var tools = new List<string>();
                     if (value.StartsWith('[') && value.EndsWith(']'))
@@ -184,7 +210,9 @@ model:
 
     /// <summary>反向序列化：把字段组装成源文本。</summary>
     public static string Serialize(string name, string description, string category,
-        IEnumerable<string> tools, AgentMemoryMode memory, int maxHistory, string model, string prompt)
+        IEnumerable<string> tools, AgentMemoryMode memory, int maxHistory, string model,
+        string source, Guid? marketplaceId, DateTimeOffset? marketplaceSyncedAt, string displayName,
+        string prompt)
     {
         var toolList = tools?.ToList() ?? new List<string>();
         var toolsLine = toolList.Count == 0
@@ -199,6 +227,10 @@ category: {category}
 memory: {memory}
 max_history: {maxHistory}
 model: {model ?? string.Empty}
+source: {source ?? string.Empty}
+marketplace_id: {(marketplaceId?.ToString() ?? string.Empty)}
+marketplace_synced_at: {(marketplaceSyncedAt.HasValue ? marketplaceSyncedAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) : string.Empty)}
+display_name: {displayName ?? string.Empty}
 ---
 {prompt}";
     }

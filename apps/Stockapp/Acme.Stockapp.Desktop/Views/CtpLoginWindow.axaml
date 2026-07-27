@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Stockapp.Desktop.Views.CtpLoginWindow"
+        Title="CTP 期货连接" Width="420" Height="540"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ContentBgBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- 标题 -->
+    <Border Grid.Row="0" Padding="20,16" Background="{DynamicResource AccentBrush}">
+      <TextBlock Text="📈 CTP 期货连接" Foreground="White" FontSize="16" FontWeight="SemiBold" />
+    </Border>
+
+    <!-- 表单 -->
+    <ScrollViewer Grid.Row="1" Padding="20,16">
+      <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="经纪商代码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding BrokerId}" Margin="0,6" />
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="用户号" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="3" Grid.Column="1" Text="{Binding UserId}" Margin="0,6" />
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="密码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="4" Grid.Column="1" Text="{Binding Password}" Margin="0,6" PasswordChar="•" />
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Text="AppId" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding AppId}" Margin="0,6" />
+
+        <TextBlock Grid.Row="6" Grid.Column="0" Text="授权码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+        <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding AuthCode}" Margin="0,6" />
+      </Grid>
+    </ScrollViewer>
+
+    <!-- 底部按钮 -->
+    <Border Grid.Row="2" Padding="20,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="取消" Click="OnCancelClick" Padding="16,6" FontSize="13" />
+        <Button Content="连接" Classes="primary" Click="OnConnectClick" Padding="16,6" FontSize="13"
+                IsEnabled="{Binding !IsConnecting}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

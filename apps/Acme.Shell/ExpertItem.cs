@@ -22,8 +22,20 @@ public sealed partial class ExpertItem : ObservableObject
     /// <summary>滑动窗口最大历史条数。</summary>
     [ObservableProperty] private int _maxHistory = 20;
 
+    /// <summary>来源："Local"|"Marketplace"。</summary>
+    [ObservableProperty] private string _source = string.Empty;
+
+    /// <summary>市场云端 Id（null=本地自建）。</summary>
+    [ObservableProperty] private Guid? _marketplaceId;
+
+    /// <summary>市场有更新（云端 LastModifiedAt 比本地新）。</summary>
+    [ObservableProperty] private bool _hasUpdate;
+
     public string DisplayIcon => "🤖";
-    public string SourceBadge => "本地";
+    /// <summary>来源徽章：本地 / 市场。</summary>
+    public string SourceBadge => string.Equals(Source, "Marketplace", StringComparison.OrdinalIgnoreCase) ? "市场" : "本地";
+    /// <summary>是否市场召唤的 agent。</summary>
+    public bool IsMarketplace => MarketplaceId is not null;
 
     /// <summary>记忆模式显示文本。</summary>
     public string MemoryLabel => Memory switch

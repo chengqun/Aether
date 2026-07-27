@@ -44,6 +44,12 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         return ToDefinition(note.Id, fields);
     }
 
+    public async Task<CustomAgentDefinition?> GetByMarketplaceIdAsync(Guid marketplaceId, CancellationToken ct = default)
+    {
+        var all = await ListAsync(ct);
+        return all.FirstOrDefault(d => d.MarketplaceId == marketplaceId);
+    }
+
     public async Task SaveAsync(CustomAgentDefinition definition, CancellationToken ct = default)
     {
         if (definition is null) throw new ArgumentNullException(nameof(definition));
@@ -58,6 +64,10 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             definition.Memory,
             definition.MaxHistory,
             definition.ModelId,
+            definition.Source,
+            definition.MarketplaceId,
+            definition.MarketplaceSyncedAt,
+            definition.DisplayName,
             definition.SystemPrompt);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
@@ -105,5 +115,9 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             Tools = fields.Tools,
             Memory = fields.Memory,
             MaxHistory = fields.MaxHistory,
+            Source = fields.Source,
+            MarketplaceId = fields.MarketplaceId,
+            MarketplaceSyncedAt = fields.MarketplaceSyncedAt,
+            DisplayName = fields.DisplayName,
         };
 }

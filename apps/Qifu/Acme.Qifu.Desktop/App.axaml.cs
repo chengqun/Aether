@@ -56,6 +56,9 @@ public partial class App : global::Avalonia.Application
         var aether = services.AddDesktopCommon("qifu", tenantDir);
         aether.AddQifuTools();   // qifu 租户专属 AI 工具（毓数 SQL/云文档/Teams）
 
+        // Qifu 连接器（毓数 + 云文档认证；注入 ExpertsViewModel 的 Connector tab）
+        services.AddSingleton<IConnectorViewModel, QifuConnectorViewModel>();
+
         // shell 主 ViewModel
         services.AddSingleton<QifuMainViewModel>();
         services.AddSingleton<MainViewModelBase>(sp => sp.GetRequiredService<QifuMainViewModel>());

@@ -41,109 +41,223 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <!-- 顶部标题栏 -->
+    <!-- 顶部标题栏 + tab -->
     <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <TextBlock Grid.Column="0" Text="🤖 专家" FontSize="16" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1" Text="从 Notes Agent 笔记加载的自定义助手" FontSize="12"
-                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="16,0,0,0" />
-        <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick" Padding="14,6" />
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="top-tab" Content="专家" Command="{Binding ShowAgentTabCommand}"
+                  IsEnabled="{Binding !IsAgentTab}" Padding="12,4" FontSize="13" />
+          <Button Classes="top-tab" Content="连接器" Command="{Binding ShowConnectorTabCommand}"
+                  IsEnabled="{Binding !IsConnectorTab}" Padding="12,4" FontSize="13"
+                  IsVisible="{Binding HasConnector}" />
+          <Button Classes="top-tab" Content="市场" Command="{Binding ShowMarketTabCommand}"
+                  IsEnabled="{Binding !IsMarketTab}" Padding="12,4" FontSize="13"
+                  IsVisible="{Binding CanShowMarket}" />
+        </StackPanel>
+        <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick"
+                Padding="14,6" IsVisible="{Binding IsAgentTab}" />
       </Grid>
     </Border>
 
-    <!-- 类别 Tab -->
-    <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White">
-      <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
-               SelectedItem="{Binding SelectedCategory}">
-        <ListBox.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="8" />
-          </ItemsPanelTemplate>
-        </ListBox.ItemsPanel>
-        <ListBox.ItemContainerTheme>
-          <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-            <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-          </ControlTheme>
-        </ListBox.ItemContainerTheme>
-      </ListBox>
-    </Border>
-
-    <!-- 专家卡片列表 -->
-    <ScrollViewer Padding="20,16">
-      <StackPanel>
-        <!-- 空状态 -->
-        <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"
-                Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                HorizontalAlignment="Center" Margin="0,40">
-          <StackPanel Spacing="8" HorizontalAlignment="Center">
-            <TextBlock Text="🧩" FontSize="40" HorizontalAlignment="Center" />
-            <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
-            <TextBlock Text="点击右上角「+ 添加专家」创建 Agent" FontSize="12"
-                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-          </StackPanel>
+    <!-- ===== tab 内容（填充剩余空间；三面板叠加，IsVisible 切换） ===== -->
+    <Grid>
+    <!-- ===== Agent 面板 ===== -->
+    <Panel IsVisible="{Binding IsAgentTab}">
+      <DockPanel>
+        <!-- 类别 Tab -->
+        <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White">
+          <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
+                   SelectedItem="{Binding SelectedCategory}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerTheme>
+              <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                <Setter Property="Padding" Value="14,6"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+              </ControlTheme>
+            </ListBox.ItemContainerTheme>
+          </ListBox>
         </Border>
 
-        <!-- 卡片网格 -->
-        <ItemsControl ItemsSource="{Binding VisibleExperts}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="expert-card" Margin="0,0,12,12" Width="280">
-                <StackPanel Spacing="6">
-                  <!-- 标题行 -->
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding DisplayIcon}" FontSize="18" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                    <Border CornerRadius="4" Padding="5,1" Background="#FFF3E0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="#E65100" />
-                    </Border>
-                  </StackPanel>
-                  <!-- 描述 -->
-                  <TextBlock Text="{Binding Description}" FontSize="12"
-                             Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
-                  <!-- 类别 -->
-                  <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB" HorizontalAlignment="Left" Margin="0,2,0,0">
-                    <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
+        <!-- 专家卡片列表 -->
+        <ScrollViewer Padding="20,16">
+          <StackPanel>
+            <!-- 空状态 -->
+            <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"
+                    Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    HorizontalAlignment="Center" Margin="0,40">
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="🧩" FontSize="40" HorizontalAlignment="Center" />
+                <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+                <TextBlock Text="点击右上角「+ 添加专家」创建 Agent" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Border>
+
+            <!-- 卡片网格 -->
+            <ItemsControl ItemsSource="{Binding VisibleExperts}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="expert-card" Margin="0,0,12,12" Width="280">
+                    <StackPanel Spacing="6">
+                      <!-- 标题行 -->
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding DisplayIcon}" FontSize="18" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Border CornerRadius="4" Padding="5,1" Background="#FFF3E0" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="#E65100" />
+                        </Border>
+                      </StackPanel>
+                      <!-- 描述 -->
+                      <TextBlock Text="{Binding Description}" FontSize="12"
+                                 Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
+                      <!-- 类别 -->
+                      <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB" HorizontalAlignment="Left" Margin="0,2,0,0">
+                        <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
+                      </Border>
+                      <!-- 记忆模式 + 工具数 -->
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                        <TextBlock Text="{Binding MemoryLabel}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                        <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="{Binding Tools.Count, StringFormat='工具 {0}'}" />
+                      </StackPanel>
+                      <!-- 操作按钮 -->
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                        <Button Content="召唤" Classes="primary" Click="OnToggleSummonClick" Tag="{Binding}"
+                                Padding="12,4" FontSize="12"
+                                IsVisible="{Binding !IsSummoned}" />
+                        <Button Content="取消召唤" Click="OnToggleSummonClick" Tag="{Binding}"
+                                Padding="12,4" FontSize="12"
+                                IsVisible="{Binding IsSummoned}" />
+                        <Button Content="编辑" Click="OnEditClick" Tag="{Binding}"
+                                Padding="12,4" FontSize="12" />
+                        <Button Content="删除" Classes="danger" Click="OnDeleteClick" Tag="{Binding}"
+                                Padding="12,4" FontSize="12" />
+                        <Button Content="发布到市场"
+                                Command="{Binding DataContext.PublishToMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                Padding="12,4" FontSize="12"
+                                IsVisible="{Binding !IsMarketplace}" />
+                      </StackPanel>
+                    </StackPanel>
                   </Border>
-                  <!-- 记忆模式 + 工具数 -->
-                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                    <TextBlock Text="{Binding MemoryLabel}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
-                    <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
-                    <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
-                               Text="{Binding Tools.Count, StringFormat='工具 {0}'}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Panel>
+
+    <!-- ===== 连接器面板（ContentControl 由宿主 DataTemplate 解析） ===== -->
+    <Panel IsVisible="{Binding IsConnectorTab}">
+      <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
+        <ContentControl Content="{Binding Connector}" />
+      </ScrollViewer>
+    </Panel>
+
+    <!-- ===== 市场面板 ===== -->
+    <Panel IsVisible="{Binding IsMarketTab}">
+      <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+          <!-- 加载/状态 -->
+          <TextBlock Text="{Binding MarketStatus}" FontSize="12"
+                     Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
+                     IsVisible="{Binding MarketStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <!-- 空状态 -->
+          <Border IsVisible="{Binding !MarketplaceAgents.Count}" Padding="40" CornerRadius="12"
+                  Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                  HorizontalAlignment="Center" Margin="0,40">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+              <TextBlock Text="🛒" FontSize="40" HorizontalAlignment="Center" />
+              <TextBlock Text="市场暂无 agent" FontSize="15" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+              <TextBlock Text="服务端未就绪时无法拉取列表" FontSize="12"
+                         Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+
+          <!-- 市场卡片 -->
+          <ItemsControl ItemsSource="{Binding MarketplaceAgents}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="expert-card" Margin="0,0,12,12" Width="300">
+                  <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="🤖" FontSize="18" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding AgentName}" FontSize="15" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <Border CornerRadius="4" Padding="5,1" Background="#E8F5E9" VerticalAlignment="Center"
+                              IsVisible="{Binding IsSummoned}">
+                        <TextBlock Text="已召唤" FontSize="9" Foreground="#2E7D32" />
+                      </Border>
+                      <Border CornerRadius="4" Padding="5,1" Background="#FFEBEE" VerticalAlignment="Center"
+                              IsVisible="{Binding HasUpdate}">
+                        <TextBlock Text="有更新" FontSize="9" Foreground="#C62828" />
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Description}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB">
+                        <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
+                      </Border>
+                      <TextBlock Text="{Binding CreatorUserName}" FontSize="10"
+                                 Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                      <Button Content="召唤" Classes="primary"
+                              Command="{Binding DataContext.SummonFromMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}"
+                              Padding="12,4" FontSize="12"
+                              IsVisible="{Binding !IsSummoned}" />
+                      <Button Content="重新召唤"
+                              Command="{Binding DataContext.SummonFromMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}"
+                              Padding="12,4" FontSize="12"
+                              IsVisible="{Binding IsSummoned}" />
+                      <Button Content="检查更新"
+                              Command="{Binding DataContext.CheckUpdateMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}"
+                              Padding="12,4" FontSize="12"
+                              IsVisible="{Binding IsSummoned}" />
+                      <Button Content="移除"
+                              Command="{Binding DataContext.RemoveMarketplaceAgentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}"
+                              Padding="12,4" FontSize="12"
+                              IsVisible="{Binding IsSummoned}" />
+                    </StackPanel>
                   </StackPanel>
-                  <!-- 操作按钮 -->
-                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
-                    <Button Content="召唤" Classes="primary" Click="OnToggleSummonClick" Tag="{Binding}"
-                            Padding="12,4" FontSize="12"
-                            IsVisible="{Binding !IsSummoned}" />
-                    <Button Content="取消召唤" Click="OnToggleSummonClick" Tag="{Binding}"
-                            Padding="12,4" FontSize="12"
-                            IsVisible="{Binding IsSummoned}" />
-                    <Button Content="编辑" Click="OnEditClick" Tag="{Binding}"
-                            Padding="12,4" FontSize="12" />
-                    <Button Content="删除" Classes="danger" Click="OnDeleteClick" Tag="{Binding}"
-                            Padding="12,4" FontSize="12" />
-                  </StackPanel>
-                </StackPanel>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-    </ScrollViewer>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </Panel>
+    </Grid>
   </DockPanel>
 </UserControl>

@@ -40,14 +40,17 @@ public static class PlatformInfrastructureExtensions
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aether", "platform.db");
         services.AddSingleton<IAppTokenStore>(_ => SqliteAppTokenStore.ForFile(dbPath));
 
-        // Authenticated app-server HTTP client: bearer handler + base address.
+        // Authenticated app-server HTTP client: tenant header + bearer handler + base address.
+        services.AddTransient<TenantHeaderDelegatingHandler>();
         services.AddTransient<BearerTokenDelegatingHandler>();
         services.AddHttpClient<IAppServerHttpClient, AppServerHttpClient>(c =>
         {
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
                 c.BaseAddress = new Uri(options.BaseUrl);
             c.Timeout = TimeSpan.FromSeconds(300);
-        }).AddHttpMessageHandler<BearerTokenDelegatingHandler>();
+        })
+        .AddHttpMessageHandler<TenantHeaderDelegatingHandler>()
+        .AddHttpMessageHandler<BearerTokenDelegatingHandler>();
 
         // Current user (from cached JWT).
         services.AddSingleton<ICurrentUser, CurrentUserResolver>();
