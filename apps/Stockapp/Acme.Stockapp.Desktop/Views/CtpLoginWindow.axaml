@@ -13,28 +13,31 @@
 
     <!-- 表单 -->
     <ScrollViewer Grid.Row="1" Padding="20,16">
-      <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+      <StackPanel Spacing="2">
+        <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="经纪商代码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding BrokerId}" Margin="0,6" />
+          <TextBlock Grid.Row="2" Grid.Column="0" Text="经纪商代码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding BrokerId}" Margin="0,6" />
 
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="用户号" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="3" Grid.Column="1" Text="{Binding UserId}" Margin="0,6" />
+          <TextBlock Grid.Row="3" Grid.Column="0" Text="用户号" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="3" Grid.Column="1" Text="{Binding UserId}" Margin="0,6" />
 
-        <TextBlock Grid.Row="4" Grid.Column="0" Text="密码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="4" Grid.Column="1" Text="{Binding Password}" Margin="0,6" PasswordChar="•" />
+          <TextBlock Grid.Row="4" Grid.Column="0" Text="密码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="4" Grid.Column="1" Text="{Binding Password}" Margin="0,6" PasswordChar="•" />
 
-        <TextBlock Grid.Row="5" Grid.Column="0" Text="AppId" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding AppId}" Margin="0,6" />
+          <TextBlock Grid.Row="5" Grid.Column="0" Text="AppId" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding AppId}" Margin="0,6" />
 
-        <TextBlock Grid.Row="6" Grid.Column="0" Text="授权码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-        <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding AuthCode}" Margin="0,6" />
-      </Grid>
+          <TextBlock Grid.Row="6" Grid.Column="0" Text="授权码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
+          <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding AuthCode}" Margin="0,6" />
+        </Grid>
+        <CheckBox Content="启动时自动连接" IsChecked="{Binding AutoLogin}" Margin="100,8,0,0" FontSize="12" />
+      </StackPanel>
     </ScrollViewer>
 
     <!-- 底部按钮 -->

@@ -32,12 +32,13 @@ public sealed partial class CtpConnectorViewModel : ObservableObject, IConnector
     [ObservableProperty] private string _password = string.Empty;
     [ObservableProperty] private string _appId = string.Empty;
     [ObservableProperty] private string _authCode = string.Empty;
+    [ObservableProperty] private bool _autoLogin;
 
     [ObservableProperty] private bool _isConnected;
     [ObservableProperty] private string _statusText = "未连接";
     [ObservableProperty] private bool _isConnecting;
 
-    /// <summary>从存储加载已存配置到表单，并刷新连接状态。</summary>
+    /// <summary>从存储加载已存配置到表单，刷新连接状态，若启用自动登录则自动连接。</summary>
     public async Task RefreshAsync()
     {
         var cfg = await _configStore.GetAsync();
@@ -50,9 +51,14 @@ public sealed partial class CtpConnectorViewModel : ObservableObject, IConnector
             Password = cfg.Password;
             AppId = cfg.AppId;
             AuthCode = cfg.AuthCode;
+            AutoLogin = cfg.AutoLogin;
         }
         IsConnected = _trading.IsConnected;
         StatusText = IsConnected ? "已连接" : "未连接";
+
+        // 自动登录：有配置 + 未连接 + AutoLogin 开启
+        if (AutoLogin && !IsConnected && !string.IsNullOrWhiteSpace(FrontAddress) && !string.IsNullOrWhiteSpace(UserId))
+            await ConnectAsync();
     }
 
     [RelayCommand]
@@ -79,6 +85,7 @@ public sealed partial class CtpConnectorViewModel : ObservableObject, IConnector
                 Password = Password,
                 AppId = AppId,
                 AuthCode = AuthCode,
+                AutoLogin = AutoLogin,
             });
 
             var result = await _trading.LoginAsync(new CtpLoginRequest

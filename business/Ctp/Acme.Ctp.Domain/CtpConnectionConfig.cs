@@ -19,4 +19,7 @@ public sealed class CtpConnectionConfig
     public string Password { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
     public string AuthCode { get; set; } = string.Empty;
+
+    /// <summary>启动时是否自动连接（跨重启保留）。</summary>
+    public bool AutoLogin { get; set; }
 }

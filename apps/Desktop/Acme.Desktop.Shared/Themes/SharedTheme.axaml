@@ -95,6 +95,7 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="Padding" Value="14,11"/>
+    <Setter Property="MinHeight" Value="40"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="Margin" Value="10,2,10,0"/>
@@ -112,6 +113,7 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="Padding" Value="0,9"/>
+    <Setter Property="MinHeight" Value="40"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="Margin" Value="6,2"/>
@@ -152,6 +154,7 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="16,8"/>
+    <Setter Property="MinHeight" Value="36"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="FontWeight" Value="Medium"/>
   </Style>

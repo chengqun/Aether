@@ -17,7 +17,10 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
         "id INTEGER PRIMARY KEY CHECK (id = 1), " +
         "front_address TEXT NOT NULL, md_front_address TEXT NOT NULL, " +
         "broker_id TEXT NOT NULL, user_id TEXT NOT NULL, password TEXT NOT NULL, " +
-        "app_id TEXT NOT NULL, auth_code TEXT NOT NULL)";
+        "app_id TEXT NOT NULL, auth_code TEXT NOT NULL, auto_login INTEGER NOT NULL DEFAULT 0)";
+
+    private const string MigrateAutoLoginSql =
+        "ALTER TABLE " + TableName + " ADD COLUMN auto_login INTEGER NOT NULL DEFAULT 0";
 
     private readonly string _connectionString;
     private int _initialized;
@@ -32,7 +35,7 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
         await EnsureSchemaAsync(ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT front_address, md_front_address, broker_id, user_id, password, app_id, auth_code FROM {TableName} WHERE id = 1";
+        cmd.CommandText = $"SELECT front_address, md_front_address, broker_id, user_id, password, app_id, auth_code, auto_login FROM {TableName} WHERE id = 1";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
         return new CtpConnectionConfig
@@ -43,7 +46,8 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
             UserId = reader.GetString(3),
             Password = reader.GetString(4),
             AppId = reader.GetString(5),
-            AuthCode = reader.GetString(6)
+            AuthCode = reader.GetString(6),
+            AutoLogin = reader.GetInt32(7) != 0
         };
     }
 
@@ -54,10 +58,10 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            $"INSERT INTO {TableName} (id, front_address, md_front_address, broker_id, user_id, password, app_id, auth_code) " +
-            "VALUES (1, @f, @m, @b, @u, @p, @a, @c) " +
+            $"INSERT INTO {TableName} (id, front_address, md_front_address, broker_id, user_id, password, app_id, auth_code, auto_login) " +
+            "VALUES (1, @f, @m, @b, @u, @p, @a, @c, @al) " +
             "ON CONFLICT(id) DO UPDATE SET front_address=excluded.front_address, md_front_address=excluded.md_front_address, " +
-            "broker_id=excluded.broker_id, user_id=excluded.user_id, password=excluded.password, app_id=excluded.app_id, auth_code=excluded.auth_code";
+            "broker_id=excluded.broker_id, user_id=excluded.user_id, password=excluded.password, app_id=excluded.app_id, auth_code=excluded.auth_code, auto_login=excluded.auto_login";
         cmd.Parameters.AddWithValue("@f", config.FrontAddress);
         cmd.Parameters.AddWithValue("@m", config.MdFrontAddress);
         cmd.Parameters.AddWithValue("@b", config.BrokerId);
@@ -65,6 +69,7 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
         cmd.Parameters.AddWithValue("@p", config.Password);
         cmd.Parameters.AddWithValue("@a", config.AppId);
         cmd.Parameters.AddWithValue("@c", config.AuthCode);
+        cmd.Parameters.AddWithValue("@al", config.AutoLogin ? 1 : 0);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -93,6 +98,14 @@ public sealed class SqliteCtpConfigStore : ICtpConfigStore
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = CreateSql;
             await cmd.ExecuteNonQueryAsync(ct);
+            // 迁移：旧表无 auto_login 列时添加（已存在则忽略）
+            try
+            {
+                await using var mig = conn.CreateCommand();
+                mig.CommandText = MigrateAutoLoginSql;
+                await mig.ExecuteNonQueryAsync(ct);
+            }
+            catch { /* 列已存在，忽略 */ }
         }
         catch { Interlocked.Exchange(ref _initialized, 0); throw; }
     }
