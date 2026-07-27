@@ -58,11 +58,11 @@ public sealed partial class QifuConnectorViewModel : ObservableObject, IConnecto
     {
         try { IsYushuAuthenticated = await _yushuAuth.IsAuthenticatedAsync(); }
         catch { IsYushuAuthenticated = false; }
-        YushuStatusText = IsYushuAuthenticated ? "已登录" : "未登录";
+        YushuStatusText = IsYushuAuthenticated ? "已连接" : "未连接";
 
         try { IsCloudDocsAuthenticated = await _cloudDocsAuth.IsAuthenticatedAsync(); }
         catch { IsCloudDocsAuthenticated = false; }
-        CloudDocsStatusText = IsCloudDocsAuthenticated ? "已登录" : "未登录";
+        CloudDocsStatusText = IsCloudDocsAuthenticated ? "已连接" : "未连接";
     }
 
     // —— 毓数命令 ——
@@ -83,7 +83,7 @@ public sealed partial class QifuConnectorViewModel : ObservableObject, IConnecto
             else
             {
                 IsYushuAuthenticated = true;
-                YushuStatusText = "已登录";
+                YushuStatusText = "已连接";
             }
         }
         catch (Exception ex) { YushuStatusText = $"登录失败：{ex.Message}"; }
@@ -103,7 +103,7 @@ public sealed partial class QifuConnectorViewModel : ObservableObject, IConnecto
             if (result?.Success == true)
             {
                 IsCloudDocsAuthenticated = true;
-                CloudDocsStatusText = "已登录";
+                CloudDocsStatusText = "已连接";
             }
             else
             {

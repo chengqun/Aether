@@ -44,8 +44,10 @@
     <Border Grid.Row="2" Padding="20,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
         <Button Content="取消" Click="OnCancelClick" Padding="16,6" FontSize="13" />
+        <Button Content="断开" Command="{Binding DisconnectCommand}" Padding="16,6" FontSize="13"
+                IsVisible="{Binding IsConnected}" />
         <Button Content="连接" Classes="primary" Click="OnConnectClick" Padding="16,6" FontSize="13"
-                IsEnabled="{Binding !IsConnecting}" />
+                IsVisible="{Binding !IsConnected}" IsEnabled="{Binding !IsConnecting}" />
       </StackPanel>
     </Border>
   </Grid>
