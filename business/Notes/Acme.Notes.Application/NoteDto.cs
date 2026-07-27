@@ -31,5 +31,6 @@ public sealed class UpdateNoteRequest
     public string Content { get; init; } = string.Empty;
     public string? Syntax { get; init; }
     public string? Tags { get; init; }
+    public string? ParentId { get; init; }
     public NoteNodeType? NodeType { get; init; }
 }

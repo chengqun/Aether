@@ -69,6 +69,10 @@ public sealed class NoteService : INoteService
             node.Tags = request.Tags;
         if (request.NodeType.HasValue)
             node.NodeType = request.NodeType.Value;
+        if (request.ParentId != null)
+        {
+            node.ParentId = Guid.TryParse(request.ParentId, out var parsed) ? parsed : null;
+        }
 
         await _repository.UpdateAsync(node, ct);
     }

@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Shell;
 
-/// <summary>笔记页面 ViewModel：左侧树状笔记列表 + 右侧 Markdown 编辑。</summary>
 public partial class NotesViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
@@ -27,8 +26,14 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPreviewMode;
 
-    /// <summary>笔记数据变化事件（专家页等订阅刷新）。</summary>
     public event Action? NotesChanged;
+
+    public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
+
+    partial void OnSelectedNodeChanged(NoteNodeVM? value)
+    {
+        OnPropertyChanged(nameof(IsAgentNode));
+    }
 
     public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
     {
@@ -36,7 +41,6 @@ public partial class NotesViewModel : ObservableObject
         _dispatcher = dispatcher;
     }
 
-    /// <summary>加载全部笔记并构建树。</summary>
     public async Task LoadAsync()
     {
         try
@@ -46,41 +50,21 @@ public partial class NotesViewModel : ObservableObject
 
             await _dispatcher.InvokeAsync(() =>
             {
-                // 先按 ParentId 分组
-                var byParent = new Dictionary<Guid, List<NoteNodeVM>>();
-                var roots = new List<NoteNodeVM>();
                 var lookup = vms.ToDictionary(n => n.Id);
 
                 foreach (var node in vms)
                 {
                     if (node.ParentId.HasValue && lookup.TryGetValue(node.ParentId.Value, out var parent))
                     {
-                        if (!byParent.ContainsKey(node.ParentId.Value))
-                            byParent[node.ParentId.Value] = new List<NoteNodeVM>();
-                        byParent[node.ParentId.Value].Add(node);
+                        parent.Children.Add(node);
                         node.Parent = parent;
-                    }
-                    else
-                    {
-                        roots.Add(node);
-                    }
-                }
-
-                // 挂子节点
-                foreach (var kv in byParent)
-                {
-                    if (lookup.TryGetValue(kv.Key, out var parent))
-                    {
-                        foreach (var child in kv.Value.OrderBy(c => c.Title))
-                            parent.Children.Add(child);
                     }
                 }
 
                 Roots.Clear();
-                foreach (var r in roots.OrderBy(r => r.Title))
+                foreach (var r in vms.Where(v => !v.ParentId.HasValue).OrderBy(r => r.Title))
                     Roots.Add(r);
 
-                // 默认选中第一个根节点
                 SelectedNode = Roots.FirstOrDefault();
             });
         }
@@ -90,55 +74,56 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    /// <summary>新建根节点笔记。</summary>
-    [RelayCommand]
-    private async Task CreateRootNoteAsync()
-    {
-        try
-        {
-            var title = "新笔记";
-            var dto = await NoteService.CreateAsync(new CreateNoteRequest
-            {
-                Title = title,
-                Content = "# 新笔记\n\n开始写作...",
-            });
-            await LoadAsync();
-            StatusMessage = $"已创建：{title}";
-            NotesChanged?.Invoke();
+    public NoteNodeEditRow BuildNewNodeRow() => new();
 
-            // 选中新建的节点
-            if (Guid.TryParse(dto.Id, out var newId))
-            {
-                var created = FindNode(Roots, newId);
-                if (created != null) SelectedNode = created;
-            }
-        }
-        catch (Exception ex)
+    public NoteNodeEditRow? BuildEditNodeRow()
+    {
+        if (SelectedNode == null) return null;
+        var row = new NoteNodeEditRow
         {
-            StatusMessage = $"创建失败：{ex.Message}";
-        }
+            Name = SelectedNode.Title,
+            IsTypeEnabled = false,
+            Syntax = SelectedNode.Syntax,
+            Tags = SelectedNode.Tags,
+            IsReadOnly = false,
+        };
+        row.SelectedTypeOption = row.TypeOptions.FirstOrDefault(o => o.Value == SelectedNode.NodeType);
+        return row;
     }
 
-    /// <summary>在选中节点下新建子笔记。</summary>
-    [RelayCommand]
-    private async Task CreateChildNoteAsync()
+    public async Task ApplyNewNodeAsync(NoteNodeEditRow row, bool asChild)
     {
-        if (SelectedNode == null) return;
         try
         {
-            var title = "新子笔记";
+            var type = row.SelectedType;
+            var title = string.IsNullOrWhiteSpace(row.Name)
+                ? (type == NoteNodeType.Agent ? "新 Agent"
+                   : type == NoteNodeType.Workflow ? "新专家团" : "新笔记")
+                : row.Name;
+
+            Guid? parentId = asChild
+                ? SelectedNode?.Id
+                : SelectedNode?.ParentId;
+
             var dto = await NoteService.CreateAsync(new CreateNoteRequest
             {
-                ParentId = SelectedNode.Id.ToString(),
                 Title = title,
-                Content = "# 新子笔记\n\n",
+                Content = type switch
+                {
+                    NoteNodeType.Agent => "# Agent 模板\n\n系统提示词...",
+                    NoteNodeType.Workflow => "# Workflow 模板\n\n",
+                    _ => "# 新笔记\n\n开始写作...",
+                },
+                ParentId = parentId?.ToString(),
+                Syntax = row.Syntax,
+                Tags = row.Tags,
+                NodeType = type,
             });
-            SelectedNode.IsExpanded = true;
+
             await LoadAsync();
-            StatusMessage = $"已创建子笔记：{title}";
+            StatusMessage = $"已创建「{title}」";
             NotesChanged?.Invoke();
 
-            // 展开父节点并选中新建的
             if (Guid.TryParse(dto.Id, out var newId))
             {
                 var created = FindNode(Roots, newId);
@@ -152,7 +137,77 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    /// <summary>保存当前选中的笔记。</summary>
+    public async Task ApplyEditNodeAsync(NoteNodeEditRow row)
+    {
+        if (SelectedNode == null) return;
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(row.Name) ? SelectedNode.Title : row.Name;
+
+            SelectedNode.Title = name;
+            SelectedNode.Syntax = row.Syntax;
+            SelectedNode.Tags = row.Tags;
+
+            await NoteService.UpdateAsync(new UpdateNoteRequest
+            {
+                Id = SelectedNode.Id.ToString(),
+                Title = name,
+                Content = SelectedNode.Content,
+                Syntax = row.Syntax,
+                Tags = row.Tags,
+            });
+
+            StatusMessage = $"已保存「{name}」";
+            NotesChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"保存失败：{ex.Message}";
+        }
+    }
+
+    public async Task MoveNodeAsync(Guid sourceId, Guid? newParentId)
+    {
+        try
+        {
+            var source = FindNode(Roots, sourceId);
+            if (source == null) { StatusMessage = "找不到待移动节点"; return; }
+            if (newParentId == sourceId) return;
+
+            var newParent = newParentId.HasValue ? FindNode(Roots, newParentId.Value) : null;
+            if (newParentId.HasValue && newParent == null) { StatusMessage = "找不到目标父节点"; return; }
+
+            await NoteService.UpdateAsync(new UpdateNoteRequest
+            {
+                Id = sourceId.ToString(),
+                Title = source.Title,
+                Content = source.Content,
+                ParentId = newParentId?.ToString(),
+            });
+
+            await _dispatcher.InvokeAsync(() =>
+            {
+                RemoveFromTree(Roots, source);
+                source.ParentId = newParentId;
+                if (newParent != null)
+                {
+                    newParent.Children.Add(source);
+                    newParent.IsExpanded = true;
+                }
+                else
+                {
+                    Roots.Add(source);
+                }
+                SelectedNode = source;
+            });
+            StatusMessage = $"已移动「{source.Title}」";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"移动失败：{ex.Message}";
+        }
+    }
+
     [RelayCommand]
     private async Task SaveNoteAsync()
     {
@@ -176,7 +231,6 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    /// <summary>删除当前选中的笔记。</summary>
     [RelayCommand]
     private async Task DeleteNoteAsync()
     {
@@ -195,14 +249,12 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    /// <summary>切换预览/编辑模式。</summary>
     [RelayCommand]
     private void TogglePreview()
     {
         IsPreviewMode = !IsPreviewMode;
     }
 
-    /// <summary>在树中递归查找节点。</summary>
     private static NoteNodeVM? FindNode(IEnumerable<NoteNodeVM> nodes, Guid id)
     {
         foreach (var n in nodes)
@@ -212,5 +264,13 @@ public partial class NotesViewModel : ObservableObject
             if (child != null) return child;
         }
         return null;
+    }
+
+    private static bool RemoveFromTree(ObservableCollection<NoteNodeVM> list, NoteNodeVM node)
+    {
+        if (list.Remove(node)) return true;
+        foreach (var n in list)
+            if (RemoveFromTree(n.Children, node)) return true;
+        return false;
     }
 }

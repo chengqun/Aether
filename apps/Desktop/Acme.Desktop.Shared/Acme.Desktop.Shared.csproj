@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />

@@ -67,6 +67,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _auth,
             serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
+        Experts.SummonChanged += async () => await Notes.LoadAsync();
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
