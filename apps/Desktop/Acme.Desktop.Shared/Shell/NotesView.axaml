@@ -34,13 +34,13 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+    <Border DockPanel.Dock="Top" Padding="12,8" Background="White"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <TextBlock Text="📝 笔记" FontSize="15" FontWeight="SemiBold"
                      Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-          <TextBlock Text="本地 Markdown 笔记 + Agent/Workflow 文本源（右键菜单操作）" FontSize="12"
+          <TextBlock Text="右键菜单操作" FontSize="12"
                      Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
         </StackPanel>
         <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
@@ -48,48 +48,50 @@
       </Grid>
     </Border>
 
-    <Grid ColumnDefinitions="280,*" Margin="20,12,20,16">
+    <Grid ColumnDefinitions="200,4,*">
 
-      <Border Grid.Column="0" Classes="note-card" Padding="0">
-        <DockPanel>
-          <TreeView x:Name="NotesTree" Margin="4,8,4,4"
-                    ItemsSource="{Binding Roots}"
-                    SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
-            <TreeView.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="新建节点（同级）" Click="OnCreateSiblingClick" />
-                <MenuItem Header="新建子节点" Click="OnCreateChildClick"
-                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-                <Separator />
-                <MenuItem Header="修改节点属性" Click="OnEditPropertiesClick"
-                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-                <MenuItem Header="删除" Command="{Binding DeleteNoteCommand}"
-                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-              </ContextMenu>
-            </TreeView.ContextMenu>
-            <TreeView.ItemTemplate>
-              <TreeDataTemplate ItemsSource="{Binding Children}">
-                <Grid HorizontalAlignment="Stretch">
-                  <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
-                          CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="{Binding Icon}" />
-                    <TextBlock Text="{Binding Title}" />
-                  </StackPanel>
-                </Grid>
-              </TreeDataTemplate>
-            </TreeView.ItemTemplate>
-            <TreeView.Styles>
-              <Style Selector="TreeViewItem">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="Padding" Value="4,2"/>
-              </Style>
-            </TreeView.Styles>
-          </TreeView>
-        </DockPanel>
+      <Border Grid.Column="0" Background="White" BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="0,0,1,0">
+        <TreeView x:Name="NotesTree" Margin="4,4"
+                  ItemsSource="{Binding Roots}"
+                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+          <TreeView.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="新建节点（同级）" Click="OnCreateSiblingClick" />
+              <MenuItem Header="新建子节点" Click="OnCreateChildClick"
+                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+              <Separator />
+              <MenuItem Header="修改节点属性" Click="OnEditPropertiesClick"
+                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+              <MenuItem Header="删除" Command="{Binding DeleteNoteCommand}"
+                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+            </ContextMenu>
+          </TreeView.ContextMenu>
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate ItemsSource="{Binding Children}">
+              <Grid HorizontalAlignment="Stretch">
+                <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
+                        CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{Binding Icon}" />
+                  <TextBlock Text="{Binding Title}" />
+                </StackPanel>
+              </Grid>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+          <TreeView.Styles>
+            <Style Selector="TreeViewItem">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <Setter Property="Padding" Value="4,2"/>
+            </Style>
+          </TreeView.Styles>
+        </TreeView>
       </Border>
 
-      <Border Grid.Column="1" Classes="note-card" Margin="12,0,0,0" Padding="0">
+      <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                    Background="{DynamicResource BorderBrush}" Cursor="SizeWestEast" />
+
+      <Border Grid.Column="2" Background="White">
         <Grid>
           <Border IsVisible="{Binding !SelectedNode}">
             <StackPanel Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -100,11 +102,11 @@
           </Border>
 
           <DockPanel IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
-            <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
               <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding SelectedNode.Icon}" FontSize="16" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding SelectedNode.Title}" FontSize="16" FontWeight="SemiBold"
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding SelectedNode.Icon}" FontSize="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SelectedNode.Title}" FontSize="14" FontWeight="SemiBold"
                              Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
@@ -113,7 +115,7 @@
                 <Button Grid.Column="2" Content="✏️ 表单编辑" Classes="notes-tool"
                         Click="OnEditAgentClick"
                         IsVisible="{Binding IsAgentNode}"
-                        ToolTip.Tip="用 Agent 表单弹窗编辑（工具分类勾选），保存写回文本源" />
+                        ToolTip.Tip="用 Agent 表单弹窗编辑" />
                 <Button Grid.Column="3" Content="💾 保存" Classes="notes-primary" Command="{Binding SaveNoteCommand}" />
               </Grid>
             </Border>
@@ -123,12 +125,12 @@
                        Text="{Binding SelectedNode.Content, Mode=TwoWay}"
                        AcceptsReturn="True" TextWrapping="Wrap" BorderThickness="0"
                        FontFamily="Cascadia Code,Consolas,monospace" FontSize="13"
-                       Padding="12,8" />
+                       Padding="8,6" />
               <TextBox IsVisible="{Binding IsPreviewMode}"
                        Text="{Binding SelectedNode.Content}"
                        IsReadOnly="True" BorderThickness="0"
                        TextWrapping="Wrap" FontSize="13"
-                       Padding="12,8" Foreground="{DynamicResource TextPrimaryBrush}" />
+                       Padding="8,6" Foreground="{DynamicResource TextPrimaryBrush}" />
             </Grid>
           </DockPanel>
         </Grid>
