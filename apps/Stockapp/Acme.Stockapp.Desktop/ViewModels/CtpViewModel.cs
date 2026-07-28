@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
+using Acme.Securities.Application;
 using Acme.Securities.Domain;
 using Acme.Shell;
 using Avalonia.Threading;
@@ -58,6 +59,7 @@ public partial class CtpViewModel : ObservableObject
 {
     private readonly ICtpTradingService _trading;
     private readonly ISecurityManager _securities;
+    private readonly ISecurityClientSyncService _securitySync;
     public CtpConnectorViewModel Connector { get; }
 
     [ObservableProperty] private bool _isConnected;
@@ -97,11 +99,12 @@ public partial class CtpViewModel : ObservableObject
     [ObservableProperty] private string _pendingCancelSummary = "";
     private CtpOrder? _pendingCancelOrder;
 
-    public CtpViewModel(ICtpTradingService trading, CtpConnectorViewModel connector, ISecurityManager securities)
+    public CtpViewModel(ICtpTradingService trading, CtpConnectorViewModel connector, ISecurityManager securities, ISecurityClientSyncService securitySync)
     {
         _trading = trading;
         Connector = connector;
         _securities = securities;
+        _securitySync = securitySync;
 
         _trading.OrderReceived += OnOrderReceived;
         _trading.TradeReceived += OnTradeReceived;
@@ -114,12 +117,36 @@ public partial class CtpViewModel : ObservableObject
         CheckConnectionStatus();
     }
 
-    /// <summary>启动期初始化：刷新连接器配置（含 md 地址/密码，可能触发自动登录）、加载主力合约、尝试自动订阅。</summary>
+    /// <summary>启动期初始化：刷新连接器配置（含 md 地址/密码，可能触发自动登录）、加载主力合约、尝试自动订阅。
+    /// 同时后台从服务端同步证券数据（增量），完成后刷新主力合约看板。</summary>
     public async Task InitializeAsync()
     {
         try { await Connector.RefreshAsync(); }
         catch { /* 连接器刷新失败不阻塞 */ }
         CheckConnectionStatus();
+        await LoadMainFuturesAsync();   // 先用本地已有数据展示（上次同步的）
+        _ = SyncAndReloadAsync();       // 后台增量同步服务端证券，完成后刷新看板
+    }
+
+    /// <summary>后台从服务端同步证券（增量），完成后在 UI 线程刷新主力合约看板。fire-and-forget。</summary>
+    private async Task SyncAndReloadAsync()
+    {
+        try { await Task.Run(() => _securitySync.SyncFromServerAsync()); }
+        catch { /* 同步失败静默，不阻塞期货页 */ }
+        await Dispatcher.UIThread.InvokeAsync(async () => await LoadMainFuturesAsync());
+    }
+
+    /// <summary>手动同步证券数据（行情 tab 按钮）：从服务端拉取增量 → 刷新主力合约看板。</summary>
+    [RelayCommand]
+    private async Task SyncSecuritiesAsync()
+    {
+        StatusMessage = "同步证券数据…";
+        try
+        {
+            var r = await Task.Run(() => _securitySync.SyncFromServerAsync());
+            StatusMessage = $"同步完成：{r.SyncedCount} 条";
+        }
+        catch (Exception ex) { StatusMessage = $"同步失败: {ex.Message}"; }
         await LoadMainFuturesAsync();
     }
 
