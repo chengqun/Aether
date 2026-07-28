@@ -18,6 +18,8 @@
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\business\DeviceConnect\Acme.DeviceConnect.Domain\Acme.DeviceConnect.Domain.csproj" />
     <ProjectReference Include="..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <!-- 自动化任务管理（IAutomationService / IAutomationScheduler） -->
+    <ProjectReference Include="..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />
     <!-- 平台：会话存储 + 标题服务 -->
     <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />

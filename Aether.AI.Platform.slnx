@@ -21,9 +21,6 @@
   <Folder Name="/ai/Trading/">
     <Project Path="ai/Trading/Acme.Trading.AI/Acme.Trading.AI.csproj" />
   </Folder>
-  <Folder Name="/ai/Automation/">
-    <Project Path="ai/Automation/Acme.Automation.AI/Acme.Automation.AI.csproj" />
-  </Folder>
   <Folder Name="/ai/Agents/">
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>

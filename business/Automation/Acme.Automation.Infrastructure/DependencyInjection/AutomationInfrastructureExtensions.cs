@@ -12,8 +12,8 @@ public static class AutomationInfrastructureExtensions
         services.AddSingleton<IAutomationTaskRepository>(_ =>
             new SqliteAutomationTaskRepository($"Data Source={sqliteDbPath}"));
         services.AddSingleton<IAutomationScheduler, AutomationScheduler>();
-        // IAgentExecutor 由 AI 适配器（ai/Automation）注册：业务 Infrastructure 不依赖 AI 平台。
-        // 组合 Automation 时需同时调 AddAutomationInfrastructure() + AddAutomationAgentExecutor()。
+        // IAgentExecutor 是业务端口（业务层不依赖 AI 平台），其实现由宿主在组合根注册
+        // （桌面端为 ConversationBackedAgentExecutor，复用聊天会话流程）。
         return services;
     }
 }

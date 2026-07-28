@@ -1,0 +1,106 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.AutomationEditWindow"
+        Title="自动化任务"
+        Width="520" Height="640"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
+
+    <!-- 标题 -->
+    <Border Grid.Row="0" Padding="20,14">
+      <TextBlock Text="⏰ 定时任务配置" FontSize="17" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+    </Border>
+
+    <!-- 任务名 -->
+    <StackPanel Grid.Row="1" Spacing="4" Margin="20,0,20,8">
+      <TextBlock Text="任务名" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <TextBox Text="{Binding TaskName}" PlaceholderText="如：每日盘前简报" />
+    </StackPanel>
+
+    <!-- 触发专家 -->
+    <StackPanel Grid.Row="2" Spacing="4" Margin="20,0,20,8">
+      <TextBlock Text="触发专家" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <ComboBox ItemsSource="{Binding AvailableAgents}"
+                SelectedItem="{Binding SelectedAgentOption}"
+                HorizontalAlignment="Stretch"
+                PlaceholderText="选择要定时触发的专家">
+        <ComboBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Display}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </StackPanel>
+
+    <!-- 提示词 -->
+    <StackPanel Grid.Row="3" Spacing="4" Margin="20,0,20,8">
+      <TextBlock Text="提示词（触发时发给专家的消息）" FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
+      <TextBox Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap" Height="90"
+               PlaceholderText="如：请生成今日 A 股盘前简报" />
+    </StackPanel>
+
+    <!-- 计划类型 -->
+    <StackPanel Grid.Row="4" Spacing="4" Margin="20,0,20,8">
+      <TextBlock Text="计划类型" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <ComboBox ItemsSource="{Binding ScheduleTypeOptions}"
+                SelectedItem="{Binding SelectedScheduleType}"
+                HorizontalAlignment="Stretch" />
+    </StackPanel>
+
+    <!-- 条件参数 -->
+    <Grid Grid.Row="5" Margin="20,0,20,8">
+      <!-- Daily -->
+      <StackPanel Spacing="4" IsVisible="{Binding IsDaily}">
+        <TextBlock Text="执行时间 HH:mm" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <TextBox Text="{Binding TimeOfDay}" />
+      </StackPanel>
+
+      <!-- Interval -->
+      <StackPanel Spacing="4" IsVisible="{Binding IsInterval}">
+        <TextBlock Text="间隔分钟" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <NumericUpDown Value="{Binding IntervalMinutes}" Minimum="1" Maximum="1440" FormatString="0" />
+      </StackPanel>
+
+      <!-- Weekly -->
+      <StackPanel Spacing="6" IsVisible="{Binding IsWeekly}">
+        <TextBlock Text="执行周几" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <ItemsControl ItemsSource="{Binding Weekdays}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="10" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Label}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="执行时间 HH:mm" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" />
+        <TextBox Text="{Binding TimeOfDay}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- 启用 -->
+    <StackPanel Grid.Row="6" Margin="20,0,20,8" Orientation="Horizontal" Spacing="8">
+      <CheckBox IsChecked="{Binding IsEnabled}" Content="启用" />
+    </StackPanel>
+
+    <!-- 底部 -->
+    <Border Grid.Row="7" Padding="20,12"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="到点自动运行，仅 App 打开时生效" FontSize="11"
+                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Content="取消" Click="OnCancelClick" Padding="20,8" Margin="0,0,8,0" />
+        <Button Grid.Column="2" Content="保存" Click="OnSaveClick" Padding="20,8" />
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

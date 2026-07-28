@@ -151,6 +151,8 @@
           IsVisible="{Binding DataContext.IsNotesPage, RelativeSource={RelativeSource AncestorType=Window}}" />
       <shell:ExpertsView x:Name="ExpertsViewInstance" DataContext="{Binding Experts}"
           IsVisible="{Binding DataContext.IsExpertsPage, RelativeSource={RelativeSource AncestorType=Window}}" />
+      <shell:AutomationView x:Name="AutomationViewInstance" DataContext="{Binding Automation}"
+          IsVisible="{Binding DataContext.IsAutomationPage, RelativeSource={RelativeSource AncestorType=Window}}" />
       <TextBlock x:Name="PlaceholderView" Text="即将上线…"
                  FontSize="20" FontWeight="SemiBold"
                  Foreground="{DynamicResource TextSecondaryBrush}"

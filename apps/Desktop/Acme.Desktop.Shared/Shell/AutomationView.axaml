@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.AutomationView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Border.auto-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="16,14"/>
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#FF5252"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Padding" Value="12,4"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- 顶部标题栏 -->
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="⏰ 自动化" FontSize="15" FontWeight="SemiBold"
+                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="定时运行专家" FontSize="12"
+                     Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                   Margin="12,0,0,0" />
+        <Button Grid.Column="2" Content="+ 创建任务" Classes="primary" Click="OnAddTaskClick" Padding="14,6" />
+      </Grid>
+    </Border>
+
+    <!-- 任务卡片列表 -->
+    <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+        <!-- 空状态 -->
+        <Border IsVisible="{Binding !Tasks.Count}" Padding="40" CornerRadius="12"
+                Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                HorizontalAlignment="Center" Margin="0,40">
+          <StackPanel Spacing="8" HorizontalAlignment="Center">
+            <TextBlock Text="⏰" FontSize="40" HorizontalAlignment="Center" />
+            <TextBlock Text="还没有定时任务" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
+            <TextBlock Text="点击右上角「+ 创建任务」，让专家按计划自动运行" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <!-- 卡片网格 -->
+        <ItemsControl ItemsSource="{Binding Tasks}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="auto-card" Margin="0,0,12,12" Width="320">
+                <StackPanel Spacing="6">
+                  <!-- 标题行 + 启用徽章 -->
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="⏰" FontSize="16" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding TaskName}" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border CornerRadius="4" Padding="5,1" Background="#E8F5E9" VerticalAlignment="Center"
+                            IsVisible="{Binding IsEnabled}">
+                      <TextBlock Text="启用" FontSize="9" Foreground="#2E7D32" />
+                    </Border>
+                    <Border CornerRadius="4" Padding="5,1" Background="#FFEBEE" VerticalAlignment="Center"
+                            IsVisible="{Binding !IsEnabled}">
+                      <TextBlock Text="停用" FontSize="9" Foreground="#C62828" />
+                    </Border>
+                  </StackPanel>
+
+                  <!-- 触发专家 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="🤖" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding AgentName}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+
+                  <!-- 计划 -->
+                  <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB" HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding ScheduleDisplay}" FontSize="10"
+                               Foreground="{DynamicResource AccentBrush}" />
+                  </Border>
+
+                  <!-- 下次运行 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="下次" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Text="{Binding NextRunDisplay}" FontSize="11"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                  </StackPanel>
+
+                  <!-- 上次运行 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="上次" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Text="{Binding LastRunDisplay}" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
+
+                  <!-- 上次结果摘要 -->
+                  <TextBlock Text="{Binding LastResultDisplay}" FontSize="11"
+                             Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                             MaxLines="3" IsVisible="{Binding LastResultDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                  <!-- 操作按钮 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                    <Button Content="立即运行" Classes="primary tool" Click="OnRunNowClick" Tag="{Binding}" />
+                    <Button Content="停用" Classes="tool" Click="OnToggleEnabledClick" Tag="{Binding}"
+                            IsVisible="{Binding IsEnabled}" />
+                    <Button Content="启用" Classes="tool" Click="OnToggleEnabledClick" Tag="{Binding}"
+                            IsVisible="{Binding !IsEnabled}" />
+                    <Button Content="编辑" Classes="tool" Click="OnEditClick" Tag="{Binding}" />
+                    <Button Content="删除" Classes="danger tool" Click="OnDeleteClick" Tag="{Binding}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

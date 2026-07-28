@@ -8,7 +8,6 @@ using Aether.AI.Memory.Stores;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
-using Acme.Automation.AI;
 using Acme.Automation.Application.DependencyInjection;
 using Acme.Automation.Infrastructure.DependencyInjection;
 using Acme.ChatSocial.Application.DependencyInjection;
@@ -74,6 +73,9 @@ public static class DesktopCompositionExtensions
 
         services.AddAutomationInfrastructure(Path.Combine(tenantDir, "automation.db"));
         services.AddAutomationApplication();
+        // IAgentExecutor 实现：复用聊天会话流程（ICustomAgentRunner + IConversationStore），
+        // 定时触发落库进「最近会话」并保留跨次记忆。实现住宿主 VM 库（Acme.Shell）。
+        services.AddSingleton<Acme.Automation.Domain.Interfaces.IAgentExecutor, Acme.Shell.ConversationBackedAgentExecutor>();
 
         services.AddChatSocialInfrastructure();
         services.AddChatSocialApplication();
@@ -88,7 +90,7 @@ public static class DesktopCompositionExtensions
         services.AddDeviceManagementApplication();
 
         // —— 公共 AI 工具（两租户共用）——
-        aether.AddSystemTools().AddApkParserTools().AddNotesTools().AddAutomationTools();
+        aether.AddSystemTools().AddApkParserTools().AddNotesTools();
 
         // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
         aether.AddCustomAgents();

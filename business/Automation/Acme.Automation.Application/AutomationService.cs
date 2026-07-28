@@ -25,14 +25,19 @@ public class AutomationService : IAutomationService
     {
         task.CreatedAt = DateTime.UtcNow;
         task.UpdatedAt = DateTime.UtcNow;
-        task.NextExecutionTime = CalculateNextExecutionTime(task);
+        // 每任务固定一个会话 Id，后续触发复用同一条会话（进最近会话 + 跨次记忆）。
+        if (task.ConversationId == Guid.Empty)
+            task.ConversationId = Guid.NewGuid();
+        task.SerializeWeekdays();
+        task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, DateTime.UtcNow);
         return await _taskRepository.AddAsync(task, cancellationToken);
     }
 
     public async Task<AutomationTask> UpdateTaskAsync(AutomationTask task, CancellationToken cancellationToken)
     {
         task.UpdatedAt = DateTime.UtcNow;
-        task.NextExecutionTime = CalculateNextExecutionTime(task);
+        task.SerializeWeekdays();
+        task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, DateTime.UtcNow);
         return await _taskRepository.UpdateAsync(task, cancellationToken);
     }
 
@@ -44,34 +49,4 @@ public class AutomationService : IAutomationService
 
     public Task StopSchedulerAsync(CancellationToken cancellationToken)
         => _scheduler.StopAsync(cancellationToken);
-
-    private static DateTime? CalculateNextExecutionTime(AutomationTask task)
-    {
-        if (!task.Enabled)
-            return null;
-
-        var now = DateTime.UtcNow;
-
-        return task.ScheduleType switch
-        {
-            AutomationScheduleType.Daily => CalculateDailyNextTime(task.ExecuteTime, now),
-            AutomationScheduleType.Interval => now.AddMinutes(task.IntervalMinutes),
-            AutomationScheduleType.Weekly => CalculateWeeklyNextTime(task.ExecuteTime, now),
-            _ => null
-        };
-    }
-
-    private static DateTime CalculateDailyNextTime(TimeOnly executeTime, DateTime now)
-    {
-        var todayAtExecuteTime = now.Date.Add(executeTime.ToTimeSpan());
-        return todayAtExecuteTime > now ? todayAtExecuteTime : todayAtExecuteTime.AddDays(1);
-    }
-
-    private static DateTime CalculateWeeklyNextTime(TimeOnly executeTime, DateTime now)
-    {
-        var todayAtExecuteTime = now.Date.Add(executeTime.ToTimeSpan());
-        if (todayAtExecuteTime > now)
-            return todayAtExecuteTime;
-        return todayAtExecuteTime.AddDays(7);
-    }
 }

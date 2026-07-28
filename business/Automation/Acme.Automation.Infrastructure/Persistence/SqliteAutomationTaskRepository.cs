@@ -24,9 +24,12 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 AgentId TEXT NOT NULL,
                 TaskName TEXT NOT NULL,
+                ConversationId TEXT NOT NULL DEFAULT '',
+                Prompt TEXT NOT NULL DEFAULT '',
                 ScheduleType INTEGER NOT NULL,
                 IntervalMinutes INTEGER NOT NULL,
                 ExecuteTime TEXT NOT NULL,
+                WeekdaysJson TEXT,
                 Enabled INTEGER NOT NULL,
                 LastExecutionTime TEXT,
                 LastExecutionStatus TEXT,
@@ -38,6 +41,25 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
         using var cmd = new SqliteCommand(createTable, conn);
         await cmd.ExecuteNonQueryAsync();
+
+        // 幂等迁移：旧库补列（列已存在则忽略 duplicate column 错误）。
+        await EnsureColumnAsync(conn, "ConversationId", "TEXT NOT NULL DEFAULT ''");
+        await EnsureColumnAsync(conn, "Prompt", "TEXT NOT NULL DEFAULT ''");
+        await EnsureColumnAsync(conn, "WeekdaysJson", "TEXT");
+    }
+
+    private static async Task EnsureColumnAsync(SqliteConnection conn, string column, string definition)
+    {
+        try
+        {
+            using var cmd = new SqliteCommand(
+                $"ALTER TABLE AutomationTasks ADD COLUMN {column} {definition};", conn);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (SqliteException)
+        {
+            // 列已存在——忽略。
+        }
     }
 
     public async Task<List<AutomationTask>> GetAllAsync(CancellationToken cancellationToken)
@@ -73,11 +95,11 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
         await conn.OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand(@"
-            INSERT INTO AutomationTasks (AgentId, TaskName, ScheduleType, IntervalMinutes, 
-                ExecuteTime, Enabled, LastExecutionTime, LastExecutionStatus, LastExecutionResult,
+            INSERT INTO AutomationTasks (AgentId, TaskName, ConversationId, Prompt, ScheduleType, IntervalMinutes,
+                ExecuteTime, WeekdaysJson, Enabled, LastExecutionTime, LastExecutionStatus, LastExecutionResult,
                 NextExecutionTime, CreatedAt, UpdatedAt)
-            VALUES (@AgentId, @TaskName, @ScheduleType, @IntervalMinutes, 
-                @ExecuteTime, @Enabled, @LastExecutionTime, @LastExecutionStatus, @LastExecutionResult,
+            VALUES (@AgentId, @TaskName, @ConversationId, @Prompt, @ScheduleType, @IntervalMinutes,
+                @ExecuteTime, @WeekdaysJson, @Enabled, @LastExecutionTime, @LastExecutionStatus, @LastExecutionResult,
                 @NextExecutionTime, @CreatedAt, @UpdatedAt);
             SELECT last_insert_rowid();", conn);
 
@@ -94,9 +116,11 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
         await conn.OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand(@"
-            UPDATE AutomationTasks SET 
-                AgentId = @AgentId, TaskName = @TaskName, ScheduleType = @ScheduleType, 
-                IntervalMinutes = @IntervalMinutes, ExecuteTime = @ExecuteTime, Enabled = @Enabled,
+            UPDATE AutomationTasks SET
+                AgentId = @AgentId, TaskName = @TaskName, ConversationId = @ConversationId, Prompt = @Prompt,
+                ScheduleType = @ScheduleType,
+                IntervalMinutes = @IntervalMinutes, ExecuteTime = @ExecuteTime, WeekdaysJson = @WeekdaysJson,
+                Enabled = @Enabled,
                 LastExecutionTime = @LastExecutionTime, LastExecutionStatus = @LastExecutionStatus,
                 LastExecutionResult = @LastExecutionResult, NextExecutionTime = @NextExecutionTime,
                 UpdatedAt = @UpdatedAt
@@ -142,31 +166,39 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     private static AutomationTask ReadTask(SqliteDataReader reader)
     {
-        return new AutomationTask
+        var task = new AutomationTask
         {
-            Id = reader.GetInt32(0),
-            AgentId = reader.GetString(1),
-            TaskName = reader.GetString(2),
-            ScheduleType = (AutomationScheduleType)reader.GetInt32(3),
-            IntervalMinutes = reader.GetInt32(4),
-            ExecuteTime = TimeOnly.Parse(reader.GetString(5)),
-            Enabled = reader.GetInt32(6) == 1,
-            LastExecutionTime = reader.IsDBNull(7) ? null : DateTime.Parse(reader.GetString(7)),
-            LastExecutionStatus = reader.IsDBNull(8) ? null : reader.GetString(8),
-            LastExecutionResult = reader.IsDBNull(9) ? null : reader.GetString(9),
-            NextExecutionTime = reader.IsDBNull(10) ? null : DateTime.Parse(reader.GetString(10)),
-            CreatedAt = DateTime.Parse(reader.GetString(11)),
-            UpdatedAt = DateTime.Parse(reader.GetString(12))
+            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+            AgentId = reader.GetString(reader.GetOrdinal("AgentId")),
+            TaskName = reader.GetString(reader.GetOrdinal("TaskName")),
+            ConversationId = Guid.TryParse(reader.IsDBNull(reader.GetOrdinal("ConversationId")) ? null : reader.GetString(reader.GetOrdinal("ConversationId")), out var cid) ? cid : Guid.Empty,
+            Prompt = reader.IsDBNull(reader.GetOrdinal("Prompt")) ? string.Empty : reader.GetString(reader.GetOrdinal("Prompt")),
+            ScheduleType = (AutomationScheduleType)reader.GetInt32(reader.GetOrdinal("ScheduleType")),
+            IntervalMinutes = reader.GetInt32(reader.GetOrdinal("IntervalMinutes")),
+            ExecuteTime = TimeOnly.Parse(reader.GetString(reader.GetOrdinal("ExecuteTime"))),
+            WeekdaysJson = reader.IsDBNull(reader.GetOrdinal("WeekdaysJson")) ? null : reader.GetString(reader.GetOrdinal("WeekdaysJson")),
+            Enabled = reader.GetInt32(reader.GetOrdinal("Enabled")) == 1,
+            LastExecutionTime = reader.IsDBNull(reader.GetOrdinal("LastExecutionTime")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("LastExecutionTime"))),
+            LastExecutionStatus = reader.IsDBNull(reader.GetOrdinal("LastExecutionStatus")) ? null : reader.GetString(reader.GetOrdinal("LastExecutionStatus")),
+            LastExecutionResult = reader.IsDBNull(reader.GetOrdinal("LastExecutionResult")) ? null : reader.GetString(reader.GetOrdinal("LastExecutionResult")),
+            NextExecutionTime = reader.IsDBNull(reader.GetOrdinal("NextExecutionTime")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("NextExecutionTime"))),
+            CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("CreatedAt"))),
+            UpdatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("UpdatedAt")))
         };
+        task.DeserializeWeekdays();
+        return task;
     }
 
     private static void AddParameters(SqliteCommand cmd, AutomationTask task)
     {
         cmd.Parameters.AddWithValue("@AgentId", task.AgentId);
         cmd.Parameters.AddWithValue("@TaskName", task.TaskName);
+        cmd.Parameters.AddWithValue("@ConversationId", task.ConversationId.ToString());
+        cmd.Parameters.AddWithValue("@Prompt", task.Prompt ?? string.Empty);
         cmd.Parameters.AddWithValue("@ScheduleType", (int)task.ScheduleType);
         cmd.Parameters.AddWithValue("@IntervalMinutes", task.IntervalMinutes);
         cmd.Parameters.AddWithValue("@ExecuteTime", task.ExecuteTime.ToString("HH:mm:ss"));
+        cmd.Parameters.AddWithValue("@WeekdaysJson", (object?)task.WeekdaysJson ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@Enabled", task.Enabled ? 1 : 0);
         cmd.Parameters.AddWithValue("@LastExecutionTime", (object?)task.LastExecutionTime?.ToString("o") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@LastExecutionStatus", (object?)task.LastExecutionStatus ?? DBNull.Value);

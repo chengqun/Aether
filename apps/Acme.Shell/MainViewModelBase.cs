@@ -3,6 +3,8 @@ using System.Windows.Input;
 using Acme.Agents.AI;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
+using Acme.Automation.Application.Interfaces;
+using Acme.Automation.Domain.Interfaces;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
@@ -59,6 +61,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
+        Automation = new AutomationViewModel(
+            serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
+            serviceProvider.GetRequiredService<IAutomationService>(),
+            serviceProvider.GetRequiredService<IAutomationScheduler>(),
+            _dispatcher);
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
@@ -68,6 +75,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
         Experts.SummonChanged += async () => await Notes.LoadAsync();
+
+        // 定时任务执行完成（成功/失败）后刷新「最近会话」——因为 executor 把运行落库进了会话存储。
+        serviceProvider.GetRequiredService<IAutomationScheduler>().TaskCompleted +=
+            _ => _dispatcher.Post(async () => await RefreshConversationsAsync());
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
@@ -351,11 +362,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是专家页</summary>
     public bool IsExpertsPage => CurrentPage == "experts";
 
-    /// <summary>是否是占位页（非聊天/笔记/专家）</summary>
-    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage;
+    /// <summary>是否是自动化页</summary>
+    public bool IsAutomationPage => CurrentPage == "automation";
+
+    /// <summary>是否是占位页（非聊天/笔记/专家/自动化）</summary>
+    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage;
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
+
+    /// <summary>自动化页 ViewModel</summary>
+    public AutomationViewModel Automation { get; }
 
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
@@ -368,6 +385,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         OnPropertyChanged(nameof(IsChatPage));
         OnPropertyChanged(nameof(IsNotesPage));
         OnPropertyChanged(nameof(IsExpertsPage));
+        OnPropertyChanged(nameof(IsAutomationPage));
         OnPropertyChanged(nameof(IsPlaceholderPage));
     }
 
@@ -445,10 +463,16 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await LoadLlmConfigsAsync();
             await Notes.LoadAsync();
             await Experts.LoadAsync();
+            await Automation.LoadAsync();
             await RestoreSummonedAndSelectedAsync();
             await RefreshConversationsAsync();
         }
         finally { _isInitializing = false; }
+
+        // 启动自动化调度器（进程内定时触发；仅 App 打开时生效）。双启动守卫已在调度器内。
+        _ = _serviceProvider.GetRequiredService<IAutomationService>()
+            .StartSchedulerAsync(CancellationToken.None);
+
         await TryAutoConnectDeviceAsync();
     }
 
