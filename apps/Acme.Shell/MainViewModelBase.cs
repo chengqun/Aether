@@ -143,22 +143,40 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 IsStreaming = true,
             };
             await _dispatcher.InvokeAsync(() => Messages.Add(assistantMsg));
+            var fullText = new System.Text.StringBuilder();
             try
             {
                 await _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content,
                     async (token, _) =>
                     {
+                        fullText.Append(token);
                         await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
                     });
             }
             catch (Exception ex)
             {
+                fullText.Append($"\n\n[运行失败：{ex.Message}]");
                 await _dispatcher.InvokeAsync(() =>
                     assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
             }
             finally
             {
                 await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
+            }
+
+            // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
+            // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
+            var replyText = fullText.ToString();
+            if (!string.IsNullOrWhiteSpace(replyText) && _deviceChatClient.IsConnected)
+            {
+                try
+                {
+                    await _deviceChatClient.SendMessageAsync(msg.ConversationId, replyText, "Text");
+                }
+                catch
+                {
+                    // 发回失败不影响本地已显示的回复
+                }
             }
             return;
         }
