@@ -32,7 +32,7 @@ A multi-context DDD platform built on **Microsoft Agent Framework** (`Microsoft.
 
 - `src/` — the **Aether.AI platform** itself, standalone. `Aether.AI.Core` (framework-agnostic domain, zero deps), `Aether.AI.Harness` (AgentFactory/HarnessRuntime/SessionManager/ToolRegistry/IChatClientFactory wrapping MEAI), `Aether.AI.Memory` (IConversationStore abstraction + InMemory impl), `Aether.AI.Memory.Sqlite` (SQLite impl, opt-in), `Aether.AI.Hosting` (`services.AddAetherAI()` DI entry point + DefaultChatClientFactory + ConversationTitleService). Platform source never references `business/` or `ai/`.
 - `business/` — **pure DDD bounded contexts**, each `Acme.<Context>.{Domain,Application,Infrastructure}`. AI-free.
-- `ai/` — **business AI adapters** bridging Aether and each context. Peers of `business/`, kept separate so business stays AI-free. 9 tool adapters (`Ctp/Quotes/Qifu/Notes/Trading/Automation/ApkParser/SystemTools`) + 1 bridge adapter (`Agents`).
+- `ai/` — **business AI adapters** bridging Aether and each context. Peers of `business/`, kept separate so business stays AI-free. 7 tool adapters (`Ctp/Quotes/Qifu/Notes/Trading/ApkParser/SystemTools`) + 1 bridge adapter (`Agents`). Not every context has an AI adapter — e.g. Automation has none (its business port `IAgentExecutor` is implemented host-side; see [business-port pattern](#business-domain-port--host-implementation) below).
 - `externals/` — third-party engines: `Ctp.Net.Core` (native CTP wrapper) and `Lean` (QuantConnect Lean, git submodule).
 - `apps/` — consumers/hosts: `Aether.AI.Sample.Console` (CLI), `Acme.Shell` (UI-agnostic shell VM library), `Desktop/Acme.Desktop.Shared` (Avalonia views + composition root), `Qifu/Acme.Qifu.Desktop` + `Stockapp/Acme.Stockapp.Desktop` (tenant host apps).
 - `tests/` — all test projects live here, never interleaved with source.
@@ -58,6 +58,18 @@ The **bridge adapter** `ai/Agents/Acme.Agents.AI` is a different shape:
 - `AddCustomAgents(this AetherAIBuilder)` registers `ICustomAgentCatalog` (CRUD over Notes-backed agents via `AgentSourceParser`), `ICustomAgentRunner` (maps `CustomAgentDefinition` → `AgentDefinition` → `HarnessRuntime`), `IAgentMarketplaceService` (cloud agent catalog client).
 - Custom agent persistence: `AgentSourceParser` (YAML front-matter + Markdown prompt) in `business/Notes/Acme.Notes.Application/AgentSource/`. Fields: name/description/category/tools/memory/max_history/model/source/marketplace_id/marketplace_synced_at/display_name.
 
+### Business Domain port → host implementation
+
+When **business logic must trigger agent execution** (or anything AI/platform-specific) but business cannot reference `Aether.AI.*`, define a **port interface in the context's Domain** and implement it **in the host composition root**. This is the canonical pattern — do NOT create an `ai/` adapter just to host a port impl, and do NOT make business depend on AI.
+
+- **Port** in `Acme.<Context>.Domain.Interfaces` (e.g. `IAgentExecutor`). Domain stays pure; the Infrastructure service/scheduler depends on the port, not on AI types.
+- **Implementation** lives in an AI-aware host project (`apps/Acme.Shell` or `apps/Desktop/...`), depending on platform/AI types (`ICustomAgentRunner`, `IConversationStore`, …), NEVER on business Infrastructure.
+- **Registration** at the composition root (`AddDesktopCommon`): `services.AddSingleton<IPort, HostImpl>()`.
+- **Reuse, don't re-route**: the impl should call the *same* runtime path the UI uses, not a parallel one. Canonical example — `ConversationBackedAgentExecutor` (`apps/Acme.Shell`): Automation's scheduler calls `IAgentExecutor.ExecuteAsync`; the impl runs the agent via `ICustomAgentRunner.RunStreamingAsync` and persists the turn to `IConversationStore`, so scheduled runs land in「最近会话」with cross-fire memory — identical to the chat page's flow. Each task owns a stable `ConversationId` (stored on the entity) so fires thread into one conversation.
+- The business layer raises completion via a port event (`IAutomationScheduler.TaskCompleted`); the host VM subscribes and refreshes UI (task list + recent conversations) on the dispatcher thread.
+
+Reference: Automation is the working template — `business/Automation/` (Domain port + scheduler) + `apps/Acme.Shell/ConversationBackedAgentExecutor.cs` (host impl) + `AddDesktopCommon` (registration).
+
 ### Foundation context
 
 `business/AppAuth/` (`Acme.AppAuth.*`, DI classes named `Platform*Extensions`) is the **foundation**: app-server (ABP) OAuth2 auth + authenticated HTTP (`IAppServerHttpClient` with `TenantHeaderDelegatingHandler` + `BearerTokenDelegatingHandler`) + `ICurrentUser`. Other contexts consume its ports — never the reverse.
@@ -74,7 +86,8 @@ apps/Acme.Shell/                    ← UI-agnostic shell VM library (zero Avalo
   MainViewModelBase (abstract chat shell: conversations/messages/agents/sidebar)
   ExpertsViewModel (专家/连接器/市场 3-tab)
   ExpertsViewModel/ExpertEditViewModel/ExpertItem (custom agent CRUD)
-  NotesViewModel, LoginViewModel, LlmConfigEditViewModel
+  NotesViewModel, AutomationViewModel (+AutomationModels), LoginViewModel, LlmConfigEditViewModel
+  ConversationBackedAgentExecutor (IAgentExecutor host impl — business-port pattern)
   IUiDispatcher (InvokeAsync+Post), IConnectorViewModel, IDeviceAutoConnectService
   ILoginDialogService, ISettingsDialogService, IPreferencesStore (interfaces)
   IChatViewModel, ConversationItem, ChatMessageItem, NavItem
@@ -105,7 +118,7 @@ apps/Qifu/      ← tenant host (Yushu/CloudDocs + Qifu connector)
 ### Host composition
 
 - **Sample console** (`apps/Aether.AI.Sample.Console/Program.cs`): `ComposeContexts` registers all contexts' Infra+App; `RegisterAgents` chains `AddXxxTools()` + builds one aggregate `assistant` agent.
-- **Desktop** (`AddDesktopCommon` in `DesktopCompositionExtensions`): registers shared contexts (AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement) + shared AI tools (`AddSystemTools().AddApkParserTools().AddNotesTools().AddAutomationTools()`) + `AddCustomAgents()`. Each tenant host appends its own contexts + tools. Key desktop-specific registrations: `IChatClientFactory→DesktopChatClientFactory`, `IModelSource→LlmConfigModelSource`, `IConversationStore→SqliteConversationStore`, `IPreferencesStore→JsonPreferencesStore`, `IUiDispatcher→AvaloniaDispatcher`, `IConnectorViewModel→CtpConnectorViewModel`/`QifuConnectorViewModel`.
+- **Desktop** (`AddDesktopCommon` in `DesktopCompositionExtensions`): registers shared contexts (AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement) + shared AI tools (`AddSystemTools().AddApkParserTools().AddNotesTools()`) + `AddCustomAgents()`. Automation has no AI adapter; instead `AddDesktopCommon` registers `IAgentExecutor→ConversationBackedAgentExecutor` (host impl of the business port). Each tenant host appends its own contexts + tools. Key desktop-specific registrations: `IChatClientFactory→DesktopChatClientFactory`, `IModelSource→LlmConfigModelSource`, `IConversationStore→SqliteConversationStore`, `IPreferencesStore→JsonPreferencesStore`, `IUiDispatcher→AvaloniaDispatcher`, `IConnectorViewModel→CtpConnectorViewModel`/`QifuConnectorViewModel`.
 
 ### Experts page (3 tabs)
 
@@ -125,4 +138,5 @@ apps/Qifu/      ← tenant host (Yushu/CloudDocs + Qifu connector)
 - **`Securities` naming quirk**: namespace `Acme.Securities.*` (plural), DI methods `AddSecurity*` (singular).
 - **CTP native libs**: `externals/Ctp.Net.Core` P/Invokes `libctp_native`; prebuilt `.dylib/.so/.dll` ship as Content. CTP auto-login requires saved config + `AutoLogin` flag.
 - **Emoji icons**: `SharedTheme.axaml` has `MinHeight` on `Button.settings-nav`/`nav-rail`/`top-tab` to prevent emoji clipping at high DPI.
-- When adding a new context/adapter, also add its projects to `Aether.AI.Platform.slnx` (folder + `<Project Path=...>`).
+- **Automation (定时任务)**: scheduler is a process-internal 1-min polling `Timer` — fires **only while the app is open** (no cron/Quartz/backfill). Started fire-and-forget from `MainViewModelBase.InitializeAsync`; `AutomationScheduler.StartAsync` has a double-start guard. Each `AutomationTask` owns a stable `ConversationId` (assigned on create) so all its fires thread into one chat conversation via `ConversationBackedAgentExecutor`. `IAutomationScheduler.TaskCompleted` is subscribed by both `AutomationViewModel` (refresh task cards) and `MainViewModelBase` (refresh 最近会话). The scheduler calls `IAgentExecutor` (business port) — must be registered at the composition root or DI resolution of `IAutomationService`/`IAutomationScheduler` throws.
+- When adding a new context/adapter, also add its projects to `Aether.AI.Platform.slnx` (folder + `<Project Path=...>`). Not every context needs an `ai/` adapter — if business only needs to *invoke* AI (not expose tools to the agent), use the [business-port pattern](#business-domain-port--host-implementation) instead and skip the adapter.
