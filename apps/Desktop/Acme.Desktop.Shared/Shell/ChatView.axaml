@@ -179,7 +179,8 @@
       </StackPanel>
     </Border>
 
-    <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}">
+    <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+                  ScrollChanged="OnMessagesScrollChanged">
       <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MsgTemplate}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Orientation="Vertical" /></ItemsPanelTemplate>
