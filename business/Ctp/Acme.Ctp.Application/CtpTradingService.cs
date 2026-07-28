@@ -17,9 +17,11 @@ public class CtpTradingService : ICtpTradingService
         _session.OrderReceived += (_, e) => OrderReceived?.Invoke(this, e);
         _session.TradeReceived += (_, e) => TradeReceived?.Invoke(this, e);
         _session.ConnectionStateChanged += (_, e) => ConnectionStateChanged?.Invoke(this, e);
+        _session.TickReceived += (_, e) => TickReceived?.Invoke(this, e);
     }
 
     public bool IsConnected => _session.IsConnected;
+    public bool IsMdSubscribed => _session.IsMdSubscribed;
     public string? BrokerId => _session.BrokerId;
     public string? UserId => _session.UserId;
     public CtpLoginResult? LoginResult => _session.LoginResult;
@@ -27,6 +29,7 @@ public class CtpTradingService : ICtpTradingService
     public event EventHandler<CtpOrder>? OrderReceived;
     public event EventHandler<CtpTrade>? TradeReceived;
     public event EventHandler<CtpConnectionStatus>? ConnectionStateChanged;
+    public event EventHandler<CtpTick>? TickReceived;
 
     public Task<CtpLoginResult> LoginAsync(CtpLoginRequest request, CancellationToken ct = default)
         => _session.LoginAsync(request, ct);
@@ -51,6 +54,12 @@ public class CtpTradingService : ICtpTradingService
 
     public Task CancelOrderAsync(CtpOrderRef orderRef, CancellationToken ct = default)
         => _session.OrderActionAsync(orderRef, ct);
+
+    public Task SubscribeMarketDataAsync(CtpMarketDataConnect connect, IReadOnlyList<string> symbols, CancellationToken ct = default)
+        => _session.SubscribeMarketDataAsync(connect, symbols, ct);
+
+    public void UnsubscribeMarketData()
+        => _session.UnsubscribeMarketData();
 
     public CtpTick? GetLatestTick(string instrumentId)
         => _session.GetLatestTick(instrumentId);

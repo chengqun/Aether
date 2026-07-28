@@ -14,6 +14,9 @@
         <DataTemplate DataType="vm:CtpConnectorViewModel">
             <views:ConnectorView />
         </DataTemplate>
+        <DataTemplate DataType="vm:CtpViewModel">
+            <views:FuturesView />
+        </DataTemplate>
     </Application.DataTemplates>
 
 </Application>

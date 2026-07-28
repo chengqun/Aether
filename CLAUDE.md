@@ -97,9 +97,17 @@ apps/Desktop/Acme.Desktop.Shared/   ← Avalonia views (axaml) + composition roo
   Shell/AvaloniaDispatcher, LoginDialogService, SettingsDialogService, DeviceAutoConnectService
   Shell/Controls/SelectableMarkdownViewer (Markdown.Avalonia.Tight)
   Themes/SharedTheme.axaml
-apps/Stockapp/  ← tenant host (CTP/Quotes/Trading + CTP connector)
+apps/Stockapp/  ← tenant host (CTP/Quotes/Trading + CTP connector + 期货 page)
 apps/Qifu/      ← tenant host (Yushu/CloudDocs + Qifu connector)
 ```
+
+### Tenant-specific top-level pages (ContentControl + DataTemplate)
+
+Some nav pages are tenant-specific (e.g. Stockapp's 期货 page uses CTP; Qifu has no CTP). The shared shell must not reference tenant/CTP types. Pattern (same as the Experts 连接器 tab):
+- Shared `MainViewModelBase` exposes an `object?` content slot (e.g. `Futures`) + an `IsXxxPage` flag (e.g. `IsFuturesPage => CurrentPage == "ctp"`); `IsPlaceholderPage` excludes it.
+- Shared `MainWindow.axaml` renders it via `<ContentControl Content="{Binding Futures}" IsVisible="{Binding IsFuturesPage}" />`.
+- The tenant VM+View live in the **tenant project** (`apps/Stockapp/.../ViewModels` + `Views`); the tenant `App.axaml` registers a `<Application.DataTemplates>` mapping (VM type → View) and the tenant `MainViewModel` assigns the VM to the slot (`Futures = ctpVm`). The other tenant leaves it null (no nav entry, flag stays false).
+- The tenant VM depends only on Application-layer services (e.g. `ICtpTradingService`) + the shared connector, never on `externals/Ctp.Net.Core` directly.
 
 ### Per-agent model + memory (platform layer)
 

@@ -1,0 +1,273 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Stockapp.Desktop.ViewModels"
+             x:Class="Acme.Stockapp.Desktop.Views.FuturesView"
+             Background="{DynamicResource ContentBgBrush}"
+             HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+
+  <UserControl.Resources>
+    <vm:OrderCancellableConverter x:Key="OrderCancellable" />
+    <vm:ChangePercentBrushConverter x:Key="ChangeBrush" />
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Button.sortHeader">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#334A90E2" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <TabControl>
+      <TabItem Header="交易">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="20" Spacing="14">
+
+            <!-- 连接信息 -->
+            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="16,14">
+              <StackPanel Spacing="8">
+                <DockPanel>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="连接设置" Click="OnCtpSettingsClick" IsEnabled="{Binding !IsConnected}" />
+                    <Button Content="登出" Command="{Binding LogoutCommand}" IsEnabled="{Binding IsConnected}" />
+                  </StackPanel>
+                  <TextBlock Text="连接信息" FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LoginInfo}" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <!-- 资金账户 -->
+            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="16,14">
+              <StackPanel Spacing="8">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="查询资金" Command="{Binding QueryAccountCommand}"
+                          IsEnabled="{Binding IsConnected}" />
+                  <TextBlock Text="资金账户" FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </DockPanel>
+                <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*">
+                  <TextBlock Grid.Column="0" Text="可用" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4" />
+                  <TextBlock Grid.Column="1" Text="{Binding Account.Available, StringFormat={}{0:F2}}" Margin="8,4" />
+                  <TextBlock Grid.Column="2" Text="权益" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,4,0,4" />
+                  <TextBlock Grid.Column="3" Text="{Binding Account.Balance, StringFormat={}{0:F2}}" Margin="8,4" />
+                  <TextBlock Grid.Column="4" Text="冻结保证金" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,4,0,4" />
+                  <TextBlock Grid.Column="5" Text="{Binding Account.FrozenMargin, StringFormat={}{0:F2}}" Margin="8,4" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- 持仓 -->
+            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="16,14">
+              <StackPanel Spacing="8">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="查询持仓" Command="{Binding QueryPositionCommand}"
+                          IsEnabled="{Binding IsConnected}" />
+                  <TextBlock Text="持仓" FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Positions}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding}" FontSize="12" Margin="0,2"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <!-- 下单 -->
+            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="16,14">
+              <StackPanel Spacing="8">
+                <TextBlock Text="下单" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto,*" RowDefinitions="Auto,Auto">
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="合约" Margin="0,6" VerticalAlignment="Center" />
+                  <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding OrderInstrumentId}" Margin="6,4" />
+                  <TextBlock Grid.Row="0" Grid.Column="2" Text="方向" Margin="10,6,0,6" VerticalAlignment="Center" />
+                  <ComboBox Grid.Row="0" Grid.Column="3" SelectedIndex="{Binding OrderDirectionIndex}" Margin="6,4">
+                    <ComboBoxItem Content="买" /><ComboBoxItem Content="卖" />
+                  </ComboBox>
+                  <TextBlock Grid.Row="0" Grid.Column="4" Text="开平" Margin="10,6,0,6" VerticalAlignment="Center" />
+                  <ComboBox Grid.Row="0" Grid.Column="5" SelectedIndex="{Binding OrderOffsetIndex}" Margin="6,4">
+                    <ComboBoxItem Content="开" /><ComboBoxItem Content="平" /><ComboBoxItem Content="平今" />
+                  </ComboBox>
+                  <TextBlock Grid.Row="0" Grid.Column="6" Text="价格类型" Margin="10,6,0,6" VerticalAlignment="Center" />
+                  <ComboBox Grid.Row="0" Grid.Column="7" SelectedIndex="{Binding OrderPriceTypeIndex}" Margin="6,4">
+                    <ComboBoxItem Content="限价" /><ComboBoxItem Content="市价" />
+                  </ComboBox>
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="价格" Margin="0,6" VerticalAlignment="Center" />
+                  <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding OrderLimitPrice}" Margin="6,4" />
+                  <TextBlock Grid.Row="1" Grid.Column="2" Text="数量" Margin="10,6,0,6" VerticalAlignment="Center" />
+                  <TextBox  Grid.Row="1" Grid.Column="3" Text="{Binding OrderVolume}" Margin="6,4" />
+                  <TextBlock Grid.Row="1" Grid.Column="4" Text="有效期" Margin="10,6,0,6" VerticalAlignment="Center" />
+                  <ComboBox Grid.Row="1" Grid.Column="5" SelectedIndex="{Binding OrderTimeConditionIndex}" Margin="6,4">
+                    <ComboBoxItem Content="GFD" /><ComboBoxItem Content="IOC" /><ComboBoxItem Content="FOK" />
+                  </ComboBox>
+                  <Button  Grid.Row="1" Grid.Column="7" Grid.ColumnSpan="2" Content="下单" Command="{Binding RequestOrderInsertCommand}"
+                           IsEnabled="{Binding IsConnected}" Margin="6,4" HorizontalAlignment="Stretch" />
+                </Grid>
+                <Border Background="{DynamicResource SidebarBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="6" Padding="12,8"
+                        IsVisible="{Binding IsConfirmingOrder}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="确认下单？" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="{Binding PendingOrderSummary}" FontSize="13"
+                               Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                      <Button Content="确认下单" Command="{Binding ConfirmOrderInsertCommand}" />
+                      <Button Content="取消" Command="{Binding CancelOrderConfirmCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <!-- 报单 / 成交 -->
+            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="16,14">
+              <StackPanel Spacing="8">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="查询报单" Command="{Binding QueryOrderCommand}"
+                          IsEnabled="{Binding IsConnected}" />
+                  <TextBlock Text="报单 / 成交" FontSize="13" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="报单（可撤单的显示撤单按钮）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+                <ItemsControl ItemsSource="{Binding Orders}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <DockPanel Margin="0,2">
+                        <Button DockPanel.Dock="Right" Content="撤单" Margin="8,0,0,0" Padding="8,2"
+                                Command="{Binding DataContext.RequestOrderActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"
+                                IsEnabled="{Binding ., Converter={StaticResource OrderCancellable}}" />
+                        <TextBlock Text="{Binding}" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="成交" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,8,0,0" />
+                <ItemsControl ItemsSource="{Binding Trades}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding}" FontSize="11" Margin="0,1"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Border Background="{DynamicResource SidebarBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="6" Padding="12,8"
+                        IsVisible="{Binding IsConfirmingCancel}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="确认撤单？" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="{Binding PendingCancelSummary}" FontSize="13"
+                               Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                      <Button Content="确认撤单" Command="{Binding ConfirmOrderActionCommand}" />
+                      <Button Content="取消" Command="{Binding CancelOrderActionConfirmCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="行情">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="110,100,80,70,120,120,80,70,90" Margin="12,8,12,4">
+            <Button Grid.Column="0" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="Symbol"
+                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" Content="合约" />
+            <Button Grid.Column="1" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="Name"
+                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" Content="名称" />
+            <Button Grid.Column="2" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="LastPrice"
+                    HorizontalContentAlignment="Right" HorizontalAlignment="Stretch" Content="最新价" />
+            <Button Grid.Column="3" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="ChangePercent"
+                    HorizontalContentAlignment="Right" HorizontalAlignment="Stretch" Content="涨幅%" />
+            <Button Grid.Column="4" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="BidPrice"
+                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" Content="买一(价/量)" />
+            <Button Grid.Column="5" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="AskPrice"
+                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" Content="卖一(价/量)" />
+            <Button Grid.Column="6" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="OpenInterest"
+                    HorizontalContentAlignment="Right" HorizontalAlignment="Stretch" Content="持仓量" />
+            <Button Grid.Column="7" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="Volume"
+                    HorizontalContentAlignment="Right" HorizontalAlignment="Stretch" Content="成交量" />
+            <Button Grid.Column="8" Classes="sortHeader" Command="{Binding SortCommand}" CommandParameter="UpdateTime"
+                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" Content="时间" />
+          </Grid>
+
+          <ListBox ItemsSource="{Binding QuoteBoard}" SelectedItem="{Binding SelectedQuote}"
+                   Background="Transparent" BorderThickness="0" Padding="0" Margin="12,0,12,8"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              </Style>
+              <Style Selector="ListBoxItem Grid TextBlock">
+                <Setter Property="Margin" Value="0,0,8,0" />
+              </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="vm:MainFutureQuote">
+                <Grid ColumnDefinitions="110,100,80,70,120,120,80,70,90" Margin="0,2" Height="18">
+                  <TextBlock Grid.Column="0" Text="{Binding Symbol}" FontSize="11" VerticalAlignment="Center"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11" VerticalAlignment="Center"
+                             Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Text="{Binding LastPrice, StringFormat={}{0:F2}}" FontSize="11" VerticalAlignment="Center"
+                             HorizontalAlignment="Right"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Grid.Column="3" Text="{Binding ChangePercent, StringFormat={}{0:F2}%}" FontSize="11" VerticalAlignment="Center"
+                             HorizontalAlignment="Right"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                             Foreground="{Binding ChangePercent, Converter={StaticResource ChangeBrush}}" />
+                  <TextBlock Grid.Column="4" Text="{Binding BidQuote}" FontSize="11" VerticalAlignment="Center"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Grid.Column="5" Text="{Binding AskQuote}" FontSize="11" VerticalAlignment="Center"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Grid.Column="6" Text="{Binding OpenInterest, StringFormat={}{0:F0}}" FontSize="11" VerticalAlignment="Center"
+                             HorizontalAlignment="Right"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Column="7" Text="{Binding Volume}" FontSize="11" VerticalAlignment="Center"
+                             HorizontalAlignment="Right"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBlock Grid.Column="8" Text="{Binding UpdateTime}" FontSize="10" VerticalAlignment="Center"
+                             Foreground="{DynamicResource TextSecondaryBrush}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</UserControl>

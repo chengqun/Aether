@@ -13,9 +13,14 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 /// </summary>
 public sealed class StockappMainViewModel : MainViewModelBase
 {
-    public StockappMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService)
+    private readonly CtpViewModel _ctpVm;
+
+    public StockappMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, CtpViewModel ctpVm)
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService, "stockapp")
     {
+        _ctpVm = ctpVm;
+        Futures = ctpVm;   // 期货页 VM（共享 shell 经 ContentControl + App.axaml DataTemplate 解析为 FuturesView）
+
         AddNav("chat", "✨", "新聊天");
         AddNav("experts", "🧪", "专家");
         AddNav("automation", "⏰", "自动化");
@@ -24,5 +29,11 @@ public sealed class StockappMainViewModel : MainViewModelBase
         AddNav("backtest", "📊", "回测");
 
         NavigateToCommand.Execute("chat");
+    }
+
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        await _ctpVm.InitializeAsync();
     }
 }

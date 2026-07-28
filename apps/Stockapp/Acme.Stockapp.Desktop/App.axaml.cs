@@ -71,6 +71,9 @@ public partial class App : global::Avalonia.Application
 
         // CTP 连接器（Stockapp 专属；注入 ExpertsViewModel 的 Connector tab）
         services.AddSingleton<IConnectorViewModel, CtpConnectorViewModel>();
+        services.AddSingleton<CtpConnectorViewModel>(sp => (CtpConnectorViewModel)sp.GetRequiredService<IConnectorViewModel>());
+        // 期货页 ViewModel（行情 + 交易）
+        services.AddSingleton<CtpViewModel>();
 
         // shell 主 ViewModel
         services.AddSingleton<StockappMainViewModel>();

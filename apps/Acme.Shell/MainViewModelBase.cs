@@ -365,14 +365,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是自动化页</summary>
     public bool IsAutomationPage => CurrentPage == "automation";
 
-    /// <summary>是否是占位页（非聊天/笔记/专家/自动化）</summary>
-    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage;
+    /// <summary>是否是期货页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
+    public bool IsFuturesPage => CurrentPage == "ctp";
+
+    /// <summary>是否是占位页（非聊天/笔记/专家/自动化/期货）</summary>
+    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage && !IsFuturesPage;
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
 
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }
+
+    /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
+    /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
+    public object? Futures { get; protected set; }
 
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
@@ -386,6 +393,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         OnPropertyChanged(nameof(IsNotesPage));
         OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsAutomationPage));
+        OnPropertyChanged(nameof(IsFuturesPage));
         OnPropertyChanged(nameof(IsPlaceholderPage));
     }
 
