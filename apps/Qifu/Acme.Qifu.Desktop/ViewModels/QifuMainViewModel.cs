@@ -16,10 +16,10 @@ public sealed class QifuMainViewModel : MainViewModelBase
     public QifuMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService)
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService, "qifu")
     {
-        AddNav("chat", "✨", "新聊天");
-        AddNav("experts", "🧪", "专家");
-        AddNav("automation", "⏰", "自动化");
-        AddNav("notes", "📝", "笔记");
+        AddNav("chat", NavIcons.Chat, "新聊天");
+        AddNav("experts", NavIcons.Experts, "专家");
+        AddNav("automation", NavIcons.Automation, "自动化");
+        AddNav("notes", NavIcons.Notes, "笔记");
 
         NavigateToCommand.Execute("chat");
     }

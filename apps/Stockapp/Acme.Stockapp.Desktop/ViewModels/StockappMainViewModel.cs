@@ -22,12 +22,12 @@ public sealed class StockappMainViewModel : MainViewModelBase
         Futures = ctpVm;   // 期货页 VM（共享 shell 经 ContentControl + App.axaml DataTemplate 解析为 FuturesView）
         Trading = tradingVm;   // 回测/实盘页 VM（DataTemplate 解析为 TradingView）
 
-        AddNav("chat", "✨", "新聊天");
-        AddNav("experts", "🧪", "专家");
-        AddNav("automation", "⏰", "自动化");
-        AddNav("notes", "📝", "笔记");
-        AddNav("ctp", "📈", "期货");
-        AddNav("backtest", "📊", "回测");
+        AddNav("chat", NavIcons.Chat, "新聊天");
+        AddNav("experts", NavIcons.Experts, "专家");
+        AddNav("automation", NavIcons.Automation, "自动化");
+        AddNav("notes", NavIcons.Notes, "笔记");
+        AddNav("ctp", NavIcons.Futures, "期货");
+        AddNav("backtest", NavIcons.Backtest, "回测");
 
         NavigateToCommand.Execute("chat");
     }
