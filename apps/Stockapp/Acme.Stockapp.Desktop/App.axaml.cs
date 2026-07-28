@@ -74,6 +74,8 @@ public partial class App : global::Avalonia.Application
         services.AddSingleton<CtpConnectorViewModel>(sp => (CtpConnectorViewModel)sp.GetRequiredService<IConnectorViewModel>());
         // 期货页 ViewModel（行情 + 交易）
         services.AddSingleton<CtpViewModel>();
+        // 回测/实盘页 ViewModel
+        services.AddSingleton<TradingViewModel>();
 
         // shell 主 ViewModel
         services.AddSingleton<StockappMainViewModel>();

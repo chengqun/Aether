@@ -156,6 +156,9 @@
       <!-- 期货页（Stockapp 租户专属；VM 经 App.axaml DataTemplate 解析为 FuturesView，Qifu 为 null 不显示） -->
       <ContentControl Content="{Binding Futures}"
           IsVisible="{Binding IsFuturesPage}" />
+      <!-- 回测/实盘页（Stockapp 租户专属；VM 经 App.axaml DataTemplate 解析为 TradingView，Qifu 为 null 不显示） -->
+      <ContentControl Content="{Binding Trading}"
+          IsVisible="{Binding IsTradingPage}" />
       <TextBlock x:Name="PlaceholderView" Text="即将上线…"
                  FontSize="20" FontWeight="SemiBold"
                  Foreground="{DynamicResource TextSecondaryBrush}"

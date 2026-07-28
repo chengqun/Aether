@@ -17,6 +17,9 @@
         <DataTemplate DataType="vm:CtpViewModel">
             <views:FuturesView />
         </DataTemplate>
+        <DataTemplate DataType="vm:TradingViewModel">
+            <views:TradingView />
+        </DataTemplate>
     </Application.DataTemplates>
 
 </Application>

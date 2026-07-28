@@ -368,8 +368,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是期货页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
     public bool IsFuturesPage => CurrentPage == "ctp";
 
-    /// <summary>是否是占位页（非聊天/笔记/专家/自动化/期货）</summary>
-    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage && !IsFuturesPage;
+    /// <summary>是否是回测/实盘页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
+    public bool IsTradingPage => CurrentPage == "backtest";
+
+    /// <summary>是否是占位页（非聊天/笔记/专家/自动化/期货/回测）</summary>
+    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage && !IsFuturesPage && !IsTradingPage;
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
@@ -380,6 +383,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
     /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
     public object? Futures { get; protected set; }
+
+    /// <summary>回测/实盘页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
+    /// 类型为 object 以免共享层依赖 Trading。视图经 App.axaml DataTemplate 解析。</summary>
+    public object? Trading { get; protected set; }
 
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
@@ -394,6 +401,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsAutomationPage));
         OnPropertyChanged(nameof(IsFuturesPage));
+        OnPropertyChanged(nameof(IsTradingPage));
         OnPropertyChanged(nameof(IsPlaceholderPage));
     }
 

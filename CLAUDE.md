@@ -77,7 +77,7 @@ Reference: Automation is the working template — `business/Automation/` (Domain
 ### Trading + Lean (the engine-bridge pattern)
 
 - `business/Trading/` — pure DDD: Domain (`IStrategy`/`MarketBar`/`BacktestResult`) + Application (orchestration, depends on Runtime abstraction only).
-- `business/Trading.Runtime/` — the bridge: `Runtime.Domain` (abstraction ports) + `Runtime.Lean` (the ONLY project referencing `externals/Lean`).
+- `business/Trading.Runtime/` — the bridge: `Runtime.Domain` (abstraction ports) + `Runtime.Lean` (the ONLY project referencing `externals/Lean`). The desktop 回测/实盘 page VM depends on `Trading.Application` + `Runtime.Domain` enums only — **not** on `Runtime.Lean` — so swapping the runtime (Lean→other) is a DI-only change.
 
 ### Desktop architecture
 

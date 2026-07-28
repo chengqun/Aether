@@ -19,4 +19,7 @@ public static class StrategyRegistry
         strategy.Initialize(parameters);
         return strategy;
     }
+
+    /// <summary>已注册策略名（供 UI 下拉动态取值；新注册的策略自动出现）。</summary>
+    public static IReadOnlyList<string> GetRegisteredNames() => _factories.Keys.ToArray();
 }
