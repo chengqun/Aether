@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
-  <Grid Margin="20">
+  <Grid Margin="20" Background="{DynamicResource ContentBgBrush}">
     <StackPanel>
       <TextBlock Text="{Binding WindowTitle}" FontSize="18" FontWeight="Bold" Margin="0,0,0,16"/>
 

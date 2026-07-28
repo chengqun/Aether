@@ -129,6 +129,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>LLM 配置变更后，通知聊天页刷新模型下拉（避免重启才能看到新增配置）。</summary>
+    private async Task NotifyLlmConfigsChangedAsync()
+    {
+        try
+        {
+            await _serviceProvider.GetRequiredService<MainViewModelBase>().RefreshLlmConfigsAsync();
+        }
+        catch { /* 主 VM 不可用时忽略 */ }
+    }
+
     private async Task LoadDeviceConfigAsync()
     {
         try
@@ -258,6 +268,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             {
                 await LlmService.SetConfigAsync(savedConfig);
                 await LoadLlmConfigsAsync();
+                await NotifyLlmConfigsChangedAsync();
             }
             catch (Exception ex)
             {
@@ -295,6 +306,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                     await LlmService.SetConfigAsync(newDefault);
                 }
             }
+            await NotifyLlmConfigsChangedAsync();
         }
         catch (Exception ex)
         {
@@ -313,6 +325,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             config.IsDefault = true;
             await LlmService.SetConfigAsync(config);
             await LoadLlmConfigsAsync();
+            await NotifyLlmConfigsChangedAsync();
         }
         catch (Exception ex)
         {

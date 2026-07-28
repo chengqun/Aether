@@ -112,6 +112,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         });
     }
 
+    /// <summary>LLM 配置变更后刷新聊天页的模型下拉（设置页新增/编辑/删除后调用）。</summary>
+    public async Task RefreshLlmConfigsAsync()
+    {
+        await _dispatcher.InvokeAsync(async () => await LoadLlmConfigsAsync());
+    }
+
     private Guid _recentConversationId;
 
     /// <summary>收到远程 SignalR 消息回调（SignalR 线程）</summary>

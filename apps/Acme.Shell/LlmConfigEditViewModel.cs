@@ -37,9 +37,11 @@ public sealed partial class LlmConfigEditViewModel : ObservableObject
     public string WindowTitle => IsEditing ? "编辑 LLM 配置" : "新增 LLM 配置";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     private string _name = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     private string _modelName = "";
 
     [ObservableProperty]

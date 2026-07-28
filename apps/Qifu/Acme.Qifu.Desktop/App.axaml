@@ -3,7 +3,7 @@
              xmlns:vm="using:Acme.Qifu.Desktop.ViewModels"
              xmlns:views="using:Acme.Qifu.Desktop.Views"
              x:Class="Acme.Qifu.Desktop.App"
-             RequestedThemeVariant="Default">
+             RequestedThemeVariant="Light">
 
     <Application.Styles>
         <FluentTheme />
