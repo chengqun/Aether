@@ -76,8 +76,32 @@ Reference: Automation is the working template — `business/Automation/` (Domain
 
 ### Trading + Lean (the engine-bridge pattern)
 
-- `business/Trading/` — pure DDD: Domain (`IStrategy`/`MarketBar`/`BacktestResult`) + Application (orchestration, depends on Runtime abstraction only).
-- `business/Trading.Runtime/` — the bridge: `Runtime.Domain` (abstraction ports) + `Runtime.Lean` (the ONLY project referencing `externals/Lean`). The desktop 回测/实盘 page VM depends on `Trading.Application` + `Runtime.Domain` enums only — **not** on `Runtime.Lean` — so swapping the runtime (Lean→other) is a DI-only change.
+The 回测/实盘 page, the business Trading context, and the Lean runtime are **four separated layers** with a one-way dependency. The UI and business layers never reference Lean — swapping the runtime is a DI-only change.
+
+```
+Desktop 回测/实盘页  (TradingViewModel + TradingView, apps/Stockapp)   ← runtime-agnostic
+        ↓ depends on
+Trading.Application  (IBacktestApplicationService / ILiveTradingApplicationService)   ← orchestration, Lean-neutral
+        ↓ depends on
+Trading.Runtime.Domain  (ports: IBacktestRuntime / ILiveTradingRuntime; BarResolution; LiveTradingRuntimeStatus; MarketDataConnectInput)
+        ↑ implemented by
+Trading.Runtime.Lean  (LeanBacktestRunner / LeanLiveTradingService / CtpBrokerage / TradingHostAlgorithm)   ← the ONLY project referencing externals/Lean
+        ↓ consumes (DI-provided, not self-registered): ICtpSession (Ctp context) + IAnalysisManager (Quotes context)
+
+Trading.Domain  (IStrategy / MarketBar / SignalDirection / BacktestResult / BacktestStatistics / EquityPoint / StrategyRegistry)   ← pure, shared by Application + Lean
+```
+
+- **`business/Trading/Acme.Trading.Domain`** — pure: `IStrategy` (`WarmUpBars`/`Initialize`/`EvaluateSignal→SignalDirection`), `MarketBar`, `BacktestResult` (`Statistics`/`EquityCurve`/`Logs`), `StrategyRegistry` (static; `AddTradingRuntimeLean` registers `SmaCross`/`Test`; `GetRegisteredNames()` feeds the UI strategy picker).
+- **`business/Trading/Acme.Trading.Application`** — `IBacktestApplicationService.RunAsync(BacktestRunInput)→BacktestResult` and `ILiveTradingApplicationService` (`StartAsync(LiveTradingRunInput)→(bool,string?)`, `StopAsync`, `Status`/`IsRunning`, `StatusChanged`/`LogReceived` events). Thin mappers to the runtime ports. `AddTradingApplication()` registers both.
+- **`business/Trading.Runtime/Acme.Trading.Runtime.Domain`** — the runtime **ports** (`IBacktestRuntime`, `ILiveTradingRuntime`) + shared enums/DTOs. No Lean.
+- **`business/Trading.Runtime/Acme.Trading.Runtime.Lean`** — the **only** project referencing `externals/Lean`. `LeanBacktestRunner` (full backtest: reads K-line via `IAnalysisManager` → CSV → LEAN engine → `BacktestResult`). `LeanLiveTradingService` (LEAN live engine + `CtpBrokerage`). `AddTradingRuntimeLean()` registers the strategies + both runtime impls; it **consumes** (does not register) `ICtpSession` (from `AddCtpInfrastructure`) and `IAnalysisManager` (from `AddQuotesApplication`).
+- **Desktop 回测/实盘页** (`apps/Stockapp/.../ViewModels/TradingViewModel.cs` + `Views/TradingView.axaml`, the `backtest` nav): two tabs (回测 + 实盘). The VM depends on `Trading.Application` + `Trading.Runtime.Domain` enums + `Trading.Domain` only — **never** on `Trading.Runtime.Lean`. Wired via the tenant-specific ContentControl+DataTemplate pattern (Stockapp-only; Qifu has no `backtest` nav).
+- **AI** (`ai/Trading/Acme.Trading.AI`): `AddTradingTools()` exposes only `RunBacktest` (no live-trading tool to the agent).
+
+Runtime paths:
+- **Backtest**: `TradingViewModel.RunCommand` → `Task.Run(() => _backtest.RunAsync(input))` (blocking, so off the UI thread) → `BacktestResult` (12 string stats + `EquityCurve` + `Logs`). **Data caveat**: K-line comes from `IAnalysisManager` (Quotes context, stock-oriented Sina/East/Baidu providers) — futures symbols may have no data; stocks (e.g. `600000`) work.
+- **Live**: `StartLiveCommand` → `_live.StartAsync(LiveTradingRunInput)`; preconditions: `ICtpSession` already logged in (CTP connected via the 期货 page) + a complete `MarketDataConnectInput` (md front, built from `CtpConnectorViewModel`). Subscribe to `StatusChanged`/`LogReceived` (dispatch to UI thread). **P1 = signal-only**: `CtpBrokerage.PlaceOrder` logs the intended order and returns `false` — no real CTP order is placed; the tick→bar→signal chain is live. P2 (real orders) is future work.
+- **Swapping the runtime** (Lean→other): implement `IBacktestRuntime`/`ILiveTradingRuntime` in a new project and replace the `AddTradingRuntimeLean()` registration. `Trading.Application`, `Trading.Domain`, and the desktop VM are untouched.
 
 ### Desktop architecture
 
@@ -103,11 +127,11 @@ apps/Qifu/      ← tenant host (Yushu/CloudDocs + Qifu connector)
 
 ### Tenant-specific top-level pages (ContentControl + DataTemplate)
 
-Some nav pages are tenant-specific (e.g. Stockapp's 期货 page uses CTP; Qifu has no CTP). The shared shell must not reference tenant/CTP types. Pattern (same as the Experts 连接器 tab):
-- Shared `MainViewModelBase` exposes an `object?` content slot (e.g. `Futures`) + an `IsXxxPage` flag (e.g. `IsFuturesPage => CurrentPage == "ctp"`); `IsPlaceholderPage` excludes it.
-- Shared `MainWindow.axaml` renders it via `<ContentControl Content="{Binding Futures}" IsVisible="{Binding IsFuturesPage}" />`.
-- The tenant VM+View live in the **tenant project** (`apps/Stockapp/.../ViewModels` + `Views`); the tenant `App.axaml` registers a `<Application.DataTemplates>` mapping (VM type → View) and the tenant `MainViewModel` assigns the VM to the slot (`Futures = ctpVm`). The other tenant leaves it null (no nav entry, flag stays false).
-- The tenant VM depends only on Application-layer services (e.g. `ICtpTradingService`) + the shared connector, never on `externals/Ctp.Net.Core` directly.
+Some nav pages are tenant-specific (Stockapp's 期货 page uses CTP; its 回测/实盘 page uses Trading/Lean; Qifu has neither). The shared shell must not reference tenant/CTP/Trading types. Pattern (same as the Experts 连接器 tab):
+- Shared `MainViewModelBase` exposes an `object?` content slot + an `IsXxxPage` flag — `Futures`/`IsFuturesPage => CurrentPage == "ctp"` and `Trading`/`IsTradingPage => CurrentPage == "backtest"`; `IsPlaceholderPage` excludes both.
+- Shared `MainWindow.axaml` renders each via `<ContentControl Content="{Binding ...}" IsVisible="{Binding Is...Page}" />`.
+- The tenant VM+View live in the **tenant project** (`apps/Stockapp/.../ViewModels` + `Views`); the tenant `App.axaml` registers `<Application.DataTemplates>` mappings (e.g. `CtpViewModel→FuturesView`, `TradingViewModel→TradingView`) and the tenant `MainViewModel` assigns the VM to the slot (`Futures = ctpVm; Trading = tradingVm;`). Qifu leaves them null (no nav entries, flags stay false).
+- The tenant VM depends only on Application-layer services (e.g. `ICtpTradingService`, `IBacktestApplicationService`) + the shared connector, never on `externals/Ctp.Net.Core` or `Trading.Runtime.Lean` directly.
 
 ### Per-agent model + memory (platform layer)
 
@@ -146,5 +170,8 @@ Some nav pages are tenant-specific (e.g. Stockapp's 期货 page uses CTP; Qifu h
 - **`Securities` naming quirk**: namespace `Acme.Securities.*` (plural), DI methods `AddSecurity*` (singular).
 - **CTP native libs**: `externals/Ctp.Net.Core` P/Invokes `libctp_native`; prebuilt `.dylib/.so/.dll` ship as Content. CTP auto-login requires saved config + `AutoLogin` flag.
 - **Emoji icons**: `SharedTheme.axaml` has `MinHeight` on `Button.settings-nav`/`nav-rail`/`top-tab` to prevent emoji clipping at high DPI.
+- **Avalonia 12 `CalendarDatePicker.SelectedDate` is `DateTime?`** (not `DateTimeOffset?`). Bind VM date properties as `DateTime?` or you get `InvalidCastException: Could not convert DateTime to Nullable<DateTimeOffset>`. (The 回测 page ran into this.)
+- **`Polyline.Points` must never bind to null** — Avalonia builds the geometry on render even when the parent `IsVisible=false`, throwing `ArgumentNullException`. Initialize the points property to an empty list.
+- **Securities auto-sync (Stockapp)**: the desktop never used to call `ISecurityClientSyncService.SyncFromServerAsync()`, so `securities.db` was empty → `GetMainFuturesAsync()` returned nothing. Now `CtpViewModel.InitializeAsync` fire-and-forgets an incremental sync on startup + the 期货页 行情 tab has a「同步证券」button. The server endpoint `api/app/security-client-sync/updates` (AllowAnonymous) returns ~5400 securities incl. ~250 futures.
 - **Automation (定时任务)**: scheduler is a process-internal 1-min polling `Timer` — fires **only while the app is open** (no cron/Quartz/backfill). Started fire-and-forget from `MainViewModelBase.InitializeAsync`; `AutomationScheduler.StartAsync` has a double-start guard. Each `AutomationTask` owns a stable `ConversationId` (assigned on create) so all its fires thread into one chat conversation via `ConversationBackedAgentExecutor`. `IAutomationScheduler.TaskCompleted` is subscribed by both `AutomationViewModel` (refresh task cards) and `MainViewModelBase` (refresh 最近会话). The scheduler calls `IAgentExecutor` (business port) — must be registered at the composition root or DI resolution of `IAutomationService`/`IAutomationScheduler` throws.
 - When adding a new context/adapter, also add its projects to `Aether.AI.Platform.slnx` (folder + `<Project Path=...>`). Not every context needs an `ai/` adapter — if business only needs to *invoke* AI (not expose tools to the agent), use the [business-port pattern](#business-domain-port--host-implementation) instead and skip the adapter.

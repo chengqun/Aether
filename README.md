@@ -1,4 +1,4 @@
-# Aether.AI Platform — Phase 1
+# Aether.AI Platform
 
 An enterprise-grade AI application platform built **on top of** [Microsoft Agent Framework](https://github.com/microsoft/agent-framework).
 
@@ -6,6 +6,12 @@ An enterprise-grade AI application platform built **on top of** [Microsoft Agent
 > Aether.AI Platform is responsible for enterprise AI application infrastructure.
 
 Aether.AI does **not** re-implement the agent framework — there is no `IAIAgent`, `IAgentRuntime`, `ITool`, or `IWorkflow` here. Those exist in Microsoft Agent Framework already. Aether.AI is the platform layer above it.
+
+> **Current architecture authority: [`CLAUDE.md`](CLAUDE.md).** The platform has grown well beyond the
+> Phase-1 snapshot described below (it now spans 17 DDD bounded contexts, an Avalonia desktop app with
+> two tenants, custom-agent/marketplace, Automation, CTP 期货, Quotes, and Trading+Lean). `CLAUDE.md` is the
+> maintained, authoritative architecture reference; the structure tree and context narratives further down
+> are an early snapshot and may lag — cross-check `CLAUDE.md` and the code for the current state.
 
 ## Status
 
@@ -165,11 +171,11 @@ in-memory connection to the CTP broker, not a persisted store):
   from method names — tool names are `GetStatus`/`QueryAccount`/`QueryPositions`/
   `OrderInsert`/`OrderAction`/`QueryLatestTick`/`QueryAllLatestTicks`).
 
-> **Scope note.** Not ported: the market-data "main futures" loader (depends on a
-> Security domain not in Aether) and the Lean-backed live-strategy engine
-> (`CtpLean`/`CtpTrading`, depends on QuantConnect externals). The self-contained
-> core (session + trading + 6 tools) is ported; those are separate bounded contexts
-> if needed later.
+> **Scope note.** The market-data "main futures" loader now lives in the
+> `Securities` context (`ISecurityManager.GetMainFuturesAsync()`), and the Lean-backed
+> strategy engine is now its own context — `business/Trading/` + `business/Trading.Runtime/`
+> (see [Trading + Lean](#trading--lean-backtest--live-trading) below). The self-contained
+> Ctp core (session + trading + tools) plus the full Trading/Lean stack are ported.
 
 The 3 AI tools live in `ai/Qifu/Acme.Qifu.AI` (NOT in `business/`), and call the
 qifu Domain service contracts — never the Infrastructure implementations directly.
@@ -278,6 +284,70 @@ Without an API key it runs an offline smoke check (builds the composed host,
 verifies the qifu agent + tools register). Live qifu tool execution still needs
 real 360 login + credentials (Playwright/OAuth) — the wiring is real, the
 backends need creds.
+
+## Trading + Lean (backtest + live trading)
+
+The desktop **回测/实盘** page (Stockapp `backtest` nav), the business **Trading**
+context, and the **Lean** runtime are four separated layers with a one-way
+dependency. The UI and business layers never reference Lean — swapping the
+runtime is a DI-only change.
+
+```
+Desktop 回测/实盘页   (TradingViewModel + TradingView, apps/Stockapp)        ← runtime-agnostic
+        ↓ depends on
+Trading.Application   (IBacktestApplicationService / ILiveTradingApplicationService)   ← orchestration, Lean-neutral
+        ↓ depends on
+Trading.Runtime.Domain   (ports: IBacktestRuntime / ILiveTradingRuntime; BarResolution; LiveTradingRuntimeStatus; MarketDataConnectInput)
+        ↑ implemented by
+Trading.Runtime.Lean   (LeanBacktestRunner / LeanLiveTradingService / CtpBrokerage / TradingHostAlgorithm)   ← the ONLY project referencing externals/Lean
+        ↓ consumes (DI-provided, not self-registered): ICtpSession (Ctp context) + IAnalysisManager (Quotes context)
+
+Trading.Domain   (IStrategy / MarketBar / SignalDirection / BacktestResult / BacktestStatistics / EquityPoint / StrategyRegistry)   ← pure, shared by Application + Lean
+```
+
+- **`business/Trading/Acme.Trading.Domain`** — pure: `IStrategy`, `MarketBar`, `BacktestResult`
+  (`Statistics` / `EquityCurve` / `Logs`), `StrategyRegistry` (static; `AddTradingRuntimeLean`
+  registers `SmaCross`/`Test`; `GetRegisteredNames()` feeds the UI strategy picker).
+- **`business/Trading/Acme.Trading.Application`** — `IBacktestApplicationService.RunAsync(BacktestRunInput)→BacktestResult`
+  and `ILiveTradingApplicationService` (`StartAsync`/`StopAsync`, `Status`/`IsRunning`,
+  `StatusChanged`/`LogReceived` events). Thin mappers to the runtime ports. No Lean.
+- **`business/Trading.Runtime/Acme.Trading.Runtime.Domain`** — the runtime **ports**
+  (`IBacktestRuntime`, `ILiveTradingRuntime`) + shared enums/DTOs. No Lean.
+- **`business/Trading.Runtime/Acme.Trading.Runtime.Lean`** — the **only** project referencing
+  `externals/Lean`. `LeanBacktestRunner` reads K-line via `IAnalysisManager` → CSV → runs the LEAN
+  backtest engine → `BacktestResult`. `LeanLiveTradingService` runs the LEAN live engine with
+  `CtpBrokerage`. `AddTradingRuntimeLean()` registers the strategies + both runtime impls; it
+  **consumes** (does not register) `ICtpSession` and `IAnalysisManager`.
+- **Desktop page** (`apps/Stockapp/.../ViewModels/TradingViewModel.cs` + `Views/TradingView.axaml`):
+  two tabs — 回测 (parameter form + statistics + equity `Polyline` + log) and 实盘 (start/stop +
+  status + signal log). The VM depends on `Trading.Application` + `Trading.Runtime.Domain` enums +
+  `Trading.Domain` only — **never** on `Trading.Runtime.Lean`. Wired via the tenant-specific
+  ContentControl + DataTemplate pattern (Stockapp-only; Qifu has no `backtest` nav).
+- **AI** (`ai/Trading/Acme.Trading.AI`): `AddTradingTools()` exposes only `RunBacktest` (no
+  live-trading tool to the agent).
+
+Runtime paths:
+
+- **Backtest**: `RunCommand` → `Task.Run(() => _backtest.RunAsync(input))` (blocking, so off the UI
+  thread) → `BacktestResult`. **Data caveat**: K-line comes from `IAnalysisManager` (Quotes context,
+  stock-oriented Sina/East/Baidu providers) — futures symbols may have no data; stocks work.
+- **Live**: `StartLiveCommand` → `_live.StartAsync(LiveTradingRunInput)`; preconditions: `ICtpSession`
+  already logged in (CTP connected via the 期货 page) + a complete `MarketDataConnectInput` (md front,
+  built from `CtpConnectorViewModel`). **P1 = signal-only**: `CtpBrokerage.PlaceOrder` logs the
+  intended order and returns `false` — no real CTP order is placed; the tick→bar→signal chain is live.
+  P2 (real orders) is future work.
+- **Swapping the runtime** (Lean → other): implement `IBacktestRuntime`/`ILiveTradingRuntime` in a new
+  project and replace the `AddTradingRuntimeLean()` registration. `Trading.Application`,
+  `Trading.Domain`, and the desktop VM are untouched.
+
+Host wiring (Stockapp `App.axaml.cs`):
+
+```csharp
+services.AddCtpInfrastructure(...);   // ICtpSession  (live engine consumes)
+services.AddQuotesInfrastructure(...); services.AddQuotesApplication();   // IAnalysisManager (backtest data)
+services.AddTradingApplication();     // IBacktestApplicationService + ILiveTradingApplicationService
+services.AddTradingRuntimeLean();     // IBacktestRuntime + ILiveTradingRuntime (Lean impl) + strategy registration
+```
 
 ## Key design decisions
 
