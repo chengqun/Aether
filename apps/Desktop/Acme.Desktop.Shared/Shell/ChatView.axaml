@@ -111,11 +111,15 @@
           <TextBlock Text="{Binding ConnectionLabel}" FontSize="13" FontWeight="Medium"
                      Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
         </StackPanel>
-        <Button Grid.Column="1" Content="⚙️" Click="OnDeviceConfigClick"
+        <Button Grid.Column="1" Click="OnDeviceConfigClick"
                 Background="Transparent" BorderThickness="0" Padding="0"
-                Width="32" Height="32" FontSize="17"
+                Width="32" Height="32"
                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                Margin="6,0,0,0" ToolTip.Tip="设备连接配置" />
+                Margin="6,0,0,0" ToolTip.Tip="设备连接配置">
+          <Path Data="{x:Static vm:NavIcons.Settings}" Stretch="Uniform" Width="15" Height="15"
+                StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+        </Button>
         <TextBlock Grid.Column="2" Text="{Binding TokenInfo}" VerticalAlignment="Center" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,0,0,0" />
       </Grid>
