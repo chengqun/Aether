@@ -39,8 +39,8 @@ public partial class TradingViewModel : ObservableObject
 
     [ObservableProperty] private string _symbol = "ag2610";
     [ObservableProperty] private string _strategyName = "SmaCross";
-    [ObservableProperty] private DateTimeOffset? _startDate = DateTimeOffset.Now.AddDays(-365);
-    [ObservableProperty] private DateTimeOffset? _endDate = DateTimeOffset.Now;
+    [ObservableProperty] private DateTime? _startDate = DateTime.Today.AddDays(-365);
+    [ObservableProperty] private DateTime? _endDate = DateTime.Today;
     [ObservableProperty] private decimal _initialCash = 100_000m;
     [ObservableProperty] private int _fastPeriod = 10;
     [ObservableProperty] private int _slowPeriod = 30;
@@ -82,8 +82,8 @@ public partial class TradingViewModel : ObservableObject
             {
                 Symbol = Symbol,
                 StrategyName = StrategyName,
-                StartDate = (StartDate ?? DateTimeOffset.Now.AddDays(-365)).LocalDateTime.Date,
-                EndDate = (EndDate ?? DateTimeOffset.Now).LocalDateTime.Date,
+                StartDate = (StartDate ?? DateTime.Today.AddDays(-365)).Date,
+                EndDate = (EndDate ?? DateTime.Today).Date,
                 InitialCash = InitialCash,
                 FastPeriod = FastPeriod,
                 SlowPeriod = SlowPeriod,
