@@ -127,12 +127,14 @@ public sealed class HarnessRuntime
     /// <summary>
     /// Runs one turn as a streaming response. The assistant's text is streamed
     /// to <paramref name="callback"/> as it arrives and the full text is
-    /// returned once complete.
+    /// returned once complete. Tool invocations/results encountered in the
+    /// stream are surfaced via <paramref name="onToolEvent"/> (if provided).
     /// </summary>
     public async Task<string> RunStreamingAsync(
         Guid sessionId,
         string userMessage,
         Func<string, CancellationToken, Task>? callback = null,
+        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
         CancellationToken cancellationToken = default)
     {
         var session = _sessions.Get(sessionId)
@@ -147,6 +149,8 @@ public sealed class HarnessRuntime
         session.Touch();
 
         var sb = new System.Text.StringBuilder();
+        // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
+        var toolNamesByCallId = new Dictionary<string, string>();
         await foreach (var update in agent.RunStreamingAsync(userMessage, frameworkSession, cancellationToken: cancellationToken))
         {
             if (!string.IsNullOrEmpty(update.Text))
@@ -155,6 +159,33 @@ public sealed class HarnessRuntime
                 if (callback is not null)
                     await callback(update.Text, cancellationToken);
             }
+
+            // 把流中的工具调用/结果内容片段上抛给 UI（思考过程展示）。
+            if (onToolEvent is not null && update.Contents is not null)
+            {
+                foreach (var content in update.Contents)
+                {
+                    if (content is FunctionCallContent call && !string.IsNullOrEmpty(call.Name))
+                    {
+                        if (!string.IsNullOrEmpty(call.CallId))
+                            toolNamesByCallId[call.CallId] = call.Name!;
+                        session.ToolCalls.Add(call.Name!);
+                        await onToolEvent(
+                            new ToolStreamEvent(ToolStreamEventKind.Call, call.Name!, call.CallId ?? string.Empty,
+                                ToInputDict(call.Arguments), null),
+                            cancellationToken);
+                    }
+                    else if (content is FunctionResultContent result)
+                    {
+                        var name = (result.CallId is not null && toolNamesByCallId.TryGetValue(result.CallId, out var n))
+                            ? n : "工具";
+                        await onToolEvent(
+                            new ToolStreamEvent(ToolStreamEventKind.Result, name, result.CallId ?? string.Empty,
+                                null, ToOutputDict(result.Result)),
+                            cancellationToken);
+                    }
+                }
+            }
         }
 
         var fullText = sb.ToString();
@@ -162,6 +193,57 @@ public sealed class HarnessRuntime
         session.State = SessionState.Idle;
         session.Touch();
         return fullText;
+    }
+
+    /// <summary>把 FunctionCallContent.Arguments（可能为字典/JsonElement/字符串）归一为可展示字典。</summary>
+    private static Dictionary<string, object>? ToInputDict(object? arguments)
+    {
+        if (arguments is null) return null;
+
+        if (arguments is IDictionary<string, object?> nd)
+            return nd.ToDictionary(kv => kv.Key, kv => kv.Value ?? string.Empty);
+        if (arguments is IDictionary<string, object> d)
+            return new Dictionary<string, object>(d);
+        if (arguments is IReadOnlyDictionary<string, object?> rnd)
+            return rnd.ToDictionary(kv => kv.Key, kv => kv.Value ?? string.Empty);
+
+        if (arguments is System.Text.Json.JsonElement je)
+        {
+            if (je.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(je); }
+                catch { }
+            }
+            return new Dictionary<string, object> { ["input"] = je.ToString() };
+        }
+
+        return new Dictionary<string, object> { ["input"] = arguments.ToString() ?? string.Empty };
+    }
+
+    /// <summary>把 FunctionResultContent.Result 归一为可展示字典。</summary>
+    private static Dictionary<string, object>? ToOutputDict(object? result)
+    {
+        if (result is null) return null;
+
+        if (result is string s)
+            return new Dictionary<string, object> { ["result"] = s };
+
+        if (result is IDictionary<string, object?> nd)
+            return nd.ToDictionary(kv => kv.Key, kv => kv.Value ?? string.Empty);
+        if (result is IDictionary<string, object> d)
+            return new Dictionary<string, object>(d);
+
+        if (result is System.Text.Json.JsonElement je)
+        {
+            if (je.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(je); }
+                catch { }
+            }
+            return new Dictionary<string, object> { ["result"] = je.ToString() };
+        }
+
+        return new Dictionary<string, object> { ["result"] = result.ToString() ?? string.Empty };
     }
 
     private AgentDefinition ResolveDefinition(string agentId)

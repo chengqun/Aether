@@ -73,7 +73,7 @@ public sealed class ConversationBackedAgentExecutor : IAgentExecutor
                     buffer.Append(token);
                     await Task.CompletedTask;
                 },
-                cancellationToken);
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

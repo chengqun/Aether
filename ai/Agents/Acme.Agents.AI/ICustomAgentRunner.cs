@@ -1,3 +1,5 @@
+using Aether.AI.Harness;
+
 namespace Acme.Agents.AI;
 
 /// <summary>
@@ -7,14 +9,16 @@ namespace Acme.Agents.AI;
 public interface ICustomAgentRunner
 {
     /// <summary>
-    /// 运行一轮对话，流式回调每个 token。每个 conversationId 拥有独立的运行时会话
+    /// 运行一轮对话，流式回调每个 token 与工具调用/结果事件。每个 conversationId 拥有独立的运行时会话
     /// （多会话间记忆隔离）；同一会话的后续轮次复用其会话（多轮记忆）。首次运行会按需注册 agent。
+    /// <paramref name="onToolEvent"/> 用于在 UI 展示思考过程中的工具调用输入/输出。
     /// </summary>
     Task RunStreamingAsync(
         Guid conversationId,
         Guid agentId,
         string message,
         Func<string, CancellationToken, Task>? onToken = null,
+        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

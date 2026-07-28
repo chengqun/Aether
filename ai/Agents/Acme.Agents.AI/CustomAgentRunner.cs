@@ -29,6 +29,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         Guid agentId,
         string message,
         Func<string, CancellationToken, Task>? onToken = null,
+        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -48,7 +49,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             conversationId,
             _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
-        await _runtime.RunStreamingAsync(sessionId, message, onToken, cancellationToken);
+        await _runtime.RunStreamingAsync(sessionId, message, onToken, onToolEvent, cancellationToken);
     }
 
     public void Invalidate(Guid agentId)

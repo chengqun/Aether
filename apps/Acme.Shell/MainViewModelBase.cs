@@ -10,6 +10,7 @@ using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Hosting;
+using Aether.AI.Harness;
 using Aether.AI.Memory;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -118,6 +119,29 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await _dispatcher.InvokeAsync(async () => await LoadLlmConfigsAsync());
     }
 
+    /// <summary>
+    /// 流式运行期间的工具调用/结果回调：在聊天流里插入 tool_call / tool_result 卡片，
+    /// 排在正在流式输出的助手消息之前（工具卡片在回答上方），让用户看到思考过程中的工具使用与输入输出。
+    /// </summary>
+    private async Task OnToolEventAsync(ChatMessageItem assistantMsg, ToolStreamEvent ev)
+    {
+        await _dispatcher.InvokeAsync(() =>
+        {
+            var item = new ChatMessageItem
+            {
+                Side = ChatMessageSide.Left,
+                ItemType = ev.Kind == ToolStreamEventKind.Call ? "tool_call" : "tool_result",
+                Sender = assistantMsg.Sender,
+                ToolName = ev.Name,
+                Input = ev.Input,
+                Output = ev.Output,
+            };
+            var idx = Messages.IndexOf(assistantMsg);
+            if (idx < 0) idx = Messages.Count;
+            Messages.Insert(idx, item);
+        });
+    }
+
     private Guid _recentConversationId;
 
     /// <summary>收到远程 SignalR 消息回调（SignalR 线程）</summary>
@@ -157,7 +181,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     {
                         fullText.Append(token);
                         await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
-                    });
+                    },
+                    async (ev, _) => await OnToolEventAsync(assistantMsg, ev));
             }
             catch (Exception ex)
             {
@@ -729,7 +754,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     {
                         fullText.Append(token);
                         await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
-                    });
+                    },
+                    async (ev, _) => await OnToolEventAsync(assistantMsg, ev));
             }
             catch (Exception ex)
             {
