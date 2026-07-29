@@ -100,17 +100,68 @@ public sealed class AgentFactory
             DisableTodoProvider = !definition.EnableTodoProvider,
             DisableAgentModeProvider = !definition.EnableAgentModeProvider,
             DisableFileMemory = !fileMemoryEnabled,
-            DisableAgentSkillsProvider = !definition.EnableAgentSkills,
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
-            AgentSkillsSource = BuildSkillsSource(definition),
             FileMemoryStore = fileMemoryEnabled
                 ? new FileSystemAgentFileStore(Path.Combine(FileMemoryRoot!, definition.Id))
                 : null,
         };
 
+        // skills provider 自建注入（见 ConfigureSkillsProvider）：聊天页无审批 UI，
+        // 必须关掉 load/read/run 审批，否则 run_skill_script 被默认审批挡住、模型只 load 不执行。
+        ConfigureSkillsProvider(options, definition);
+
         return _chatClientFactory.Create(definition.ModelId).AsHarnessAgent(options, _loggerFactory);
+    }
+
+    /// <summary>
+    /// 配置 skills provider。自建 <see cref="AgentSkillsProvider"/>（关闭 load/read/run 审批），
+    /// 经 <see cref="HarnessAgentOptions.AIContextProviders"/> 注入，并关掉 HarnessAgent 内部默认
+    /// skills provider（其用默认 options 要求审批，会挡住 <c>run_skill_script</c>）。
+    /// 配了 <see cref="SkillsDirectory"/> 用文件型 source（支持脚本）；否则退回 SkillRegistry 纯提示词。
+    /// </summary>
+    private void ConfigureSkillsProvider(HarnessAgentOptions options, AgentDefinition definition)
+    {
+        if (!definition.EnableAgentSkills)
+        {
+            options.DisableAgentSkillsProvider = true;
+            return;
+        }
+
+        AgentSkillsSource? source = null;
+        if (!string.IsNullOrEmpty(SkillsDirectory))
+        {
+            source = new AgentFileSkillsSource(SkillsDirectory, _skillScriptRunner, options: null, _loggerFactory);
+            if (definition.Skills.Count > 0)
+            {
+                var allowed = new HashSet<string>(definition.Skills, StringComparer.OrdinalIgnoreCase);
+                source = new FilteringAgentSkillsSource(source, (s, _) => allowed.Contains(s.Frontmatter.Name), _loggerFactory);
+            }
+        }
+        else
+        {
+            var skills = definition.Skills.Count > 0
+                ? _skillRegistry.ResolveAll(definition.Skills)
+                : _skillRegistry.GetAll();
+            if (skills.Count == 0) { options.DisableAgentSkillsProvider = true; return; }
+
+            var agentSkills = skills
+                .Select(s => (AgentSkill)new AgentInlineSkill(
+                    new AgentSkillFrontmatter(s.Name, s.Description, ""), s.Content, null, null))
+                .ToList();
+            source = new AgentInMemorySkillsSource(agentSkills);
+        }
+
+        var provider = new AgentSkillsProvider(source, new AgentSkillsProviderOptions
+        {
+            DisableLoadSkillApproval = true,
+            DisableReadSkillResourceApproval = true,
+            DisableRunSkillScriptApproval = true,
+        }, _loggerFactory, ownsSource: false);
+
+        options.DisableAgentSkillsProvider = true; // 关内部默认 provider，避免双重 + 避免其默认审批
+        options.AIContextProviders = new List<AIContextProvider> { provider };
     }
 
     private AIAgent BuildChatClientAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
@@ -199,47 +250,6 @@ public sealed class AgentFactory
     /// 配了 <see cref="SkillsDirectory"/> 时用 MAF <see cref="AgentFileSkillsSource"/>（支持 SKILL.md 正文 + 脚本/resources），
     /// 并按 <see cref="AgentDefinition.Skills"/> 过滤；否则退回 SkillRegistry 的纯提示词 <see cref="AgentInMemorySkillsSource"/>。
     /// </summary>
-    private AgentSkillsSource? BuildSkillsSource(AgentDefinition definition)
-    {
-        if (!definition.EnableAgentSkills) return null;
-
-        // 文件型 source（支持脚本）：每 agent 一个，按名过滤子集。
-        if (!string.IsNullOrEmpty(SkillsDirectory))
-        {
-            var fileSource = new AgentFileSkillsSource(
-                SkillsDirectory,
-                scriptRunner: _skillScriptRunner,
-                options: null,
-                loggerFactory: _loggerFactory);
-
-            if (definition.Skills.Count > 0)
-            {
-                var allowed = new HashSet<string>(definition.Skills, StringComparer.OrdinalIgnoreCase);
-                return new FilteringAgentSkillsSource(
-                    fileSource,
-                    (skill, _) => allowed.Contains(skill.Frontmatter.Name),
-                    _loggerFactory);
-            }
-            return fileSource;
-        }
-
-        // 退路：SkillRegistry 纯提示词（无脚本）。
-        var skills = definition.Skills.Count > 0
-            ? _skillRegistry.ResolveAll(definition.Skills)
-            : _skillRegistry.GetAll();
-        if (skills.Count == 0) return null;
-
-        var agentSkills = skills
-            .Select(s => (AgentSkill)new AgentInlineSkill(
-                new AgentSkillFrontmatter(s.Name, s.Description, ""),
-                s.Content,
-                null,
-                null))
-            .ToList();
-
-        return new AgentInMemorySkillsSource(agentSkills);
-    }
-
     /// <summary>
     /// skill 脚本运行器：按扩展名选解释器（.py→python3，.sh→sh，.js→node），
     /// 以子进程执行脚本并传入 CLI 参数，返回 stdout。失败时返回含退出码/ stderr 的字符串。
