@@ -51,6 +51,8 @@ public static class DesktopCompositionExtensions
             o.OpenAI.ApiKey = llm.ApiKey;
             o.OpenAI.ModelId = llm.ModelName;
             o.OpenAI.Endpoint = llm.Endpoint;
+            // HarnessAgent 文件记忆 provider 的可写根目录（.app 启动 CWD=/ 只读，必须显式指定）。
+            o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
         });
 
         // —— 公共业务上下文（两租户共用）——

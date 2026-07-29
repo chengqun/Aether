@@ -39,6 +39,13 @@ public sealed class AgentFactory
     /// </summary>
     public bool UseChatClientAgent { get; set; } = false;
 
+    /// <summary>
+    /// HarnessAgent 文件记忆 provider 的可写根目录（每 agent 在其下建子目录）。
+    /// 为空时启用文件记忆的 agent 会被静默禁用该 provider，避免默认相对路径在只读 CWD 下崩溃。
+    /// 由宿主通过 AetherAIOptions.FileMemoryRoot 设置。
+    /// </summary>
+    public string? FileMemoryRoot { get; set; }
+
     /// <param name="chatClientFactory">
     /// Resolves the <see cref="IChatClient"/> for a given agent model id.
     /// Invoked lazily per agent so the runtime does not eagerly build a client.
@@ -68,6 +75,9 @@ public sealed class AgentFactory
 
     private AIAgent BuildHarnessAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
     {
+        // 文件记忆仅在配置了可写根目录时才真正启用；否则静默禁用，避免默认相对路径在只读 CWD 下崩溃。
+        var fileMemoryEnabled = definition.EnableFileMemory && !string.IsNullOrEmpty(FileMemoryRoot);
+
         var options = new HarnessAgentOptions
         {
             Id = definition.Id,
@@ -79,12 +89,15 @@ public sealed class AgentFactory
             DisableWebSearch = !definition.EnableWebSearch,
             DisableTodoProvider = !definition.EnableTodoProvider,
             DisableAgentModeProvider = !definition.EnableAgentModeProvider,
-            DisableFileMemory = !definition.EnableFileMemory,
+            DisableFileMemory = !fileMemoryEnabled,
             DisableAgentSkillsProvider = !definition.EnableAgentSkills,
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
             AgentSkillsSource = BuildSkillsSource(definition),
+            FileMemoryStore = fileMemoryEnabled
+                ? new FileSystemAgentFileStore(Path.Combine(FileMemoryRoot!, definition.Id))
+                : null,
         };
 
         return _chatClientFactory.Create(definition.ModelId).AsHarnessAgent(options, _loggerFactory);

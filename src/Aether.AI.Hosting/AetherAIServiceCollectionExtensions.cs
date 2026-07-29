@@ -79,6 +79,7 @@ public static class AetherAIServiceCollectionExtensions
                 sp.GetRequiredService<SkillRegistry>(),
                 sp.GetService<ILoggerFactory>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
+            factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
             return factory;
         });
         services.AddSingleton<SessionManager>();

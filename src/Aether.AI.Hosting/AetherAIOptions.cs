@@ -13,6 +13,13 @@ public sealed class AetherAIOptions
     /// instead of the full <c>HarnessAgent</c> pipeline. Defaults to <c>false</c>.
     /// </summary>
     public bool UseChatClientAgent { get; set; } = false;
+
+    /// <summary>
+    /// HarnessAgent「文件记忆」provider 的可写根目录（每 agent 在其下建子目录隔离）。
+    /// 为 null 且某 agent 启用文件记忆时，平台会静默禁用该 provider（避免默认相对路径
+    /// 在只读 CWD 下抛 Read-only file system）。桌面端应设为租户数据目录下的子目录。
+    /// </summary>
+    public string? FileMemoryRoot { get; set; }
 }
 
 /// <summary>
