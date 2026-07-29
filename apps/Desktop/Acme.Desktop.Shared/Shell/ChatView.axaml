@@ -26,12 +26,12 @@
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="🤔" FontSize="13" VerticalAlignment="Center" />
-              <TextBlock Text="深度思考中" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="正在思考…" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
               <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsStreamingExpanded}" />
               <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsStreamingExpanded}" />
             </StackPanel>
             <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsStreamingExpanded}" Margin="0,2,0,0">
-              <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+              <ScrollViewer MaxHeight="200" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                             ScrollChanged="OnStreamingScrollChanged">
                 <TextBlock Text="{Binding Content}" FontSize="12" TextWrapping="Wrap"
                            FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
@@ -72,51 +72,37 @@
           </StackPanel>
         </Border>
 
+        <!-- 工具步骤：调用+结果合并为一条。折叠态一行摘要，展开看完整输入/输出 JSON -->
         <Border Classes="tool-card" HorizontalAlignment="Left"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
-                IsVisible="{Binding IsToolCall}" PointerPressed="OnToolCardTapped">
+                IsVisible="{Binding IsToolStep}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="🔧" FontSize="13" VerticalAlignment="Center" />
-              <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center">
-                <Run Text="调用 " /><Run Text="{Binding ToolName}" />
-              </TextBlock>
+              <TextBlock Text="✅" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding IsToolCompleted}" />
+              <TextBlock Text="🔧" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsToolCompleted}" />
+              <TextBlock Text="{Binding ToolName}" FontSize="13" FontWeight="SemiBold"
+                         Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding ArgSummary}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
               <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
               <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
-            <TextBlock Text="{Binding Input, Converter={StaticResource DictToString}}" FontSize="11" MaxLines="2" TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" IsVisible="{Binding !IsExpanded}" />
-            <Border Background="#FFFFFF" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
-              <TextBlock Text="{Binding Input, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
-                         FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
+              <StackPanel Spacing="6">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="输入" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBlock Text="{Binding Input, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
+                             FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                </StackPanel>
+                <StackPanel Spacing="2" IsVisible="{Binding IsToolCompleted}">
+                  <TextBlock Text="输出" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
+                             FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                </StackPanel>
+              </StackPanel>
             </Border>
-          </StackPanel>
-        </Border>
-
-        <Border Classes="tool-card" HorizontalAlignment="Left"
-                Background="{DynamicResource ToolResultBrush}" BorderBrush="{DynamicResource ToolResultBorderBrush}"
-                IsVisible="{Binding IsToolResult}" PointerPressed="OnToolCardTapped">
-          <StackPanel Spacing="4">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="✅" FontSize="13" VerticalAlignment="Center" />
-              <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolResultTextBrush}" VerticalAlignment="Center">
-                <Run Text="结果 " /><Run Text="{Binding ToolName}" />
-              </TextBlock>
-              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
-            </StackPanel>
-            <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" MaxLines="2" TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource TextSecondaryBrush}" FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" IsVisible="{Binding !IsExpanded}" />
-            <Border Background="#FFFFFF" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
-              <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
-                         FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" Foreground="{DynamicResource TextPrimaryBrush}" />
-            </Border>
-          </StackPanel>
-        </Border>
-
-        <Border Classes="bubble-agent" HorizontalAlignment="Left" IsVisible="{Binding IsThinking}">
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Content}" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" FontStyle="Italic" />
           </StackPanel>
         </Border>
       </Grid>

@@ -32,11 +32,18 @@ public partial class ChatMessageItem : ObservableObject
     [ObservableProperty]
     private string? _toolName;
 
+    /// <summary>工具调用 Id，用于把 call 与 result 配对到同一条消息。</summary>
+    public string CallId { get; set; } = string.Empty;
+
     [ObservableProperty]
     private Dictionary<string, object>? _input;
 
     [ObservableProperty]
     private Dictionary<string, object>? _output;
+
+    /// <summary>工具结果已返回（call+result 合并到一条，完成后置 true）。</summary>
+    [ObservableProperty]
+    private bool _isToolCompleted;
 
     [ObservableProperty]
     private bool _isExpanded;
@@ -52,11 +59,8 @@ public partial class ChatMessageItem : ObservableObject
 
     public bool IsText => ItemType == "text";
 
-    public bool IsToolCall => ItemType == "tool_call";
-
-    public bool IsToolResult => ItemType == "tool_result";
-
-    public bool IsThinking => ItemType == "thinking";
+    /// <summary>工具步骤（调用+结果合并为一条）。</summary>
+    public bool IsToolStep => ItemType == "tool";
 
     public bool IsUserText => IsUser && IsText;
 
@@ -67,6 +71,44 @@ public partial class ChatMessageItem : ObservableObject
 
     /// <summary>最终回答：markdown 气泡（非思考段）。</summary>
     public bool IsAgentMarkdownText => !IsUser && IsText && !IsStreaming && !IsReasoning;
+
+    /// <summary>输入一行摘要（折叠态展示），如 skill=hello-py  arguments=["张三"]。</summary>
+    public string ArgSummary => Summarize(Input);
+
+    /// <summary>输出一行摘要（折叠态展示）。</summary>
+    public string ResultSummary => Summarize(Output);
+
+    partial void OnInputChanged(Dictionary<string, object>? value) => OnPropertyChanged(nameof(ArgSummary));
+    partial void OnOutputChanged(Dictionary<string, object>? value)
+    {
+        OnPropertyChanged(nameof(ResultSummary));
+    }
+
+    private static string Summarize(Dictionary<string, object>? dict)
+    {
+        if (dict is null || dict.Count == 0) return string.Empty;
+        var parts = new List<string>();
+        foreach (var kv in dict)
+            parts.Add($"{kv.Key}={FormatValue(kv.Value)}");
+        var s = string.Join("  ", parts);
+        return s.Length > 80 ? s[..80] + "…" : s;
+    }
+
+    private static string FormatValue(object? v)
+    {
+        if (v is null) return "null";
+        if (v is string s) return s;
+        if (v is System.Text.Json.JsonElement je)
+        {
+            return je.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => je.GetString() ?? string.Empty,
+                System.Text.Json.JsonValueKind.Null => "null",
+                _ => je.ToString(),
+            };
+        }
+        return v.ToString() ?? string.Empty;
+    }
 
     partial void OnIsStreamingChanged(bool value)
     {

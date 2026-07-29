@@ -119,16 +119,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await _dispatcher.InvokeAsync(async () => await LoadLlmConfigsAsync());
     }
 
-    /// <summary>流式分段光标：指向"当前正在追加 token 的消息项"。</summary>
+    /// <summary>流式分段光标：指向"当前正在追加 token 的消息项"；PendingTools 按 CallId 配对调用与结果。</summary>
     private sealed class StreamCursor
     {
         public ChatMessageItem Current;
+        public readonly Dictionary<string, ChatMessageItem> PendingTools = new();
         public StreamCursor(ChatMessageItem initial) => Current = initial;
     }
 
     /// <summary>
-    /// 分段交错运行：agent 思考→调工具→再思考→… 的过程中，把每段思考与工具调用/结果按真实时序
-    /// 交错插入聊天流（思考段1 → 🔧调用 → ✅结果 → 思考段2/回答），而非旧的全堆在一个气泡上方。
+    /// 分段交错运行：agent 思考→调工具→再思考→… 的过程中，把每段思考与工具步骤按真实时序
+    /// 交错插入聊天流（思考段1 → 工具步(调用+结果合并) → 思考段2/回答），而非旧的全堆在一个气泡上方。
     /// </summary>
     private async Task RunSegmentedStreamAsync(Guid conversationId, Guid expertId, string userMessage,
         string senderName, System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
@@ -180,7 +181,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         IsReasoning = true,
     };
 
-    /// <summary>工具事件处理：Call 冻结当前思考段并插 tool_call；Result 插 tool_result 后开新思考段。</summary>
+    /// <summary>工具事件处理：Call 冻结当前思考段并插一条工具步（带 CallId）；Result 按 CallId 回填到同一条，再开新思考段。</summary>
     private void HandleToolEventSegmented(StreamCursor cursor, ToolStreamEvent ev, string senderName)
     {
         if (ev.Kind == ToolStreamEventKind.Call)
@@ -195,32 +196,40 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空思考段
                 idx++;
             }
-            var call = new ChatMessageItem
+            var tool = new ChatMessageItem
             {
                 Side = ChatMessageSide.Left,
-                ItemType = "tool_call",
+                ItemType = "tool",
                 Sender = senderName,
                 ToolName = ev.Name,
+                CallId = ev.CallId,
                 Input = ev.Input,
             };
-            Messages.Insert(idx, call);
-            cursor.Current = call;
+            Messages.Insert(idx, tool);
+            cursor.Current = tool;
+            if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
         }
-        else // Result
+        else // Result：回填到对应工具步（合并为一条），再开新思考段
         {
-            var idx = Messages.IndexOf(cursor.Current); // 当前是 tool_call
-            if (idx < 0) idx = Messages.Count - 1;
-            var res = new ChatMessageItem
+            ChatMessageItem? tool = null;
+            if (!string.IsNullOrEmpty(ev.CallId) && cursor.PendingTools.TryGetValue(ev.CallId, out var t))
             {
-                Side = ChatMessageSide.Left,
-                ItemType = "tool_result",
-                Sender = senderName,
-                ToolName = ev.Name,
-                Output = ev.Output,
-            };
-            Messages.Insert(idx + 1, res);
+                tool = t;
+                cursor.PendingTools.Remove(ev.CallId);
+            }
+            else if (cursor.Current.ItemType == "tool")
+            {
+                tool = cursor.Current; // 退路：顺序配对
+            }
+            if (tool is null) return;
+
+            tool.Output = ev.Output;
+            tool.IsToolCompleted = true;
+
+            var idx = Messages.IndexOf(tool);
+            if (idx < 0) idx = Messages.Count - 1;
             var next = NewThinkingSegment(senderName);
-            Messages.Insert(idx + 2, next);
+            Messages.Insert(idx + 1, next);
             cursor.Current = next;
         }
     }
