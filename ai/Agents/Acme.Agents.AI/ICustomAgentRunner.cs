@@ -1,4 +1,4 @@
-using Aether.AI.Harness;
+using Aether.AI.Core.Agents;
 
 namespace Acme.Agents.AI;
 
