@@ -132,6 +132,7 @@
     <Project Path="src/Aether.AI.Hosting/Aether.AI.Hosting.csproj" />
     <Project Path="src/Aether.AI.Memory/Aether.AI.Memory.csproj" />
     <Project Path="src/Aether.AI.Memory.Sqlite/Aether.AI.Memory.Sqlite.csproj" />
+    <Project Path="src/Aether.AI.Workflows/Aether.AI.Workflows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />

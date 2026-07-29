@@ -101,6 +101,7 @@ public static class DesktopCompositionExtensions
 
         // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
         aether.AddCustomAgents();
+        aether.AddCustomWorkflows();
         // 桌面端模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端
         services.AddSingleton<IModelSource, LlmConfigModelSource>();
         services.AddSingleton<IChatClientFactory, DesktopChatClientFactory>();

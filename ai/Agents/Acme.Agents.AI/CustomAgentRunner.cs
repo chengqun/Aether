@@ -60,7 +60,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         _runtime.Invalidate(agentId.ToString());
     }
 
-    private static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
+    internal static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
         => new()
         {
             Id = id,

@@ -148,6 +148,41 @@ public sealed class HarnessRuntime
         session.State = SessionState.Active;
         session.Touch();
 
+        var fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, callback, onToolEvent, cancellationToken,
+            name => session.ToolCalls.Add(name));
+
+        session.Messages.Add(Message.Assistant(fullText));
+        session.State = SessionState.Idle;
+        session.Touch();
+        return fullText;
+    }
+
+    /// <summary>
+    /// 用一个**已构建好的** <see cref="AIAgent"/>（如 workflow 包成的 agent）流式运行一轮，
+    /// 复用与 <see cref="RunStreamingAsync(Guid,string,Func{string,CancellationToken,Task}?,Func{ToolStreamEvent,CancellationToken,Task}?,CancellationToken)"/>
+    /// 相同的流式循环 + ToolStreamEvent 提取。无 AetherSession 簿记（调用方自管会话）。
+    /// 供 ICustomWorkflowRunner 等把组合 agent 当单 agent 跑的场景使用。
+    /// </summary>
+    public async Task<string> RunStreamingAsync(
+        AIAgent agent,
+        FrameworkAgentSession frameworkSession,
+        string userMessage,
+        Func<string, CancellationToken, Task>? callback = null,
+        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        CancellationToken cancellationToken = default)
+        => await RunStreamingCoreAsync(agent, frameworkSession, userMessage, callback, onToolEvent, cancellationToken, onToolCallName: null);
+
+    /// <summary>
+    /// 流式运行核心：遍历 <see cref="AIAgent.RunStreamingAsync"/>，上抛文本 token 与工具调用/结果事件。
+    /// <paramref name="onToolCallName"/> 供带 AetherSession 的调用方记录工具名（可选）。
+    /// </summary>
+    private static async Task<string> RunStreamingCoreAsync(
+        AIAgent agent, FrameworkAgentSession frameworkSession, string userMessage,
+        Func<string, CancellationToken, Task>? callback,
+        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent,
+        CancellationToken cancellationToken,
+        Action<string>? onToolCallName)
+    {
         var sb = new System.Text.StringBuilder();
         // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
@@ -169,7 +204,7 @@ public sealed class HarnessRuntime
                     {
                         if (!string.IsNullOrEmpty(call.CallId))
                             toolNamesByCallId[call.CallId] = call.Name!;
-                        session.ToolCalls.Add(call.Name!);
+                        onToolCallName?.Invoke(call.Name!);
                         await onToolEvent(
                             new ToolStreamEvent(ToolStreamEventKind.Call, call.Name!, call.CallId ?? string.Empty,
                                 ToInputDict(call.Arguments), null),
@@ -187,12 +222,7 @@ public sealed class HarnessRuntime
                 }
             }
         }
-
-        var fullText = sb.ToString();
-        session.Messages.Add(Message.Assistant(fullText));
-        session.State = SessionState.Idle;
-        session.Touch();
-        return fullText;
+        return sb.ToString();
     }
 
     /// <summary>把 FunctionCallContent.Arguments（可能为字典/JsonElement/字符串）归一为可展示字典。</summary>

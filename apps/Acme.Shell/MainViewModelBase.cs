@@ -33,6 +33,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
     private readonly ICustomAgentRunner _agentRunner;
+    private readonly ICustomWorkflowRunner _workflowRunner;
     private readonly IUiDispatcher _dispatcher;
     private readonly IConversationStore _conversationStore;
     private readonly IPreferencesStore _preferences;
@@ -54,6 +55,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _deviceChatClient = deviceChatClient;
         _llmService = llmService;
         _agentRunner = serviceProvider.GetRequiredService<ICustomAgentRunner>();
+        _workflowRunner = serviceProvider.GetRequiredService<ICustomWorkflowRunner>();
         _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
         _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
@@ -67,12 +69,20 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<IAutomationService>(),
             serviceProvider.GetRequiredService<IAutomationScheduler>(),
             _dispatcher);
+        Workflows = new WorkflowsViewModel(
+            serviceProvider.GetRequiredService<ICustomWorkflowCatalog>(),
+            serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
+            _workflowRunner,
+            _dispatcher);
+        Workflows.SummonRequested += OnWorkflowSummonRequested;
+
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
             _dispatcher,
             serviceProvider.GetRequiredService<IAgentMarketplaceService>(),
             _auth,
+            Workflows,
             serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
         Experts.SummonChanged += async () => await Notes.LoadAsync();
@@ -132,8 +142,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// 交错插入聊天流（思考段1 → 工具步(调用+结果合并) → 思考段2/回答）。
     /// 返回本轮产生的 transcript 项（思考段/工具步/回答，按时序），供 PersistTurnAsync 持久化。
     /// </summary>
-    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(Guid conversationId, Guid expertId, string userMessage,
-        string senderName, System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
+    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(Guid conversationId, string userMessage,
+        string senderName,
+        Func<Func<string, CancellationToken, Task>, Func<ToolStreamEvent, CancellationToken, Task>, CancellationToken, Task> runAsync,
+        System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
     {
         var runItems = new List<ChatMessageItem>();
         var cursor = new StreamCursor(NewThinkingSegment(senderName));
@@ -141,7 +153,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
         try
         {
-            await _agentRunner.RunStreamingAsync(conversationId, expertId, userMessage,
+            await runAsync(
                 async (token, _) =>
                 {
                     fullText.Append(token);
@@ -280,7 +292,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         if (SelectedAgentItem is ExpertItem expert)
         {
             var fullText = new System.Text.StringBuilder();
-            await RunSegmentedStreamAsync(msg.ConversationId, expert.Id, msg.Content, expert.Name, fullText);
+            await RunSegmentedStreamAsync(msg.ConversationId, msg.Content, expert.Name,
+                (onToken, onToolEvent, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, onToken, onToolEvent, ct),
+                fullText);
 
             // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
             // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
@@ -362,9 +376,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
 
             _isInitializing = true;
-            // 恢复时把下拉选中切到该会话绑定的专家（抑制变更回调，避免触发持久化/新建）
+            // 恢复时按绑定 id 判断是 workflow 还是 agent，切到对应目标（抑制变更回调）
             if (Guid.TryParse(item.AgentId, out var aid))
-                SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid);
+            {
+                var wf = Workflows.Workflows.FirstOrDefault(w => w.Id == aid);
+                if (wf is not null) { SelectedWorkflow = wf; SelectedAgentItem = null; }
+                else { SelectedWorkflow = null; SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid); }
+            }
             _isInitializing = false;
 
             Messages.Clear();
@@ -507,6 +525,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }
 
+    /// <summary>工作流页 ViewModel</summary>
+    public WorkflowsViewModel Workflows { get; }
+
+    /// <summary>当前召唤到聊天的 workflow（非空时聊天跑 workflow；为空时跑选中的 agent）。</summary>
+    [ObservableProperty] private WorkflowItem? _selectedWorkflow;
+
     /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
     /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
     public object? Futures { get; protected set; }
@@ -607,6 +631,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await Notes.LoadAsync();
             await Experts.LoadAsync();
             await Automation.LoadAsync();
+            await Workflows.LoadAsync();
             await RestoreSummonedAndSelectedAsync();
             await RefreshConversationsAsync();
         }
@@ -706,6 +731,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         catch { /* 偏好持久化失败不阻塞 */ }
     }
 
+    /// <summary>召唤 workflow 到聊天：设为当前目标、开新会话、切到聊天页。</summary>
+    private void OnWorkflowSummonRequested(WorkflowItem item)
+    {
+        _dispatcher.Post(() =>
+        {
+            SelectedWorkflow = item;
+            SelectedAgentItem = null; // 走 workflow 分支
+            _currentConversationId = Guid.Empty; // 新会话
+            Messages.Clear();
+            CurrentPage = "chat";
+            StatusText = $"已召唤工作流：{item.Name}";
+            IsConnected = _deviceChatClient.IsConnected;
+        });
+    }
+
     /// <summary>选中专家变化时持久化（启动期 _isInitializing 抑制）。</summary>
     partial void OnSelectedAgentItemChanged(object? value)
     {
@@ -781,6 +821,44 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Content = content
         });
 
+        // 召唤了 workflow 时，本地流式运行 workflow（多 agent 转交）
+        if (SelectedWorkflow is WorkflowItem wf)
+        {
+            var justCreated = false;
+            if (_currentConversationId == Guid.Empty)
+            {
+                justCreated = true;
+                _currentConversationId = Guid.NewGuid();
+                var conv = new Conversation
+                {
+                    ConversationId = _currentConversationId,
+                    AgentId = wf.Id.ToString(),
+                    AgentName = wf.Name,
+                    Title = content.Length > 20 ? content[..20] + "…" : content,
+                };
+                conv.Append(Aether.AI.Core.Messages.Message.User(content));
+                await _conversationStore.SaveAsync(conv);
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    Conversations.Insert(0, new ConversationItem
+                    {
+                        Id = conv.ConversationId, Title = conv.Title, Preview = content,
+                        DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
+                    });
+                    foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
+                });
+            }
+
+            var fullText = new System.Text.StringBuilder();
+            var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, wf.Name,
+                (onToken, onToolEvent, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, onToken, onToolEvent, ct),
+                fullText);
+            await PersistTurnAsync(content, runItems, fullText.ToString());
+            if (justCreated)
+                _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
+            return;
+        }
+
         // 选中已召唤的自定义专家时，本地流式运行（不走 SignalR）
         if (SelectedAgentItem is ExpertItem expert)
         {
@@ -816,10 +894,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
 
             var fullText = new System.Text.StringBuilder();
-            var runItems = await RunSegmentedStreamAsync(_currentConversationId, expert.Id, content, expert.Name, fullText);
+            var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, expert.Name,
+                (onToken, onToolEvent, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, onToken, onToolEvent, ct),
+                fullText);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
-            await PersistTurnAsync(expert, content, runItems, fullText.ToString());
+            await PersistTurnAsync(content, runItems, fullText.ToString());
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
@@ -888,7 +968,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     }
 
     /// <summary>把本轮 transcript（user + 思考段/工具步/回答）追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>
-    private async Task PersistTurnAsync(ExpertItem expert, string userContent,
+    private async Task PersistTurnAsync(string userContent,
         IReadOnlyList<ChatMessageItem> runItems, string fullText)
     {
         if (_currentConversationId == Guid.Empty) return;

@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Shell;
 
 /// <summary>专家页 tab。</summary>
-public enum ExpertsTab { Agent, Connector, Market }
+public enum ExpertsTab { Agent, Workflow, Connector, Market }
 
 /// <summary>专家页面 ViewModel：从自定义 Agent 目录加载，展示为专家卡片。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject
@@ -20,13 +20,14 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly IAppAuthService _auth;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        IAgentMarketplaceService marketplace, IAppAuthService auth, IConnectorViewModel? connector = null)
+        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _marketplace = marketplace ?? throw new ArgumentNullException(nameof(marketplace));
         _auth = auth ?? throw new ArgumentNullException(nameof(auth));
+        Workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
         Connector = connector;
         _ = RefreshLoginStateAsync();
     }
@@ -54,7 +55,12 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>宿主注入的连接器 VM（null 则无连接器 tab）。</summary>
     public IConnectorViewModel? Connector { get; }
 
+    /// <summary>工作流 VM（专家团 tab）。</summary>
+    public WorkflowsViewModel Workflows { get; }
+
     public bool IsAgentTab => CurrentTab == ExpertsTab.Agent;
+
+    public bool IsWorkflowTab => CurrentTab == ExpertsTab.Workflow;
     public bool IsConnectorTab => CurrentTab == ExpertsTab.Connector;
     public bool IsMarketTab => CurrentTab == ExpertsTab.Market;
     public bool HasConnector => Connector is not null;
@@ -62,6 +68,7 @@ public partial class ExpertsViewModel : ObservableObject
     partial void OnCurrentTabChanged(ExpertsTab value)
     {
         OnPropertyChanged(nameof(IsAgentTab));
+        OnPropertyChanged(nameof(IsWorkflowTab));
         OnPropertyChanged(nameof(IsConnectorTab));
         OnPropertyChanged(nameof(IsMarketTab));
         if (value == ExpertsTab.Connector && Connector is not null)
@@ -74,6 +81,7 @@ public partial class ExpertsViewModel : ObservableObject
     }
 
     [RelayCommand] private void ShowAgentTab() => CurrentTab = ExpertsTab.Agent;
+    [RelayCommand] private void ShowWorkflowTab() => CurrentTab = ExpertsTab.Workflow;
     [RelayCommand] private void ShowConnectorTab() { if (HasConnector) CurrentTab = ExpertsTab.Connector; }
     [RelayCommand] private void ShowMarketTab() => CurrentTab = ExpertsTab.Market;
 

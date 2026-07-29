@@ -48,6 +48,8 @@
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Classes="top-tab" Content="专家" Command="{Binding ShowAgentTabCommand}"
                   IsEnabled="{Binding !IsAgentTab}" Padding="12,4" FontSize="13" />
+          <Button Classes="top-tab" Content="专家团" Command="{Binding ShowWorkflowTabCommand}"
+                  IsEnabled="{Binding !IsWorkflowTab}" Padding="12,4" FontSize="13" />
           <Button Classes="top-tab" Content="连接器" Command="{Binding ShowConnectorTabCommand}"
                   IsEnabled="{Binding !IsConnectorTab}" Padding="12,4" FontSize="13"
                   IsVisible="{Binding HasConnector}" />
@@ -62,6 +64,11 @@
 
     <!-- ===== tab 内容（填充剩余空间；三面板叠加，IsVisible 切换） ===== -->
     <Grid>
+    <!-- ===== Workflow（专家团）面板 ===== -->
+    <Panel IsVisible="{Binding IsWorkflowTab}">
+      <shell:WorkflowsView DataContext="{Binding Workflows}" />
+    </Panel>
+
     <!-- ===== Agent 面板 ===== -->
     <Panel IsVisible="{Binding IsAgentTab}">
       <DockPanel>

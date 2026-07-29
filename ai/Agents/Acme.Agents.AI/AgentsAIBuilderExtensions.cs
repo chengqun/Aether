@@ -22,4 +22,13 @@ public static class AgentsAIBuilderExtensions
         services.AddSingleton<IAgentMarketplaceService, AgentMarketplaceService>();
         return builder;
     }
+
+    /// <summary>注册自定义 Workflow 目录 + 运行器（依赖 AddCustomAgents 已注册的 catalog/HarnessRuntime/AgentFactory）。</summary>
+    public static AetherAIBuilder AddCustomWorkflows(this AetherAIBuilder builder)
+    {
+        var services = builder.Services;
+        services.AddSingleton<ICustomWorkflowCatalog, CustomWorkflowCatalog>();
+        services.AddSingleton<ICustomWorkflowRunner, CustomWorkflowRunner>();
+        return builder;
+    }
 }
