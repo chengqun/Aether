@@ -56,19 +56,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("名称不能为空", nameof(definition));
 
-        var source = AgentSourceParser.Serialize(
-            definition.Name,
-            definition.Description,
-            definition.Category,
-            definition.Tools,
-            definition.Memory,
-            definition.MaxHistory,
-            definition.ModelId,
-            definition.Source,
-            definition.MarketplaceId,
-            definition.MarketplaceSyncedAt,
-            definition.DisplayName,
-            definition.SystemPrompt);
+        var source = AgentSourceParser.Serialize(definition.ToSourceFields());
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)
@@ -119,5 +107,14 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             MarketplaceId = fields.MarketplaceId,
             MarketplaceSyncedAt = fields.MarketplaceSyncedAt,
             DisplayName = fields.DisplayName,
+            TopP = fields.TopP,
+            MaxOutputTokens = fields.MaxOutputTokens,
+            ResponseFormat = fields.ResponseFormat,
+            EnableWebSearch = fields.EnableWebSearch,
+            EnableTodoProvider = fields.EnableTodoProvider,
+            EnableAgentModeProvider = fields.EnableAgentModeProvider,
+            EnableFileMemory = fields.EnableFileMemory,
+            EnableAgentSkills = fields.EnableAgentSkills,
+            EnableOpenTelemetry = fields.EnableOpenTelemetry,
         };
 }

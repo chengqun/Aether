@@ -107,6 +107,15 @@ public partial class ExpertsViewModel : ObservableObject
                         Tools = def.Tools.ToList(),
                         Memory = def.Memory,
                         MaxHistory = def.MaxHistory,
+                        TopP = def.TopP,
+                        MaxOutputTokens = def.MaxOutputTokens,
+                        ResponseFormat = def.ResponseFormat,
+                        EnableWebSearch = def.EnableWebSearch,
+                        EnableTodoProvider = def.EnableTodoProvider,
+                        EnableAgentModeProvider = def.EnableAgentModeProvider,
+                        EnableFileMemory = def.EnableFileMemory,
+                        EnableAgentSkills = def.EnableAgentSkills,
+                        EnableOpenTelemetry = def.EnableOpenTelemetry,
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
@@ -177,6 +186,15 @@ public partial class ExpertsViewModel : ObservableObject
                 Tools = item.Tools,
                 Memory = item.Memory,
                 MaxHistory = item.MaxHistory,
+                TopP = item.TopP,
+                MaxOutputTokens = item.MaxOutputTokens,
+                ResponseFormat = item.ResponseFormat,
+                EnableWebSearch = item.EnableWebSearch,
+                EnableTodoProvider = item.EnableTodoProvider,
+                EnableAgentModeProvider = item.EnableAgentModeProvider,
+                EnableFileMemory = item.EnableFileMemory,
+                EnableAgentSkills = item.EnableAgentSkills,
+                EnableOpenTelemetry = item.EnableOpenTelemetry,
             };
 
             await _catalog.SaveAsync(def);
@@ -303,6 +321,15 @@ public partial class ExpertsViewModel : ObservableObject
                 Memory = fields?.Memory ?? AgentMemoryMode.SlidingWindow,
                 MaxHistory = fields?.MaxHistory ?? 20,
                 ModelId = fields?.Model ?? string.Empty,
+                TopP = fields?.TopP,
+                MaxOutputTokens = fields?.MaxOutputTokens,
+                ResponseFormat = fields?.ResponseFormat ?? AgentResponseFormat.Default,
+                EnableWebSearch = fields?.EnableWebSearch ?? false,
+                EnableTodoProvider = fields?.EnableTodoProvider ?? false,
+                EnableAgentModeProvider = fields?.EnableAgentModeProvider ?? false,
+                EnableFileMemory = fields?.EnableFileMemory ?? false,
+                EnableAgentSkills = fields?.EnableAgentSkills ?? false,
+                EnableOpenTelemetry = fields?.EnableOpenTelemetry ?? false,
                 Source = "Marketplace",
                 MarketplaceId = detail.Id,
                 MarketplaceSyncedAt = detail.LastModifiedAt,
@@ -368,10 +395,7 @@ public partial class ExpertsViewModel : ObservableObject
         {
             var def = await _catalog.GetAsync(item.Id);
             if (def is null) return (false, "本地无定义");
-            var source = AgentSourceParser.Serialize(
-                def.Name, def.Description, def.Category, def.Tools, def.Memory, def.MaxHistory,
-                def.ModelId, def.Source, def.MarketplaceId, def.MarketplaceSyncedAt, def.DisplayName,
-                def.SystemPrompt);
+            var source = AgentSourceParser.Serialize(def.ToSourceFields());
 
             var cloudId = def.MarketplaceId;
             var input = new PublishLocalAgentInputDto

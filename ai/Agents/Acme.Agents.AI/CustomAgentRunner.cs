@@ -70,6 +70,24 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             ModelId = def.ModelId ?? string.Empty,
             Memory = MapMemory(def.Memory),
             MaxHistory = def.MaxHistory,
+            TopP = def.TopP,
+            MaxOutputTokens = def.MaxOutputTokens,
+            ResponseFormat = MapResponseFormat(def.ResponseFormat),
+            EnableWebSearch = def.EnableWebSearch,
+            EnableTodoProvider = def.EnableTodoProvider,
+            EnableAgentModeProvider = def.EnableAgentModeProvider,
+            EnableFileMemory = def.EnableFileMemory,
+            EnableAgentSkills = def.EnableAgentSkills,
+            EnableOpenTelemetry = def.EnableOpenTelemetry,
+        };
+
+    /// <summary>Notes 层 AgentResponseFormat → 平台 Core AgentResponseFormat（同名不同程序集，显式映射）。</summary>
+    private static Aether.AI.Core.Agents.AgentResponseFormat MapResponseFormat(Acme.Notes.AgentSource.AgentResponseFormat format)
+        => format switch
+        {
+            Acme.Notes.AgentSource.AgentResponseFormat.Text => Aether.AI.Core.Agents.AgentResponseFormat.Text,
+            Acme.Notes.AgentSource.AgentResponseFormat.Json => Aether.AI.Core.Agents.AgentResponseFormat.Json,
+            _ => Aether.AI.Core.Agents.AgentResponseFormat.Default,
         };
 
     /// <summary>Notes 的 <see cref="NotesAgentMemoryMode"/> 与平台 <see cref="Aether.AI.Core.Agents.AgentMemoryMode"/> 同名同序，直接映射。</summary>

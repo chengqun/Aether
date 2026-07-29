@@ -46,4 +46,43 @@ public sealed class CustomAgentDefinition
 
     /// <summary>市场原名（本地 Name 会加" [市场]"后缀，此字段保留原名）。</summary>
     public string DisplayName { get; set; } = string.Empty;
+
+    // —— 采样 / 输出参数（可空=沿用 provider 默认）。映射到平台 AgentDefinition。
+    public double? TopP { get; set; }
+    public int? MaxOutputTokens { get; set; }
+    public AgentResponseFormat ResponseFormat { get; set; } = AgentResponseFormat.Default;
+
+    // —— HarnessAgent 扩展能力开关（默认全 false = 全部禁用）。
+    public bool EnableWebSearch { get; set; }
+    public bool EnableTodoProvider { get; set; }
+    public bool EnableAgentModeProvider { get; set; }
+    public bool EnableFileMemory { get; set; }
+    public bool EnableAgentSkills { get; set; }
+    public bool EnableOpenTelemetry { get; set; }
+
+    /// <summary>投影到持久化用的源字段（供 AgentSourceParser.Serialize 使用）。</summary>
+    public AgentSourceFields ToSourceFields() => new()
+    {
+        Name = Name,
+        Description = Description,
+        Category = string.IsNullOrWhiteSpace(Category) ? "普通对话" : Category,
+        Tools = Tools.ToList(),
+        Memory = Memory,
+        MaxHistory = MaxHistory,
+        Model = ModelId,
+        Source = Source,
+        MarketplaceId = MarketplaceId,
+        MarketplaceSyncedAt = MarketplaceSyncedAt,
+        DisplayName = DisplayName,
+        Prompt = SystemPrompt,
+        TopP = TopP,
+        MaxOutputTokens = MaxOutputTokens,
+        ResponseFormat = ResponseFormat,
+        EnableWebSearch = EnableWebSearch,
+        EnableTodoProvider = EnableTodoProvider,
+        EnableAgentModeProvider = EnableAgentModeProvider,
+        EnableFileMemory = EnableFileMemory,
+        EnableAgentSkills = EnableAgentSkills,
+        EnableOpenTelemetry = EnableOpenTelemetry,
+    };
 }

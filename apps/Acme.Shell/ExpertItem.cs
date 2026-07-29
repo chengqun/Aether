@@ -31,6 +31,19 @@ public sealed partial class ExpertItem : ObservableObject
     /// <summary>市场有更新（云端 LastModifiedAt 比本地新）。</summary>
     [ObservableProperty] private bool _hasUpdate;
 
+    // —— 采样 / 输出参数。
+    [ObservableProperty] private double? _topP;
+    [ObservableProperty] private int? _maxOutputTokens;
+    [ObservableProperty] private AgentResponseFormat _responseFormat = AgentResponseFormat.Default;
+
+    // —— HarnessAgent 扩展能力开关。
+    [ObservableProperty] private bool _enableWebSearch;
+    [ObservableProperty] private bool _enableTodoProvider;
+    [ObservableProperty] private bool _enableAgentModeProvider;
+    [ObservableProperty] private bool _enableFileMemory;
+    [ObservableProperty] private bool _enableAgentSkills;
+    [ObservableProperty] private bool _enableOpenTelemetry;
+
     public string DisplayIcon => "🤖";
     /// <summary>来源徽章：本地 / 市场。</summary>
     public string SourceBadge => string.Equals(Source, "Marketplace", StringComparison.OrdinalIgnoreCase) ? "市场" : "本地";

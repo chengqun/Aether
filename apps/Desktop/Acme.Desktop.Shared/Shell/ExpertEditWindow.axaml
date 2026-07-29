@@ -2,12 +2,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Acme.Desktop.Shared.Shell.ExpertEditWindow"
         Title="专家配置"
-        Width="520" Height="680"
+        Width="520" Height="820"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
 
     <!-- 标题 -->
     <Border Grid.Row="0" Padding="20,14">
@@ -72,8 +72,49 @@
       </StackPanel>
     </Grid>
 
+    <!-- 采样 / 输出 + 扩展能力 -->
+    <StackPanel Grid.Row="4" Margin="20,0,20,12" Spacing="10">
+      <Grid ColumnDefinitions="*,12,*,12,2*">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="Top P" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <NumericUpDown Value="{Binding TopP}" Minimum="0" Maximum="1"
+                         Increment="0.1" FormatString="0.0" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="最大输出 tokens" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <NumericUpDown Value="{Binding MaxOutputTokens}" Minimum="1" Maximum="128000"
+                         FormatString="0" />
+        </StackPanel>
+        <StackPanel Grid.Column="4" Spacing="4">
+          <TextBlock Text="响应格式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <ComboBox ItemsSource="{Binding ResponseFormatOptions}"
+                    SelectedItem="{Binding SelectedResponseFormatOption}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Display}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+      </Grid>
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="扩展能力（高级，默认关闭）" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+        <WrapPanel>
+          <CheckBox Content="Web 搜索" IsChecked="{Binding EnableWebSearch}" Margin="0,0,16,4" />
+          <CheckBox Content="文件记忆" IsChecked="{Binding EnableFileMemory}" Margin="0,0,16,4" />
+          <CheckBox Content="待办" IsChecked="{Binding EnableTodoProvider}" Margin="0,0,16,4" />
+          <CheckBox Content="技能" IsChecked="{Binding EnableAgentSkills}" Margin="0,0,16,4" />
+          <CheckBox Content="Agent 模式" IsChecked="{Binding EnableAgentModeProvider}" Margin="0,0,16,4" />
+          <CheckBox Content="遥测(OTel)" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,0,16,4" />
+        </WrapPanel>
+      </StackPanel>
+    </StackPanel>
+
     <!-- 工具区（占满剩余空间） -->
-    <Grid Grid.Row="4" Margin="20,0,20,12" RowDefinitions="Auto,*">
+    <Grid Grid.Row="5" Margin="20,0,20,12" RowDefinitions="Auto,*">
       <TextBlock Grid.Row="0" Text="工具（按类别勾选启用）" FontSize="12"
                  Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
       <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
@@ -111,7 +152,7 @@
     </Grid>
 
     <!-- 底部按钮 -->
-    <Border Grid.Row="5" Padding="20,12"
+    <Border Grid.Row="6" Padding="20,12"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
         <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8"/>

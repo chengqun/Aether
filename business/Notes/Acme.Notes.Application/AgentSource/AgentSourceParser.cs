@@ -10,6 +10,14 @@ public enum AgentMemoryMode
     Off = 2,
 }
 
+/// <summary>Agent 响应格式（与平台 Core 的 AgentResponseFormat 平行，business 层不引用 Aether.AI.*）。</summary>
+public enum AgentResponseFormat
+{
+    Default = 0,
+    Text = 1,
+    Json = 2,
+}
+
 /// <summary>Agent 源字段（解析结果）。</summary>
 public sealed class AgentSourceFields
 {
@@ -35,6 +43,19 @@ public sealed class AgentSourceFields
     public string DisplayName { get; set; } = string.Empty;
 
     public string Prompt { get; set; } = string.Empty;
+
+    // —— 采样 / 输出参数（可空=沿用 provider 默认）。
+    public double? TopP { get; set; }
+    public int? MaxOutputTokens { get; set; }
+    public AgentResponseFormat ResponseFormat { get; set; } = AgentResponseFormat.Default;
+
+    // —— HarnessAgent 扩展能力开关（默认全 false = 全部禁用，保持轻量运行时）。
+    public bool EnableWebSearch { get; set; }
+    public bool EnableTodoProvider { get; set; }
+    public bool EnableAgentModeProvider { get; set; }
+    public bool EnableFileMemory { get; set; }
+    public bool EnableAgentSkills { get; set; }
+    public bool EnableOpenTelemetry { get; set; }
 }
 
 /// <summary>
@@ -151,6 +172,36 @@ public static class AgentSourceParser
                 case "displayname":
                     result.DisplayName = value;
                     break;
+                case "topp":
+                    if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var tp))
+                        result.TopP = tp;
+                    break;
+                case "maxoutputtokens":
+                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mot))
+                        result.MaxOutputTokens = mot;
+                    break;
+                case "responseformat":
+                    if (Enum.TryParse<AgentResponseFormat>(value, true, out var rf))
+                        result.ResponseFormat = rf;
+                    break;
+                case "enablewebsearch":
+                    if (bool.TryParse(value, out var ws)) result.EnableWebSearch = ws;
+                    break;
+                case "enabletodoprovider":
+                    if (bool.TryParse(value, out var td)) result.EnableTodoProvider = td;
+                    break;
+                case "enableagentmodeprovider":
+                    if (bool.TryParse(value, out var am)) result.EnableAgentModeProvider = am;
+                    break;
+                case "enablefilememory":
+                    if (bool.TryParse(value, out var fm)) result.EnableFileMemory = fm;
+                    break;
+                case "enableagentskills":
+                    if (bool.TryParse(value, out var sk)) result.EnableAgentSkills = sk;
+                    break;
+                case "enableopentelemetry":
+                    if (bool.TryParse(value, out var ot)) result.EnableOpenTelemetry = ot;
+                    break;
                 case "tools":
                     var tools = new List<string>();
                     if (value.StartsWith('[') && value.EndsWith(']'))
@@ -204,34 +255,43 @@ tools: []
 memory: SlidingWindow
 max_history: 20
 model:
+response_format: Default
 ---
 （在此写系统提示词）";
     }
 
     /// <summary>反向序列化：把字段组装成源文本。</summary>
-    public static string Serialize(string name, string description, string category,
-        IEnumerable<string> tools, AgentMemoryMode memory, int maxHistory, string model,
-        string source, Guid? marketplaceId, DateTimeOffset? marketplaceSyncedAt, string displayName,
-        string prompt)
+    public static string Serialize(AgentSourceFields f)
     {
-        var toolList = tools?.ToList() ?? new List<string>();
+        if (f is null) throw new ArgumentNullException(nameof(f));
+
+        var toolList = f.Tools?.ToList() ?? new List<string>();
         var toolsLine = toolList.Count == 0
             ? "tools: []"
             : "tools:\n" + string.Join("\n", toolList.Select(t => $"- {t}"));
 
         return $@"---
-name: {name}
-description: {description}
-category: {category}
+name: {f.Name}
+description: {f.Description}
+category: {f.Category}
 {toolsLine}
-memory: {memory}
-max_history: {maxHistory}
-model: {model ?? string.Empty}
-source: {source ?? string.Empty}
-marketplace_id: {(marketplaceId?.ToString() ?? string.Empty)}
-marketplace_synced_at: {(marketplaceSyncedAt.HasValue ? marketplaceSyncedAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) : string.Empty)}
-display_name: {displayName ?? string.Empty}
+memory: {f.Memory}
+max_history: {f.MaxHistory}
+model: {f.Model ?? string.Empty}
+top_p: {(f.TopP.HasValue ? f.TopP.Value.ToString("R", CultureInfo.InvariantCulture) : string.Empty)}
+max_output_tokens: {(f.MaxOutputTokens.HasValue ? f.MaxOutputTokens.Value.ToString(CultureInfo.InvariantCulture) : string.Empty)}
+response_format: {f.ResponseFormat}
+enable_web_search: {f.EnableWebSearch.ToString().ToLowerInvariant()}
+enable_todo_provider: {f.EnableTodoProvider.ToString().ToLowerInvariant()}
+enable_agent_mode_provider: {f.EnableAgentModeProvider.ToString().ToLowerInvariant()}
+enable_file_memory: {f.EnableFileMemory.ToString().ToLowerInvariant()}
+enable_agent_skills: {f.EnableAgentSkills.ToString().ToLowerInvariant()}
+enable_open_telemetry: {f.EnableOpenTelemetry.ToString().ToLowerInvariant()}
+source: {f.Source ?? string.Empty}
+marketplace_id: {(f.MarketplaceId?.ToString() ?? string.Empty)}
+marketplace_synced_at: {(f.MarketplaceSyncedAt.HasValue ? f.MarketplaceSyncedAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) : string.Empty)}
+display_name: {f.DisplayName ?? string.Empty}
 ---
-{prompt}";
+{f.Prompt}";
     }
 }

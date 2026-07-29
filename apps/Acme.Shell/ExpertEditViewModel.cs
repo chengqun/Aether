@@ -42,6 +42,13 @@ public class MemoryModeOption
     public string Display { get; set; } = string.Empty;
 }
 
+/// <summary>响应格式下拉选项（值 + 中文显示）。</summary>
+public class ResponseFormatOption
+{
+    public AgentResponseFormat Value { get; set; }
+    public string Display { get; set; } = string.Empty;
+}
+
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
     public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels)
@@ -84,6 +91,15 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             ModelId = existing.ModelId;
             Memory = existing.Memory;
             MaxHistory = existing.MaxHistory;
+            TopP = existing.TopP;
+            MaxOutputTokens = existing.MaxOutputTokens;
+            ResponseFormat = existing.ResponseFormat;
+            EnableWebSearch = existing.EnableWebSearch;
+            EnableTodoProvider = existing.EnableTodoProvider;
+            EnableAgentModeProvider = existing.EnableAgentModeProvider;
+            EnableFileMemory = existing.EnableFileMemory;
+            EnableAgentSkills = existing.EnableAgentSkills;
+            EnableOpenTelemetry = existing.EnableOpenTelemetry;
             IsEditing = true;
         }
         else
@@ -96,6 +112,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             ModelId = string.Empty;
             Memory = AgentMemoryMode.SlidingWindow;
             MaxHistory = 20;
+            ResponseFormat = AgentResponseFormat.Default;
             IsEditing = false;
         }
 
@@ -115,6 +132,20 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private AgentMemoryMode _memory = AgentMemoryMode.SlidingWindow;
     [ObservableProperty] private int _maxHistory = 20;
+
+    // —— 采样 / 输出参数（可空=默认）。
+    [ObservableProperty] private double? _topP;
+    [ObservableProperty] private int? _maxOutputTokens;
+    [ObservableProperty] private AgentResponseFormat _responseFormat = AgentResponseFormat.Default;
+
+    // —— HarnessAgent 扩展能力开关。
+    [ObservableProperty] private bool _enableWebSearch;
+    [ObservableProperty] private bool _enableTodoProvider;
+    [ObservableProperty] private bool _enableAgentModeProvider;
+    [ObservableProperty] private bool _enableFileMemory;
+    [ObservableProperty] private bool _enableAgentSkills;
+    [ObservableProperty] private bool _enableOpenTelemetry;
+
     [ObservableProperty] private string? _error;
 
     /// <summary>可选模型列表（由目录 IModelSource 提供）。</summary>
@@ -153,6 +184,14 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         new() { Value = AgentMemoryMode.Full, Display = "完整记忆 · 保留全部历史" },
     };
 
+    /// <summary>响应格式可选列表。</summary>
+    public static ResponseFormatOption[] ResponseFormatOptions { get; } =
+    {
+        new() { Value = AgentResponseFormat.Default, Display = "默认 · 沿用模型" },
+        new() { Value = AgentResponseFormat.Text, Display = "纯文本" },
+        new() { Value = AgentResponseFormat.Json, Display = "JSON · 结构化输出" },
+    };
+
     /// <summary>当前选中的记忆模式选项。</summary>
     public MemoryModeOption? SelectedMemoryModeOption
     {
@@ -175,6 +214,22 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         OnPropertyChanged(nameof(IsWindowVisible));
         OnPropertyChanged(nameof(SelectedMemoryModeOption));
     }
+
+    /// <summary>当前选中的响应格式选项。</summary>
+    public ResponseFormatOption? SelectedResponseFormatOption
+    {
+        get => ResponseFormatOptions.FirstOrDefault(o => o.Value == ResponseFormat);
+        set
+        {
+            if (value != null && value.Value != ResponseFormat)
+            {
+                ResponseFormat = value.Value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    partial void OnResponseFormatChanged(AgentResponseFormat value) => OnPropertyChanged(nameof(SelectedResponseFormatOption));
 
     /// <summary>Name 变化时刷新保存按钮可用性（CanSave 是计算属性，需手动通知）。</summary>
     partial void OnNameChanged(string value) => OnPropertyChanged(nameof(CanSave));
@@ -207,6 +262,15 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Tools = toolList,
             Memory = Memory,
             MaxHistory = MaxHistory,
+            TopP = TopP,
+            MaxOutputTokens = MaxOutputTokens,
+            ResponseFormat = ResponseFormat,
+            EnableWebSearch = EnableWebSearch,
+            EnableTodoProvider = EnableTodoProvider,
+            EnableAgentModeProvider = EnableAgentModeProvider,
+            EnableFileMemory = EnableFileMemory,
+            EnableAgentSkills = EnableAgentSkills,
+            EnableOpenTelemetry = EnableOpenTelemetry,
         };
 
         SaveRequested?.Invoke(item);
