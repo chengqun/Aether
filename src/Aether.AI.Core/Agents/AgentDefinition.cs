@@ -41,4 +41,34 @@ public sealed class AgentDefinition
     /// recent messages to retain. Ignored by other modes.
     /// </summary>
     public int MaxHistory { get; init; } = 20;
+
+    /// <summary>Optional top-P override. <c>null</c> means use the provider default.</summary>
+    public double? TopP { get; init; }
+
+    /// <summary>Optional max output tokens override. <c>null</c> means use the provider default.</summary>
+    public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Response format (Default/Text/Json). <c>Default</c> leaves it unset.</summary>
+    public AgentResponseFormat ResponseFormat { get; init; } = AgentResponseFormat.Default;
+
+    // —— HarnessAgent provider 开关（仅 HarnessAgent 路径生效；ChatClientAgent 不用这些 provider）。
+    //   默认全 false = 全部禁用，保持 Phase 1 的轻量运行时行为。按需开启。
+
+    /// <summary>启用 web search provider（默认禁用）。</summary>
+    public bool EnableWebSearch { get; init; }
+
+    /// <summary>启用 todo provider（默认禁用）。</summary>
+    public bool EnableTodoProvider { get; init; }
+
+    /// <summary>启用 agent mode provider（默认禁用）。</summary>
+    public bool EnableAgentModeProvider { get; init; }
+
+    /// <summary>启用 file memory provider（默认禁用）。</summary>
+    public bool EnableFileMemory { get; init; }
+
+    /// <summary>启用 agent skills provider（默认禁用）。</summary>
+    public bool EnableAgentSkills { get; init; }
+
+    /// <summary>启用 OpenTelemetry（默认禁用）。</summary>
+    public bool EnableOpenTelemetry { get; init; }
 }

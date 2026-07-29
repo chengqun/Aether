@@ -70,16 +70,15 @@ public sealed class AgentFactory
             Id = definition.Id,
             Name = definition.Name,
             Description = $"Aether.AI agent '{definition.Id}'.",
-            // Disable the heavyweight default providers so Phase 1 is a clean
-            // runtime with no disk/network/OTel dependencies. These can be
-            // re-enabled per agent in a later phase. (Compaction is auto-
-            // disabled when no token limits are set, so it needs no flag here.)
-            DisableWebSearch = true,
-            DisableTodoProvider = true,
-            DisableAgentModeProvider = true,
-            DisableFileMemory = true,
-            DisableAgentSkillsProvider = true,
-            DisableOpenTelemetry = true,
+            // Provider 开关由 AgentDefinition 的 Enable* 字段驱动（默认全 false = 全部禁用），
+            // 保持 Phase 1 的轻量运行时行为；需要 web search / file memory / OTel 等能力的
+            // agent 在定义里把对应 Enable* 置 true 即可。(Compaction 在未设 token 上限时自动禁用，无需开关。)
+            DisableWebSearch = !definition.EnableWebSearch,
+            DisableTodoProvider = !definition.EnableTodoProvider,
+            DisableAgentModeProvider = !definition.EnableAgentModeProvider,
+            DisableFileMemory = !definition.EnableFileMemory,
+            DisableAgentSkillsProvider = !definition.EnableAgentSkills,
+            DisableOpenTelemetry = !definition.EnableOpenTelemetry,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
         };
@@ -143,6 +142,26 @@ public sealed class AgentFactory
         if (definition.Temperature is { } temperature)
         {
             chatOptions.Temperature = (float)temperature;
+        }
+
+        if (definition.TopP is { } topP)
+        {
+            chatOptions.TopP = (float)topP;
+        }
+
+        if (definition.MaxOutputTokens is { } maxTokens)
+        {
+            chatOptions.MaxOutputTokens = maxTokens;
+        }
+
+        if (definition.ResponseFormat != AgentResponseFormat.Default)
+        {
+            chatOptions.ResponseFormat = definition.ResponseFormat switch
+            {
+                AgentResponseFormat.Text => ChatResponseFormat.Text,
+                AgentResponseFormat.Json => ChatResponseFormat.Json,
+                _ => null,
+            };
         }
 
         return chatOptions;
