@@ -6,6 +6,10 @@ obj/
 .vs/
 .idea/
 
+## NuGet
+.nuget/
+.nuget-packages/
+
 ## Build artifacts
 *.dll
 *.pdb
