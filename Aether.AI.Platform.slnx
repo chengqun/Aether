@@ -9,9 +9,6 @@
   <Folder Name="/ai/Notes/">
     <Project Path="ai/Notes/Acme.Notes.AI/Acme.Notes.AI.csproj" />
   </Folder>
-  <Folder Name="/ai/Qifu/">
-    <Project Path="ai/Qifu/Acme.Qifu.AI/Acme.Qifu.AI.csproj" />
-  </Folder>
   <Folder Name="/ai/Quotes/">
     <Project Path="ai/Quotes/Acme.Quotes.AI/Acme.Quotes.AI.csproj" />
   </Folder>
@@ -32,9 +29,6 @@
   </Folder>
   <Folder Name="/apps/Acme.Shell/">
     <Project Path="apps/Acme.Shell/Acme.Shell.csproj" />
-  </Folder>
-  <Folder Name="/apps/Qifu/">
-    <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />
   </Folder>
   <Folder Name="/apps/Stockapp/">
     <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
@@ -59,11 +53,6 @@
     <Project Path="business/AppAuth/Acme.AppAuth.Application/Acme.AppAuth.Application.csproj" />
     <Project Path="business/AppAuth/Acme.AppAuth.Domain/Acme.AppAuth.Domain.csproj" />
     <Project Path="business/AppAuth/Acme.AppAuth.Infrastructure/Acme.AppAuth.Infrastructure.csproj" />
-  </Folder>
-  <Folder Name="/business/Qifu/">
-    <Project Path="business/Qifu/Acme.Qifu.Application/Acme.Qifu.Application.csproj" />
-    <Project Path="business/Qifu/Acme.Qifu.Domain/Acme.Qifu.Domain.csproj" />
-    <Project Path="business/Qifu/Acme.Qifu.Infrastructure/Acme.Qifu.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/business/Quotes/">
     <Project Path="business/Quotes/Acme.Quotes.Application/Acme.Quotes.Application.csproj" />
@@ -138,7 +127,6 @@
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
     <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
-    <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Acme.Agents.AI.Tests/Acme.Agents.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />
