@@ -8,6 +8,7 @@ using Aether.AI.Memory.Stores;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
+using Acme.AppAuth.Infrastructure.Http;
 using Acme.Automation.Application.DependencyInjection;
 using Acme.Automation.Infrastructure.DependencyInjection;
 using Acme.ChatSocial.Application.DependencyInjection;
@@ -43,6 +44,9 @@ public static class DesktopCompositionExtensions
     {
         Directory.CreateDirectory(tenantDir);
 
+        // 初始化自定义证书处理器：加载内嵌 rootCA.crt，解决 Windows 下自签名 SSL 连接问题
+        CustomCertificateHandler.Initialize();
+
         // LLM 配置：读 SQLite 活跃配置；无则从 env 种子（无 key 用 "dummy"，shell 仍能启动，agent 待配置）。
         var llm = DesktopLlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"));
         var aether = services.AddAetherAI();
@@ -66,8 +70,8 @@ public static class DesktopCompositionExtensions
             o.Scope = "Abp alphaagent_chat";   // 必须带 Abp 受众，否则签发的 token 无 API 受众 → invalid_token
             o.Tenant = tenant;
             o.DbPath = Path.Combine(tenantDir, "platform.db");
-        });
-        services.AddAppAuthApplication();
+        }, CustomCertificateHandler.CreateHandler);
+        services.AddAppAuthApplication(CustomCertificateHandler.CreateHandler);
 
         services.AddLlmInfrastructure(Path.Combine(tenantDir, "llm.db"));
         services.AddLlmApplication();

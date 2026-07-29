@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +11,9 @@ namespace Acme.AppAuth.Application.DependencyInjection;
 /// </summary>
 public static class PlatformApplicationExtensions
 {
-    public static IServiceCollection AddAppAuthApplication(this IServiceCollection services)
+    public static IServiceCollection AddAppAuthApplication(
+        this IServiceCollection services,
+        Func<HttpMessageHandler>? httpMessageHandlerFactory = null)
     {
         // AppAuthService uses a plain HttpClient (base address only, NO bearer
         // handler) for connect/token — routing login/refresh through the
@@ -20,7 +23,10 @@ public static class PlatformApplicationExtensions
         services.AddSingleton<AppAuthService>(sp =>
         {
             var options = sp.GetRequiredService<AppServerOptions>();
-            var client = new HttpClient
+            HttpMessageHandler handler = httpMessageHandlerFactory != null
+                ? httpMessageHandlerFactory()
+                : new SocketsHttpHandler();
+            var client = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromSeconds(300)
             };

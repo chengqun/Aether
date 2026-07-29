@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.AppAuth.Domain\Acme.AppAuth.Domain.csproj" />
@@ -15,5 +15,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="rootCA.crt" LogicalName="rootCA.crt" />
+  </ItemGroup>
 
 </Project>

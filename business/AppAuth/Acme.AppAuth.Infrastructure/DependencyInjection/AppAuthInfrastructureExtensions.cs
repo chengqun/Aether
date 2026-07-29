@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.Auth;
 using Acme.AppAuth.Infrastructure.Http;
@@ -18,7 +19,8 @@ public static class PlatformInfrastructureExtensions
 {
     public static IServiceCollection AddAppAuthInfrastructure(
         this IServiceCollection services,
-        Action<AppServerOptions>? configure = null)
+        Action<AppServerOptions>? configure = null,
+        Func<HttpMessageHandler>? httpMessageHandlerFactory = null)
     {
         var options = new AppServerOptions();
         configure?.Invoke(options);
@@ -43,7 +45,8 @@ public static class PlatformInfrastructureExtensions
         // Authenticated app-server HTTP client: tenant header + bearer handler + base address.
         services.AddTransient<TenantHeaderDelegatingHandler>();
         services.AddTransient<BearerTokenDelegatingHandler>();
-        services.AddHttpClient<IAppServerHttpClient, AppServerHttpClient>(c =>
+
+        var httpClientBuilder = services.AddHttpClient<IAppServerHttpClient, AppServerHttpClient>(c =>
         {
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
                 c.BaseAddress = new Uri(options.BaseUrl);
@@ -51,6 +54,11 @@ public static class PlatformInfrastructureExtensions
         })
         .AddHttpMessageHandler<TenantHeaderDelegatingHandler>()
         .AddHttpMessageHandler<BearerTokenDelegatingHandler>();
+
+        if (httpMessageHandlerFactory != null)
+        {
+            httpClientBuilder.ConfigurePrimaryHttpMessageHandler(() => httpMessageHandlerFactory());
+        }
 
         // Current user (from cached JWT).
         services.AddSingleton<ICurrentUser, CurrentUserResolver>();
