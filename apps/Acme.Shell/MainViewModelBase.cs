@@ -129,13 +129,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     /// <summary>
     /// 分段交错运行：agent 思考→调工具→再思考→… 的过程中，把每段思考与工具步骤按真实时序
-    /// 交错插入聊天流（思考段1 → 工具步(调用+结果合并) → 思考段2/回答），而非旧的全堆在一个气泡上方。
+    /// 交错插入聊天流（思考段1 → 工具步(调用+结果合并) → 思考段2/回答）。
+    /// 返回本轮产生的 transcript 项（思考段/工具步/回答，按时序），供 PersistTurnAsync 持久化。
     /// </summary>
-    private async Task RunSegmentedStreamAsync(Guid conversationId, Guid expertId, string userMessage,
+    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(Guid conversationId, Guid expertId, string userMessage,
         string senderName, System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
     {
+        var runItems = new List<ChatMessageItem>();
         var cursor = new StreamCursor(NewThinkingSegment(senderName));
-        await _dispatcher.InvokeAsync(() => Messages.Add(cursor.Current));
+        await _dispatcher.InvokeAsync(() => { Messages.Add(cursor.Current); runItems.Add(cursor.Current); });
 
         try
         {
@@ -148,7 +150,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         if (cursor.Current.IsText) cursor.Current.Content += token;
                     });
                 },
-                async (ev, _) => await _dispatcher.InvokeAsync(() => HandleToolEventSegmented(cursor, ev, senderName)),
+                async (ev, _) => await _dispatcher.InvokeAsync(() => HandleToolEventSegmented(cursor, runItems, ev, senderName)),
                 cancellationToken);
         }
         catch (Exception ex)
@@ -160,6 +162,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 {
                     var seg = NewThinkingSegment(senderName);
                     Messages.Add(seg);
+                    runItems.Add(seg);
                     cursor.Current = seg;
                 }
                 cursor.Current.Content += $"\n\n[运行失败：{ex.Message}]";
@@ -167,8 +170,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         finally
         {
-            await _dispatcher.InvokeAsync(() => FinalizeSegment(cursor.Current));
+            await _dispatcher.InvokeAsync(() => FinalizeSegment(cursor.Current, runItems));
         }
+        return runItems;
     }
 
     private static ChatMessageItem NewThinkingSegment(string senderName) => new()
@@ -182,7 +186,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     };
 
     /// <summary>工具事件处理：Call 冻结当前思考段并插一条工具步（带 CallId）；Result 按 CallId 回填到同一条，再开新思考段。</summary>
-    private void HandleToolEventSegmented(StreamCursor cursor, ToolStreamEvent ev, string senderName)
+    private void HandleToolEventSegmented(StreamCursor cursor, List<ChatMessageItem> runItems, ToolStreamEvent ev, string senderName)
     {
         if (ev.Kind == ToolStreamEventKind.Call)
         {
@@ -190,6 +194,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
             {
                 Messages.RemoveAt(idx); // 空思考段不留
+                runItems.Remove(cursor.Current);
             }
             else
             {
@@ -206,6 +211,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 Input = ev.Input,
             };
             Messages.Insert(idx, tool);
+            runItems.Add(tool);
             cursor.Current = tool;
             if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
         }
@@ -230,17 +236,19 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             if (idx < 0) idx = Messages.Count - 1;
             var next = NewThinkingSegment(senderName);
             Messages.Insert(idx + 1, next);
+            runItems.Add(next);
             cursor.Current = next;
         }
     }
 
-    /// <summary>运行结束：末段空则移除；否则从"思考段"转为最终回答（markdown 气泡）。</summary>
-    private void FinalizeSegment(ChatMessageItem last)
+    /// <summary>运行结束：末段空则移除（从 Messages 与 runItems）；否则从"思考段"转为最终回答（markdown 气泡）。</summary>
+    private void FinalizeSegment(ChatMessageItem last, List<ChatMessageItem> runItems)
     {
         if (!last.IsText) return;
         if (string.IsNullOrWhiteSpace(last.Content))
         {
             Messages.Remove(last);
+            runItems.Remove(last);
         }
         else
         {
@@ -363,16 +371,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             if (conv is not null)
             {
                 foreach (var m in conv.Messages)
-                {
-                    Messages.Add(new ChatMessageItem
-                    {
-                        Side = m.Role == Aether.AI.Core.Messages.MessageRole.User ? ChatMessageSide.Right : ChatMessageSide.Left,
-                        ItemType = "text",
-                        Sender = m.Role == Aether.AI.Core.Messages.MessageRole.User ? "我" : item.AgentName,
-                        Content = m.Content,
-                        IsStreaming = false,
-                    });
-                }
+                    Messages.Add(FromTranscriptMessage(m, item.AgentName ?? "专家"));
             }
             CurrentPage = "chat";
         }
@@ -817,10 +816,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
 
             var fullText = new System.Text.StringBuilder();
-            await RunSegmentedStreamAsync(_currentConversationId, expert.Id, content, expert.Name, fullText);
+            var runItems = await RunSegmentedStreamAsync(_currentConversationId, expert.Id, content, expert.Name, fullText);
 
-            // 持久化 transcript（user + assistant）并乐观 bump 侧栏项
-            await PersistTurnAsync(expert, content, fullText.ToString());
+            // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
+            await PersistTurnAsync(expert, content, runItems, fullText.ToString());
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
@@ -888,8 +887,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         catch { /* 标题生成失败不影响主流程 */ }
     }
 
-    /// <summary>把本轮 user+assistant 消息追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>
-    private async Task PersistTurnAsync(ExpertItem expert, string userContent, string assistantContent)
+    /// <summary>把本轮 transcript（user + 思考段/工具步/回答）追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>
+    private async Task PersistTurnAsync(ExpertItem expert, string userContent,
+        IReadOnlyList<ChatMessageItem> runItems, string fullText)
     {
         if (_currentConversationId == Guid.Empty) return;
         try
@@ -900,8 +900,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var last = conv.Messages.Count > 0 ? conv.Messages[^1] : null;
             if (last is null || last.Role != Aether.AI.Core.Messages.MessageRole.User || last.Content != userContent)
                 conv.Append(Aether.AI.Core.Messages.Message.User(userContent));
-            if (!string.IsNullOrWhiteSpace(assistantContent))
-                conv.Append(Aether.AI.Core.Messages.Message.Assistant(assistantContent));
+            // 按时序持久化本轮 transcript（思考段 / 工具步 / 回答）
+            foreach (var item in runItems)
+            {
+                if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue; // 跳过空思考段
+                conv.Append(ToTranscriptMessage(item));
+            }
             await _conversationStore.SaveAsync(conv);
 
             await _dispatcher.InvokeAsync(() =>
@@ -909,7 +913,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
                 if (item is not null)
                 {
-                    item.Preview = assistantContent.Length > 40 ? assistantContent[..40] + "…" : assistantContent;
+                    item.Preview = fullText.Length > 40 ? fullText[..40] + "…" : fullText;
                     item.DisplayTime = FormatTime(conv.UpdatedAt);
                     // 移到顶部
                     Conversations.Remove(item);
@@ -919,4 +923,76 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         catch { /* transcript 持久化失败不阻塞对话 */ }
     }
+
+    /// <summary>ChatMessageItem → 持久化 Message。工具步用 metadata 存 input/output JSON；思考段用 metadata kind=reasoning 标记。</summary>
+    private static Aether.AI.Core.Messages.Message ToTranscriptMessage(ChatMessageItem item)
+    {
+        var jsonOpts = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        if (item.IsToolStep)
+        {
+            return new Aether.AI.Core.Messages.Message
+            {
+                Role = Aether.AI.Core.Messages.MessageRole.Tool,
+                ToolName = item.ToolName ?? string.Empty,
+                ToolCallId = item.CallId,
+                Content = string.Empty,
+                Metadata = new Dictionary<string, string>
+                {
+                    ["kind"] = "tool",
+                    ["input"] = item.Input is null ? "" : System.Text.Json.JsonSerializer.Serialize(item.Input, jsonOpts),
+                    ["output"] = item.Output is null ? "" : System.Text.Json.JsonSerializer.Serialize(item.Output, jsonOpts),
+                },
+            };
+        }
+        return new Aether.AI.Core.Messages.Message
+        {
+            Role = Aether.AI.Core.Messages.MessageRole.Assistant,
+            Content = item.Content ?? string.Empty,
+            Metadata = item.IsReasoning ? new Dictionary<string, string> { ["kind"] = "reasoning" } : null,
+        };
+    }
+
+    /// <summary>持久化 Message → ChatMessageItem（还原历史时）。工具步/思考段从 metadata 还原。</summary>
+    private static ChatMessageItem FromTranscriptMessage(Aether.AI.Core.Messages.Message m, string agentName)
+    {
+        if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
+            return new ChatMessageItem { Side = ChatMessageSide.Right, ItemType = "text", Sender = "我", Content = m.Content, IsStreaming = false };
+
+        if (m.Role == Aether.AI.Core.Messages.MessageRole.Tool)
+            return new ChatMessageItem
+            {
+                Side = ChatMessageSide.Left,
+                ItemType = "tool",
+                Sender = agentName,
+                ToolName = m.ToolName ?? string.Empty,
+                CallId = m.ToolCallId ?? string.Empty,
+                Input = MetaDict(m, "input"),
+                Output = MetaDict(m, "output"),
+                IsToolCompleted = MetaHas(m, "output"),
+            };
+
+        var isReasoning = MetaVal(m, "kind") == "reasoning";
+        return new ChatMessageItem
+        {
+            Side = ChatMessageSide.Left,
+            ItemType = "text",
+            Sender = agentName,
+            Content = m.Content,
+            IsStreaming = false,
+            IsReasoning = isReasoning,
+        };
+    }
+
+    private static Dictionary<string, object>? MetaDict(Aether.AI.Core.Messages.Message m, string key)
+    {
+        if (m.Metadata is null || !m.Metadata.TryGetValue(key, out var json) || string.IsNullOrEmpty(json)) return null;
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json); }
+        catch { return null; }
+    }
+
+    private static bool MetaHas(Aether.AI.Core.Messages.Message m, string key)
+        => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v);
+
+    private static string? MetaVal(Aether.AI.Core.Messages.Message m, string key)
+        => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) ? v : null;
 }

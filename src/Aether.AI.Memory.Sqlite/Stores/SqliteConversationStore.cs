@@ -24,7 +24,7 @@ public sealed class SqliteConversationStore : IConversationStore
     private const string CreateMsgSql =
         "CREATE TABLE IF NOT EXISTS " + MsgTable + " (" +
         "id TEXT NOT NULL PRIMARY KEY, conversation_id TEXT NOT NULL, seq INTEGER NOT NULL, " +
-        "role INTEGER NOT NULL, content TEXT NOT NULL, tool_name TEXT, tool_call_id TEXT, created_at TEXT NOT NULL, " +
+        "role INTEGER NOT NULL, content TEXT NOT NULL, tool_name TEXT, tool_call_id TEXT, metadata TEXT, created_at TEXT NOT NULL, " +
         "FOREIGN KEY(conversation_id) REFERENCES " + ConvTable + "(id) ON DELETE CASCADE)";
 
     private const string CreateConvUpdatedIdx =
@@ -81,8 +81,8 @@ public sealed class SqliteConversationStore : IConversationStore
             await using var ins = c.CreateCommand();
             ins.Transaction = (SqliteTransaction)tx;
             ins.CommandText =
-                "INSERT INTO " + MsgTable + " (id,conversation_id,seq,role,content,tool_name,tool_call_id,created_at) " +
-                "VALUES (@id,@cid,@seq,@r,@ct,@tn,@tc,@ca)";
+                "INSERT INTO " + MsgTable + " (id,conversation_id,seq,role,content,tool_name,tool_call_id,metadata,created_at) " +
+                "VALUES (@id,@cid,@seq,@r,@ct,@tn,@tc,@md,@ca)";
             ins.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
             ins.Parameters.AddWithValue("@cid", conversation.ConversationId.ToString());
             ins.Parameters.AddWithValue("@seq", seq++);
@@ -90,6 +90,8 @@ public sealed class SqliteConversationStore : IConversationStore
             ins.Parameters.AddWithValue("@ct", m.Content ?? string.Empty);
             ins.Parameters.AddWithValue("@tn", (object?)m.ToolName ?? DBNull.Value);
             ins.Parameters.AddWithValue("@tc", (object?)m.ToolCallId ?? DBNull.Value);
+            var md = MetadataToJson(m.Metadata);
+            ins.Parameters.AddWithValue("@md", string.IsNullOrEmpty(md) ? DBNull.Value : (object)md);
             ins.Parameters.AddWithValue("@ca", Format(m.CreatedAt));
             await ins.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -208,7 +210,7 @@ public sealed class SqliteConversationStore : IConversationStore
     {
         var list = new List<Message>();
         await using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT role,content,tool_name,tool_call_id,created_at FROM " + MsgTable + " WHERE conversation_id=@cid ORDER BY seq";
+        cmd.CommandText = "SELECT role,content,tool_name,tool_call_id,metadata,created_at FROM " + MsgTable + " WHERE conversation_id=@cid ORDER BY seq";
         cmd.Parameters.AddWithValue("@cid", conversationId.ToString());
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
@@ -219,10 +221,20 @@ public sealed class SqliteConversationStore : IConversationStore
                 Content = r.GetString(1),
                 ToolName = r.IsDBNull(2) ? null : r.GetString(2),
                 ToolCallId = r.IsDBNull(3) ? null : r.GetString(3),
-                CreatedAt = Parse(r.GetString(4)),
+                Metadata = r.IsDBNull(4) ? null : MetadataFromJson(r.GetString(4)),
+                CreatedAt = Parse(r.GetString(5)),
             });
         }
         return list;
+    }
+
+    private static string? MetadataToJson(IReadOnlyDictionary<string, string>? meta)
+        => meta is null || meta.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(meta);
+
+    private static IReadOnlyDictionary<string, string>? MetadataFromJson(string json)
+    {
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json); }
+        catch { return null; }
     }
 
     private async Task EnsureAsync(CancellationToken ct)
@@ -238,6 +250,12 @@ public sealed class SqliteConversationStore : IConversationStore
             await using var cmd = c.CreateCommand();
             cmd.CommandText = CreateConvSql + ";" + CreateMsgSql + ";" + CreateConvUpdatedIdx + ";" + CreateMsgConvIdx;
             await cmd.ExecuteNonQueryAsync(ct);
+
+            // 迁移：旧库的 message 表可能没有 metadata 列（用于持久化工具步 input/output、思考段标记等）。ALTER 幂等（列已存在则忽略）。
+            await using var alter = c.CreateCommand();
+            alter.CommandText = "ALTER TABLE " + MsgTable + " ADD COLUMN metadata TEXT";
+            try { await alter.ExecuteNonQueryAsync(ct); }
+            catch (Microsoft.Data.Sqlite.SqliteException) { /* 列已存在，忽略 */ }
         }
         catch { Interlocked.Exchange(ref _init, 0); throw; }
     }
