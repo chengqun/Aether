@@ -44,6 +44,10 @@ public partial class ChatMessageItem : ObservableObject
     [ObservableProperty]
     private bool _isStreamingExpanded = true;
 
+    /// <summary>本条文本是"思考段"（agent 运行中途的推理），非最终回答。分段交错展示用。</summary>
+    [ObservableProperty]
+    private bool _isReasoning;
+
     public bool IsUser => Side == ChatMessageSide.Right;
 
     public bool IsText => ItemType == "text";
@@ -58,11 +62,22 @@ public partial class ChatMessageItem : ObservableObject
 
     public bool IsAgentStreamingText => !IsUser && IsText && IsStreaming;
 
-    public bool IsAgentMarkdownText => !IsUser && IsText && !IsStreaming;
+    /// <summary>已结束的思考段：等宽可折叠"思考"卡片（非最终回答）。</summary>
+    public bool IsAgentThinkingCard => !IsUser && IsText && !IsStreaming && IsReasoning;
+
+    /// <summary>最终回答：markdown 气泡（非思考段）。</summary>
+    public bool IsAgentMarkdownText => !IsUser && IsText && !IsStreaming && !IsReasoning;
 
     partial void OnIsStreamingChanged(bool value)
     {
         OnPropertyChanged(nameof(IsAgentStreamingText));
+        OnPropertyChanged(nameof(IsAgentMarkdownText));
+        OnPropertyChanged(nameof(IsAgentThinkingCard));
+    }
+
+    partial void OnIsReasoningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsAgentThinkingCard));
         OnPropertyChanged(nameof(IsAgentMarkdownText));
     }
 }

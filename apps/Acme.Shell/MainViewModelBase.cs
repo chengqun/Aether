@@ -119,27 +119,125 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await _dispatcher.InvokeAsync(async () => await LoadLlmConfigsAsync());
     }
 
-    /// <summary>
-    /// 流式运行期间的工具调用/结果回调：在聊天流里插入 tool_call / tool_result 卡片，
-    /// 排在正在流式输出的助手消息之前（工具卡片在回答上方），让用户看到思考过程中的工具使用与输入输出。
-    /// </summary>
-    private async Task OnToolEventAsync(ChatMessageItem assistantMsg, ToolStreamEvent ev)
+    /// <summary>流式分段光标：指向"当前正在追加 token 的消息项"。</summary>
+    private sealed class StreamCursor
     {
-        await _dispatcher.InvokeAsync(() =>
+        public ChatMessageItem Current;
+        public StreamCursor(ChatMessageItem initial) => Current = initial;
+    }
+
+    /// <summary>
+    /// 分段交错运行：agent 思考→调工具→再思考→… 的过程中，把每段思考与工具调用/结果按真实时序
+    /// 交错插入聊天流（思考段1 → 🔧调用 → ✅结果 → 思考段2/回答），而非旧的全堆在一个气泡上方。
+    /// </summary>
+    private async Task RunSegmentedStreamAsync(Guid conversationId, Guid expertId, string userMessage,
+        string senderName, System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
+    {
+        var cursor = new StreamCursor(NewThinkingSegment(senderName));
+        await _dispatcher.InvokeAsync(() => Messages.Add(cursor.Current));
+
+        try
         {
-            var item = new ChatMessageItem
+            await _agentRunner.RunStreamingAsync(conversationId, expertId, userMessage,
+                async (token, _) =>
+                {
+                    fullText.Append(token);
+                    await _dispatcher.InvokeAsync(() =>
+                    {
+                        if (cursor.Current.IsText) cursor.Current.Content += token;
+                    });
+                },
+                async (ev, _) => await _dispatcher.InvokeAsync(() => HandleToolEventSegmented(cursor, ev, senderName)),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            fullText.Append($"\n\n[运行失败：{ex.Message}]");
+            await _dispatcher.InvokeAsync(() =>
+            {
+                if (!cursor.Current.IsText)
+                {
+                    var seg = NewThinkingSegment(senderName);
+                    Messages.Add(seg);
+                    cursor.Current = seg;
+                }
+                cursor.Current.Content += $"\n\n[运行失败：{ex.Message}]";
+            });
+        }
+        finally
+        {
+            await _dispatcher.InvokeAsync(() => FinalizeSegment(cursor.Current));
+        }
+    }
+
+    private static ChatMessageItem NewThinkingSegment(string senderName) => new()
+    {
+        Side = ChatMessageSide.Left,
+        ItemType = "text",
+        Sender = senderName,
+        Content = string.Empty,
+        IsStreaming = true,
+        IsReasoning = true,
+    };
+
+    /// <summary>工具事件处理：Call 冻结当前思考段并插 tool_call；Result 插 tool_result 后开新思考段。</summary>
+    private void HandleToolEventSegmented(StreamCursor cursor, ToolStreamEvent ev, string senderName)
+    {
+        if (ev.Kind == ToolStreamEventKind.Call)
+        {
+            var idx = Messages.IndexOf(cursor.Current);
+            if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
+            {
+                Messages.RemoveAt(idx); // 空思考段不留
+            }
+            else
+            {
+                if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空思考段
+                idx++;
+            }
+            var call = new ChatMessageItem
             {
                 Side = ChatMessageSide.Left,
-                ItemType = ev.Kind == ToolStreamEventKind.Call ? "tool_call" : "tool_result",
-                Sender = assistantMsg.Sender,
+                ItemType = "tool_call",
+                Sender = senderName,
                 ToolName = ev.Name,
                 Input = ev.Input,
+            };
+            Messages.Insert(idx, call);
+            cursor.Current = call;
+        }
+        else // Result
+        {
+            var idx = Messages.IndexOf(cursor.Current); // 当前是 tool_call
+            if (idx < 0) idx = Messages.Count - 1;
+            var res = new ChatMessageItem
+            {
+                Side = ChatMessageSide.Left,
+                ItemType = "tool_result",
+                Sender = senderName,
+                ToolName = ev.Name,
                 Output = ev.Output,
             };
-            var idx = Messages.IndexOf(assistantMsg);
-            if (idx < 0) idx = Messages.Count;
-            Messages.Insert(idx, item);
-        });
+            Messages.Insert(idx + 1, res);
+            var next = NewThinkingSegment(senderName);
+            Messages.Insert(idx + 2, next);
+            cursor.Current = next;
+        }
+    }
+
+    /// <summary>运行结束：末段空则移除；否则从"思考段"转为最终回答（markdown 气泡）。</summary>
+    private void FinalizeSegment(ChatMessageItem last)
+    {
+        if (!last.IsText) return;
+        if (string.IsNullOrWhiteSpace(last.Content))
+        {
+            Messages.Remove(last);
+        }
+        else
+        {
+            last.IsReasoning = false; // 末段 = 最终回答
+            last.IsStreaming = false;
+        }
     }
 
     private Guid _recentConversationId;
@@ -164,36 +262,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 选中已召唤的自定义专家时，用该专家流式回复
         if (SelectedAgentItem is ExpertItem expert)
         {
-            var assistantMsg = new ChatMessageItem
-            {
-                Side = ChatMessageSide.Left,
-                ItemType = "text",
-                Sender = expert.Name,
-                Content = string.Empty,
-                IsStreaming = true,
-            };
-            await _dispatcher.InvokeAsync(() => Messages.Add(assistantMsg));
             var fullText = new System.Text.StringBuilder();
-            try
-            {
-                await _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content,
-                    async (token, _) =>
-                    {
-                        fullText.Append(token);
-                        await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
-                    },
-                    async (ev, _) => await OnToolEventAsync(assistantMsg, ev));
-            }
-            catch (Exception ex)
-            {
-                fullText.Append($"\n\n[运行失败：{ex.Message}]");
-                await _dispatcher.InvokeAsync(() =>
-                    assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
-            }
-            finally
-            {
-                await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
-            }
+            await RunSegmentedStreamAsync(msg.ConversationId, expert.Id, msg.Content, expert.Name, fullText);
 
             // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
             // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
@@ -737,36 +807,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 });
             }
 
-            var assistantMsg = new ChatMessageItem
-            {
-                Side = ChatMessageSide.Left,
-                ItemType = "text",
-                Sender = expert.Name,
-                Content = string.Empty,
-                IsStreaming = true,
-            };
-            Messages.Add(assistantMsg);
             var fullText = new System.Text.StringBuilder();
-            try
-            {
-                await _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content,
-                    async (token, _) =>
-                    {
-                        fullText.Append(token);
-                        await _dispatcher.InvokeAsync(() => assistantMsg.Content += token);
-                    },
-                    async (ev, _) => await OnToolEventAsync(assistantMsg, ev));
-            }
-            catch (Exception ex)
-            {
-                fullText.Append($"\n\n[运行失败：{ex.Message}]");
-                await _dispatcher.InvokeAsync(() =>
-                    assistantMsg.Content += $"\n\n[运行失败：{ex.Message}]");
-            }
-            finally
-            {
-                await _dispatcher.InvokeAsync(() => assistantMsg.IsStreaming = false);
-            }
+            await RunSegmentedStreamAsync(_currentConversationId, expert.Id, content, expert.Name, fullText);
 
             // 持久化 transcript（user + assistant）并乐观 bump 侧栏项
             await PersistTurnAsync(expert, content, fullText.ToString());

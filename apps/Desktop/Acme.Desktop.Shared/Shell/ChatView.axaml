@@ -51,6 +51,27 @@
           </StackPanel>
         </Border>
 
+        <!-- 已结束的思考段（agent 运行中途的推理，可折叠） -->
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
+                IsVisible="{Binding IsAgentThinkingCard}" PointerPressed="OnToolCardTapped">
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="💭" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock Text="思考" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+            </StackPanel>
+            <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
+              <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <TextBlock Text="{Binding Content}" FontSize="12" TextWrapping="Wrap"
+                           FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+              </ScrollViewer>
+            </Border>
+          </StackPanel>
+        </Border>
+
         <Border Classes="tool-card" HorizontalAlignment="Left"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsToolCall}" PointerPressed="OnToolCardTapped">
