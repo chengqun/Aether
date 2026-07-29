@@ -30,6 +30,9 @@ public partial class WorkflowsViewModel : ObservableObject
     /// <summary>用户点"召唤到聊天"时触发（MainViewModelBase 订阅，创建 workflow 会话）。</summary>
     public event Action<WorkflowItem>? SummonRequested;
 
+    /// <summary>工作流增删改时触发（通知 Notes 等同源列表刷新）。</summary>
+    public event Action? WorkflowsChanged;
+
     public async Task LoadAsync()
     {
         try
@@ -67,6 +70,7 @@ public partial class WorkflowsViewModel : ObservableObject
             _runner.Invalidate(item.Id);
             await LoadAsync();
             StatusMessage = "已保存";
+            WorkflowsChanged?.Invoke();
             return (true, string.Empty);
         }
         catch (Exception ex) { return (false, $"保存失败：{ex.Message}"); }
@@ -82,6 +86,7 @@ public partial class WorkflowsViewModel : ObservableObject
             _runner.Invalidate(item.Id);
             await LoadAsync();
             StatusMessage = $"已删除：{item.Name}";
+            WorkflowsChanged?.Invoke();
         }
         catch (Exception ex) { StatusMessage = $"删除失败：{ex.Message}"; }
     }

@@ -75,6 +75,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _workflowRunner,
             _dispatcher);
         Workflows.SummonRequested += OnWorkflowSummonRequested;
+        Workflows.WorkflowsChanged += async () => await Notes.LoadAsync();
+        // Notes 的增删改会影响同源的 Experts（agent 笔记）与 Workflows（workflow 笔记），需双向刷新。
+        Notes.NotesChanged += async () =>
+        {
+            await Experts.LoadAsync();
+            await Workflows.LoadAsync();
+        };
 
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
