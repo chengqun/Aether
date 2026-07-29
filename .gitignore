@@ -12,6 +12,16 @@ obj/
 *.exe
 dist/
 
+## CTP 原生库例外（跨平台分发：Windows .dll / macOS .dylib / Linux .so）
+!externals/Ctp.Net.Core/build/native/*.dll
+!externals/Ctp.Net.Core/ctp-sdk/win-x64/*.dll
+
+## Qifu 仅本地（不推 GitHub；磁盘文件保留，git 停止跟踪）
+apps/Qifu/
+business/Qifu/
+ai/Qifu/
+tests/Acme.Qifu.Infrastructure.Tests/
+
 ## Local config / secrets
 appsettings.Development.json
 .env
