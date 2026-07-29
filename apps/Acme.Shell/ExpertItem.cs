@@ -14,6 +14,8 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private string _modelName = string.Empty;
     [ObservableProperty] private List<string> _tools = new();
+    /// <summary>勾选启用的 skill 名（空=启用 skills 时用全部）。</summary>
+    [ObservableProperty] private List<string> _skills = new();
     [ObservableProperty] private bool _isSummoned;
 
     /// <summary>记忆模式：SlidingWindow=滑动窗口, Full=全量, Off=关闭。</summary>

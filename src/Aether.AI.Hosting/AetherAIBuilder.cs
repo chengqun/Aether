@@ -1,5 +1,6 @@
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,6 +76,16 @@ public sealed class AetherAIBuilder
     public AetherAIBuilder ConfigureToolRegistry(Action<ToolRegistry> configure)
     {
         _services.AddSingleton<IToolRegistryContributor>(new DelegateToolRegistryContributor(configure));
+        return this;
+    }
+
+    /// <summary>
+    /// 配置 SkillRegistry（注册提示词级 skill：name/description/category + 指令正文）。
+    /// 每个 AI 适配器在 AddXxxSkills 中调用此方法注册自己的 skill。
+    /// </summary>
+    public AetherAIBuilder ConfigureSkillRegistry(Action<SkillRegistry> configure)
+    {
+        _services.AddSingleton<ISkillRegistryContributor>(new DelegateSkillRegistryContributor(configure));
         return this;
     }
 }

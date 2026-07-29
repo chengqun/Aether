@@ -1,6 +1,7 @@
 using Acme.Notes.Application;
 using Acme.Notes.AgentSource;
 using Acme.Notes.Domain;
+using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 
 namespace Acme.Agents.AI;
@@ -13,12 +14,14 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 {
     private readonly INoteService _notes;
     private readonly ToolRegistry _toolRegistry;
+    private readonly SkillRegistry _skillRegistry;
     private readonly IModelSource _modelSource;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, IModelSource modelSource)
+    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+        _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
     }
 
@@ -88,6 +91,11 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category))
             .ToList();
 
+    public IReadOnlyList<CustomSkillMeta> GetAvailableSkills()
+        => _skillRegistry.GetAllMetas()
+            .Select(m => new CustomSkillMeta(m.Name, m.Description, m.Category))
+            .ToList();
+
     public IReadOnlyList<CustomModelOption> GetAvailableModels()
         => _modelSource.GetModels();
 
@@ -101,6 +109,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             SystemPrompt = fields.Prompt,
             ModelId = fields.Model,
             Tools = fields.Tools,
+            Skills = fields.Skills,
             Memory = fields.Memory,
             MaxHistory = fields.MaxHistory,
             Source = fields.Source,

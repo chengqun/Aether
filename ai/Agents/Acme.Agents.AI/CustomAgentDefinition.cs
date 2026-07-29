@@ -30,6 +30,9 @@ public sealed class CustomAgentDefinition
     /// <summary>勾选启用的工具名（对应 ToolRegistry 中的工具）。</summary>
     public IReadOnlyList<string> Tools { get; set; } = Array.Empty<string>();
 
+    /// <summary>勾选启用的 skill 名（对应 SkillRegistry 中的 skill；空=启用 skills 时用全部）。</summary>
+    public IReadOnlyList<string> Skills { get; set; } = Array.Empty<string>();
+
     /// <summary>记忆模式（当前未由运行时强制，仅持久化；见计划缺口）。</summary>
     public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
 
@@ -67,6 +70,7 @@ public sealed class CustomAgentDefinition
         Description = Description,
         Category = string.IsNullOrWhiteSpace(Category) ? "普通对话" : Category,
         Tools = Tools.ToList(),
+        Skills = Skills.ToList(),
         Memory = Memory,
         MaxHistory = MaxHistory,
         Model = ModelId,

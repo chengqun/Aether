@@ -3,6 +3,7 @@ using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Sessions;
 using Aether.AI.Harness.Tools;
+using Aether.AI.Harness.Skills;
 using Microsoft.Extensions.AI;
 
 namespace Aether.AI.Harness.Tests;
@@ -41,7 +42,7 @@ public class HarnessRuntimeTests
     {
         // A null chat client is fine here — these tests never invoke the model,
         // they only exercise registration and session creation.
-        return new AgentFactory(new NullChatClientFactory(), new ToolRegistry());
+        return new AgentFactory(new NullChatClientFactory(), new ToolRegistry(), new SkillRegistry());
     }
 
     /// <summary>A minimal IChatClient that never produces responses; used only

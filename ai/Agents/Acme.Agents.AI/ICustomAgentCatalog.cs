@@ -24,6 +24,9 @@ public interface ICustomAgentCatalog
     /// <summary>当前注册到 ToolRegistry 的全部工具元数据（供编辑页勾选）。</summary>
     IReadOnlyList<CustomToolMeta> GetAvailableTools();
 
+    /// <summary>当前注册到 SkillRegistry 的全部 skill 元数据（供编辑页勾选）。</summary>
+    IReadOnlyList<CustomSkillMeta> GetAvailableSkills();
+
     /// <summary>可选模型列表（供编辑页下拉，由宿主 IModelSource 提供）。</summary>
     IReadOnlyList<CustomModelOption> GetAvailableModels();
 }

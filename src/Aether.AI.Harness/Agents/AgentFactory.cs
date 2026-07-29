@@ -1,4 +1,5 @@
 using Aether.AI.Core.Agents;
+using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -29,6 +30,7 @@ public sealed class AgentFactory
 {
     private readonly IChatClientFactory _chatClientFactory;
     private readonly ToolRegistry _toolRegistry;
+    private readonly SkillRegistry _skillRegistry;
     private readonly ILoggerFactory? _loggerFactory;
 
     /// <summary>
@@ -41,10 +43,11 @@ public sealed class AgentFactory
     /// Resolves the <see cref="IChatClient"/> for a given agent model id.
     /// Invoked lazily per agent so the runtime does not eagerly build a client.
     /// </param>
-    public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, ILoggerFactory? loggerFactory = null)
+    public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, SkillRegistry skillRegistry, ILoggerFactory? loggerFactory = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+        _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _loggerFactory = loggerFactory;
     }
 
@@ -81,6 +84,7 @@ public sealed class AgentFactory
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
+            AgentSkillsSource = BuildSkillsSource(definition),
         };
 
         return _chatClientFactory.Create(definition.ModelId).AsHarnessAgent(options, _loggerFactory);
@@ -165,5 +169,31 @@ public sealed class AgentFactory
         }
 
         return chatOptions;
+    }
+
+    /// <summary>
+    /// 当 agent 启用 skills（<see cref="AgentDefinition.EnableAgentSkills"/>）且注册表非空时，
+    /// 把全部已注册 skill 包成 <see cref="AgentInMemorySkillsSource"/> 供 HarnessAgent 的
+    /// AgentSkillsProvider 使用。否则返回 null（provider 也会被 Disable）。
+    /// </summary>
+    private AgentSkillsSource? BuildSkillsSource(AgentDefinition definition)
+    {
+        if (!definition.EnableAgentSkills) return null;
+
+        // 指定了 skill 名列表就只取那些；空则用全部已注册 skill。
+        var skills = definition.Skills.Count > 0
+            ? _skillRegistry.ResolveAll(definition.Skills)
+            : _skillRegistry.GetAll();
+        if (skills.Count == 0) return null;
+
+        var agentSkills = skills
+            .Select(s => (AgentSkill)new AgentInlineSkill(
+                new AgentSkillFrontmatter(s.Name, s.Description, ""),
+                s.Content,
+                null,
+                null))
+            .ToList();
+
+        return new AgentInMemorySkillsSource(agentSkills);
     }
 }

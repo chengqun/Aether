@@ -105,6 +105,7 @@ public partial class ExpertsViewModel : ObservableObject
                         ModelId = def.ModelId,
                         ModelName = modelNames.TryGetValue(def.ModelId ?? string.Empty, out var mn) ? mn : string.Empty,
                         Tools = def.Tools.ToList(),
+                        Skills = def.Skills.ToList(),
                         Memory = def.Memory,
                         MaxHistory = def.MaxHistory,
                         TopP = def.TopP,
@@ -184,6 +185,7 @@ public partial class ExpertsViewModel : ObservableObject
                 SystemPrompt = item.SystemPrompt,
                 ModelId = item.ModelId ?? string.Empty,
                 Tools = item.Tools,
+                Skills = item.Skills,
                 Memory = item.Memory,
                 MaxHistory = item.MaxHistory,
                 TopP = item.TopP,
@@ -251,8 +253,9 @@ public partial class ExpertsViewModel : ObservableObject
     public ExpertEditViewModel CreateEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
+        var skills = _catalog.GetAvailableSkills();
         var models = _catalog.GetAvailableModels();
-        return new ExpertEditViewModel(existing, tools, models);
+        return new ExpertEditViewModel(existing, tools, skills, models);
     }
 
     // —— 市场 ——
@@ -318,6 +321,7 @@ public partial class ExpertsViewModel : ObservableObject
                 Category = string.IsNullOrWhiteSpace(detail.Category) ? "普通对话" : detail.Category,
                 SystemPrompt = fields?.Prompt ?? detail.Content,
                 Tools = fields?.Tools ?? new List<string>(),
+                Skills = fields?.Skills ?? new List<string>(),
                 Memory = fields?.Memory ?? AgentMemoryMode.SlidingWindow,
                 MaxHistory = fields?.MaxHistory ?? 20,
                 ModelId = fields?.Model ?? string.Empty,

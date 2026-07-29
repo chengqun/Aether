@@ -25,6 +25,8 @@ public sealed class AgentSourceFields
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = "普通对话";
     public List<string> Tools { get; set; } = new();
+    /// <summary>该 agent 启用 skills 时可用的 skill 名列表（空=全部已注册 skill）。</summary>
+    public List<string> Skills { get; set; } = new();
     public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
     public int MaxHistory { get; set; } = 20;
     /// <summary>模型标识（宿主解析，如 LLM 配置 Id；空=默认）。</summary>
@@ -203,45 +205,54 @@ public static class AgentSourceParser
                     if (bool.TryParse(value, out var ot)) result.EnableOpenTelemetry = ot;
                     break;
                 case "tools":
-                    var tools = new List<string>();
-                    if (value.StartsWith('[') && value.EndsWith(']'))
-                    {
-                        // flow style: [a, b, c]
-                        var inner = value.Substring(1, value.Length - 2);
-                        foreach (var t in inner.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                        {
-                            var tn = t.Trim().Trim('\'', '"');
-                            if (!string.IsNullOrWhiteSpace(tn)) tools.Add(tn);
-                        }
-                    }
-                    else if (string.IsNullOrWhiteSpace(value))
-                    {
-                        // block style: 下一行以 - 开头
-                        while (i + 1 < lines.Length)
-                        {
-                            var next = lines[i + 1].Trim();
-                            if (next.StartsWith("- "))
-                            {
-                                var tn = next.Substring(2).Trim().Trim('\'', '"');
-                                if (!string.IsNullOrWhiteSpace(tn)) tools.Add(tn);
-                                i++;
-                            }
-                            else if (string.IsNullOrWhiteSpace(next))
-                            {
-                                i++;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    result.Tools = tools;
+                    result.Tools = ParseListValue(value, lines, ref i);
+                    break;
+                case "skills":
+                    result.Skills = ParseListValue(value, lines, ref i);
                     break;
             }
             i++;
         }
         return true;
+    }
+
+    /// <summary>解析 flow（[a, b]）或 block（下一行起 - a / - b）形式的字符串列表，block 形式会推进 i。</summary>
+    private static List<string> ParseListValue(string value, string[] lines, ref int i)
+    {
+        var list = new List<string>();
+        if (value.StartsWith('[') && value.EndsWith(']'))
+        {
+            // flow style: [a, b, c]
+            var inner = value.Substring(1, value.Length - 2);
+            foreach (var t in inner.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var tn = t.Trim().Trim('\'', '"');
+                if (!string.IsNullOrWhiteSpace(tn)) list.Add(tn);
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(value))
+        {
+            // block style: 下一行以 - 开头
+            while (i + 1 < lines.Length)
+            {
+                var next = lines[i + 1].Trim();
+                if (next.StartsWith("- "))
+                {
+                    var tn = next.Substring(2).Trim().Trim('\'', '"');
+                    if (!string.IsNullOrWhiteSpace(tn)) list.Add(tn);
+                    i++;
+                }
+                else if (string.IsNullOrWhiteSpace(next))
+                {
+                    i++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        return list;
     }
 
     /// <summary>生成空白 Agent 源模板。</summary>
@@ -252,6 +263,7 @@ name: {name}
 description: 由文本源创建
 category: 普通对话
 tools: []
+skills: []
 memory: SlidingWindow
 max_history: 20
 model:
@@ -270,11 +282,17 @@ response_format: Default
             ? "tools: []"
             : "tools:\n" + string.Join("\n", toolList.Select(t => $"- {t}"));
 
+        var skillList = f.Skills?.ToList() ?? new List<string>();
+        var skillsLine = skillList.Count == 0
+            ? "skills: []"
+            : "skills:\n" + string.Join("\n", skillList.Select(s => $"- {s}"));
+
         return $@"---
 name: {f.Name}
 description: {f.Description}
 category: {f.Category}
 {toolsLine}
+{skillsLine}
 memory: {f.Memory}
 max_history: {f.MaxHistory}
 model: {f.Model ?? string.Empty}

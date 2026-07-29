@@ -2,6 +2,7 @@ using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Sessions;
+using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
@@ -65,6 +66,9 @@ public static class AetherAIServiceCollectionExtensions
         // AIFunction and never fails due to missing DI dependencies.
         services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp));
 
+        // Skills — SkillRegistry 收集各适配器通过 ISkillRegistryContributor 注册的提示词级 skill。
+        services.AddSingleton<SkillRegistry>(sp => new SkillRegistry(sp));
+
         // Harness
         services.AddSingleton<IChatClientFactory, DefaultChatClientFactory>();
         services.AddSingleton<AgentFactory>(sp =>
@@ -72,6 +76,7 @@ public static class AetherAIServiceCollectionExtensions
             var factory = new AgentFactory(
                 sp.GetRequiredService<IChatClientFactory>(),
                 sp.GetRequiredService<ToolRegistry>(),
+                sp.GetRequiredService<SkillRegistry>(),
                 sp.GetService<ILoggerFactory>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             return factory;

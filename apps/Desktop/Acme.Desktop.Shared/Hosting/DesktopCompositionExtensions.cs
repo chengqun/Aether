@@ -91,6 +91,10 @@ public static class DesktopCompositionExtensions
 
         // —— 公共 AI 工具（两租户共用）——
         aether.AddSystemTools().AddApkParserTools().AddNotesTools();
+        // —— 公共 AI skill（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）——
+        var skillsDir = Path.Combine(tenantDir, "skills");
+        SeedDefaultSkill(skillsDir);
+        aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));
 
         // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
         aether.AddCustomAgents();
@@ -114,6 +118,45 @@ public static class DesktopCompositionExtensions
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
+    }
+
+    /// <summary>
+    /// 首次运行时在 skills 目录种子一个示例 SKILL.md（organize-notes），
+    /// 让用户开箱即用并作为 SKILL.md 格式范本。已存在则不覆盖。
+    /// </summary>
+    private static void SeedDefaultSkill(string skillsDir)
+    {
+        var exampleDir = Path.Combine(skillsDir, "organize-notes");
+        var exampleFile = Path.Combine(exampleDir, "SKILL.md");
+        if (File.Exists(exampleFile)) return;
+
+        try
+        {
+            Directory.CreateDirectory(exampleDir);
+            File.WriteAllText(exampleFile, """
+                ---
+                name: organize-notes
+                description: 把零散笔记整理成主题分类的结构化笔记
+                category: 笔记技能
+                ---
+
+                # 整理笔记
+
+                当用户要求整理笔记时，按以下步骤进行：
+
+                1. 用 ListNotes 列出当前所有笔记，了解全貌。
+                2. 用 SearchNotes 按关键词聚类，识别共同主题。
+                3. 为每个主题新建一篇结构化笔记（CreateNote），标题含主题名，
+                   正文用二级标题分「要点」「待办」「相关笔记」三段。
+                4. 把归入该主题的旧笔记关键内容追加到对应结构化笔记（AppendNote），
+                   并在旧笔记里标注去向（UpdateNote）。
+                5. 不要直接删除旧笔记；整理完成后用 ListNotes 复核并给用户一份
+                   「主题 → 笔记」对照表。
+
+                原则：保留原始信息、可追溯、不重复。
+                """);
+        }
+        catch { /* 种子失败不阻塞启动 */ }
     }
 }
 

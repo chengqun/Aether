@@ -31,6 +31,12 @@ public sealed class AgentDefinition
     public IReadOnlyList<string> Tools { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// Names of skills (registered with the SkillRegistry) the agent may use when
+    /// <see cref="EnableAgentSkills"/> is on. Empty = use all registered skills.
+    /// </summary>
+    public IReadOnlyList<string> Skills { get; init; } = Array.Empty<string>();
+
+    /// <summary>
     /// Conversation memory policy. Defaults to <see cref="AgentMemoryMode.Full"/>.
     /// Enforced by the Harness via the framework's chat-history provider.
     /// </summary>

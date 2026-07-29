@@ -3,6 +3,7 @@ using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Sessions;
 using Aether.AI.Harness.Tools;
+using Aether.AI.Harness.Skills;
 using Microsoft.Extensions.AI;
 
 namespace Aether.AI.Harness.Tests;
@@ -61,7 +62,7 @@ public class AgentMemoryTests
     private static (HarnessRuntime runtime, RecordingChatClient client) Build(AgentMemoryMode memory, int maxHistory)
     {
         var client = new RecordingChatClient();
-        var factory = new AgentFactory(new ConstChatClientFactory(client), new ToolRegistry());
+        var factory = new AgentFactory(new ConstChatClientFactory(client), new ToolRegistry(), new SkillRegistry());
         var runtime = new HarnessRuntime(factory, new SessionManager());
         runtime.RegisterAgent(new AgentDefinition
         {

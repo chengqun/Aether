@@ -14,6 +14,15 @@ public partial class ToolOption : ObservableObject
     [ObservableProperty] private bool _isSelected;
 }
 
+/// <summary>skill 选项（skill 池项，供自定义 Agent 勾选）。</summary>
+public partial class SkillOption : ObservableObject
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    [ObservableProperty] private bool _isSelected;
+}
+
 /// <summary>工具类别分组（UI 分组展示用，支持类别整体勾选）。</summary>
 public partial class ToolCategoryGroup : ObservableObject
 {
@@ -51,11 +60,12 @@ public class ResponseFormatOption
 
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
-    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels)
+    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomSkillMeta> allSkills, IReadOnlyList<CustomModelOption> allModels)
     {
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
+        var selectedSkillSet = new HashSet<string>(existing?.Skills ?? Enumerable.Empty<string>());
 
         // 按分类分组构建工具列表
         foreach (var meta in allTools)
@@ -79,6 +89,18 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             opt.PropertyChanged += (_, _) => group.RefreshIsAllSelected();
             Tools.Add(opt);
             group.Tools.Add(opt);
+        }
+
+        // 构建 skill 列表（skill 通常较少，平铺即可）
+        foreach (var meta in allSkills ?? Array.Empty<CustomSkillMeta>())
+        {
+            Skills.Add(new SkillOption
+            {
+                Name = meta.Name,
+                Description = meta.Description,
+                Category = meta.Category,
+                IsSelected = selectedSkillSet.Contains(meta.Name),
+            });
         }
 
         if (existing != null)
@@ -173,6 +195,9 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     /// <summary>按类别分组的工具列表（UI 分组展示用）。</summary>
     public ObservableCollection<ToolCategoryGroup> ToolCategories { get; } = new();
 
+    /// <summary>可选 skill 列表（含选中状态）。</summary>
+    public ObservableCollection<SkillOption> Skills { get; } = new();
+
     /// <summary>选中工具数量。</summary>
     public int SelectedToolCount => Tools.Count(t => t.IsSelected);
 
@@ -250,6 +275,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         }
 
         var toolList = Tools.Where(t => t.IsSelected).Select(t => t.Name).ToList();
+        var skillList = Skills.Where(s => s.IsSelected).Select(s => s.Name).ToList();
 
         var item = new ExpertItem
         {
@@ -260,6 +286,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             SystemPrompt = SystemPrompt,
             ModelId = ModelId ?? string.Empty,
             Tools = toolList,
+            Skills = skillList,
             Memory = Memory,
             MaxHistory = MaxHistory,
             TopP = TopP,
