@@ -80,6 +80,8 @@ public static class AetherAIServiceCollectionExtensions
                 sp.GetService<ILoggerFactory>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
+            factory.SkillsDirectory = sp.GetRequiredService<AetherAIOptions>().SkillsDirectory;
+            factory.PythonExecutable = sp.GetRequiredService<AetherAIOptions>().PythonExecutable;
             return factory;
         });
         services.AddSingleton<SessionManager>();

@@ -20,6 +20,19 @@ public sealed class AetherAIOptions
     /// 在只读 CWD 下抛 Read-only file system）。桌面端应设为租户数据目录下的子目录。
     /// </summary>
     public string? FileMemoryRoot { get; set; }
+
+    /// <summary>
+    /// skills 目录（每个 skill 占一个子目录：&lt;dir&gt;/&lt;name&gt;/SKILL.md，可含脚本/资源）。
+    /// 配置后 AgentFactory 用 MAF 的 AgentFileSkillsSource 加载（支持 SKILL.md 正文 + 可执行脚本）。
+    /// 为 null 时退回 SkillRegistry 的纯提示词 source（不支持脚本）。
+    /// </summary>
+    public string? SkillsDirectory { get; set; }
+
+    /// <summary>
+    /// 执行 .py skill 脚本的解释器（默认 "python3"）。从 .app 启动时 GUI 进程 PATH 受限，
+    /// 建议填绝对路径（如 /usr/bin/python3 / /opt/homebrew/bin/python3）。
+    /// </summary>
+    public string? PythonExecutable { get; set; }
 }
 
 /// <summary>

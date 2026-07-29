@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
@@ -32,6 +34,7 @@ public sealed class AgentFactory
     private readonly ToolRegistry _toolRegistry;
     private readonly SkillRegistry _skillRegistry;
     private readonly ILoggerFactory? _loggerFactory;
+    private readonly AgentFileSkillScriptRunner _skillScriptRunner;
 
     /// <summary>
     /// When <c>true</c> (default), builds a <see cref="HarnessAgent"/>. When
@@ -46,6 +49,12 @@ public sealed class AgentFactory
     /// </summary>
     public string? FileMemoryRoot { get; set; }
 
+    /// <summary>skills 目录。配置后用 MAF AgentFileSkillsSource 加载（支持脚本）；否则退回 SkillRegistry 纯提示词。</summary>
+    public string? SkillsDirectory { get; set; }
+
+    /// <summary>执行 .py 脚本的解释器（默认 python3）。由宿主通过 AetherAIOptions.PythonExecutable 设置。</summary>
+    public string? PythonExecutable { get; set; }
+
     /// <param name="chatClientFactory">
     /// Resolves the <see cref="IChatClient"/> for a given agent model id.
     /// Invoked lazily per agent so the runtime does not eagerly build a client.
@@ -56,6 +65,7 @@ public sealed class AgentFactory
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _loggerFactory = loggerFactory;
+        _skillScriptRunner = RunSkillScriptAsync;
     }
 
     /// <summary>Builds a cached, runnable agent for the given definition.</summary>
@@ -185,15 +195,35 @@ public sealed class AgentFactory
     }
 
     /// <summary>
-    /// 当 agent 启用 skills（<see cref="AgentDefinition.EnableAgentSkills"/>）且注册表非空时，
-    /// 把全部已注册 skill 包成 <see cref="AgentInMemorySkillsSource"/> 供 HarnessAgent 的
-    /// AgentSkillsProvider 使用。否则返回 null（provider 也会被 Disable）。
+    /// 当 agent 启用 skills（<see cref="AgentDefinition.EnableAgentSkills"/>）时构建 skill 源。
+    /// 配了 <see cref="SkillsDirectory"/> 时用 MAF <see cref="AgentFileSkillsSource"/>（支持 SKILL.md 正文 + 脚本/resources），
+    /// 并按 <see cref="AgentDefinition.Skills"/> 过滤；否则退回 SkillRegistry 的纯提示词 <see cref="AgentInMemorySkillsSource"/>。
     /// </summary>
     private AgentSkillsSource? BuildSkillsSource(AgentDefinition definition)
     {
         if (!definition.EnableAgentSkills) return null;
 
-        // 指定了 skill 名列表就只取那些；空则用全部已注册 skill。
+        // 文件型 source（支持脚本）：每 agent 一个，按名过滤子集。
+        if (!string.IsNullOrEmpty(SkillsDirectory))
+        {
+            var fileSource = new AgentFileSkillsSource(
+                SkillsDirectory,
+                scriptRunner: _skillScriptRunner,
+                options: null,
+                loggerFactory: _loggerFactory);
+
+            if (definition.Skills.Count > 0)
+            {
+                var allowed = new HashSet<string>(definition.Skills, StringComparer.OrdinalIgnoreCase);
+                return new FilteringAgentSkillsSource(
+                    fileSource,
+                    (skill, _) => allowed.Contains(skill.Frontmatter.Name),
+                    _loggerFactory);
+            }
+            return fileSource;
+        }
+
+        // 退路：SkillRegistry 纯提示词（无脚本）。
         var skills = definition.Skills.Count > 0
             ? _skillRegistry.ResolveAll(definition.Skills)
             : _skillRegistry.GetAll();
@@ -208,5 +238,69 @@ public sealed class AgentFactory
             .ToList();
 
         return new AgentInMemorySkillsSource(agentSkills);
+    }
+
+    /// <summary>
+    /// skill 脚本运行器：按扩展名选解释器（.py→python3，.sh→sh，.js→node），
+    /// 以子进程执行脚本并传入 CLI 参数，返回 stdout。失败时返回含退出码/ stderr 的字符串。
+    /// </summary>
+    private async Task<object?> RunSkillScriptAsync(
+        AgentSkill skill, AgentFileSkillScript script, JsonElement? rawArguments,
+        IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var args = ParseCliArgs(rawArguments);
+        var interpreter = ResolveInterpreter(script.FullPath);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = interpreter,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add(script.FullPath);
+        foreach (var a in args) psi.ArgumentList.Add(a);
+
+        try
+        {
+            using var process = new Process { StartInfo = psi };
+            if (!process.Start()) return $"无法启动脚本进程：{interpreter}";
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            if (process.ExitCode != 0)
+            {
+                var stderr = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+                return $"脚本退出码 {process.ExitCode}：{stderr}";
+            }
+            return stdout;
+        }
+        catch (Exception ex)
+        {
+            return $"脚本执行失败：{ex.Message}";
+        }
+    }
+
+    private static List<string> ParseCliArgs(JsonElement? raw)
+    {
+        var list = new List<string>();
+        if (raw is { } el && el.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in el.EnumerateArray())
+                list.Add(item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : item.ToString());
+        }
+        return list;
+    }
+
+    private string ResolveInterpreter(string scriptPath)
+    {
+        var ext = Path.GetExtension(scriptPath).ToLowerInvariant();
+        return ext switch
+        {
+            ".py" => string.IsNullOrWhiteSpace(PythonExecutable) ? "python3" : PythonExecutable,
+            ".sh" => "sh",
+            ".js" => "node",
+            _ => "sh",
+        };
     }
 }

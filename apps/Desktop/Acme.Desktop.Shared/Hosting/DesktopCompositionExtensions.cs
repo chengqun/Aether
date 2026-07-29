@@ -53,6 +53,8 @@ public static class DesktopCompositionExtensions
             o.OpenAI.Endpoint = llm.Endpoint;
             // HarnessAgent 文件记忆 provider 的可写根目录（.app 启动 CWD=/ 只读，必须显式指定）。
             o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
+            // skills 目录：MAF AgentFileSkillsSource 从此加载 SKILL.md（+ 脚本/资源）。
+            o.SkillsDirectory = Path.Combine(tenantDir, "skills");
         });
 
         // —— 公共业务上下文（两租户共用）——
