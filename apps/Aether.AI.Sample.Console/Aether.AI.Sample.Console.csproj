@@ -9,9 +9,6 @@
     <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Application\Acme.Qifu.Application.csproj" />
-    <ProjectReference Include="..\..\business\Qifu\Acme.Qifu.Infrastructure\Acme.Qifu.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\ai\Qifu\Acme.Qifu.AI\Acme.Qifu.AI.csproj" />
     <ProjectReference Include="..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
     <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Application\Acme.Ctp.Application.csproj" />
     <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />

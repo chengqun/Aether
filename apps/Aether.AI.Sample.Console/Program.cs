@@ -20,11 +20,6 @@ using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Infrastructure;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
-using Acme.Qifu.AI;
-using Acme.Qifu.Application;
-using Acme.Qifu.Application.DependencyInjection;
-using Acme.Qifu.Infrastructure;
-using Acme.Qifu.Infrastructure.DependencyInjection;
 using Acme.Quotes.AI;
 using Acme.Quotes.Application.DependencyInjection;
 using Acme.Quotes.Infrastructure.DependencyInjection;
@@ -42,7 +37,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 // ---- Aether.AI integrated Console demo -----------------------------------
-// Composes every context: Platform (app auth/HTTP) + Llm (LLM config) + Qifu +
+// Composes every context: Platform (app auth/HTTP) + Llm (LLM config) +
 // Ctp + Securities + Quotes + Trading + Notes + Aether.AI. One assistant agent
 // aggregates all tools. 'sync-securities' pulls instruments
 // from the app server; 'use <agent>' switches the active agent.
@@ -142,9 +137,6 @@ static void ComposeContexts(IServiceCollection services)
     // Llm: LLM config in SQLite.
     services.AddLlmInfrastructure();
     services.AddLlmApplication();
-    // Qifu: 360 internal-platform integration.
-    services.AddQifuInfrastructure();
-    services.AddQifuApplication();
     // Ctp: futures broker session (self-contained, native CTP binding).
     services.AddCtpInfrastructure();
     services.AddCtpApplication();
@@ -166,10 +158,9 @@ static void ComposeContexts(IServiceCollection services)
 static void RegisterAgents(AetherAIBuilder aether, string modelId)
 {
     // One agent with all tools from every context (no agent switching needed).
-    aether.AddQifuTools().AddCtpTools().AddQuotesTools().AddTradingTools();
+    aether.AddCtpTools().AddQuotesTools().AddTradingTools();
     aether.AddSystemTools().AddApkParserTools().AddNotesTools();
-    var allTools = QifuAIBuilderExtensions.ToolNames
-        .Concat(CtpAIBuilderExtensions.ToolNames)
+    var allTools = CtpAIBuilderExtensions.ToolNames
         .Concat(QuotesAIBuilderExtensions.ToolNames)
         .Concat(TradingAIBuilderExtensions.ToolNames)
         .Concat(SystemToolsAIBuilderExtensions.ToolNames)
@@ -180,7 +171,7 @@ static void RegisterAgents(AetherAIBuilder aether, string modelId)
         .Name("Aether Assistant")
         .Instructions(
             "你是企业助手，可调用工具：证券查询/技术指标、CTP 期货（账户/持仓/行情/下单/撤单）、" +
-            "量化回测（SMA 策略历史回测，返回收益/风险统计）、毓数异步 SQL、360Teams 云文档/消息通知。" +
+            "量化回测（SMA 策略历史回测，返回收益/风险统计）、本地 Markdown 笔记、系统/文件工具、APK 解析。" +
             "按需调用工具，简洁回复。下单/撤单默认仅预览。")
         .ModelId(modelId)
         .WithTools(allTools));
@@ -211,7 +202,7 @@ static async Task RunOfflineSmokeAsync(string dbPath)
 static async Task RunConversationAsync(HarnessRuntime runtime, IServiceProvider services)
 {
     Console.WriteLine("Aether.AI live. Commands: 'ctp', 'ctp-login', 'ctp-status', 'sync-securities', 'backtest', 'login', 'whoami', 'configs', 'config', 'exit'.");
-    Console.WriteLine("One assistant with all tools (qifu/ctp/quotes). Tool backends still need their own login/credentials.");
+    Console.WriteLine("One assistant with all tools (ctp/quotes/trading/notes/system). Tool backends still need their own login/credentials.");
     Console.WriteLine(new string('-', 60));
 
     var llmService = services.GetRequiredService<ILlmConfigService>();
