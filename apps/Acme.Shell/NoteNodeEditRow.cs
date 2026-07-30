@@ -21,6 +21,20 @@ public partial class NoteNodeEditRow : ObservableObject
 
     [ObservableProperty] private NodeTypeOption? _selectedTypeOption;
 
+    partial void OnSelectedTypeOptionChanged(NodeTypeOption? value)
+    {
+        // 选 Agent/Workflow 时联动语法（→ 图标自动跟随）
+        if (value is null) return;
+        var syntaxKey = value.Value switch
+        {
+            NoteNodeType.Agent => "yaml",
+            NoteNodeType.Workflow => "json",
+            _ => null, // 文本类型不改语法
+        };
+        if (syntaxKey is not null)
+            SelectedSyntaxOption = SyntaxOptions.FirstOrDefault(o => o.Value == syntaxKey);
+    }
+
     [ObservableProperty] private bool _isTypeEnabled = true;
 
     /// <summary>语法下拉选项（PathData=图标 path；IsFill=true 用填充渲染语言 logo，false 用描边渲染 Lucide）。</summary>

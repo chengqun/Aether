@@ -68,15 +68,57 @@ public partial class NotesView : UserControl
         if (_vm == null) return;
         if (e.PropertyName == nameof(NotesViewModel.SelectedNode))
         {
-            // 重新订阅当前节点的 Syntax 变化（切高亮）
             if (_subscribedNode != null) _subscribedNode.PropertyChanged -= OnNodePropertyChanged;
             _subscribedNode = _vm.SelectedNode;
             if (_subscribedNode != null) _subscribedNode.PropertyChanged += OnNodePropertyChanged;
+            _ = CreateEditVmForNodeAsync();
             SyncCodeEditor();
         }
         else if (e.PropertyName == nameof(NotesViewModel.IsCodeEdit) && _vm.IsCodeEdit)
         {
             SyncCodeEditor();
+        }
+    }
+
+    private MainViewModelBase? MainVm => (TopLevel.GetTopLevel(this)?.DataContext) as MainViewModelBase;
+
+    /// <summary>选中 Agent/Workflow 时创建对应表单 VM；保存后 RefreshAsync 同步源码。</summary>
+    private async Task CreateEditVmForNodeAsync()
+    {
+        var node = _vm?.SelectedNode;
+        if (node is null || _vm is null) return;
+        var main = MainVm;
+        if (main is null) return;
+
+        if (node.NodeType == NoteNodeType.Agent)
+        {
+            var expert = main.Experts.Experts.FirstOrDefault(e => e.Id == node.Id);
+            if (expert is null) return;
+            var editVm = main.Experts.CreateEditViewModel(expert);
+            if (editVm is null) return;
+            editVm.SaveRequested += async saved =>
+            {
+                var result = await main.Experts.SaveAsync(saved);
+                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
+                else editVm.Error = result.Error;
+            };
+            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
+            _vm.ActiveEditVm = editVm;
+        }
+        else if (node.NodeType == NoteNodeType.Workflow)
+        {
+            var wf = main.Workflows.Workflows.FirstOrDefault(w => w.Id == node.Id);
+            if (wf is null) return;
+            var editVm = await main.Workflows.CreateEditViewModelAsync(wf);
+            if (editVm is null) return;
+            editVm.SaveRequested += async saved =>
+            {
+                var result = await main.Workflows.SaveAsync(saved);
+                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
+                else editVm.Error = result.Error;
+            };
+            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
+            _vm.ActiveEditVm = editVm;
         }
     }
 
@@ -379,38 +421,6 @@ public partial class NotesView : UserControl
         okBtn.Click += (_, _) => { result = true; dlg.Close(); };
         await dlg.ShowDialog(parent);
         return result;
-    }
-
-    private async void OnEditAgentClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryGetVmParent(out var vm, out var parent)) return;
-        if (parent.DataContext is not MainViewModelBase main) return;
-
-        var selectedNode = vm.SelectedNode;
-        if (selectedNode == null || selectedNode.NodeType != NoteNodeType.Agent) return;
-
-        var expert = main.Experts.Experts.FirstOrDefault(e => e.Id == selectedNode.Id);
-        var editVm = main.Experts.CreateEditViewModel(expert);
-        if (editVm == null) return;
-
-        var dialog = new ExpertEditWindow { DataContext = editVm };
-
-        editVm.SaveRequested += async saved =>
-        {
-            var result = await main.Experts.SaveAsync(saved);
-            if (result.Success)
-            {
-                dialog.Close();
-                await vm.LoadAsync();
-            }
-            else
-            {
-                editVm.Error = result.Error;
-            }
-        };
-        editVm.CancelRequested += () => dialog.Close();
-
-        await dialog.ShowDialog(parent);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)

@@ -107,33 +107,35 @@ public partial class NotesViewModel : ObservableObject
     }
 
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
+    public bool IsWorkflowNode => SelectedNode?.NodeType == NoteNodeType.Workflow;
+    public bool IsFormNode => IsAgentNode || IsWorkflowNode;
+    public bool HasRightPane => IsMarkdownNode || IsFormNode;
 
-    /// <summary>文本节点 → AvaloniaEdit 编辑（按语法高亮，含 markdown 高亮）。</summary>
-    /// <summary>所有节点都用 AvaloniaEdit 编辑（Agent=YAML纯文本、Workflow=JSON、文本=按语法高亮）。</summary>
     public bool IsCodeEdit => SelectedNode is not null;
-
-    /// <summary>markdown 语法节点 → 右侧显示渲染预览栏。</summary>
     public bool IsMarkdownNode => SelectedNode?.IsMarkdown ?? false;
 
-    /// <summary>纯预览模式（仅渲染栏，隐藏编辑器）。</summary>
+    [ObservableProperty] private object? _activeEditVm;
     [ObservableProperty] private bool _isPreviewOnly;
 
-    public bool EditorVisible => IsCodeEdit && !(IsMarkdownNode && IsPreviewOnly);
-    public bool SplitterVisible => IsMarkdownNode && !IsPreviewOnly;
-    public bool PreviewVisible => IsMarkdownNode;
-    public int EditorSpan => !IsCodeEdit ? 1 : (IsMarkdownNode && !IsPreviewOnly ? 1 : 3);
-    public int PreviewColumn => IsPreviewOnly ? 0 : 2;
-    public int PreviewSpan => IsPreviewOnly ? 3 : 1;
+    public bool EditorVisible => IsCodeEdit && !(HasRightPane && IsPreviewOnly);
+    public bool SplitterVisible => HasRightPane && !IsPreviewOnly;
+    public bool RightPaneVisible => HasRightPane;
+    public int EditorSpan => !IsCodeEdit ? 1 : (HasRightPane && !IsPreviewOnly ? 1 : 3);
+    public int RightPaneColumn => IsPreviewOnly ? 0 : 2;
+    public int RightPaneSpan => IsPreviewOnly ? 3 : 1;
 
     private void RaiseLayout()
     {
         OnPropertyChanged(nameof(IsMarkdownNode));
+        OnPropertyChanged(nameof(IsWorkflowNode));
+        OnPropertyChanged(nameof(IsFormNode));
+        OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
-        OnPropertyChanged(nameof(PreviewVisible));
+        OnPropertyChanged(nameof(RightPaneVisible));
         OnPropertyChanged(nameof(EditorSpan));
-        OnPropertyChanged(nameof(PreviewColumn));
-        OnPropertyChanged(nameof(PreviewSpan));
+        OnPropertyChanged(nameof(RightPaneColumn));
+        OnPropertyChanged(nameof(RightPaneSpan));
     }
 
     /// <summary>语法变化后由视图调用，刷新 markdown 预览栏可见性。</summary>
@@ -146,7 +148,6 @@ public partial class NotesViewModel : ObservableObject
 
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
-        // 切换前保存上一个节点（如果有未保存改动）
         if (_dirty && _previousSelected is not null)
         {
             _saveCts?.Cancel();
@@ -154,6 +155,7 @@ public partial class NotesViewModel : ObservableObject
             _dirty = false;
         }
         _previousSelected = value;
+        ActiveEditVm = null; // 切换节点时清空表单 VM（视图层会按需重建）
 
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsCodeEdit));
