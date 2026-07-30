@@ -30,9 +30,10 @@ public sealed partial class NoteNodeVM : ObservableObject
 
     partial void OnIconKeyChanged(string? value)
     {
-        // Icon / IconColor 由 IconKey 派生，key 变化时需手动通知绑定刷新。
+        // Icon / IconColor / IconIsFill 由 IconKey 派生，key 变化时需手动通知绑定刷新。
         OnPropertyChanged(nameof(Icon));
         OnPropertyChanged(nameof(IconColor));
+        OnPropertyChanged(nameof(IconIsFill));
     }
 
     public ObservableCollection<NoteNodeVM> Children { get; } = new();
@@ -52,6 +53,9 @@ public sealed partial class NoteNodeVM : ObservableObject
         NoteNodeType.Workflow => "#1F8A4C",
         _                     => "#6B6B70",
     };
+
+    /// <summary>图标渲染模式：自定义语言 logo=true(填充)，其余 false(描边)。</summary>
+    public bool IconIsFill => NoteIcons.Find(IconKey)?.IsFill ?? false;
 
     public NoteNodeType NodeType { get; set; } = NoteNodeType.Note;
 

@@ -12,15 +12,18 @@ public sealed partial class NoteIconOption : ObservableObject
     public string? Key { get; }
     public string PathData { get; }
     public string Color { get; }
+    /// <summary>true=填充渲染（语言 logo）；false=描边渲染（Lucide）。</summary>
+    public bool IsFill { get; }
 
     [ObservableProperty] private bool _isSelected;
 
-    public NoteIconOption(string display, string? key, string pathData, string color)
+    public NoteIconOption(string display, string? key, string pathData, string color, bool isFill = false)
     {
         Display = display;
         Key = key;
         PathData = pathData;
         Color = color;
+        IsFill = isFill;
     }
 }
 
@@ -90,6 +93,41 @@ public static class NoteIcons
         new("勾选",   "check",   NavIcons.Check,       "#1F8A4C"),
         new("关闭",   "close",   NavIcons.Close,       "#EF4444"),
         new("新增",   "plus",    NavIcons.Plus,        "#1F8A4C"),
+        // —— 编程语言 logo（Simple Icons 填充式；选对应语法时自动选用）——
+        new("Markdown",   "lang_markdown", NavIcons.LangMarkdown,   "#6B6B70", true),
+        new("Python",     "lang_python",   NavIcons.LangPython,     "#3776AB", true),
+        new("JavaScript", "lang_js",       NavIcons.LangJavascript, "#D97706", true),
+        new("JSON",       "lang_json",     NavIcons.LangJson,       "#6B6B70", true),
+        new("HTML",       "lang_html",     NavIcons.LangHtml5,      "#E34F26", true),
+        new("CSS",        "lang_css",      NavIcons.LangCss3,       "#1572B6", true),
+        new("C++",        "lang_cpp",      NavIcons.LangCplusplus,  "#00599C", true),
+        new("C#",         "lang_csharp",   NavIcons.LangDotnet,     "#512BD4", true),
+        new("Java",       "lang_java",     NavIcons.LangOpenJdk,    "#1A1A1F", true),
+        new("VB",         "lang_vb",       NavIcons.LangDotnet,     "#512BD4", true),
+        new("XML",        "lang_xml",      NavIcons.LangXml,        "#005FAD", true),
+        new("SQL",        "lang_sql",      NavIcons.LangSqlite,     "#003B57", true),
+        new("PowerShell", "lang_ps",       NavIcons.LangBash,       "#4EAA25", true),
+    };
+
+    /// <summary>语法 key → 对应图标 key（用于选语法时自动设节点图标）。</summary>
+    public static string? IconKeyForSyntax(string? syntax) => syntax?.ToLowerInvariant() switch
+    {
+        "markdown" => "lang_markdown",
+        "python" => "lang_python",
+        "javascript" => "lang_js",
+        "json" => "lang_json",
+        "html" => "lang_html",
+        "css" => "lang_css",
+        "cpp" => "lang_cpp",
+        "csharp" => "lang_csharp",
+        "java" => "lang_java",
+        "vb" => "lang_vb",
+        "xml" => "lang_xml",
+        "sql" => "lang_sql",
+        "powershell" => "lang_ps",
+        "text" => "file",
+        "folder" => "folder",
+        _ => null,
     };
 
     /// <summary>按 key 查找图标项；key 为 null 或未命中返回 null（调用方回退到 NodeType 默认）。</summary>

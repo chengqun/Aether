@@ -84,8 +84,10 @@
                         CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}" VerticalAlignment="Center"/>
+                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
                         StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                        Stroke="{Binding IconColor}" VerticalAlignment="Center"/>
+                        Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}" VerticalAlignment="Center"/>
                   <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
                 </StackPanel>
               </Grid>
@@ -121,8 +123,10 @@
               <Grid ColumnDefinitions="*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
+                        Fill="{Binding SelectedNode.IconColor}" IsVisible="{Binding SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
+                  <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
                         StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                        Stroke="{Binding SelectedNode.IconColor}" VerticalAlignment="Center"/>
+                        Stroke="{Binding SelectedNode.IconColor}" IsVisible="{Binding !SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
                   <TextBlock Text="{Binding SelectedNode.Title}" FontSize="14" FontWeight="SemiBold"
                              Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                              TextTrimming="CharacterEllipsis" />
