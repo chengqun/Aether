@@ -1,3 +1,4 @@
+using System;
 using Acme.Shell;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -6,7 +7,32 @@ namespace Acme.Desktop.Shared.Shell;
 
 public partial class WorkflowEditView : UserControl
 {
-    public WorkflowEditView() { InitializeComponent(); }
+    private Expander[]? _accordions;
+
+    public WorkflowEditView()
+    {
+        InitializeComponent();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object? sender, EventArgs e)
+    {
+        _accordions = new[]
+        {
+            this.FindControl<Expander>("ExpBasic")!,
+            this.FindControl<Expander>("ExpParticipants")!,
+            this.FindControl<Expander>("ExpHandoffs")!,
+        };
+        foreach (var exp in _accordions)
+        {
+            exp.PropertyChanged += (s, args) =>
+            {
+                if (args.Property == Expander.IsExpandedProperty && (bool)args.NewValue!)
+                    foreach (var other in _accordions!)
+                        if (!ReferenceEquals(other, s)) other.IsExpanded = false;
+            };
+        }
+    }
 
     private void OnAddHandoffClick(object? sender, RoutedEventArgs e)
     {
