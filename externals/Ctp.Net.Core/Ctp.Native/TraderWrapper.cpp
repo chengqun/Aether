@@ -192,7 +192,7 @@ private:
 
 extern "C" {
 
-CtpTraderHandle CtpTrader_Create(const char* flowPath,
+CTP_API CtpTraderHandle CtpTrader_Create(const char* flowPath,
                                  const CtpTraderCallbacks* callbacks, void* ctx) {
     if (!callbacks) return nullptr;
     auto* t = new CtpTrader{};
@@ -205,7 +205,7 @@ CtpTraderHandle CtpTrader_Create(const char* flowPath,
     return t;
 }
 
-void CtpTrader_Release(CtpTraderHandle h) {
+CTP_API void CtpTrader_Release(CtpTraderHandle h) {
     if (!h) return;
     // 注意：Release 不得在 CTP 回调线程内调用，调用方须先 Join 退出后再 Release。
     if (h->api) h->api->Release();
@@ -213,36 +213,36 @@ void CtpTrader_Release(CtpTraderHandle h) {
     delete h;
 }
 
-int CtpTrader_Join(CtpTraderHandle h) {
+CTP_API int CtpTrader_Join(CtpTraderHandle h) {
     if (!h || !h->api) return -1;
     return h->api->Join();
 }
 
-int CtpTrader_RegisterFront(CtpTraderHandle h, const char* front) {
+CTP_API int CtpTrader_RegisterFront(CtpTraderHandle h, const char* front) {
     if (!h || !h->api || !front) return -1;
     h->api->RegisterFront(const_cast<char*>(front));
     return 0;
 }
 
-int CtpTrader_SubscribePrivateTopic(CtpTraderHandle h, int resumeType) {
+CTP_API int CtpTrader_SubscribePrivateTopic(CtpTraderHandle h, int resumeType) {
     if (!h || !h->api) return -1;
     h->api->SubscribePrivateTopic(static_cast<THOST_TE_RESUME_TYPE>(resumeType));
     return 0;
 }
 
-int CtpTrader_SubscribePublicTopic(CtpTraderHandle h, int resumeType) {
+CTP_API int CtpTrader_SubscribePublicTopic(CtpTraderHandle h, int resumeType) {
     if (!h || !h->api) return -1;
     h->api->SubscribePublicTopic(static_cast<THOST_TE_RESUME_TYPE>(resumeType));
     return 0;
 }
 
-int CtpTrader_Init(CtpTraderHandle h) {
+CTP_API int CtpTrader_Init(CtpTraderHandle h) {
     if (!h || !h->api) return -1;
     h->api->Init();
     return 0;
 }
 
-int CtpTrader_Authenticate(CtpTraderHandle h,
+CTP_API int CtpTrader_Authenticate(CtpTraderHandle h,
                            const char* brokerId, const char* userId,
                            const char* appId, const char* authCode, int requestId) {
     if (!h || !h->api) return -1;
@@ -254,7 +254,7 @@ int CtpTrader_Authenticate(CtpTraderHandle h,
     return h->api->ReqAuthenticate(&f, requestId);
 }
 
-int CtpTrader_Login(CtpTraderHandle h,
+CTP_API int CtpTrader_Login(CtpTraderHandle h,
                     const char* brokerId, const char* userId, const char* password,
                     const char* userAgent, int requestId) {
     if (!h || !h->api) return -1;
@@ -286,7 +286,7 @@ int CtpTrader_Login(CtpTraderHandle h,
 #endif
 }
 
-int CtpTrader_SetCollectionInfo(CtpTraderHandle h, const char* buf, int len) {
+CTP_API int CtpTrader_SetCollectionInfo(CtpTraderHandle h, const char* buf, int len) {
     if (!h) return -1;
     if (len < 0) len = 0;
     if (len > (int)sizeof(h->collectionInfo)) len = (int)sizeof(h->collectionInfo);
@@ -295,7 +295,7 @@ int CtpTrader_SetCollectionInfo(CtpTraderHandle h, const char* buf, int len) {
     return 0;
 }
 
-int CtpTrader_QryTradingAccount(CtpTraderHandle h,
+CTP_API int CtpTrader_QryTradingAccount(CtpTraderHandle h,
                                 const char* brokerId, const char* accountId, int requestId) {
     if (!h || !h->api) return -1;
     CThostFtdcQryTradingAccountField f{};
@@ -304,7 +304,7 @@ int CtpTrader_QryTradingAccount(CtpTraderHandle h,
     return h->api->ReqQryTradingAccount(&f, requestId);
 }
 
-int CtpTrader_QryInvestorPosition(CtpTraderHandle h,
+CTP_API int CtpTrader_QryInvestorPosition(CtpTraderHandle h,
                                   const char* brokerId, const char* investorId,
                                   const char* instrumentId, int requestId) {
     if (!h || !h->api) return -1;
@@ -316,7 +316,7 @@ int CtpTrader_QryInvestorPosition(CtpTraderHandle h,
     return h->api->ReqQryInvestorPosition(&f, requestId);
 }
 
-int CtpTrader_OrderInsert(CtpTraderHandle h, const CtpOrderInsertRequest* req, int requestId) {
+CTP_API int CtpTrader_OrderInsert(CtpTraderHandle h, const CtpOrderInsertRequest* req, int requestId) {
     if (!h || !h->api || !req) return -1;
     CThostFtdcInputOrderField f{};
     copyStr(f.BrokerID, req->BrokerID, sizeof(f.BrokerID));
@@ -338,7 +338,7 @@ int CtpTrader_OrderInsert(CtpTraderHandle h, const CtpOrderInsertRequest* req, i
     return h->api->ReqOrderInsert(&f, requestId);
 }
 
-int CtpTrader_OrderAction(CtpTraderHandle h,
+CTP_API int CtpTrader_OrderAction(CtpTraderHandle h,
                           const char* brokerId, const char* investorId,
                           int frontId, int sessionId, const char* orderRef,
                           const char* exchangeId, int requestId) {
@@ -355,7 +355,7 @@ int CtpTrader_OrderAction(CtpTraderHandle h,
     return h->api->ReqOrderAction(&f, requestId);
 }
 
-int CtpTrader_QryOrder(CtpTraderHandle h,
+CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
                        const char* brokerId, const char* investorId,
                        const char* instrumentId, int requestId) {
     if (!h || !h->api) return -1;
@@ -366,7 +366,7 @@ int CtpTrader_QryOrder(CtpTraderHandle h,
     return h->api->ReqQryOrder(&f, requestId);
 }
 
-int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
+CTP_API int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
                                     const char* brokerId, const char* investorId, int requestId) {
     if (!h || !h->api) return -1;
     CThostFtdcSettlementInfoConfirmField f{};

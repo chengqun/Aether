@@ -3,6 +3,21 @@
 
 #include <stdbool.h>
 
+/* 跨平台导出宏：
+ * - Windows DLL：必须显式 __declspec(dllexport)，否则 extern "C" 符号不导出
+ *   （C# P/Invoke 找不到入口点 "Unable to find entry point ..."）。
+ * - macOS/Linux：符号默认导出，宏为空即可。 */
+#undef CTP_API
+#if defined(_WIN32) || defined(__CYGWIN__)
+  #if defined(CTP_NATIVE_EXPORTS)
+    #define CTP_API __declspec(dllexport)
+  #else
+    #define CTP_API __declspec(dllimport)
+  #endif
+#else
+  #define CTP_API
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -138,50 +153,50 @@ typedef struct CtpTraderCallbacks {
 } CtpTraderCallbacks;
 
 /* 生命周期 */
-CtpTraderHandle CtpTrader_Create(const char* flowPath,
+CTP_API CtpTraderHandle CtpTrader_Create(const char* flowPath,
     const CtpTraderCallbacks* callbacks, void* ctx);
-void CtpTrader_Release(CtpTraderHandle h);
-int  CtpTrader_Join(CtpTraderHandle h);
+CTP_API void CtpTrader_Release(CtpTraderHandle h);
+CTP_API int  CtpTrader_Join(CtpTraderHandle h);
 
 /* 连接 */
-int CtpTrader_RegisterFront(CtpTraderHandle h, const char* front);
-int CtpTrader_SubscribePrivateTopic(CtpTraderHandle h, int resumeType);
-int CtpTrader_SubscribePublicTopic(CtpTraderHandle h, int resumeType);
-int CtpTrader_Init(CtpTraderHandle h);
+CTP_API int CtpTrader_RegisterFront(CtpTraderHandle h, const char* front);
+CTP_API int CtpTrader_SubscribePrivateTopic(CtpTraderHandle h, int resumeType);
+CTP_API int CtpTrader_SubscribePublicTopic(CtpTraderHandle h, int resumeType);
+CTP_API int CtpTrader_Init(CtpTraderHandle h);
 
 /* 认证（Win/Linux/Mac 一致，不需采集信息） */
-int CtpTrader_Authenticate(CtpTraderHandle h,
+CTP_API int CtpTrader_Authenticate(CtpTraderHandle h,
     const char* brokerId, const char* userId,
     const char* appId, const char* authCode, int requestId);
 
 /* 登录（Mac 内部 4 参 + 采集信息；Win/Linux 2 参。C# 无感） */
-int CtpTrader_Login(CtpTraderHandle h,
+CTP_API int CtpTrader_Login(CtpTraderHandle h,
     const char* brokerId, const char* userId, const char* password,
     const char* userAgent, int requestId);
 
 /* Mac 采集信息接入点（生产穿透式用；SimNow 仿真可不调） */
-int CtpTrader_SetCollectionInfo(CtpTraderHandle h, const char* buf, int len);
+CTP_API int CtpTrader_SetCollectionInfo(CtpTraderHandle h, const char* buf, int len);
 
 /* ===================== 查询 / 下单 / 撤单 ===================== */
 /* 查询资金账户 */
-int CtpTrader_QryTradingAccount(CtpTraderHandle h,
+CTP_API int CtpTrader_QryTradingAccount(CtpTraderHandle h,
     const char* brokerId, const char* accountId, int requestId);
 /* 查询投资者持仓（instrumentId 传空串查全部） */
-int CtpTrader_QryInvestorPosition(CtpTraderHandle h,
+CTP_API int CtpTrader_QryInvestorPosition(CtpTraderHandle h,
     const char* brokerId, const char* investorId, const char* instrumentId, int requestId);
 /* 下单 */
-int CtpTrader_OrderInsert(CtpTraderHandle h,
+CTP_API int CtpTrader_OrderInsert(CtpTraderHandle h,
     const CtpOrderInsertRequest* req, int requestId);
 /* 撤单（按 FrontID/SessionID/OrderRef 定位） */
-int CtpTrader_OrderAction(CtpTraderHandle h,
+CTP_API int CtpTrader_OrderAction(CtpTraderHandle h,
     const char* brokerId, const char* investorId,
     int frontId, int sessionId, const char* orderRef, const char* exchangeId, int requestId);
 
-int CtpTrader_QryOrder(CtpTraderHandle h,
+CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
     const char* brokerId, const char* investorId,
     const char* instrumentId, int requestId);
 /* 确认结算结果（每个交易日下单前必须先调） */
-int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
+CTP_API int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
     const char* brokerId, const char* investorId, int requestId);
 
 /* ===================== 行情接口（Md） ===================== */
@@ -208,18 +223,18 @@ typedef struct CtpMdCallbacks {
         const struct CThostFtdcDepthMarketDataField* field);
 } CtpMdCallbacks;
 
-CtpMdHandle CtpMd_Create(const char* flowPath,
+CTP_API CtpMdHandle CtpMd_Create(const char* flowPath,
     const CtpMdCallbacks* callbacks, void* ctx);
-void CtpMd_Release(CtpMdHandle h);
-int  CtpMd_Join(CtpMdHandle h);
+CTP_API void CtpMd_Release(CtpMdHandle h);
+CTP_API int  CtpMd_Join(CtpMdHandle h);
 
-int CtpMd_RegisterFront(CtpMdHandle h, const char* front);
-int CtpMd_Init(CtpMdHandle h);
+CTP_API int CtpMd_RegisterFront(CtpMdHandle h, const char* front);
+CTP_API int CtpMd_Init(CtpMdHandle h);
 /* Md 登录为 2 参（行情登录不需要穿透式采集信息） */
-int CtpMd_Login(CtpMdHandle h,
+CTP_API int CtpMd_Login(CtpMdHandle h,
     const char* brokerId, const char* userId, const char* password, int requestId);
-int CtpMd_SubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count);
-int CtpMd_UnSubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count);
+CTP_API int CtpMd_SubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count);
+CTP_API int CtpMd_UnSubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count);
 
 #ifdef __cplusplus
 }

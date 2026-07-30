@@ -53,7 +53,7 @@ private:
 
 extern "C" {
 
-CtpMdHandle CtpMd_Create(const char* flowPath,
+CTP_API CtpMdHandle CtpMd_Create(const char* flowPath,
                          const CtpMdCallbacks* callbacks, void* ctx) {
     if (!callbacks) return nullptr;
     auto* m = new CtpMd{};
@@ -65,31 +65,31 @@ CtpMdHandle CtpMd_Create(const char* flowPath,
     return m;
 }
 
-void CtpMd_Release(CtpMdHandle h) {
+CTP_API void CtpMd_Release(CtpMdHandle h) {
     if (!h) return;
     if (h->api) h->api->Release();
     delete h->spi;
     delete h;
 }
 
-int CtpMd_Join(CtpMdHandle h) {
+CTP_API int CtpMd_Join(CtpMdHandle h) {
     if (!h || !h->api) return -1;
     return h->api->Join();
 }
 
-int CtpMd_RegisterFront(CtpMdHandle h, const char* front) {
+CTP_API int CtpMd_RegisterFront(CtpMdHandle h, const char* front) {
     if (!h || !h->api || !front) return -1;
     h->api->RegisterFront(const_cast<char*>(front));
     return 0;
 }
 
-int CtpMd_Init(CtpMdHandle h) {
+CTP_API int CtpMd_Init(CtpMdHandle h) {
     if (!h || !h->api) return -1;
     h->api->Init();
     return 0;
 }
 
-int CtpMd_Login(CtpMdHandle h,
+CTP_API int CtpMd_Login(CtpMdHandle h,
                 const char* brokerId, const char* userId, const char* password, int requestId) {
     if (!h || !h->api) return -1;
     CThostFtdcReqUserLoginField f{};
@@ -100,13 +100,13 @@ int CtpMd_Login(CtpMdHandle h,
     return h->api->ReqUserLogin(&f, requestId);
 }
 
-int CtpMd_SubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count) {
+CTP_API int CtpMd_SubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count) {
     if (!h || !h->api || !symbols || count <= 0) return -1;
     // CTP 接口要求 char**；它内部会拷贝合约号，调用期间指针有效即可。
     return h->api->SubscribeMarketData(const_cast<char**>(symbols), count);
 }
 
-int CtpMd_UnSubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count) {
+CTP_API int CtpMd_UnSubscribeMarketData(CtpMdHandle h, const char* const* symbols, int count) {
     if (!h || !h->api || !symbols || count <= 0) return -1;
     return h->api->UnSubscribeMarketData(const_cast<char**>(symbols), count);
 }

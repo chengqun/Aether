@@ -1,20 +1,18 @@
 #!/bin/bash
-# 在 macOS 下把 Aether 桌面端（Qifu / Stockapp）编译成可直接运行的 .app。
+# 在 macOS 下把 Aether 桌面端（Stockapp 股票版）编译成可直接运行的 .app。
+# 与 build-stockapp-windows.ps1 / build-stockapp-linux.sh 对齐的 macOS 版打包脚本。
+# 本仓库提交到 GitHub 的只有 Stockapp 租户，故脚本固定打包 Stockapp，无需参数。
 # self-contained：不需要安装 .NET 运行时；非单文件：Avalonia 原生库 + Lean 数据直接随 .app 分发，最稳。
 #
 # 用法:
-#   ./scripts/build-desktop-macos.sh              # Qifu + Stockapp 都打
-#   ./scripts/build-desktop-macos.sh stockapp     # 仅股票版（stockapp 租户）
-#   ./scripts/build-desktop-macos.sh qifu         # 仅 360 版（qifu 租户）
+#   ./scripts/build-stockapp-macos.sh
 #
-# 产物: dist/Aether-Qifu.app、dist/Aether-Stockapp.app
-# 运行: 双击 .app，或在 Finder 里打开；也可命令行: open dist/Aether-Qifu.app
+# 产物: dist/Aether-Stockapp.app
+# 运行: 双击 .app，或在 Finder 里打开；也可命令行: open dist/Aether-Stockapp.app
 #
 # 注:
-# - Stockapp 版引 externals/Lean（回测引擎），脚本会确保子模块已 init。
-# - Qifu 版用 Playwright（云文档登录），首次使用云文档工具前需在产出目录执行:
-#     <bundle>/Contents/MacOS/.playwright/node install chromium
-#   （或本地 dotnet tool 与项目 Playwright 版本一致后 install）
+# - Stockapp 引 externals/Lean（回测引擎），脚本会确保子模块已 init。
+# - CTP wrapper（libctp_native.dylib）现场编译，需 cmake + clang（Xcode Command Line Tools）。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,7 +20,6 @@ RUNTIME="osx-x64"
 CONFIG="Release"
 DIST="${ROOT}/dist"
 VERSION="${APP_VERSION_NAME:-1.0.0}"
-TARGET="${1:-all}"
 
 # 默认产出 osx-x64（Intel 原生 / Apple Silicon 走 Rosetta）。
 # Apple Silicon 上如需 arm64 原生，改 RUNTIME=osx-arm64 后重跑。
@@ -39,22 +36,54 @@ ensure_lean() {
   fi
 }
 
+build_ctp_native() {
+  # 现场编译 macOS 版 libctp_native.dylib（C++ wrapper），输出到 build/native。
+  # 与 build-stockapp-windows.ps1 的 Build-CtpNative 对齐：现场编，不依赖入库的预编译产物。
+  # 依赖：cmake + clang（Xcode Command Line Tools）。
+  local native="${ROOT}/externals/Ctp.Net.Core/Ctp.Native"
+  local sdk="${ROOT}/externals/Ctp.Net.Core/ctp-sdk/macos-universal"
+  local builddir="${native}/build-mac"
+
+  [ -f "${native}/CMakeLists.txt" ] || { echo "  ! Ctp.Native 源码缺失，跳过 wrapper 编译"; return 1; }
+  [ -d "${sdk}" ] || { echo "  ! CTP SDK 缺失: ${sdk}，跳过 wrapper 编译"; return 1; }
+  command -v cmake >/dev/null 2>&1 || { echo "  ! 未找到 cmake，跳过 wrapper 编译（装 Xcode Command Line Tools: xcode-select --install）"; return 1; }
+
+  echo "==> 编译 libctp_native.dylib (cmake + clang, APPLE)"
+  rm -rf "${builddir}"
+  cmake -S "${native}" -B "${builddir}" -DCMAKE_BUILD_TYPE=Release
+  cmake --build "${builddir}" --config Release
+
+  local dylib="${ROOT}/externals/Ctp.Net.Core/build/native/libctp_native.dylib"
+  [ -f "${dylib}" ] && { echo "    libctp_native.dylib 已生成"; return 0; }
+  echo "  ! 编译未产出 libctp_native.dylib"; return 1
+}
+
 build_one() {
-  local variant="$1"          # Qifu / Stockapp
-  local lower                 # qifu / stockapp
-  lower="$(echo "${variant}" | tr '[:upper:]' '[:lower:]')"
+  local variant="Stockapp"
+  local lower="stockapp"
   local proj="apps/${variant}/Acme.${variant}.Desktop/Acme.${variant}.Desktop.csproj"
   local exe="Acme.${variant}.Desktop"   # dotnet 默认 AssemblyName = 项目名
   local pubdir="${DIST}/publish-${lower}"
   local appname="Aether-${variant}"
   local bundle="${DIST}/${appname}.app"
-  local display_name
-  case "${variant}" in
-    Stockapp) display_name="Aether - 股票版" ;;
-    Qifu)     display_name="Aether - 360版" ;;
-  esac
+  local display_name="Aether - 股票版"
 
-  [ "${variant}" = "Stockapp" ] && ensure_lean
+  ensure_lean
+  # 混合模式：有 cmake+clang 就现场编 libctp_native.dylib（覆盖入库旧产物，与源码一致）；
+  # 工具链不全则回退用 build/native 里入库的预编译产物兜底（clone 即用，无需编译器）。
+  local dylib="${ROOT}/externals/Ctp.Net.Core/build/native/libctp_native.dylib"
+  if build_ctp_native; then
+    : # 现场编译成功
+  elif [ -f "${dylib}" ]; then
+    echo "  回退使用入库的预编译 libctp_native.dylib（未现场编译）"
+  else
+    echo "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo "  !! libctp_native.dylib 既无现场编译也无入库兜底             !!"
+    echo "  !! 产物可启动，但 CTP 期货行情/交易调用时会报错             !!"
+    echo "  !! 其它功能（聊天/专家/回测/Lean/笔记等）不受影响           !!"
+    echo "  !! 如需 CTP：装 Xcode Command Line Tools (xcode-select --install) + cmake !!"
+    echo "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  fi
 
   echo "==> [${variant}] dotnet publish (${RUNTIME}, self-contained)"
   dotnet publish "${ROOT}/${proj}" \
@@ -120,12 +149,7 @@ PLIST
   echo "    双击运行，或: open \"${bundle}\""
 }
 
-case "${TARGET}" in
-  stockapp|Stockapp) build_one Stockapp ;;
-  qifu|Qifu)         build_one Qifu ;;
-  all|All)           build_one Qifu; build_one Stockapp ;;
-  *) echo "用法: $0 [stockapp|qifu|all]"; exit 1 ;;
-esac
+build_one
 
 echo ""
 echo "全部完成。产物目录: ${DIST}"

@@ -5,6 +5,7 @@ obj/
 *.suo
 .vs/
 .idea/
+.vscode/
 
 ## NuGet
 .nuget/
@@ -16,9 +17,16 @@ obj/
 *.exe
 dist/
 
-## CTP 原生库例外（跨平台分发：Windows .dll / macOS .dylib / Linux .so）
+## CTP 原生库例外（跨平台分发：Windows .dll / macOS .dylib / Linux .so / framework）
+## ctp-sdk 是 CTP 官方 6.7.2 闭源二进制 SDK，全平台入库以支持 clone 后现场编 wrapper。
+## build/native 是 wrapper 编译产物（ctp_native.*）随 publish 流出。
+## 注：*.dll 全局忽略（上方）会拦住 .dll，必须用逐文件 ! 路径重新放行。
 !externals/Ctp.Net.Core/build/native/*.dll
-!externals/Ctp.Net.Core/ctp-sdk/win-x64/*.dll
+!externals/Ctp.Net.Core/build/native/*.dylib
+!externals/Ctp.Net.Core/build/native/*.so
+!externals/Ctp.Net.Core/ctp-sdk/**/*.dll
+!externals/Ctp.Net.Core/ctp-sdk/**/*.dylib
+!externals/Ctp.Net.Core/ctp-sdk/**/*.so
 
 ## Qifu 仅本地（不推 GitHub；磁盘文件保留，git 停止跟踪）
 apps/Qifu/
