@@ -31,7 +31,12 @@ public partial class NotesView : UserControl
     {
         InitializeComponent();
         CodeEditor.TextChanged += OnCodeEditorTextChanged;
-        CodeEditor.Loaded += (_, _) => SyncCodeEditor();
+        CodeEditor.PointerWheelChanged += OnCodeEditorWheelChanged;
+        CodeEditor.Loaded += (_, _) =>
+        {
+            ConfigureEditorAppearance();
+            SyncCodeEditor();
+        };
         this.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed,
             RoutingStrategies.Bubble, handledEventsToo: true);
         this.AddHandler(InputElement.PointerMovedEvent, OnPointerMoved,
@@ -98,31 +103,92 @@ public partial class NotesView : UserControl
         CodeEditor.SyntaxHighlighting = HighlightingFor(node.Syntax);
     }
 
-    /// <summary>语法 key → AvaloniaEdit 内置高亮定义；text/未知 → null（纯文本）。</summary>
-    private static IHighlightingDefinition? HighlightingFor(string? syntax)
-        => syntax?.ToLowerInvariant() switch
+    /// <summary>VSCode 质感：当前行高亮 + 选中色。</summary>
+    private void ConfigureEditorAppearance()
+    {
+        try
         {
-            "markdown" => HighlightingManager.Instance.GetDefinition("MarkDown"),
-            "sql" => HighlightingManager.Instance.GetDefinition("TSQL"),
-            "python" => HighlightingManager.Instance.GetDefinition("Python"),
-            "javascript" => HighlightingManager.Instance.GetDefinition("JavaScript"),
-            "json" => HighlightingManager.Instance.GetDefinition("Json"),
-            "csharp" => HighlightingManager.Instance.GetDefinition("C#"),
-            "html" => HighlightingManager.Instance.GetDefinition("HTML"),
-            "css" => HighlightingManager.Instance.GetDefinition("CSS"),
-            "xml" => HighlightingManager.Instance.GetDefinition("XML"),
-            "java" => HighlightingManager.Instance.GetDefinition("Java"),
-            "cpp" => HighlightingManager.Instance.GetDefinition("C++"),
-            "vb" => HighlightingManager.Instance.GetDefinition("VB"),
-            "powershell" => HighlightingManager.Instance.GetDefinition("PowerShell"),
+            CodeEditor.Options.HighlightCurrentLine = true;
+            var tv = CodeEditor.TextArea.TextView;
+            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse("#F0F0F4"));
+            tv.CurrentLineBorder = null;
+            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse("#ADD6FF"));
+            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse("#1A1A1F"));
+        }
+        catch { /* 控件未就绪则跳过 */ }
+    }
+
+    /// <summary>语法 key → AvaloniaEdit 内置高亮定义；text/未知 → null（纯文本）。统一重映射为 VSCode 配色。</summary>
+    private static IHighlightingDefinition? HighlightingFor(string? syntax)
+    {
+        var name = syntax?.ToLowerInvariant() switch
+        {
+            "markdown" => "MarkDown",
+            "sql" => "TSQL",
+            "python" => "Python",
+            "javascript" => "JavaScript",
+            "json" => "Json",
+            "csharp" => "C#",
+            "html" => "HTML",
+            "css" => "CSS",
+            "xml" => "XML",
+            "java" => "Java",
+            "cpp" => "C++",
+            "vb" => "VB",
+            "powershell" => "PowerShell",
             _ => null,
         };
+        if (name is null) return null;
+        var def = HighlightingManager.Instance.GetDefinition(name);
+        if (def is not null) ApplyVscodeColors(def);
+        return def;
+    }
+
+    /// <summary>把内置定义的颜色重映射为 VSCode Light+ 配色（蓝关键字/橙字符串/绿注释/绿数字）。</summary>
+    private static void ApplyVscodeColors(IHighlightingDefinition def)
+    {
+        foreach (var c in def.NamedHighlightingColors)
+        {
+            var n = (c.Name ?? "").ToUpperInvariant();
+            string? hex = null;
+            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = "#008000";
+            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = "#A31515";
+            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = "#098658";
+            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = "#795E26";
+            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = "#267F99";
+            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = "#800000";
+            else if (n.Contains("ATTRIBUT")) hex = "#FF0000";
+            else if (n.Contains("KEYWORD") || n.Contains("VISIBILITY") || n.Contains("MODIFIER")
+                || n.Contains("REFERENCE") || n.Contains("VALUE") || n.Contains("EXCEPTION")
+                || n.Contains("GOTO") || n.Contains("CONTEXT") || n.Contains("OPERATOR")
+                || n.Contains("PARAMETER") || n.Contains("NAMESPACE") || n.Contains("GETSET")
+                || n.Contains("TRUEFALSE") || n.Contains("SEMANTIC") || n.Contains("CHECKED")
+                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = "#0000FF";
+            if (hex is not null)
+            {
+                c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));
+                c.FontWeight = null; // VSCode 关键字不加粗
+            }
+        }
+    }
 
     private void OnCodeEditorTextChanged(object? sender, EventArgs e)
     {
         if (_syncing) return;
         if (_vm?.SelectedNode is { } node)
             node.Content = CodeEditor.Text ?? "";
+    }
+
+    /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48）。</summary>
+    private void OnCodeEditorWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0) return;
+        var delta = e.Delta.Y;
+        if (delta == 0) return;
+        var size = Math.Max(8, Math.Min(48, CodeEditor.FontSize + (delta > 0 ? 1 : -1)));
+        if (Math.Abs(size - CodeEditor.FontSize) < 0.01) return;
+        CodeEditor.FontSize = size;
+        e.Handled = true;
     }
 
     private async void OnCreateSiblingClick(object? sender, RoutedEventArgs e)

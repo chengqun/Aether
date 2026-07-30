@@ -81,7 +81,16 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    public NoteNodeEditRow BuildNewNodeRow() => new();
+    /// <summary>上次新建节点用的语法（同会话内记忆，免去每次重选）。</summary>
+    private string? _lastNewSyntax;
+
+    public NoteNodeEditRow BuildNewNodeRow()
+    {
+        var row = new NoteNodeEditRow();
+        if (_lastNewSyntax is not null)
+            row.SelectedSyntaxOption = row.SyntaxOptions.FirstOrDefault(o => o.Value == _lastNewSyntax);
+        return row;
+    }
 
     public NoteNodeEditRow? BuildEditNodeRow()
     {
@@ -135,6 +144,9 @@ public partial class NotesViewModel : ObservableObject
                 Icon = row.IconKey,
                 SortOrder = nextOrder,
             });
+
+            // 记住本次新建用的语法，下次新建默认沿用
+            _lastNewSyntax = row.SyntaxValue;
 
             // 直接插入现有树，保持其他节点展开/折叠状态不变（不全量重建）
             var created = NoteNodeVM.FromDto(dto);
