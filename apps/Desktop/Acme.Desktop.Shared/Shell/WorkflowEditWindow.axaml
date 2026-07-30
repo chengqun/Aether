@@ -1,91 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.WorkflowEditWindow"
         Title="工作流配置"
         Width="560" Height="700" CanResize="True"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
-
-  <Grid RowDefinitions="Auto,*,Auto">
-    <Border Grid.Row="0" Padding="20,14">
-      <TextBlock Text="{Binding WindowTitle}" FontSize="17" FontWeight="SemiBold"
-                 Foreground="{DynamicResource TextPrimaryBrush}" />
-    </Border>
-
-    <ScrollViewer Grid.Row="1" Margin="20,0" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Spacing="12">
-        <StackPanel Spacing="4">
-          <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Text="{Binding Name}" PlaceholderText="如 投资助手工作流" />
-        </StackPanel>
-        <StackPanel Spacing="4">
-          <TextBlock Text="描述" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Text="{Binding Description}" />
-        </StackPanel>
-        <StackPanel Spacing="4">
-          <TextBlock Text="入口 agent（收请求、决定转交给谁）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <ComboBox ItemsSource="{Binding Agents}" SelectedItem="{Binding SelectedEntry}"
-                    HorizontalAlignment="Stretch">
-            <ComboBox.ItemTemplate>
-              <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </StackPanel>
-
-        <StackPanel Spacing="4">
-          <TextBlock Text="参与者（勾选参与协作的专家）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,6">
-            <ItemsControl ItemsSource="{Binding Participants}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <CheckBox IsChecked="{Binding IsSelected}" Margin="0,2">
-                    <TextBlock Text="{Binding Name}" FontSize="12" />
-                  </CheckBox>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </Border>
-        </StackPanel>
-
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Text="转交边" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-            <Button Content="+ 添加" Classes="tool" Click="OnAddHandoffClick" Padding="8,2" FontSize="11" />
-          </StackPanel>
-          <ItemsControl ItemsSource="{Binding Handoffs}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="*,*,2*,Auto" Margin="0,2">
-                  <ComboBox Grid.Column="0" ItemsSource="{Binding Agents}" SelectedItem="{Binding SelectedFrom}"
-                            Margin="0,0,4,0">
-                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
-                  </ComboBox>
-                  <ComboBox Grid.Column="1" ItemsSource="{Binding Agents}" SelectedItem="{Binding SelectedTo}"
-                            Margin="0,0,4,0">
-                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
-                  </ComboBox>
-                  <TextBox Grid.Column="2" Text="{Binding Reason}" PlaceholderText="转交原因" Margin="0,0,4,0" />
-                  <Button Grid.Column="3" Content="✕" Click="OnRemoveHandoffClick" Tag="{Binding}" Padding="6,2" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-
-        <StackPanel Spacing="4">
-          <TextBlock Text="转交指令（可选，给有转交能力的 agent 的统一说明）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-          <TextBox Text="{Binding HandoffInstructions}" PlaceholderText="留空用默认" />
-        </StackPanel>
-
-        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="12"
-                   IsVisible="{Binding HasError}" />
-      </StackPanel>
-    </ScrollViewer>
-
-    <Border Grid.Row="2" Padding="20,12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-        <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8" />
-        <Button Content="保存" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Padding="20,8" />
-      </StackPanel>
-    </Border>
-  </Grid>
+  <shell:WorkflowEditView/>
 </Window>
