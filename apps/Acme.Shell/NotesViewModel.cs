@@ -37,6 +37,26 @@ public partial class NotesViewModel : ObservableObject
 
     public event Action? NotesChanged;
 
+    /// <summary>编辑器字体大小（持久化到偏好，重启保留）。</summary>
+    [ObservableProperty] private double _editorFontSize = 13;
+    private bool _loadingPref;
+
+    partial void OnEditorFontSizeChanged(double value)
+    {
+        if (!_loadingPref) _ = PersistFontSizeAsync(value);
+    }
+
+    private async Task PersistFontSizeAsync(double value)
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null)
+                await store.SetAsync("notes.editorFontSize", value.ToString("0.#"));
+        }
+        catch { /* 偏好存储失败不影响编辑 */ }
+    }
+
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
 
     /// <summary>文本节点 → AvaloniaEdit 编辑（按语法高亮，含 markdown 高亮）。</summary>
@@ -53,6 +73,24 @@ public partial class NotesViewModel : ObservableObject
     {
         _serviceProvider = serviceProvider;
         _dispatcher = dispatcher;
+        _ = LoadFontSizeAsync();
+    }
+
+    private async Task LoadFontSizeAsync()
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null
+                && double.TryParse(await store.GetAsync("notes.editorFontSize"), out var fs)
+                && fs is >= 8 and <= 48)
+            {
+                _loadingPref = true;
+                EditorFontSize = fs;
+                _loadingPref = false;
+            }
+        }
+        catch { /* 读取失败用默认值 */ }
     }
 
     public async Task LoadAsync()

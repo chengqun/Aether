@@ -226,15 +226,16 @@ public partial class NotesView : UserControl
             node.Content = CodeEditor.Text ?? "";
     }
 
-    /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48）。</summary>
+    /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48，持久化）。</summary>
     private void OnCodeEditorWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         if ((e.KeyModifiers & KeyModifiers.Control) == 0) return;
+        if (_vm is null) return;
         var delta = e.Delta.Y;
         if (delta == 0) return;
-        var size = Math.Max(8, Math.Min(48, CodeEditor.FontSize + (delta > 0 ? 1 : -1)));
-        if (Math.Abs(size - CodeEditor.FontSize) < 0.01) return;
-        CodeEditor.FontSize = size;
+        var size = Math.Max(8, Math.Min(48, _vm.EditorFontSize + (delta > 0 ? 1 : -1)));
+        if (Math.Abs(size - _vm.EditorFontSize) < 0.01) return;
+        _vm.EditorFontSize = size; // 绑定更新 CodeEditor.FontSize，并持久化
         e.Handled = true;
     }
 

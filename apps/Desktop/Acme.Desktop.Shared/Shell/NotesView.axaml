@@ -155,7 +155,7 @@
               <!-- 所有节点统一用 AvaloniaEdit 编辑（高亮按类型/语法） -->
               <edit:TextEditor x:Name="CodeEditor" IsVisible="{Binding IsCodeEdit}"
                        ShowLineNumbers="True" WordWrap="True"
-                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="13"
+                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="{Binding EditorFontSize}"
                        LineNumbersForeground="#858585"
                        Background="Transparent" Margin="8,6" />
             </Grid>
