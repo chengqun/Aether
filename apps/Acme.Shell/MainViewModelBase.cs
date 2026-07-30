@@ -499,7 +499,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         IsSidebarExpanded = !IsSidebarExpanded;
         SidebarWidth = IsSidebarExpanded ? 220 : 48;
+        // 用户手动切换后，不再由笔记页自动恢复
+        _sidebarCollapsedForNotes = false;
     }
+
+    /// <summary>是否因进入笔记页而自动收起了侧边栏（离开时据此恢复，避免覆盖用户手动操作）。</summary>
+    private bool _sidebarCollapsedForNotes;
 
     // —— 导航 ——
     [ObservableProperty]
@@ -566,6 +571,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [RelayCommand]
     private void NavigateTo(string pageKey)
     {
+        // 离开笔记页时恢复侧边栏（在 chat 提前 return 之前处理）
+        if (CurrentPage == "notes" && pageKey != "notes" && _sidebarCollapsedForNotes)
+        {
+            IsSidebarExpanded = true;
+            SidebarWidth = 220;
+            _sidebarCollapsedForNotes = false;
+        }
+
         // “新聊天”导航项（chat）真正开一个新会话，而非仅跳页
         if (pageKey == "chat")
         {
@@ -573,6 +586,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             foreach (var item in NavItems)
                 item.IsCurrent = item.Key == pageKey;
             return;
+        }
+
+        // 进入笔记页：自动收起侧边栏，给笔记树更大空间
+        if (pageKey == "notes" && IsSidebarExpanded)
+        {
+            IsSidebarExpanded = false;
+            SidebarWidth = 48;
+            _sidebarCollapsedForNotes = true;
         }
 
         CurrentPage = pageKey;

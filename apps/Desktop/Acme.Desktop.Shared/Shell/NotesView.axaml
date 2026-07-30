@@ -88,7 +88,14 @@
           <TreeView.Styles>
             <Style Selector="TreeViewItem">
               <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-              <Setter Property="Padding" Value="4,2"/>
+              <Setter Property="Padding" Value="2,1"/>
+            </Style>
+            <!-- 箭头三角大小不变，只压缩容器空白让其紧贴节点 -->
+            <Style Selector="TreeViewItem /template/ ToggleButton">
+              <Setter Property="Width" Value="12"/>
+              <Setter Property="MinWidth" Value="0"/>
+              <Setter Property="Padding" Value="0"/>
+              <Setter Property="Margin" Value="0"/>
             </Style>
             <!-- 选中后背景变深，文字转白保证可读 -->
             <Style Selector="TreeViewItem:selected">
