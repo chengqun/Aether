@@ -80,9 +80,11 @@ public partial class NotesView : UserControl
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // 语法变了 → 重设高亮（内容同步由 TextChanged 回写，无需重载）
+        // 语法变了 → 重设高亮 + 刷新 markdown 预览栏可见性
         if (e.PropertyName == nameof(NoteNodeVM.Syntax))
             ApplyHighlighting();
+        if (e.PropertyName is nameof(NoteNodeVM.Syntax) or nameof(NoteNodeVM.IsMarkdown))
+            _vm?.RaiseIsMarkdownNode();
     }
 
     /// <summary>把节点内容载入编辑器并按语法设高亮。</summary>

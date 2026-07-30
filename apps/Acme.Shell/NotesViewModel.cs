@@ -64,10 +64,43 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>所有节点都用 AvaloniaEdit 编辑（Agent=YAML纯文本、Workflow=JSON、文本=按语法高亮）。</summary>
     public bool IsCodeEdit => SelectedNode is not null;
 
+    /// <summary>markdown 语法节点 → 右侧显示渲染预览栏。</summary>
+    public bool IsMarkdownNode => SelectedNode?.IsMarkdown ?? false;
+
+    /// <summary>纯预览模式（仅渲染栏，隐藏编辑器）。</summary>
+    [ObservableProperty] private bool _isPreviewOnly;
+
+    public bool EditorVisible => IsCodeEdit && !(IsMarkdownNode && IsPreviewOnly);
+    public bool SplitterVisible => IsMarkdownNode && !IsPreviewOnly;
+    public bool PreviewVisible => IsMarkdownNode;
+    public int EditorSpan => !IsCodeEdit ? 1 : (IsMarkdownNode && !IsPreviewOnly ? 1 : 3);
+    public int PreviewColumn => IsPreviewOnly ? 0 : 2;
+    public int PreviewSpan => IsPreviewOnly ? 3 : 1;
+
+    private void RaiseLayout()
+    {
+        OnPropertyChanged(nameof(IsMarkdownNode));
+        OnPropertyChanged(nameof(EditorVisible));
+        OnPropertyChanged(nameof(SplitterVisible));
+        OnPropertyChanged(nameof(PreviewVisible));
+        OnPropertyChanged(nameof(EditorSpan));
+        OnPropertyChanged(nameof(PreviewColumn));
+        OnPropertyChanged(nameof(PreviewSpan));
+    }
+
+    /// <summary>语法变化后由视图调用，刷新 markdown 预览栏可见性。</summary>
+    public void RaiseIsMarkdownNode() => RaiseLayout();
+
+    partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
+
+    [RelayCommand]
+    private void TogglePreviewOnly() => IsPreviewOnly = !IsPreviewOnly;
+
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsCodeEdit));
+        RaiseLayout();
     }
 
     public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
