@@ -47,6 +47,7 @@ public sealed class NoteService : INoteService
             Tags = request.Tags,
             NodeType = request.NodeType,
             Icon = request.Icon,
+            SortOrder = request.SortOrder,
         };
 
         var created = await _repository.CreateAsync(node, ct);
@@ -72,6 +73,8 @@ public sealed class NoteService : INoteService
             node.NodeType = request.NodeType.Value;
         if (request.Icon is not null)
             node.Icon = string.IsNullOrEmpty(request.Icon) ? null : request.Icon;
+        if (request.SortOrder.HasValue)
+            node.SortOrder = request.SortOrder.Value;
         if (request.ParentId != null)
         {
             node.ParentId = Guid.TryParse(request.ParentId, out var parsed) ? parsed : null;
@@ -104,5 +107,6 @@ public sealed class NoteService : INoteService
         IsReadOnly = node.IsReadOnly,
         NodeType = node.NodeType,
         Icon = node.Icon,
+        SortOrder = node.SortOrder,
     };
 }

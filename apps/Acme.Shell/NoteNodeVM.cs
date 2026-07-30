@@ -16,6 +16,7 @@ public sealed partial class NoteNodeVM : ObservableObject
     [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private NoteNodeVM? _parent;
     [ObservableProperty] private bool _isDropTarget;
+    [ObservableProperty] private int _sortOrder;
 
     /// <summary>持久化的图标 key（null=按 NodeType 回退默认）。</summary>
     [ObservableProperty] private string? _iconKey;
@@ -59,6 +60,7 @@ public sealed partial class NoteNodeVM : ObservableObject
             Tags = dto.Tags,
             NodeType = dto.NodeType,
             IconKey = dto.Icon,
+            SortOrder = dto.SortOrder,
         };
         return node;
     }

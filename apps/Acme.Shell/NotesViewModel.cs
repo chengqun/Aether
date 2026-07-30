@@ -78,7 +78,9 @@ public partial class NotesViewModel : ObservableObject
                 }
 
                 Roots.Clear();
-                foreach (var r in vms.Where(v => !v.ParentId.HasValue).OrderBy(r => r.Title))
+                foreach (var r in vms.Where(v => !v.ParentId.HasValue)
+                                     .OrderBy(r => r.SortOrder)
+                                     .ThenBy(r => r.Title))
                     Roots.Add(r);
 
                 SelectedNode = Roots.FirstOrDefault();
@@ -122,6 +124,12 @@ public partial class NotesViewModel : ObservableObject
                 ? SelectedNode?.Id
                 : SelectedNode?.ParentId;
 
+            // 新节点默认排到同级末尾（SortOrder = 同级最大 + 1）
+            IList<NoteNodeVM> siblings = asChild
+                ? (SelectedNode?.Children ?? Roots)
+                : (SelectedNode?.Parent?.Children ?? Roots);
+            var nextOrder = siblings.Count == 0 ? 0 : siblings.Max(s => s.SortOrder) + 1;
+
             var dto = await NoteService.CreateAsync(new CreateNoteRequest
             {
                 Title = title,
@@ -136,18 +144,26 @@ public partial class NotesViewModel : ObservableObject
                 Tags = row.Tags,
                 NodeType = type,
                 Icon = row.IconKey,
+                SortOrder = nextOrder,
             });
 
-            await LoadAsync();
+            // 直接插入现有树，保持其他节点展开/折叠状态不变（不全量重建）
+            var created = NoteNodeVM.FromDto(dto);
+            NoteNodeVM? parent = parentId.HasValue ? FindNode(Roots, parentId.Value) : null;
+            if (parent != null)
+            {
+                parent.Children.Add(created);
+                created.Parent = parent;
+                parent.IsExpanded = true; // 仅展开新节点的父级，让新节点可见
+            }
+            else
+            {
+                Roots.Add(created);
+            }
+            SelectedNode = created;
+
             StatusMessage = $"已创建「{title}」";
             NotesChanged?.Invoke();
-
-            if (Guid.TryParse(dto.Id, out var newId))
-            {
-                var created = FindNode(Roots, newId);
-                if (created?.Parent != null) created.Parent.IsExpanded = true;
-                if (created != null) SelectedNode = created;
-            }
         }
         catch (Exception ex)
         {
@@ -228,6 +244,60 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
+    /// <summary>同级上移。</summary>
+    [RelayCommand]
+    private async Task MoveNodeUpAsync()
+    {
+        if (SelectedNode is not { } node) return;
+        var siblings = GetSiblings(node);
+        var idx = siblings.IndexOf(node);
+        if (idx <= 0) return;
+        siblings[idx] = siblings[idx - 1];
+        siblings[idx - 1] = node;
+        await PersistOrderAsync(siblings);
+        SelectedNode = node;
+    }
+
+    /// <summary>同级下移。</summary>
+    [RelayCommand]
+    private async Task MoveNodeDownAsync()
+    {
+        if (SelectedNode is not { } node) return;
+        var siblings = GetSiblings(node);
+        var idx = siblings.IndexOf(node);
+        if (idx < 0 || idx >= siblings.Count - 1) return;
+        siblings[idx] = siblings[idx + 1];
+        siblings[idx + 1] = node;
+        await PersistOrderAsync(siblings);
+        SelectedNode = node;
+    }
+
+    private ObservableCollection<NoteNodeVM> GetSiblings(NoteNodeVM node)
+        => node.Parent?.Children ?? Roots;
+
+    /// <summary>按集合当前顺序重写同级 SortOrder 并持久化（仅写变化的）。</summary>
+    private async Task PersistOrderAsync(IList<NoteNodeVM> siblings)
+    {
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            var n = siblings[i];
+            if (n.SortOrder == i) continue;
+            n.SortOrder = i;
+            try
+            {
+                await NoteService.UpdateAsync(new UpdateNoteRequest
+                {
+                    Id = n.Id.ToString(),
+                    Title = n.Title,
+                    Content = n.Content,
+                    SortOrder = i,
+                });
+            }
+            catch { /* 单条失败不阻断其余 */ }
+        }
+        StatusMessage = "顺序已保存";
+    }
+
     [RelayCommand]
     private async Task SaveNoteAsync()
     {
@@ -254,12 +324,27 @@ public partial class NotesViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteNoteAsync()
     {
-        if (SelectedNode == null) return;
+        if (SelectedNode is not { } node) return;
         try
         {
-            var title = SelectedNode.Title;
-            await NoteService.DeleteAsync(SelectedNode.Id.ToString());
-            await LoadAsync();
+            var title = node.Title;
+            await NoteService.DeleteAsync(node.Id.ToString());
+
+            await _dispatcher.InvokeAsync(() =>
+            {
+                // 子节点提升为根（DB 已置 parent_id=NULL），保持其展开状态
+                foreach (var child in node.Children.ToList())
+                {
+                    child.Parent = null;
+                    child.ParentId = null;
+                    Roots.Add(child);
+                }
+                node.Children.Clear();
+                // 从父级或 Roots 移除被删节点
+                if (node.Parent != null) node.Parent.Children.Remove(node);
+                else Roots.Remove(node);
+                SelectedNode = Roots.FirstOrDefault();
+            });
             StatusMessage = $"已删除：{title}";
             NotesChanged?.Invoke();
         }

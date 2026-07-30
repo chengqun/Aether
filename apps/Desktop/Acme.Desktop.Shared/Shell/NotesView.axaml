@@ -70,6 +70,11 @@
                         IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
               <MenuItem Header="删除" Command="{Binding DeleteNoteCommand}"
                         IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+              <Separator />
+              <MenuItem Header="上移" Command="{Binding MoveNodeUpCommand}"
+                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+              <MenuItem Header="下移" Command="{Binding MoveNodeDownCommand}"
+                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
             </ContextMenu>
           </TreeView.ContextMenu>
           <TreeView.ItemTemplate>
