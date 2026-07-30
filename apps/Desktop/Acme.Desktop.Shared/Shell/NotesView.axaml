@@ -90,6 +90,10 @@
               <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
               <Setter Property="Padding" Value="4,2"/>
             </Style>
+            <!-- 选中后背景变深，文字转白保证可读 -->
+            <Style Selector="TreeViewItem:selected">
+              <Setter Property="Foreground" Value="White"/>
+            </Style>
           </TreeView.Styles>
         </TreeView>
       </Border>
