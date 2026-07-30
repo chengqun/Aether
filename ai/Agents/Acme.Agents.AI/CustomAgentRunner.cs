@@ -40,7 +40,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         // 按需注册（首次或 Invalidate 后）
         if (!_runtime.HasAgent(id))
         {
-            var def = await _catalog.GetAsync(agentId, cancellationToken)
+            var def = await _catalog.GetAsync(agentId, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"找不到自定义 Agent：{agentId}");
             _runtime.RegisterAgent(ToAgentDefinition(id, def));
         }
@@ -49,7 +49,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             conversationId,
             _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
-        await _runtime.RunStreamingAsync(sessionId, message, onToken, onToolEvent, cancellationToken);
+        await _runtime.RunStreamingAsync(sessionId, message, onToken, onToolEvent, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid agentId)

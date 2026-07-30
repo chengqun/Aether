@@ -42,8 +42,8 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException("消息不能为空", nameof(message));
 
-        var (agent, session) = await GetOrCreateAsync(conversationId, workflowId, cancellationToken);
-        await _runtime.RunStreamingAsync(agent, session, message, onToken, onToolEvent, cancellationToken);
+        var (agent, session) = await GetOrCreateAsync(conversationId, workflowId, cancellationToken).ConfigureAwait(false);
+        await _runtime.RunStreamingAsync(agent, session, message, onToken, onToolEvent, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid workflowId)

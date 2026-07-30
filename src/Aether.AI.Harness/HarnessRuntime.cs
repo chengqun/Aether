@@ -186,13 +186,13 @@ public sealed class HarnessRuntime
         var sb = new System.Text.StringBuilder();
         // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
-        await foreach (var update in agent.RunStreamingAsync(userMessage, frameworkSession, cancellationToken: cancellationToken))
+        await foreach (var update in agent.RunStreamingAsync(userMessage, frameworkSession, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             if (!string.IsNullOrEmpty(update.Text))
             {
                 sb.Append(update.Text);
                 if (callback is not null)
-                    await callback(update.Text, cancellationToken);
+                    await callback(update.Text, cancellationToken).ConfigureAwait(false);
             }
 
             // 把流中的工具调用/结果内容片段上抛给 UI（思考过程展示）。
@@ -208,7 +208,7 @@ public sealed class HarnessRuntime
                         await onToolEvent(
                             new ToolStreamEvent(ToolStreamEventKind.Call, call.Name!, call.CallId ?? string.Empty,
                                 ToInputDict(call.Arguments), null),
-                            cancellationToken);
+                            cancellationToken).ConfigureAwait(false);
                     }
                     else if (content is FunctionResultContent result)
                     {
@@ -217,7 +217,7 @@ public sealed class HarnessRuntime
                         await onToolEvent(
                             new ToolStreamEvent(ToolStreamEventKind.Result, name, result.CallId ?? string.Empty,
                                 null, ToOutputDict(result.Result)),
-                            cancellationToken);
+                            cancellationToken).ConfigureAwait(false);
                     }
                 }
             }

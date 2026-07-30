@@ -161,16 +161,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         try
         {
             await runAsync(
-                async (token, _) =>
+                (token, _) =>
                 {
                     fullText.Append(token);
-                    await _dispatcher.InvokeAsync(() =>
+                    _dispatcher.Post(() =>
                     {
                         if (cursor.Current.IsText) cursor.Current.Content += token;
                     });
+                    return Task.CompletedTask;
                 },
-                async (ev, _) => await _dispatcher.InvokeAsync(() => HandleToolEventSegmented(cursor, runItems, ev, senderName)),
-                cancellationToken);
+                (ev, _) =>
+                {
+                    _dispatcher.Post(() => HandleToolEventSegmented(cursor, runItems, ev, senderName));
+                    return Task.CompletedTask;
+                },
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
