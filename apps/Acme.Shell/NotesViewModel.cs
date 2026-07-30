@@ -30,9 +30,25 @@ public partial class NotesViewModel : ObservableObject
 
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
 
+    /// <summary>当前节点是否为 Markdown 文本节点（预览时用 Markdown 渲染器，而非纯文本）。</summary>
+    public bool IsMarkdownNode => SelectedNode?.NodeType == NoteNodeType.Note;
+
+    /// <summary>预览模式 且 Markdown 节点 → 用 Markdown 渲染器。</summary>
+    public bool IsPreviewMarkdown => IsPreviewMode && IsMarkdownNode;
+
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
+        // Agent/Workflow 不支持预览，切到非 Markdown 节点时退出预览模式
+        if (value is not null && value.NodeType != NoteNodeType.Note)
+            IsPreviewMode = false;
         OnPropertyChanged(nameof(IsAgentNode));
+        OnPropertyChanged(nameof(IsMarkdownNode));
+        OnPropertyChanged(nameof(IsPreviewMarkdown));
+    }
+
+    partial void OnIsPreviewModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsPreviewMarkdown));
     }
 
     public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)

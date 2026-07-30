@@ -16,10 +16,10 @@
       <StackPanel Spacing="2">
         <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
           <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-          <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+          <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-          <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" Watermark="tcp://ip:port" />
+          <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port" />
 
           <TextBlock Grid.Row="2" Grid.Column="0" Text="经纪商代码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
           <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding BrokerId}" Margin="0,6" />

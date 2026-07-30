@@ -17,10 +17,10 @@
     </StackPanel>
 
     <StackPanel Grid.Row="1" Spacing="12">
-      <TextBox Text="{Binding Username}" Watermark="用户名" Classes="input"
-               WatermarkForeground="gray"/>
-      <TextBox Text="{Binding Password}" PasswordChar="●" Watermark="密码" Classes="input"
-               WatermarkForeground="gray"/>
+      <TextBox Text="{Binding Username}" PlaceholderText="用户名" Classes="input"
+               PlaceholderForeground="gray"/>
+      <TextBox Text="{Binding Password}" PasswordChar="●" PlaceholderText="密码" Classes="input"
+               PlaceholderForeground="gray"/>
       <TextBlock Text="{Binding Error}" FontSize="12"
                  Foreground="{DynamicResource DangerBrush}"
                  TextWrapping="Wrap"

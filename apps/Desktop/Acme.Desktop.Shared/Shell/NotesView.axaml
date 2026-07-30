@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              xmlns:nav="using:Acme.Shell"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              x:Class="Acme.Desktop.Shared.Shell.NotesView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -132,6 +133,7 @@
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <Button Grid.Column="1" Classes="notes-tool" Command="{Binding TogglePreviewCommand}"
+                        IsVisible="{Binding IsMarkdownNode}"
                         ToolTip.Tip="{Binding IsPreviewMode, Converter={x:Static shell:BoolToTextConverter.EditPreview}}">
                   <Path Data="{Binding IsPreviewMode, Converter={x:Static shell:PreviewIconConverter.Instance}}"
                         Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
@@ -159,16 +161,16 @@
             </Border>
 
             <Grid>
+              <!-- 编辑模式：源码 TextBox -->
               <TextBox IsVisible="{Binding !IsPreviewMode}"
                        Text="{Binding SelectedNode.Content, Mode=TwoWay}"
                        AcceptsReturn="True" TextWrapping="Wrap" BorderThickness="0"
                        FontFamily="Cascadia Code,Consolas,monospace" FontSize="13"
                        Padding="8,6" />
-              <TextBox IsVisible="{Binding IsPreviewMode}"
-                       Text="{Binding SelectedNode.Content}"
-                       IsReadOnly="True" BorderThickness="0"
-                       TextWrapping="Wrap" FontSize="13"
-                       Padding="8,6" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <!-- 预览：Markdown 文本节点 → 渲染 -->
+              <ctl:SelectableMarkdownViewer IsVisible="{Binding IsPreviewMarkdown}"
+                       Markdown="{Binding SelectedNode.Content}" MarkdownStyleName="Standard"
+                       Padding="8,6" />
             </Grid>
           </DockPanel>
         </Grid>

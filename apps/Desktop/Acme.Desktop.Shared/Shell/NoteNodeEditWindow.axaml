@@ -36,7 +36,7 @@
 
     <StackPanel Grid.Row="1" Spacing="4" Margin="20,16,20,8">
       <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-      <TextBox Classes="input" Text="{Binding Name}" Watermark="节点名称" />
+      <TextBox Classes="input" Text="{Binding Name}" PlaceholderText="节点名称" />
     </StackPanel>
 
     <StackPanel Grid.Row="2" Spacing="4" Margin="20,0,20,12">
