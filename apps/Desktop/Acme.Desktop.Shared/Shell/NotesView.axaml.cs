@@ -231,6 +231,7 @@ public partial class NotesView : UserControl
         if (_syncing) return;
         if (_vm?.SelectedNode is { } node)
             node.Content = CodeEditor.Text ?? "";
+        _vm?.MarkDirty(); // 启动延迟自动保存
         UpdateFoldings();
     }
 

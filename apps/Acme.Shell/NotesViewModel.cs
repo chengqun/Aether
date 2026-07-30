@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using System.Threading;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -27,6 +28,53 @@ public partial class NotesViewModel : ObservableObject
     }
     private INoteService? _noteService;
     private bool _suppressExternalRefresh;
+    private bool _dirty;
+    private NoteNodeVM? _previousSelected;
+    private CancellationTokenSource? _saveCts;
+
+    /// <summary>标记当前节点有未保存改动（由编辑器 TextChanged 调用），启动延迟自动保存。</summary>
+    public void MarkDirty()
+    {
+        _dirty = true;
+        _saveCts?.Cancel();
+        _saveCts = new CancellationTokenSource();
+        _ = DebouncedSaveAsync(_saveCts.Token);
+    }
+
+    private async Task DebouncedSaveAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(1500, ct); }
+        catch (TaskCanceledException) { return; }
+        if (ct.IsCancellationRequested || SelectedNode is null) return;
+        await SaveNodeInternalAsync(SelectedNode);
+        _dirty = false;
+    }
+
+    /// <summary>保存单个节点到 DB（抑制自身触发的刷新事件）。</summary>
+    private async Task SaveNodeInternalAsync(NoteNodeVM node)
+    {
+        try
+        {
+            _suppressExternalRefresh = true;
+            try
+            {
+                await NoteService.UpdateAsync(new UpdateNoteRequest
+                {
+                    Id = node.Id.ToString(),
+                    Title = node.Title,
+                    Content = node.Content,
+                    Syntax = node.Syntax,
+                    Tags = node.Tags,
+                    Icon = node.IconKey ?? "",
+                });
+            }
+            finally { _suppressExternalRefresh = false; }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"保存失败：{ex.Message}";
+        }
+    }
 
     public ObservableCollection<NoteNodeVM> Roots { get; } = new();
 
@@ -98,6 +146,15 @@ public partial class NotesViewModel : ObservableObject
 
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
+        // 切换前保存上一个节点（如果有未保存改动）
+        if (_dirty && _previousSelected is not null)
+        {
+            _saveCts?.Cancel();
+            _ = SaveNodeInternalAsync(_previousSelected);
+            _dirty = false;
+        }
+        _previousSelected = value;
+
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsCodeEdit));
         RaiseLayout();
@@ -501,23 +558,11 @@ public partial class NotesViewModel : ObservableObject
     private async Task SaveNoteAsync()
     {
         if (SelectedNode == null) return;
-        try
-        {
-            await NoteService.UpdateAsync(new UpdateNoteRequest
-            {
-                Id = SelectedNode.Id.ToString(),
-                Title = SelectedNode.Title,
-                Content = SelectedNode.Content,
-                Syntax = SelectedNode.Syntax,
-                Tags = SelectedNode.Tags,
-            });
-            StatusMessage = "已保存";
-            NotesChanged?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"保存失败：{ex.Message}";
-        }
+        _saveCts?.Cancel();
+        await SaveNodeInternalAsync(SelectedNode);
+        _dirty = false;
+        StatusMessage = "已保存";
+        NotesChanged?.Invoke();
     }
 
     /// <summary>删除当前选中节点（供确认对话框后调用）。</summary>
