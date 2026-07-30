@@ -1,0 +1,6 @@
+framework module IOSDataCollect {
+  umbrella header "IOSDataCollect.h"
+  export *
+
+  module * { export * }
+}
