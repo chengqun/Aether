@@ -82,6 +82,10 @@ public static class NavIcons
     public const string Folder =
         "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z";
 
+    /// <summary>目录树</summary>
+    public const string FolderTree =
+        "M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1z M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1z M3 5a2 2 0 0 0 2 2h3 M3 3v13a2 2 0 0 0 2 2h3";
+
     /// <summary>链接</summary>
     public const string Link =
         "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71";
@@ -177,4 +181,102 @@ public static class NavIcons
     /// <summary>标记（旗帜）</summary>
     public const string Flag =
         "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22V15";
+
+    // —— 通用图标（Lucide）——
+
+    /// <summary>大纲/层级列表</summary>
+    public const string ListTree =
+        "M8 5h13 M13 12h8 M13 19h8 M3 10a2 2 0 0 0 2 2h3 M3 5v12a2 2 0 0 0 2 2h3";
+
+    /// <summary>打开的书</summary>
+    public const string BookOpen =
+        "M12 5v16 M20 19a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2l-6 .002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4a5 5 0 0 1 4 2 5 5 0 0 1 4-2z";
+
+    /// <summary>文件夹组</summary>
+    public const string Folders =
+        "M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1";
+
+    /// <summary>归档</summary>
+    public const string Archive =
+        "M2 6h20 M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8 M10 12h4";
+
+    /// <summary>日历</summary>
+    public const string Calendar =
+        "M3 4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M8 2v4 M16 2v4 M3 10h18";
+
+    /// <summary>时钟</summary>
+    public const string Clock =
+        "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 6v6l4 2";
+
+    /// <summary>密钥</summary>
+    public const string Key =
+        "M15.5 7.5l2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4 M21 2l-9.6 9.6";
+
+    /// <summary>锁定</summary>
+    public const string Lock =
+        "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M8 11V7a4 4 0 0 1 8 0v4";
+
+    /// <summary>用户</summary>
+    public const string User =
+        "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M8 7a4 4 0 1 0 8 0 4 4 0 1 0-8 0";
+
+    /// <summary>用户组</summary>
+    public const string Users =
+        "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M16 3.128a4 4 0 0 1 0 7.744 M22 21v-2a4 4 0 0 0-3-3.87";
+
+    /// <summary>邮件</summary>
+    public const string Mail =
+        "M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7";
+
+    /// <summary>全球</summary>
+    public const string Globe =
+        "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20 M2 12h20";
+
+    /// <summary>云</summary>
+    public const string Cloud =
+        "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z";
+
+    /// <summary>终端</summary>
+    public const string Terminal =
+        "M12 19h8 M4 17l6-6-6-6";
+
+    /// <summary>文件</summary>
+    public const string File =
+        "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6";
+
+    /// <summary>删除（垃圾桶）</summary>
+    public const string Trash =
+        "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6";
+
+    /// <summary>下载</summary>
+    public const string Download =
+        "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3";
+
+    /// <summary>上传</summary>
+    public const string Upload =
+        "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M17 8l-5-5-5 5 M12 3v12";
+
+    /// <summary>刷新</summary>
+    public const string RefreshCw =
+        "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5";
+
+    /// <summary>运行（播放）</summary>
+    public const string Play =
+        "M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z";
+
+    /// <summary>附件（回形针）</summary>
+    public const string Paperclip =
+        "M16 6l-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551";
+
+    /// <summary>勾选</summary>
+    public const string Check =
+        "M20 6L9 17l-5-5";
+
+    /// <summary>关闭（叉）</summary>
+    public const string Close =
+        "M18 6L6 18 M6 6l12 12";
+
+    /// <summary>新增（加号）</summary>
+    public const string Plus =
+        "M12 5v14 M5 12h14";
 }
