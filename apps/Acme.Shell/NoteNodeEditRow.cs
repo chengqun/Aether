@@ -41,6 +41,7 @@ public partial class NoteNodeEditRow : ObservableObject
         new("C++",        "cpp",        NavIcons.LangCplusplus,   true,  "#00599C"),
         new("VB",         "vb",         NavIcons.LangDotnet,      true,  "#512BD4"),
         new("PowerShell", "powershell", NavIcons.LangBash,        true,  "#4EAA25"),
+        new("YAML",       "yaml",       NavIcons.LangYaml,        true,  "#CB171E"),
     };
 
     [ObservableProperty] private SyntaxOption? _selectedSyntaxOption;

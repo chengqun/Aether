@@ -12,8 +12,20 @@ public partial class NotesViewModel : ObservableObject
     private readonly IServiceProvider _serviceProvider;
     private readonly IUiDispatcher _dispatcher;
 
-    private INoteService NoteService => _noteService ??= _serviceProvider.GetRequiredService<INoteService>();
+    private INoteService NoteService
+    {
+        get
+        {
+            if (_noteService is null)
+            {
+                _noteService = _serviceProvider.GetRequiredService<INoteService>();
+                _noteService.NotesChanged += OnNotesChangedExternal;
+            }
+            return _noteService;
+        }
+    }
     private INoteService? _noteService;
+    private bool _suppressExternalRefresh;
 
     public ObservableCollection<NoteNodeVM> Roots { get; } = new();
 
@@ -28,16 +40,13 @@ public partial class NotesViewModel : ObservableObject
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
 
     /// <summary>文本节点 → AvaloniaEdit 编辑（按语法高亮，含 markdown 高亮）。</summary>
-    public bool IsCodeEdit => SelectedNode?.NodeType == NoteNodeType.Note;
-
-    /// <summary>非文本节点 → 普通 TextBox（Agent/Workflow 源码）。</summary>
-    public bool IsPlainEdit => SelectedNode is not null && SelectedNode.NodeType != NoteNodeType.Note;
+    /// <summary>所有节点都用 AvaloniaEdit 编辑（Agent=YAML纯文本、Workflow=JSON、文本=按语法高亮）。</summary>
+    public bool IsCodeEdit => SelectedNode is not null;
 
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsCodeEdit));
-        OnPropertyChanged(nameof(IsPlainEdit));
     }
 
     public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
@@ -90,6 +99,48 @@ public partial class NotesViewModel : ObservableObject
         if (_lastNewSyntax is not null)
             row.SelectedSyntaxOption = row.SyntaxOptions.FirstOrDefault(o => o.Value == _lastNewSyntax);
         return row;
+    }
+
+    /// <summary>外部（如 AI 工具）修改笔记后触发：刷新树，保持展开/选中状态。</summary>
+    private void OnNotesChangedExternal()
+    {
+        if (_suppressExternalRefresh) return;
+        _dispatcher.Post(async () => await RefreshAsync());
+    }
+
+    /// <summary>重新加载树，保持展开状态和选中节点。</summary>
+    public async Task RefreshAsync()
+    {
+        var selectedId = SelectedNode?.Id;
+        var expanded = new HashSet<Guid>();
+        CollectExpanded(Roots, expanded);
+
+        await LoadAsync();
+
+        RestoreExpanded(Roots, expanded);
+        if (selectedId.HasValue)
+        {
+            var node = FindNode(Roots, selectedId.Value);
+            if (node != null) SelectedNode = node;
+        }
+    }
+
+    private static void CollectExpanded(IEnumerable<NoteNodeVM> nodes, HashSet<Guid> ids)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsExpanded) ids.Add(n.Id);
+            CollectExpanded(n.Children, ids);
+        }
+    }
+
+    private static void RestoreExpanded(IEnumerable<NoteNodeVM> nodes, HashSet<Guid> ids)
+    {
+        foreach (var n in nodes)
+        {
+            if (ids.Contains(n.Id)) n.IsExpanded = true;
+            RestoreExpanded(n.Children, ids);
+        }
     }
 
     public NoteNodeEditRow? BuildEditNodeRow()

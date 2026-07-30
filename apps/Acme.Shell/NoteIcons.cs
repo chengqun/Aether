@@ -45,6 +45,8 @@ public static class NoteIcons
         new("工作流", "workflow",NavIcons.Workflow,    "#1F8A4C"),
         new("代码",   "code",    NavIcons.Code,        "#1F8A4C"),
         new("任务",   "task",    NavIcons.CheckSquare, "#1F8A4C"),
+        new("待办",   "todo",    NavIcons.ListChecks,  "#1F8A4C"),
+        new("清单",   "clip2",   NavIcons.ClipboardList,"#6B6B70"),
         new("灯泡",   "idea",    NavIcons.Lightbulb,   "#D97706"),
         new("文件夹", "folder",  NavIcons.Folder,      "#6B6B70"),
         new("目录",   "tree",    NavIcons.FolderTree,  "#6B6B70"),
@@ -107,6 +109,7 @@ public static class NoteIcons
         new("XML",        "lang_xml",      NavIcons.LangXml,        "#005FAD", true),
         new("SQL",        "lang_sql",      NavIcons.LangSqlite,     "#003B57", true),
         new("PowerShell", "lang_ps",       NavIcons.LangBash,       "#4EAA25", true),
+        new("YAML",       "lang_yaml",     NavIcons.LangYaml,       "#CB171E", true),
     };
 
     /// <summary>语法 key → 对应图标 key（用于选语法时自动设节点图标）。</summary>
@@ -125,6 +128,7 @@ public static class NoteIcons
         "xml" => "lang_xml",
         "sql" => "lang_sql",
         "powershell" => "lang_ps",
+        "yaml" => "lang_yaml",
         "text" => "file",
         "folder" => "folder",
         _ => null,

@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Threading.Tasks;
+using System.Xml;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -10,6 +12,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit.Highlighting;
+using AvaloniaEdit.Highlighting.Xshd;
+using AvaloniaEdit.Search;
 using Acme.Notes.Domain;
 using Acme.Shell;
 
@@ -100,28 +104,17 @@ public partial class NotesView : UserControl
     private void ApplyHighlighting()
     {
         if (_vm?.SelectedNode is not { } node) return;
-        CodeEditor.SyntaxHighlighting = HighlightingFor(node.Syntax);
+        CodeEditor.SyntaxHighlighting = HighlightingFor(node);
     }
 
-    /// <summary>VSCode 质感：当前行高亮 + 选中色。</summary>
-    private void ConfigureEditorAppearance()
+    /// <summary>节点 → 高亮定义：Agent=YAML、Workflow=Json、文本=按语法映射。统一 VSCode 配色。</summary>
+    private static IHighlightingDefinition? HighlightingFor(NoteNodeVM node)
     {
-        try
-        {
-            CodeEditor.Options.HighlightCurrentLine = true;
-            var tv = CodeEditor.TextArea.TextView;
-            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse("#F0F0F4"));
-            tv.CurrentLineBorder = null;
-            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse("#ADD6FF"));
-            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse("#1A1A1F"));
-        }
-        catch { /* 控件未就绪则跳过 */ }
-    }
-
-    /// <summary>语法 key → AvaloniaEdit 内置高亮定义；text/未知 → null（纯文本）。统一重映射为 VSCode 配色。</summary>
-    private static IHighlightingDefinition? HighlightingFor(string? syntax)
-    {
-        var name = syntax?.ToLowerInvariant() switch
+        if (node.NodeType == NoteNodeType.Agent) return LoadYaml();
+        if (node.NodeType == NoteNodeType.Workflow) return Load("Json");
+        var syntax = node.Syntax?.ToLowerInvariant();
+        if (syntax == "yaml") return LoadYaml();
+        return Load(syntax switch
         {
             "markdown" => "MarkDown",
             "sql" => "TSQL",
@@ -137,11 +130,65 @@ public partial class NotesView : UserControl
             "vb" => "VB",
             "powershell" => "PowerShell",
             _ => null,
-        };
+        });
+    }
+
+    private static IHighlightingDefinition? _yamlDef;
+
+    /// <summary>自定义 YAML 高亮（AvaloniaEdit 无内置；内联 .xshd，VSCode 配色）。</summary>
+    private static IHighlightingDefinition LoadYaml()
+    {
+        if (_yamlDef is not null) return _yamlDef;
+        var xshd = @"<SyntaxDefinition name=""YAML"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
+  <Color name=""Comment"" foreground=""#008000""/>
+  <Color name=""String"" foreground=""#A31515""/>
+  <Color name=""Number"" foreground=""#098658""/>
+  <Color name=""Keyword"" foreground=""#0000FF""/>
+  <Color name=""Key"" foreground=""#267F99""/>
+  <Color name=""DocMarker"" foreground=""#808080""/>
+  <RuleSet>
+    <Rule color=""DocMarker"">^---\s*$</Rule>
+    <Rule color=""DocMarker"">^\.\.\.\s*$</Rule>
+    <Rule color=""Comment"">\#.*</Rule>
+    <Rule color=""Key"">^\s*[\w-]+(?=\s*:)</Rule>
+    <Rule color=""Key"">\b[\w-]+(?=\s*:)</Rule>
+    <Span color=""String""><Begin>&quot;</Begin><End>&quot;</End></Span>
+    <Span color=""String""><Begin>'</Begin><End>'</End></Span>
+    <Rule color=""Number"">\b\d+(\.\d+)?\b</Rule>
+    <Keywords color=""Keyword"">
+      <Word>true</Word><Word>false</Word><Word>null</Word>
+      <Word>yes</Word><Word>no</Word><Word>on</Word><Word>off</Word>
+    </Keywords>
+  </RuleSet>
+</SyntaxDefinition>";
+        using var reader = XmlReader.Create(new StringReader(xshd));
+        _yamlDef = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+        return _yamlDef;
+    }
+
+    private static IHighlightingDefinition? Load(string? name)
+    {
         if (name is null) return null;
         var def = HighlightingManager.Instance.GetDefinition(name);
         if (def is not null) ApplyVscodeColors(def);
         return def;
+    }
+
+    /// <summary>VSCode 质感：当前行高亮 + 选中色 + 括号匹配 + 搜索面板。</summary>
+    private void ConfigureEditorAppearance()
+    {
+        try
+        {
+            CodeEditor.Options.HighlightCurrentLine = true;
+            var tv = CodeEditor.TextArea.TextView;
+            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse("#F0F0F4"));
+            tv.CurrentLineBorder = null;
+            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse("#ADD6FF"));
+            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse("#1A1A1F"));
+            // 安装搜索替换面板（Ctrl+F 呼出）
+            SearchPanel.Install(CodeEditor);
+        }
+        catch { /* 控件未就绪则跳过 */ }
     }
 
     /// <summary>把内置定义的颜色重映射为 VSCode Light+ 配色（蓝关键字/橙字符串/绿注释/绿数字）。</summary>

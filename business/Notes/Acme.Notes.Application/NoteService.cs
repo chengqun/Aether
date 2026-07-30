@@ -6,8 +6,12 @@ public sealed class NoteService : INoteService
 {
     private readonly INoteRepository _repository;
 
+    public event Action? NotesChanged;
+
     public NoteService(INoteRepository repository)
         => _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+
+    private void NotifyChanged() => NotesChanged?.Invoke();
 
     public async Task<List<NoteDto>> GetAllAsync(CancellationToken ct = default)
     {
@@ -51,6 +55,7 @@ public sealed class NoteService : INoteService
         };
 
         var created = await _repository.CreateAsync(node, ct);
+        NotifyChanged();
         return ToDto(created);
     }
 
@@ -81,6 +86,7 @@ public sealed class NoteService : INoteService
         }
 
         await _repository.UpdateAsync(node, ct);
+        NotifyChanged();
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
@@ -88,6 +94,7 @@ public sealed class NoteService : INoteService
         if (!Guid.TryParse(id, out var guid))
             throw new ArgumentException("无效的笔记 ID", nameof(id));
         await _repository.DeleteAsync(guid, ct);
+        NotifyChanged();
     }
 
     public async Task<List<NoteDto>> SearchAsync(string query, CancellationToken ct = default)
