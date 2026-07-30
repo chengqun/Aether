@@ -3,16 +3,34 @@
         xmlns:shell="using:Acme.Shell"
         x:Class="Acme.Desktop.Shared.Shell.NoteNodeEditWindow"
         Title="节点属性"
-        Width="460" Height="420"
+        Width="460" Height="560" MinHeight="500"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
+
+  <Window.Styles>
+    <Style Selector="RadioButton.icon-pick">
+      <Setter Property="Padding" Value="6,4"/>
+      <Setter Property="Margin" Value="0,0,5,5"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="Background" Value="White"/>
+    </Style>
+    <Style Selector="RadioButton.icon-pick:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F5F5F5"/>
+    </Style>
+    <Style Selector="RadioButton.icon-pick:checked">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Background" Value="#EEF0FB"/>
+    </Style>
+  </Window.Styles>
 
   <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" Background="{DynamicResource ContentBgBrush}">
 
     <Border Grid.Row="0" Padding="20,14" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <TextBlock x:Name="HeaderTitle" Text="📝 节点属性" FontSize="17" FontWeight="SemiBold"
+      <TextBlock x:Name="HeaderTitle" Text="节点属性" FontSize="17" FontWeight="SemiBold"
                  Foreground="{DynamicResource TextPrimaryBrush}" />
     </Border>
 
@@ -46,6 +64,35 @@
         <TextBox Classes="input" Text="{Binding Tags}" />
       </StackPanel>
     </Grid>
+
+    <StackPanel Grid.Row="4" Spacing="4" Margin="20,0,20,12">
+      <TextBlock Text="图标" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+        <ItemsControl ItemsSource="{Binding IconOptions}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <RadioButton Classes="icon-pick" GroupName="Icon"
+                           IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                           ToolTip.Tip="{Binding Display}">
+                <StackPanel Spacing="2" HorizontalAlignment="Center" Width="34">
+                  <Path Data="{Binding PathData}" Stretch="Uniform" Width="16" Height="16"
+                        StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                        Stroke="{Binding Color}" HorizontalAlignment="Center"/>
+                  <TextBlock Text="{Binding Display}" FontSize="9"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             HorizontalAlignment="Center" TextAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </StackPanel>
 
     <Border Grid.Row="5" Padding="20,12" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"

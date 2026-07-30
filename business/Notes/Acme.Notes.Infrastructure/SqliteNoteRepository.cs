@@ -17,10 +17,10 @@ public sealed class SqliteNoteRepository : INoteRepository
         "id TEXT NOT NULL PRIMARY KEY, parent_id TEXT, sort_order INTEGER NOT NULL, " +
         "title TEXT NOT NULL, content TEXT NOT NULL, syntax TEXT, tags TEXT, " +
         "is_readonly INTEGER NOT NULL, node_type INTEGER NOT NULL, linked_id TEXT, " +
-        "source TEXT, marketplace_id TEXT, marketplace_synced_at TEXT, display_name TEXT, " +
+        "source TEXT, marketplace_id TEXT, marketplace_synced_at TEXT, display_name TEXT, icon TEXT, " +
         "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)";
 
-    private static readonly string Cols = "id, parent_id, sort_order, title, content, syntax, tags, is_readonly, node_type, linked_id, source, marketplace_id, marketplace_synced_at, display_name, created_at, updated_at";
+    private static readonly string Cols = "id, parent_id, sort_order, title, content, syntax, tags, is_readonly, node_type, linked_id, source, marketplace_id, marketplace_synced_at, display_name, icon, created_at, updated_at";
 
     private readonly string _cs;
     private int _init;
@@ -69,7 +69,7 @@ public sealed class SqliteNoteRepository : INoteRepository
         await EnsureAsync(ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
-        cmd.CommandText = $"INSERT INTO {TableName} ({Cols}) VALUES (@id,@pid,@so,@t,@cnt,@syn,@tg,@ro,@nt,@lid,@src,@mid,@msa,@dn,@ca,@ua)";
+        cmd.CommandText = $"INSERT INTO {TableName} ({Cols}) VALUES (@id,@pid,@so,@t,@cnt,@syn,@tg,@ro,@nt,@lid,@src,@mid,@msa,@dn,@icon,@ca,@ua)";
         AddParams(cmd, node);
         await cmd.ExecuteNonQueryAsync(ct);
         return node;
@@ -81,7 +81,7 @@ public sealed class SqliteNoteRepository : INoteRepository
         await EnsureAsync(ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
-        cmd.CommandText = $"UPDATE {TableName} SET parent_id=@pid, sort_order=@so, title=@t, content=@cnt, syntax=@syn, tags=@tg, is_readonly=@ro, node_type=@nt, linked_id=@lid, source=@src, marketplace_id=@mid, marketplace_synced_at=@msa, display_name=@dn, updated_at=@ua WHERE id=@id";
+        cmd.CommandText = $"UPDATE {TableName} SET parent_id=@pid, sort_order=@so, title=@t, content=@cnt, syntax=@syn, tags=@tg, is_readonly=@ro, node_type=@nt, linked_id=@lid, source=@src, marketplace_id=@mid, marketplace_synced_at=@msa, display_name=@dn, icon=@icon, updated_at=@ua WHERE id=@id";
         AddParams(cmd, node);
         await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -123,6 +123,7 @@ public sealed class SqliteNoteRepository : INoteRepository
         cmd.Parameters.AddWithValue("@mid", n.MarketplaceId.HasValue ? (object)n.MarketplaceId.Value.ToString() : DBNull.Value);
         cmd.Parameters.AddWithValue("@msa", n.MarketplaceSyncedAt.HasValue ? (object)n.MarketplaceSyncedAt.Value.ToString("O") : DBNull.Value);
         cmd.Parameters.AddWithValue("@dn", (object?)n.DisplayName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@icon", (object?)n.Icon ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@ca", n.CreatedAt.ToString("O"));
         cmd.Parameters.AddWithValue("@ua", n.UpdatedAt.ToString("O"));
     }
@@ -149,8 +150,9 @@ public sealed class SqliteNoteRepository : INoteRepository
                 MarketplaceId = r.IsDBNull(11) ? null : Guid.Parse(r.GetString(11)),
                 MarketplaceSyncedAt = r.IsDBNull(12) ? null : DateTimeOffset.Parse(r.GetString(12), CultureInfo.InvariantCulture),
                 DisplayName = r.IsDBNull(13) ? null : r.GetString(13),
-                CreatedAt = DateTimeOffset.Parse(r.GetString(14), CultureInfo.InvariantCulture),
-                UpdatedAt = DateTimeOffset.Parse(r.GetString(15), CultureInfo.InvariantCulture)
+                Icon = r.IsDBNull(14) ? null : r.GetString(14),
+                CreatedAt = DateTimeOffset.Parse(r.GetString(15), CultureInfo.InvariantCulture),
+                UpdatedAt = DateTimeOffset.Parse(r.GetString(16), CultureInfo.InvariantCulture)
             });
         }
         return list;
@@ -168,8 +170,25 @@ public sealed class SqliteNoteRepository : INoteRepository
             await using var cmd = c.CreateCommand();
             cmd.CommandText = CreateSql;
             await cmd.ExecuteNonQueryAsync(ct);
+            // 老库迁移：note_node 早期无 icon 列，按需补列（已存在则忽略）。
+            await MigrateAddColumnAsync(c, "icon", "TEXT", ct);
         }
         catch { Interlocked.Exchange(ref _init, 0); throw; }
+    }
+
+    /// <summary>给老库补列：ADD COLUMN 在列已存在时抛异常，吞掉即可（幂等迁移）。</summary>
+    private static async Task MigrateAddColumnAsync(SqliteConnection c, string column, string type, CancellationToken ct)
+    {
+        try
+        {
+            await using var m = c.CreateCommand();
+            m.CommandText = $"ALTER TABLE {TableName} ADD COLUMN {column} {type}";
+            await m.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException)
+        {
+            // 列已存在 — 忽略。
+        }
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken ct)

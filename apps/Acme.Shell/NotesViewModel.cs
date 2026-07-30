@@ -88,6 +88,7 @@ public partial class NotesViewModel : ObservableObject
             IsReadOnly = false,
         };
         row.SelectedTypeOption = row.TypeOptions.FirstOrDefault(o => o.Value == SelectedNode.NodeType);
+        row.SelectIconByKey(SelectedNode.IconKey);
         return row;
     }
 
@@ -118,6 +119,7 @@ public partial class NotesViewModel : ObservableObject
                 Syntax = row.Syntax,
                 Tags = row.Tags,
                 NodeType = type,
+                Icon = row.IconKey,
             });
 
             await LoadAsync();
@@ -147,6 +149,7 @@ public partial class NotesViewModel : ObservableObject
             SelectedNode.Title = name;
             SelectedNode.Syntax = row.Syntax;
             SelectedNode.Tags = row.Tags;
+            SelectedNode.IconKey = row.IconKey;
 
             await NoteService.UpdateAsync(new UpdateNoteRequest
             {
@@ -155,6 +158,7 @@ public partial class NotesViewModel : ObservableObject
                 Content = SelectedNode.Content,
                 Syntax = row.Syntax,
                 Tags = row.Tags,
+                Icon = row.IconKey ?? "",
             });
 
             StatusMessage = $"已保存「{name}」";

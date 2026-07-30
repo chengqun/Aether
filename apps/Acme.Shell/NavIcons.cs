@@ -43,4 +43,138 @@ public static class NavIcons
     /// <summary>工作流（三节点流转）</summary>
     public const string Workflow =
         "M5 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M5 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M17 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M7 6v12 M7 7h6a4 4 0 0 1 4 4v8";
+
+    // —— 笔记节点可选图标（Lucide，viewBox 24×24，stroke-based）——
+
+    /// <summary>文件文本（笔记）</summary>
+    public const string FileText =
+        "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z M14 2v4a2 2 0 0 0 2 2h4 M16 13H8 M16 17H8 M10 9H8";
+
+    /// <summary>机器人（Agent）</summary>
+    public const string Bot =
+        "M12 8V4H8 M4 12a8 8 0 0 1 16 0v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z M2 14h2 M20 14h2 M15 13v2 M9 13v2";
+
+    /// <summary>便签</summary>
+    public const string StickyNote =
+        "M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z M15 3v6h6";
+
+    /// <summary>星标</summary>
+    public const string Star =
+        "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z";
+
+    /// <summary>书签</summary>
+    public const string Bookmark =
+        "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z";
+
+    /// <summary>代码</summary>
+    public const string Code =
+        "M16 18l6-6-6-6 M8 6l-6 6 6 6";
+
+    /// <summary>任务（勾选方框）</summary>
+    public const string CheckSquare =
+        "M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11";
+
+    /// <summary>灯泡</summary>
+    public const string Lightbulb =
+        "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.8.8 1.3 1.5 1.5 2.5 M9 18h6 M10 22h4";
+
+    /// <summary>文件夹</summary>
+    public const string Folder =
+        "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z";
+
+    /// <summary>链接</summary>
+    public const string Link =
+        "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71";
+
+    /// <summary>心</summary>
+    public const string Heart =
+        "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z";
+
+    // —— 笔记页工具栏动作图标（Lucide）——
+
+    /// <summary>保存</summary>
+    public const string Save =
+        "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8";
+
+    /// <summary>编辑（铅笔）</summary>
+    public const string Pencil =
+        "M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z";
+
+    /// <summary>预览（眼睛）</summary>
+    public const string Eye =
+        "M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6";
+
+    /// <summary>关闭预览（划线眼睛）</summary>
+    public const string EyeOff =
+        "M9.88 9.88a3 3 0 1 0 4.24 4.24 M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68 M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61 M2 2l20 20";
+
+    // —— 风控/数据 场景图标（Lucide）——
+
+    /// <summary>查找（放大镜）</summary>
+    public const string Search =
+        "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35";
+
+    /// <summary>变量/CPU</summary>
+    public const string Cpu =
+        "M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3";
+
+    /// <summary>数据库</summary>
+    public const string Database =
+        "M3 5V19A9 3 0 0 0 21 19V5 M3 12A9 3 0 0 0 21 12";
+
+    /// <summary>过滤（漏斗）</summary>
+    public const string Filter =
+        "M22 3H2l8 9.46V19l4 2v-8.54z";
+
+    /// <summary>追踪（靶心）</summary>
+    public const string Target =
+        "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z";
+
+    /// <summary>定位（十字准星）</summary>
+    public const string Crosshair =
+        "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M22 12h-4 M6 12H2 M12 6V2 M12 22v-4";
+
+    /// <summary>路径</summary>
+    public const string Route =
+        "M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15";
+
+    /// <summary>监控（心电波）</summary>
+    public const string Activity =
+        "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2";
+
+    /// <summary>验证（盾牌勾）</summary>
+    public const string ShieldCheck =
+        "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z M9 12l2 2 4-4";
+
+    /// <summary>风险（盾牌感叹）</summary>
+    public const string ShieldAlert =
+        "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z M12 8v4 M12 16h.01";
+
+    /// <summary>预警（三角感叹）</summary>
+    public const string AlertTriangle =
+        "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01";
+
+    /// <summary>评估（仪表盘）</summary>
+    public const string Gauge =
+        "M12 14l4-4 M3.34 19a10 10 0 1 1 17.32 0";
+
+    /// <summary>柱状图</summary>
+    public const string BarChart =
+        "M3 3v16a2 2 0 0 0 2 2h16 M18 17V9 M13 17V5 M8 17v-3";
+
+    /// <summary>饼图</summary>
+    public const string PieChart =
+        "M21.21 15.89A10 10 0 1 1 8 2.83 M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z";
+
+    /// <summary>折线图</summary>
+    public const string LineChart =
+        "M3 3v16a2 2 0 0 0 2 2h16 M19 9l-5 5-4-4-3 3";
+
+    /// <summary>提醒（铃铛）</summary>
+    public const string Bell =
+        "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9 M10.3 21a1.94 1.94 0 0 0 3.4 0";
+
+    /// <summary>标记（旗帜）</summary>
+    public const string Flag =
+        "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22V15";
 }

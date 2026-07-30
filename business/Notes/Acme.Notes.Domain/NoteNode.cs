@@ -15,6 +15,8 @@ public sealed class NoteNode
     public string? Tags { get; set; }
     public bool IsReadOnly { get; set; }
     public NoteNodeType NodeType { get; set; } = NoteNodeType.Note;
+    /// <summary>节点自定义图标 key（对应 UI 图标目录；null=按 NodeType 回退默认）。</summary>
+    public string? Icon { get; set; }
     public Guid? LinkedId { get; set; }
     public string? Source { get; set; }
     public Guid? MarketplaceId { get; set; }

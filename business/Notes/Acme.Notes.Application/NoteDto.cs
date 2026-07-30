@@ -12,6 +12,7 @@ public sealed class NoteDto
     public string? Tags { get; init; }
     public bool IsReadOnly { get; init; }
     public NoteNodeType NodeType { get; init; } = NoteNodeType.Note;
+    public string? Icon { get; init; }
 }
 
 public sealed class CreateNoteRequest
@@ -22,6 +23,7 @@ public sealed class CreateNoteRequest
     public string? Syntax { get; init; }
     public string? Tags { get; init; }
     public NoteNodeType NodeType { get; init; } = NoteNodeType.Note;
+    public string? Icon { get; init; }
 }
 
 public sealed class UpdateNoteRequest
@@ -33,4 +35,6 @@ public sealed class UpdateNoteRequest
     public string? Tags { get; init; }
     public string? ParentId { get; init; }
     public NoteNodeType? NodeType { get; init; }
+    /// <summary>null=不改；空串=清除自定义图标（回退 NodeType 默认）；非空=设为该 key。</summary>
+    public string? Icon { get; init; }
 }

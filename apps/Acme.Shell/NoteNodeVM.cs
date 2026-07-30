@@ -17,14 +17,32 @@ public sealed partial class NoteNodeVM : ObservableObject
     [ObservableProperty] private NoteNodeVM? _parent;
     [ObservableProperty] private bool _isDropTarget;
 
+    /// <summary>持久化的图标 key（null=按 NodeType 回退默认）。</summary>
+    [ObservableProperty] private string? _iconKey;
+
+    partial void OnIconKeyChanged(string? value)
+    {
+        // Icon / IconColor 由 IconKey 派生，key 变化时需手动通知绑定刷新。
+        OnPropertyChanged(nameof(Icon));
+        OnPropertyChanged(nameof(IconColor));
+    }
+
     public ObservableCollection<NoteNodeVM> Children { get; } = new();
 
-    public string Icon => NodeType switch
+    /// <summary>渲染用矢量 path data：自定义图标优先，否则按 NodeType 默认。</summary>
+    public string Icon => NoteIcons.Find(IconKey)?.PathData ?? NodeType switch
     {
-        NoteNodeType.Note => "📝",
-        NoteNodeType.Agent => "🤖",
-        NoteNodeType.Workflow => "🤝",
-        _ => "📄"
+        NoteNodeType.Agent    => NavIcons.Bot,
+        NoteNodeType.Workflow => NavIcons.Workflow,
+        _                     => NavIcons.FileText,
+    };
+
+    /// <summary>图标配色：自定义图标用其目录色，否则按 NodeType 默认。</summary>
+    public string IconColor => NoteIcons.Find(IconKey)?.Color ?? NodeType switch
+    {
+        NoteNodeType.Agent    => "#5B5FC7",
+        NoteNodeType.Workflow => "#1F8A4C",
+        _                     => "#6B6B70",
     };
 
     public NoteNodeType NodeType { get; set; } = NoteNodeType.Note;
@@ -40,6 +58,7 @@ public sealed partial class NoteNodeVM : ObservableObject
             Syntax = dto.Syntax,
             Tags = dto.Tags,
             NodeType = dto.NodeType,
+            IconKey = dto.Icon,
         };
         return node;
     }
