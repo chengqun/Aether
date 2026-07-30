@@ -26,7 +26,7 @@
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" Background="{DynamicResource ContentBgBrush}">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Background="{DynamicResource ContentBgBrush}">
 
     <Border Grid.Row="0" Padding="20,14" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
@@ -65,9 +65,9 @@
       </StackPanel>
     </Grid>
 
-    <StackPanel Grid.Row="4" Spacing="4" Margin="20,0,20,12">
-      <TextBlock Text="图标" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-      <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+    <Grid Grid.Row="4" RowDefinitions="Auto,*" Margin="20,0,20,12">
+      <TextBlock Grid.Row="0" Text="图标" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
         <ItemsControl ItemsSource="{Binding IconOptions}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -92,7 +92,7 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
-    </StackPanel>
+    </Grid>
 
     <Border Grid.Row="5" Padding="20,12" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
