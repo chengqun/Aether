@@ -163,9 +163,8 @@
               <!-- 左：源码编辑器 -->
               <edit:TextEditor Grid.Column="0" Grid.ColumnSpan="{Binding EditorSpan}"
                        x:Name="CodeEditor" IsVisible="{Binding EditorVisible}"
-                       ShowLineNumbers="True" WordWrap="True"
+                       ShowLineNumbers="False" WordWrap="True"
                        FontFamily="Cascadia Code,Consolas,monospace" FontSize="{Binding EditorFontSize}"
-                       LineNumbersForeground="#858585"
                        Background="Transparent" Margin="8,6" />
               <!-- 中：可拖动分隔条 -->
               <GridSplitter Grid.Column="1" IsVisible="{Binding SplitterVisible}"

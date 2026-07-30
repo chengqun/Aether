@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using AvaloniaEdit.Folding;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Search;
@@ -30,6 +31,7 @@ public partial class NotesView : UserControl
     private NotesViewModel? _vm;
     private NoteNodeVM? _subscribedNode;
     private bool _syncing;
+    private FoldingManager? _foldingManager;
 
     public NotesView()
     {
@@ -101,6 +103,7 @@ public partial class NotesView : UserControl
         try { CodeEditor.Text = node.Content ?? ""; }
         finally { _syncing = false; }
         ApplyHighlighting();
+        UpdateFoldings();
     }
 
     private void ApplyHighlighting()
@@ -189,6 +192,8 @@ public partial class NotesView : UserControl
             CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse("#1A1A1F"));
             // 安装搜索替换面板（Ctrl+F 呼出）
             SearchPanel.Install(CodeEditor);
+            // 安装代码折叠（基于 {} 配对）
+            _foldingManager = FoldingManager.Install(CodeEditor.TextArea);
         }
         catch { /* 控件未就绪则跳过 */ }
     }
@@ -226,6 +231,70 @@ public partial class NotesView : UserControl
         if (_syncing) return;
         if (_vm?.SelectedNode is { } node)
             node.Content = CodeEditor.Text ?? "";
+        UpdateFoldings();
+    }
+
+    /// <summary>按语法类型生成折叠区域：大括号语言折叠 {}、SQL 折叠 ()、YAML 折叠 --- 文档段。</summary>
+    private void UpdateFoldings()
+    {
+        if (_foldingManager is null) return;
+        var text = CodeEditor.Document.Text;
+        var foldings = new List<NewFolding>();
+
+        var kind = _vm?.SelectedNode?.NodeType switch
+        {
+            NoteNodeType.Agent => "yaml",
+            NoteNodeType.Workflow => "json",
+            _ => _vm?.SelectedNode?.Syntax?.ToLowerInvariant(),
+        };
+
+        if (kind == "yaml")
+            FoldYamlDocuments(text, foldings);
+        else if (kind == "sql")
+            FoldPairs(text, foldings, '(', ')');
+        else
+            FoldPairs(text, foldings, '{', '}'); // C 风格 + JSON
+
+        foldings.Sort((a, b) => a.StartOffset.CompareTo(b.StartOffset));
+        _foldingManager.UpdateFoldings(foldings, -1);
+    }
+
+    /// <summary>配对字符折叠（{} 或 ()），超过 2 字符才折。</summary>
+    private static void FoldPairs(string text, List<NewFolding> foldings, char open, char close)
+    {
+        var starts = new Stack<int>();
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == open) starts.Push(i);
+            else if (text[i] == close && starts.Count > 0)
+            {
+                var start = starts.Pop();
+                if (i - start > 2)
+                    foldings.Add(new NewFolding(start, i + 1));
+            }
+        }
+    }
+
+    /// <summary>YAML 文档段折叠：--- 到下一个 ---/... 之间。</summary>
+    private static void FoldYamlDocuments(string text, List<NewFolding> foldings)
+    {
+        var marks = new List<int>();
+        var lineStart = 0;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            if (i == text.Length || text[i] == '\n')
+            {
+                var line = text.AsSpan(lineStart, i - lineStart).Trim('\r').Trim();
+                if (line is "---" or "...")
+                    marks.Add(lineStart);
+                lineStart = i + 1;
+            }
+        }
+        for (var i = 0; i + 1 < marks.Count; i++)
+        {
+            if (marks[i + 1] - marks[i] > 4)
+                foldings.Add(new NewFolding(marks[i], marks[i + 1]));
+        }
     }
 
     /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48，持久化）。</summary>
