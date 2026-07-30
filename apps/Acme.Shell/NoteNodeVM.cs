@@ -21,6 +21,11 @@ public sealed partial class NoteNodeVM : ObservableObject
 
     [ObservableProperty] private string? _tags;
     [ObservableProperty] private bool _isExpanded = true;
+
+    /// <summary>任意节点展开/折叠变化时触发（静态，供 VM 节流保存展开状态）。</summary>
+    public static event Action? AnyExpandChanged;
+
+    partial void OnIsExpandedChanged(bool value) => AnyExpandChanged?.Invoke();
     [ObservableProperty] private NoteNodeVM? _parent;
     [ObservableProperty] private bool _isDropTarget;
     [ObservableProperty] private int _sortOrder;

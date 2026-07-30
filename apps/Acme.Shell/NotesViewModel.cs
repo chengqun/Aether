@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -74,6 +75,72 @@ public partial class NotesViewModel : ObservableObject
         _serviceProvider = serviceProvider;
         _dispatcher = dispatcher;
         _ = LoadFontSizeAsync();
+        NoteNodeVM.AnyExpandChanged += OnAnyExpandChanged;
+    }
+
+    private bool _loadingExp;
+    private bool _expandSavePending;
+
+    private void OnAnyExpandChanged()
+    {
+        if (_loadingExp) return;
+        if (_expandSavePending) return;
+        _expandSavePending = true;
+        _dispatcher.Post(async () =>
+        {
+            _expandSavePending = false;
+            await SaveExpandStateAsync();
+        });
+    }
+
+    private async Task SaveExpandStateAsync()
+    {
+        try
+        {
+            var ids = new List<Guid>();
+            CollectExpandedIds(Roots, ids);
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null)
+                await store.SetAsync("notes.expandedNodes", JsonSerializer.Serialize(ids));
+        }
+        catch { /* 保存失败不影响使用 */ }
+    }
+
+    private static void CollectExpandedIds(IEnumerable<NoteNodeVM> nodes, List<Guid> ids)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsExpanded) ids.Add(n.Id);
+            CollectExpandedIds(n.Children, ids);
+        }
+    }
+
+    private static void RestoreExpandState(IEnumerable<NoteNodeVM> nodes, HashSet<Guid> expanded)
+    {
+        foreach (var n in nodes)
+        {
+            n.IsExpanded = expanded.Contains(n.Id);
+            RestoreExpandState(n.Children, expanded);
+        }
+    }
+
+    private async Task<HashSet<Guid>?> LoadExpandStateAsync()
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null)
+            {
+                var json = await store.GetAsync("notes.expandedNodes");
+                if (!string.IsNullOrEmpty(json))
+                {
+                    var ids = JsonSerializer.Deserialize<List<Guid>>(json);
+                    if (ids is not null) return new HashSet<Guid>(ids);
+                }
+            }
+        }
+        catch { }
+        return null;
     }
 
     private async Task LoadFontSizeAsync()
@@ -99,6 +166,7 @@ public partial class NotesViewModel : ObservableObject
         {
             var all = await NoteService.GetAllAsync();
             var vms = all.Select(NoteNodeVM.FromDto).ToList();
+            var expanded = await LoadExpandStateAsync();
 
             await _dispatcher.InvokeAsync(() =>
             {
@@ -118,6 +186,14 @@ public partial class NotesViewModel : ObservableObject
                                      .OrderBy(r => r.SortOrder)
                                      .ThenBy(r => r.Title))
                     Roots.Add(r);
+
+                // 恢复展开状态（有保存记录时才恢复，否则用默认全展开）
+                if (expanded is not null)
+                {
+                    _loadingExp = true;
+                    RestoreExpandState(vms, expanded);
+                    _loadingExp = false;
+                }
 
                 SelectedNode = Roots.FirstOrDefault();
             });
