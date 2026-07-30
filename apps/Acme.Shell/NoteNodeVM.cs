@@ -12,6 +12,13 @@ public sealed partial class NoteNodeVM : ObservableObject
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _content = string.Empty;
     [ObservableProperty] private string? _syntax;
+
+    /// <summary>文本节点且语法为 markdown → 预览时用 Markdown 渲染。</summary>
+    public bool IsMarkdown => NodeType == NoteNodeType.Note
+        && string.Equals(Syntax, "markdown", StringComparison.OrdinalIgnoreCase);
+
+    partial void OnSyntaxChanged(string? value) => OnPropertyChanged(nameof(IsMarkdown));
+
     [ObservableProperty] private string? _tags;
     [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private NoteNodeVM? _parent;

@@ -8,7 +8,7 @@ public partial class NoteNodeEditRow : ObservableObject
 {
     public ObservableCollection<NodeTypeOption> TypeOptions { get; } = new()
     {
-        new("Markdown 文本", NoteNodeType.Note),
+        new("文本", NoteNodeType.Note),
         new("Agent", NoteNodeType.Agent),
         new("Workflow", NoteNodeType.Workflow),
     };
@@ -23,7 +23,26 @@ public partial class NoteNodeEditRow : ObservableObject
 
     [ObservableProperty] private bool _isTypeEnabled = true;
 
-    [ObservableProperty] private string? _syntax;
+    /// <summary>语法下拉选项（值=持久化 key；代码后台按 key 映射 AvaloniaEdit 高亮定义）。</summary>
+    public ObservableCollection<SyntaxOption> SyntaxOptions { get; } = new()
+    {
+        new("Markdown", "markdown"),
+        new("纯文本", "text"),
+        new("SQL", "sql"),
+        new("Python", "python"),
+        new("JavaScript", "javascript"),
+        new("JSON", "json"),
+        new("C#", "csharp"),
+        new("HTML", "html"),
+        new("CSS", "css"),
+        new("XML", "xml"),
+        new("Java", "java"),
+        new("C++", "cpp"),
+        new("VB", "vb"),
+        new("PowerShell", "powershell"),
+    };
+
+    [ObservableProperty] private SyntaxOption? _selectedSyntaxOption;
 
     [ObservableProperty] private string? _tags;
 
@@ -32,10 +51,14 @@ public partial class NoteNodeEditRow : ObservableObject
     public NoteNodeEditRow()
     {
         _selectedTypeOption = TypeOptions[0];
+        _selectedSyntaxOption = SyntaxOptions[0]; // 默认 markdown
         SelectIconByKey(null);
     }
 
     public NoteNodeType SelectedType => SelectedTypeOption?.Value ?? NoteNodeType.Note;
+
+    /// <summary>当前语法值（markdown/sql/text）。</summary>
+    public string? SyntaxValue => SelectedSyntaxOption?.Value;
 
     /// <summary>当前选中图标的 key（null=跟随类型默认）。</summary>
     public string? IconKey => IconOptions.FirstOrDefault(o => o.IsSelected)?.Key;
@@ -49,3 +72,5 @@ public partial class NoteNodeEditRow : ObservableObject
 }
 
 public sealed record NodeTypeOption(string Display, NoteNodeType Value);
+
+public sealed record SyntaxOption(string Display, string Value);

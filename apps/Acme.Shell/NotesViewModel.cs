@@ -23,32 +23,21 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
-    [ObservableProperty]
-    private bool _isPreviewMode;
-
     public event Action? NotesChanged;
 
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
 
-    /// <summary>当前节点是否为 Markdown 文本节点（预览时用 Markdown 渲染器，而非纯文本）。</summary>
-    public bool IsMarkdownNode => SelectedNode?.NodeType == NoteNodeType.Note;
+    /// <summary>文本节点 → AvaloniaEdit 编辑（按语法高亮，含 markdown 高亮）。</summary>
+    public bool IsCodeEdit => SelectedNode?.NodeType == NoteNodeType.Note;
 
-    /// <summary>预览模式 且 Markdown 节点 → 用 Markdown 渲染器。</summary>
-    public bool IsPreviewMarkdown => IsPreviewMode && IsMarkdownNode;
+    /// <summary>非文本节点 → 普通 TextBox（Agent/Workflow 源码）。</summary>
+    public bool IsPlainEdit => SelectedNode is not null && SelectedNode.NodeType != NoteNodeType.Note;
 
     partial void OnSelectedNodeChanged(NoteNodeVM? value)
     {
-        // Agent/Workflow 不支持预览，切到非 Markdown 节点时退出预览模式
-        if (value is not null && value.NodeType != NoteNodeType.Note)
-            IsPreviewMode = false;
         OnPropertyChanged(nameof(IsAgentNode));
-        OnPropertyChanged(nameof(IsMarkdownNode));
-        OnPropertyChanged(nameof(IsPreviewMarkdown));
-    }
-
-    partial void OnIsPreviewModeChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsPreviewMarkdown));
+        OnPropertyChanged(nameof(IsCodeEdit));
+        OnPropertyChanged(nameof(IsPlainEdit));
     }
 
     public NotesViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
@@ -101,11 +90,11 @@ public partial class NotesViewModel : ObservableObject
         {
             Name = SelectedNode.Title,
             IsTypeEnabled = false,
-            Syntax = SelectedNode.Syntax,
             Tags = SelectedNode.Tags,
             IsReadOnly = false,
         };
         row.SelectedTypeOption = row.TypeOptions.FirstOrDefault(o => o.Value == SelectedNode.NodeType);
+        row.SelectedSyntaxOption = row.SyntaxOptions.FirstOrDefault(o => o.Value == SelectedNode.Syntax) ?? row.SyntaxOptions[0];
         row.SelectIconByKey(SelectedNode.IconKey);
         return row;
     }
@@ -137,10 +126,10 @@ public partial class NotesViewModel : ObservableObject
                 {
                     NoteNodeType.Agent => "# Agent 模板\n\n系统提示词...",
                     NoteNodeType.Workflow => "# Workflow 模板\n\n",
-                    _ => "# 新笔记\n\n开始写作...",
+                    _ => "",
                 },
                 ParentId = parentId?.ToString(),
-                Syntax = row.Syntax,
+                Syntax = row.SyntaxValue,
                 Tags = row.Tags,
                 NodeType = type,
                 Icon = row.IconKey,
@@ -179,7 +168,7 @@ public partial class NotesViewModel : ObservableObject
             var name = string.IsNullOrWhiteSpace(row.Name) ? SelectedNode.Title : row.Name;
 
             SelectedNode.Title = name;
-            SelectedNode.Syntax = row.Syntax;
+            SelectedNode.Syntax = row.SyntaxValue;
             SelectedNode.Tags = row.Tags;
             SelectedNode.IconKey = row.IconKey;
 
@@ -188,7 +177,7 @@ public partial class NotesViewModel : ObservableObject
                 Id = SelectedNode.Id.ToString(),
                 Title = name,
                 Content = SelectedNode.Content,
-                Syntax = row.Syntax,
+                Syntax = row.SyntaxValue,
                 Tags = row.Tags,
                 Icon = row.IconKey ?? "",
             });
@@ -321,6 +310,9 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
+    /// <summary>删除当前选中节点（供确认对话框后调用）。</summary>
+    public Task DeleteSelectedAsync() => DeleteNoteAsync();
+
     [RelayCommand]
     private async Task DeleteNoteAsync()
     {
@@ -352,12 +344,6 @@ public partial class NotesViewModel : ObservableObject
         {
             StatusMessage = $"删除失败：{ex.Message}";
         }
-    }
-
-    [RelayCommand]
-    private void TogglePreview()
-    {
-        IsPreviewMode = !IsPreviewMode;
     }
 
     private static NoteNodeVM? FindNode(IEnumerable<NoteNodeVM> nodes, Guid id)

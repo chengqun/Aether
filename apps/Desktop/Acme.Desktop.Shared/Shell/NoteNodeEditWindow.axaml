@@ -56,8 +56,17 @@
 
     <Grid Grid.Row="3" ColumnDefinitions="*,12,*" Margin="20,0,20,12">
       <StackPanel Grid.Column="0" Spacing="4">
-        <TextBlock Text="语法(sql/python…)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-        <TextBox Classes="input" Text="{Binding Syntax}" FontFamily="Cascadia Code,Consolas,monospace" />
+        <TextBlock Text="语法" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <ComboBox Classes="input"
+                  ItemsSource="{Binding SyntaxOptions}"
+                  SelectedItem="{Binding SelectedSyntaxOption}"
+                  ToolTip.Tip="markdown=渲染预览；sql=代码高亮；text=纯文本">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Display}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="4">
         <TextBlock Text="标签(逗号分隔)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />

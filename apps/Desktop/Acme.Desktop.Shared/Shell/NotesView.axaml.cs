@@ -1,10 +1,15 @@
 using System;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
+using AvaloniaEdit.Highlighting;
 using Acme.Notes.Domain;
 using Acme.Shell;
 
@@ -18,15 +23,106 @@ public partial class NotesView : UserControl
     private bool _isDragging;
     private const double DragThreshold = 4.0;
 
+    private NotesViewModel? _vm;
+    private NoteNodeVM? _subscribedNode;
+    private bool _syncing;
+
     public NotesView()
     {
         InitializeComponent();
+        CodeEditor.TextChanged += OnCodeEditorTextChanged;
+        CodeEditor.Loaded += (_, _) => SyncCodeEditor();
         this.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed,
             RoutingStrategies.Bubble, handledEventsToo: true);
         this.AddHandler(InputElement.PointerMovedEvent, OnPointerMoved,
             RoutingStrategies.Bubble, handledEventsToo: true);
         this.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_vm != null) _vm.PropertyChanged -= OnVmPropertyChanged;
+        _vm = DataContext as NotesViewModel;
+        if (_vm != null)
+        {
+            _vm.PropertyChanged += OnVmPropertyChanged;
+            SyncCodeEditor();
+        }
+    }
+
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_vm == null) return;
+        if (e.PropertyName == nameof(NotesViewModel.SelectedNode))
+        {
+            // 重新订阅当前节点的 Syntax 变化（切高亮）
+            if (_subscribedNode != null) _subscribedNode.PropertyChanged -= OnNodePropertyChanged;
+            _subscribedNode = _vm.SelectedNode;
+            if (_subscribedNode != null) _subscribedNode.PropertyChanged += OnNodePropertyChanged;
+            SyncCodeEditor();
+        }
+        else if (e.PropertyName == nameof(NotesViewModel.IsCodeEdit) && _vm.IsCodeEdit)
+        {
+            SyncCodeEditor();
+        }
+    }
+
+    private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // 语法变了 → 重设高亮（内容同步由 TextChanged 回写，无需重载）
+        if (e.PropertyName == nameof(NoteNodeVM.Syntax))
+            ApplyHighlighting();
+    }
+
+    /// <summary>把节点内容载入编辑器并按语法设高亮。</summary>
+    private void SyncCodeEditor()
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        // Document 在控件模板应用（首次显示）后才创建；未就绪时延迟到下一帧再试。
+        if (CodeEditor.Document is null)
+        {
+            Dispatcher.UIThread.Post(SyncCodeEditor);
+            return;
+        }
+        _syncing = true;
+        try { CodeEditor.Text = node.Content ?? ""; }
+        finally { _syncing = false; }
+        ApplyHighlighting();
+    }
+
+    private void ApplyHighlighting()
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        CodeEditor.SyntaxHighlighting = HighlightingFor(node.Syntax);
+    }
+
+    /// <summary>语法 key → AvaloniaEdit 内置高亮定义；text/未知 → null（纯文本）。</summary>
+    private static IHighlightingDefinition? HighlightingFor(string? syntax)
+        => syntax?.ToLowerInvariant() switch
+        {
+            "markdown" => HighlightingManager.Instance.GetDefinition("MarkDown"),
+            "sql" => HighlightingManager.Instance.GetDefinition("TSQL"),
+            "python" => HighlightingManager.Instance.GetDefinition("Python"),
+            "javascript" => HighlightingManager.Instance.GetDefinition("JavaScript"),
+            "json" => HighlightingManager.Instance.GetDefinition("Json"),
+            "csharp" => HighlightingManager.Instance.GetDefinition("C#"),
+            "html" => HighlightingManager.Instance.GetDefinition("HTML"),
+            "css" => HighlightingManager.Instance.GetDefinition("CSS"),
+            "xml" => HighlightingManager.Instance.GetDefinition("XML"),
+            "java" => HighlightingManager.Instance.GetDefinition("Java"),
+            "cpp" => HighlightingManager.Instance.GetDefinition("C++"),
+            "vb" => HighlightingManager.Instance.GetDefinition("VB"),
+            "powershell" => HighlightingManager.Instance.GetDefinition("PowerShell"),
+            _ => null,
+        };
+
+    private void OnCodeEditorTextChanged(object? sender, EventArgs e)
+    {
+        if (_syncing) return;
+        if (_vm?.SelectedNode is { } node)
+            node.Content = CodeEditor.Text ?? "";
     }
 
     private async void OnCreateSiblingClick(object? sender, RoutedEventArgs e)
@@ -54,6 +150,49 @@ public partial class NotesView : UserControl
         dialog.SetHeader("✏️ 修改节点属性");
         if (await dialog.ShowDialog<bool>(parent))
             await vm.ApplyEditNodeAsync(row);
+    }
+
+    private async void OnDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TryGetVmParent(out var vm, out var parent)) return;
+        if (vm.SelectedNode == null) return;
+        var title = vm.SelectedNode.Title;
+        var ok = await ConfirmAsync(parent, "删除节点", $"确定删除「{title}」？其子节点将提升为根节点。", "删除");
+        if (ok)
+            await vm.DeleteSelectedAsync();
+    }
+
+    /// <summary>简易确认对话框（内联构建，无需额外 axaml）。返回 true=点了确认按钮。</summary>
+    private static async Task<bool> ConfirmAsync(Window parent, string title, string message, string confirmText)
+    {
+        var result = false;
+        var dlg = new Window
+        {
+            Title = title,
+            Width = 360, Height = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        var root = new StackPanel { Spacing = 16, Margin = new Thickness(20) };
+        root.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        var btns = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+        };
+        var cancel = new Button { Content = "取消", Padding = new Thickness(20, 8) };
+        var okBtn = new Button { Content = confirmText, Padding = new Thickness(20, 8) };
+        okBtn.Classes.Add("primary");
+        btns.Children.Add(cancel);
+        btns.Children.Add(okBtn);
+        root.Children.Add(btns);
+        dlg.Content = root;
+        cancel.Click += (_, _) => dlg.Close();
+        okBtn.Click += (_, _) => { result = true; dlg.Close(); };
+        await dlg.ShowDialog(parent);
+        return result;
     }
 
     private async void OnEditAgentClick(object? sender, RoutedEventArgs e)
