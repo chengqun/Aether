@@ -28,6 +28,10 @@ dist/
 !externals/Ctp.Net.Core/ctp-sdk/**/*.dylib
 !externals/Ctp.Net.Core/ctp-sdk/**/*.so
 
+## Ctp.Native cmake 构建缓存（现场编时重新生成，不入库）
+externals/Ctp.Net.Core/Ctp.Native/build/
+externals/Ctp.Net.Core/Ctp.Native/build-*/
+
 ## Qifu 仅本地（不推 GitHub；磁盘文件保留，git 停止跟踪）
 apps/Qifu/
 business/Qifu/
