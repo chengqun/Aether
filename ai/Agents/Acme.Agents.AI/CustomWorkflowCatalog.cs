@@ -1,5 +1,4 @@
 using Acme.Notes.Application;
-using Acme.Notes.AgentSource;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 
@@ -7,15 +6,17 @@ namespace Acme.Agents.AI;
 
 /// <summary>
 /// <see cref="ICustomWorkflowCatalog"/> 默认实现：用 <see cref="INoteService"/> 持久化、
-/// <see cref="WorkflowSourceParser"/> JSON 序列化。
+/// <see cref="IWorkflowSourceParser"/> JSON 序列化。
 /// </summary>
 public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
 {
     private readonly INoteService _notes;
+    private readonly IWorkflowSourceParser _workflowParser;
 
-    public CustomWorkflowCatalog(INoteService notes)
+    public CustomWorkflowCatalog(INoteService notes, IWorkflowSourceParser workflowParser)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
+        _workflowParser = workflowParser ?? throw new ArgumentNullException(nameof(workflowParser));
     }
 
     public async Task<IReadOnlyList<CustomWorkflowDefinition>> ListAsync(CancellationToken ct = default)
@@ -24,7 +25,7 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
         var result = new List<CustomWorkflowDefinition>();
         foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Workflow))
         {
-            if (WorkflowSourceParser.TryParse(note.Content, out var def, out _) && def is not null)
+            if (_workflowParser.TryParse(note.Content, out var def, out _) && def is not null)
             {
                 def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
                 result.Add(def);
@@ -37,7 +38,7 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
     {
         var note = await _notes.GetAsync(id.ToString(), ct);
         if (note is null || note.NodeType != NoteNodeType.Workflow) return null;
-        if (!WorkflowSourceParser.TryParse(note.Content, out var def, out _) || def is null) return null;
+        if (!_workflowParser.TryParse(note.Content, out var def, out _) || def is null) return null;
         def.Id = id;
         return def;
     }
@@ -48,7 +49,7 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("名称不能为空", nameof(definition));
 
-        var source = WorkflowSourceParser.Serialize(definition);
+        var source = _workflowParser.Serialize(definition);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)

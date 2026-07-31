@@ -1,17 +1,17 @@
 using System.Globalization;
 using Acme.Notes.Domain.Agents;
 
-namespace Acme.Notes.AgentSource;
+namespace Acme.Notes.Infrastructure.Agents;
 
 /// <summary>
-/// 轻量 Agent 源文本解析器（无第三方依赖）。
+/// <see cref="IAgentSourceParser"/> 实现：轻量 Agent 源文本解析（无第三方依赖）。
 /// 格式：YAML-like front-matter + Markdown 正文（正文=系统提示词）。
-/// 直接 (de)serialize <see cref="CustomAgentDefinition"/>（单模型，向 Knowledge 看齐）。
+/// 直接 (de)serialize <see cref="CustomAgentDefinition"/>（单模型）。
 /// </summary>
-public static class AgentSourceParser
+public sealed class AgentSourceParser : IAgentSourceParser
 {
     /// <summary>尝试解析 agent 源文本。</summary>
-    public static bool TryParse(string source, out CustomAgentDefinition? definition, out string error)
+    public bool TryParse(string source, out CustomAgentDefinition? definition, out string error)
     {
         definition = null;
         error = string.Empty;
@@ -200,25 +200,8 @@ public static class AgentSourceParser
         return list;
     }
 
-    /// <summary>生成空白 Agent 源模板。</summary>
-    public static string Template(string name = "新 Agent")
-    {
-        return $@"---
-name: {name}
-description: 由文本源创建
-category: 普通对话
-tools: []
-skills: []
-memory: SlidingWindow
-max_history: 20
-model:
-response_format: Default
----
-（在此写系统提示词）";
-    }
-
     /// <summary>反向序列化：把定义组装成源文本。</summary>
-    public static string Serialize(CustomAgentDefinition f)
+    public string Serialize(CustomAgentDefinition f)
     {
         if (f is null) throw new ArgumentNullException(nameof(f));
 

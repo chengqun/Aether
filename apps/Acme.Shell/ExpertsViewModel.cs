@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using Acme.Agents.AI;
 using Acme.AppAuth.Application.Auth;
-using Acme.Notes.AgentSource;
 using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,9 +18,10 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly IUiDispatcher _dispatcher;
     private readonly IAgentMarketplaceService _marketplace;
     private readonly IAppAuthService _auth;
+    private readonly IAgentSourceParser _agentParser;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IConnectorViewModel? connector = null)
+        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IAgentSourceParser agentParser, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -29,6 +29,7 @@ public partial class ExpertsViewModel : ObservableObject
         _marketplace = marketplace ?? throw new ArgumentNullException(nameof(marketplace));
         _auth = auth ?? throw new ArgumentNullException(nameof(auth));
         Workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         Connector = connector;
         _ = RefreshLoginStateAsync();
     }
@@ -321,7 +322,7 @@ public partial class ExpertsViewModel : ObservableObject
             var detail = await _marketplace.GetAgentDetailAsync(dto.Id);
             if (detail is null) return (false, "取详情失败");
 
-            AgentSourceParser.TryParse(detail.Content, out var parsed, out _);
+            _agentParser.TryParse(detail.Content, out var parsed, out _);
             var def = parsed ?? new CustomAgentDefinition();
             def.Id = Guid.NewGuid();
             def.Name = (detail.AgentName ?? "市场 Agent") + " [市场]";
@@ -354,7 +355,7 @@ public partial class ExpertsViewModel : ObservableObject
             var local = await _catalog.GetByMarketplaceIdAsync(dto.Id);
             if (local is null) return (false, "本地无副本");
 
-            AgentSourceParser.TryParse(detail.Content, out var parsed, out _);
+            _agentParser.TryParse(detail.Content, out var parsed, out _);
             local.SystemPrompt = parsed?.SystemPrompt ?? detail.Content;
             local.Tools = parsed?.Tools ?? local.Tools;
             local.MarketplaceSyncedAt = detail.LastModifiedAt;
@@ -392,7 +393,7 @@ public partial class ExpertsViewModel : ObservableObject
         {
             var def = await _catalog.GetAsync(item.Id);
             if (def is null) return (false, "本地无定义");
-            var source = AgentSourceParser.Serialize(def);
+            var source = _agentParser.Serialize(def);
 
             var cloudId = def.MarketplaceId;
             var input = new PublishLocalAgentInputDto

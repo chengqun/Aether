@@ -8,6 +8,7 @@ using Acme.Automation.Domain.Interfaces;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
+using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Hosting;
@@ -90,6 +91,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<IAgentMarketplaceService>(),
             _auth,
             Workflows,
+            serviceProvider.GetRequiredService<IAgentSourceParser>(),
             serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
         Experts.SummonChanged += async () => await Notes.LoadAsync();

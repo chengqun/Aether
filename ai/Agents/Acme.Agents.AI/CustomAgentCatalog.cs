@@ -1,5 +1,4 @@
 using Acme.Notes.Application;
-using Acme.Notes.AgentSource;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Harness.Skills;
@@ -9,7 +8,7 @@ namespace Acme.Agents.AI;
 
 /// <summary>
 /// <see cref="ICustomAgentCatalog"/> 默认实现：用 <see cref="INoteService"/> 持久化、
-/// <see cref="AgentSourceParser"/> 序列化，工具元数据取自 <see cref="ToolRegistry"/>。
+/// <see cref="IAgentSourceParser"/> 序列化，工具元数据取自 <see cref="ToolRegistry"/>。
 /// </summary>
 public sealed class CustomAgentCatalog : ICustomAgentCatalog
 {
@@ -17,13 +16,15 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     private readonly ToolRegistry _toolRegistry;
     private readonly SkillRegistry _skillRegistry;
     private readonly IModelSource _modelSource;
+    private readonly IAgentSourceParser _agentParser;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource)
+    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource, IAgentSourceParser agentParser)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
+        _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
     }
 
     public async Task<IReadOnlyList<CustomAgentDefinition>> ListAsync(CancellationToken ct = default)
@@ -32,7 +33,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         var result = new List<CustomAgentDefinition>();
         foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Agent))
         {
-            if (AgentSourceParser.TryParse(note.Content, out var def, out _) && def is not null)
+            if (_agentParser.TryParse(note.Content, out var def, out _) && def is not null)
             {
                 def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
                 result.Add(def);
@@ -45,7 +46,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     {
         var note = await _notes.GetAsync(id.ToString(), ct);
         if (note is null || note.NodeType != NoteNodeType.Agent) return null;
-        if (!AgentSourceParser.TryParse(note.Content, out var def, out _) || def is null) return null;
+        if (!_agentParser.TryParse(note.Content, out var def, out _) || def is null) return null;
         def.Id = id;
         return def;
     }
@@ -62,7 +63,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("名称不能为空", nameof(definition));
 
-        var source = AgentSourceParser.Serialize(definition);
+        var source = _agentParser.Serialize(definition);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)

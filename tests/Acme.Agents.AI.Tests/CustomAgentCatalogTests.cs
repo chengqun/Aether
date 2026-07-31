@@ -2,6 +2,7 @@ using Acme.Agents.AI;
 using Acme.Notes.Application;
 using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Domain.Agents;
+using Acme.Notes.Infrastructure.Agents;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Harness.Skills;
@@ -28,7 +29,7 @@ public class CustomAgentCatalogTests : IDisposable
     public async Task Save_List_Get_Update_Delete_round_trip()
     {
         var notes = _provider.GetRequiredService<INoteService>();
-        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource());
+        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser());
 
         var def = new CustomAgentDefinition
         {
@@ -89,7 +90,7 @@ public class CustomAgentCatalogTests : IDisposable
         registry.Register("ReadFile", "读取文件", "系统工具", _ => null!);
         registry.Register("QueryAccount", "查询账户", "期货交易", _ => null!);
 
-        var catalog = new CustomAgentCatalog(notes, registry, new SkillRegistry(), new DefaultModelSource());
+        var catalog = new CustomAgentCatalog(notes, registry, new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser());
         var tools = catalog.GetAvailableTools();
 
         Assert.Equal(2, tools.Count);

@@ -2,13 +2,13 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Acme.Notes.Domain.Agents;
 
-namespace Acme.Notes.AgentSource;
+namespace Acme.Notes.Infrastructure.Agents;
 
 /// <summary>
-/// workflow 源文本解析器：JSON 序列化/反序列化，直接操作 <see cref="CustomWorkflowDefinition"/>
-/// （单模型，向 Knowledge 看齐）。workflow 结构嵌套，比 agent 的 YAML 更适合 JSON。无第三方依赖。
+/// <see cref="IWorkflowSourceParser"/> 实现：JSON 序列化/反序列化，直接操作
+/// <see cref="CustomWorkflowDefinition"/>（单模型）。workflow 结构嵌套，比 agent 的 YAML 更适合 JSON。无第三方依赖。
 /// </summary>
-public static class WorkflowSourceParser
+public sealed class WorkflowSourceParser : IWorkflowSourceParser
 {
     private static readonly JsonSerializerOptions _options = new()
     {
@@ -16,10 +16,10 @@ public static class WorkflowSourceParser
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public static string Serialize(CustomWorkflowDefinition definition)
+    public string Serialize(CustomWorkflowDefinition definition)
         => JsonSerializer.Serialize(definition ?? throw new ArgumentNullException(nameof(definition)), _options);
 
-    public static bool TryParse(string source, out CustomWorkflowDefinition? definition, out string error)
+    public bool TryParse(string source, out CustomWorkflowDefinition? definition, out string error)
     {
         definition = null;
         error = string.Empty;
