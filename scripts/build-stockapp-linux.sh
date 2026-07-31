@@ -50,8 +50,21 @@ build_ctp_native() {
   cmake --build "${builddir}" --config Release
 
   local so="${ROOT}/externals/Ctp.Net.Core/build/native/libctp_native.so"
-  [ -f "${so}" ] && { echo "    libctp_native.so 已生成"; return 0; }
-  echo "  ! 编译未产出 libctp_native.so"; return 1
+  [ -f "${so}" ] || { echo "  ! 编译未产出 libctp_native.so"; return 1; }
+  echo "    libctp_native.so 已生成"
+
+  # rpath 归一化：cmake --build（非 --install）只写入绝对 BUILD_RPATH（指向源码树 ctp-sdk/linux-x64，
+  # 不可移植）。发布包需要相对 $ORIGIN，由随包的 thost*.so 解析（CMakeLists POST_BUILD 已把 thost*.so
+  # 拷到 build/native，csproj glob 再随包）。dev 模式 `dotnet run` 仍用默认绝对 rpath，不受影响。
+  # 用 patchelf（mac 用 install_name_tool）；未装 patchelf 则仅警告——.so 在编译机上仍可跑，只是不可移植。
+  if command -v patchelf >/dev/null 2>&1; then
+    patchelf --set-rpath '$ORIGIN' "${so}"
+    echo "    rpath 已归一化为 \$ORIGIN（发布包可移植）"
+  else
+    echo "    ! 未找到 patchelf，rpath 仍是绝对路径（发布包不可移植）"
+    echo "      装 patchelf 后重跑: Debian/Ubuntu: sudo apt install patchelf | Fedora: sudo dnf install patchelf"
+  fi
+  return 0
 }
 
 build_one() {
