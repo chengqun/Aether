@@ -309,4 +309,3 @@ mac 装 Xcode Command Line Tools；Linux 装 `cmake` + `build-essential`/`gcc-c+
 
 **CTP 官方 SDK 在哪**
 `externals/Ctp.Net.Core/ctp-sdk/<平台>`，全平台已入库，clone 即有，无需额外放置。
-（历史上的 `externals/ctp-6.7.2` 已移除，统一用 `ctp-sdk`。）
