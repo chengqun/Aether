@@ -10,7 +10,8 @@ public static class NotesAIBuilderExtensions
 {
     public static readonly string[] ToolNames = {
         "CreateNote", "ReadNote", "AppendNote", "UpdateNote",
-        "SearchNotes", "ListNotes", "DeleteNote"
+        "SearchNotes", "ListNotes", "DeleteNote",
+        "ListKnowledgeObjects", "ReadKnowledgeObject"
     };
 
     /// <summary>Registers the Notes tools only. Business layers (Notes.Infrastructure/Application)
@@ -19,8 +20,10 @@ public static class NotesAIBuilderExtensions
     {
         var s = builder.Services;
         s.AddTransient<NoteTool>();
+        s.AddTransient<KnowledgeTool>();
 
         const string cat = "笔记工具";
+        const string kCat = "知识工具";
         builder.ConfigureToolRegistry(reg =>
         {
             reg.Register("CreateNote", "新建笔记", cat,
@@ -37,6 +40,10 @@ public static class NotesAIBuilderExtensions
                 sp => CreateTool<NoteTool>(sp, "ListNotes"));
             reg.Register("DeleteNote", "删除笔记", cat,
                 sp => CreateTool<NoteTool>(sp, "DeleteNote"));
+            reg.Register("ListKnowledgeObjects", "列出知识对象", kCat,
+                sp => CreateTool<KnowledgeTool>(sp, "ListKnowledgeObjects"));
+            reg.Register("ReadKnowledgeObject", "读取知识对象定义", kCat,
+                sp => CreateTool<KnowledgeTool>(sp, "ReadKnowledgeObject"));
         });
         return builder;
     }
