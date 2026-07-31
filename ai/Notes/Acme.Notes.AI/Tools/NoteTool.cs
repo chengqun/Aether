@@ -58,7 +58,7 @@ public class NoteTool
         [Description("笔记标题")] string title,
         [Description("笔记正文（Markdown）")] string content,
         [Description("父笔记标题（留空挂到根节点）")] string? parentTitle = null,
-        [Description("代码语言标记，如 sql/python（留空为普通 Markdown）")] string? syntax = null,
+        [Description("语法/语言标记，留空=Markdown；也可传 sql/python/json 等建代码笔记")] string? syntax = null,
         [Description("标签，逗号分隔")] string? tags = null,
         CancellationToken cancellationToken = default)
     {
@@ -82,7 +82,7 @@ public class NoteTool
                 Title = title,
                 Content = content ?? string.Empty,
                 ParentId = parentId,
-                Syntax = string.IsNullOrWhiteSpace(syntax) ? null : syntax,
+                Syntax = string.IsNullOrWhiteSpace(syntax) ? "markdown" : syntax,
                 Tags = string.IsNullOrWhiteSpace(tags) ? null : tags,
             };
             var created = await _service.CreateAsync(request, cancellationToken);
