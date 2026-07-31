@@ -135,6 +135,13 @@ public class KnowledgeTool
                 sb.AppendLine($"  - {b.Name} ({b.Type}): {b.Expression}");
         }
 
+        if (d.History.Count > 0)
+        {
+            sb.AppendLine("history:");
+            foreach (var h in d.History)
+                sb.AppendLine($"  - {h}");
+        }
+
         return sb.ToString().TrimEnd();
     }
 
