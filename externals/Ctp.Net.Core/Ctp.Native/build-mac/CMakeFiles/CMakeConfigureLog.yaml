@@ -20,6 +20,8 @@ events:
     names:
       - "uname"
     candidate_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -39,6 +41,8 @@ events:
       - "/Applications/Tuanjie Cowork.app/Contents/MacOS/"
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/uname"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/uname"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/uname"
       - "/Applications/Yunshu.app/Contents/Public/uname"
       - "/usr/local/bin/uname"
@@ -46,6 +50,8 @@ events:
     found: "/usr/bin/uname"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -62,9 +68,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -96,6 +101,8 @@ events:
       - "make"
       - "smake"
     candidate_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -115,6 +122,8 @@ events:
       - "/Applications/Tuanjie Cowork.app/Contents/MacOS/"
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/gmake"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/gmake"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/gmake"
       - "/Applications/Yunshu.app/Contents/Public/gmake"
       - "/usr/local/bin/gmake"
@@ -133,6 +142,8 @@ events:
       - "/Users/360jr/.dotnet/tools/gmake"
       - "/Applications/Tuanjie Cowork.app/Contents/MacOS/gmake"
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/gmake"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/make"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/make"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/make"
       - "/Applications/Yunshu.app/Contents/Public/make"
       - "/usr/local/bin/make"
@@ -140,6 +151,8 @@ events:
     found: "/usr/bin/make"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -156,9 +169,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -188,6 +200,8 @@ events:
       - "icx"
       - "clang++"
     candidate_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -207,6 +221,8 @@ events:
       - "/Applications/Tuanjie Cowork.app/Contents/MacOS/"
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/c++"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/c++"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/c++"
       - "/Applications/Yunshu.app/Contents/Public/c++"
       - "/usr/local/bin/c++"
@@ -214,6 +230,8 @@ events:
     found: "/usr/bin/c++"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -230,9 +248,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -263,6 +280,8 @@ events:
     found: "/usr/local/share/cmake/Modules/CMakeCXXCompilerId.cpp.in"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -279,9 +298,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -369,6 +387,8 @@ events:
       - "ar"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -389,6 +409,8 @@ events:
     found: "/usr/bin/ar"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -405,9 +427,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -432,6 +453,8 @@ events:
       - "ranlib"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -452,6 +475,8 @@ events:
     found: "/usr/bin/ranlib"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -468,9 +493,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -495,6 +519,8 @@ events:
       - "strip"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -515,6 +541,8 @@ events:
     found: "/usr/bin/strip"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -531,9 +559,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -558,6 +585,8 @@ events:
       - "ld"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -578,6 +607,8 @@ events:
     found: "/usr/bin/ld"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -594,9 +625,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -621,6 +651,8 @@ events:
       - "nm"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -641,6 +673,8 @@ events:
     found: "/usr/bin/nm"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -657,9 +691,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -684,6 +717,8 @@ events:
       - "objdump"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -704,6 +739,8 @@ events:
     found: "/usr/bin/objdump"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -720,9 +757,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -747,6 +783,8 @@ events:
       - "objcopy"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -766,6 +804,8 @@ events:
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
       - "/usr/bin/objcopy"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/objcopy"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/objcopy"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/objcopy"
       - "/Applications/Yunshu.app/Contents/Public/objcopy"
       - "/usr/local/bin/objcopy"
@@ -786,6 +826,8 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -802,9 +844,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -829,6 +870,8 @@ events:
       - "readelf"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -848,6 +891,8 @@ events:
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
       - "/usr/bin/readelf"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/readelf"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/readelf"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/readelf"
       - "/Applications/Yunshu.app/Contents/Public/readelf"
       - "/usr/local/bin/readelf"
@@ -868,6 +913,8 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -884,9 +931,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -911,6 +957,8 @@ events:
       - "dlltool"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -930,6 +978,8 @@ events:
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
       - "/usr/bin/dlltool"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/dlltool"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/dlltool"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/dlltool"
       - "/Applications/Yunshu.app/Contents/Public/dlltool"
       - "/usr/local/bin/dlltool"
@@ -950,6 +1000,8 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -966,9 +1018,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -993,6 +1044,8 @@ events:
       - "addr2line"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -1012,6 +1065,8 @@ events:
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
       - "/usr/bin/addr2line"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/addr2line"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/addr2line"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/addr2line"
       - "/Applications/Yunshu.app/Contents/Public/addr2line"
       - "/usr/local/bin/addr2line"
@@ -1032,6 +1087,8 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -1048,9 +1105,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -1075,6 +1131,8 @@ events:
       - "tapi"
     candidate_directories:
       - "/usr/bin/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -1094,6 +1152,8 @@ events:
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
       - "/usr/bin/tapi"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/tapi"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/tapi"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/tapi"
       - "/Applications/Yunshu.app/Contents/Public/tapi"
       - "/usr/local/bin/tapi"
@@ -1114,6 +1174,8 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -1130,9 +1192,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -1156,6 +1217,8 @@ events:
     names:
       - "install_name_tool"
     candidate_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/"
       - "/Applications/Yunshu.app/Contents/Public/"
       - "/usr/local/bin/"
@@ -1175,6 +1238,8 @@ events:
       - "/Applications/Tuanjie Cowork.app/Contents/MacOS/"
       - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin/"
     searched_directories:
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand/install_name_tool"
+      - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli/install_name_tool"
       - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public/install_name_tool"
       - "/Applications/Yunshu.app/Contents/Public/install_name_tool"
       - "/usr/local/bin/install_name_tool"
@@ -1182,6 +1247,8 @@ events:
     found: "/usr/bin/install_name_tool"
     search_context:
       ENV{PATH}:
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Library/Application Support/Yunshu/Yunshu.app/Contents/Public"
         - "/Applications/Yunshu.app/Contents/Public"
         - "/usr/local/bin"
@@ -1198,9 +1265,8 @@ events:
         - "/Applications/VMware Fusion.app/Contents/Public"
         - "/usr/local/share/dotnet"
         - "~/.dotnet/tools"
-        - "/Users/360jr/.dotnet/tools"
-        - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
-        - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/Users/360jr/Library/Application Support/Code/User/globalStorage/github.copilot-chat/copilotCli"
         - "/Users/360jr/.dotnet/tools"
         - "/Applications/Tuanjie Cowork.app/Contents/MacOS"
         - "/Users/360jr/Library/Application Support/Tuanjie Cowork/bin"
@@ -1214,8 +1280,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz"
-      binary: "/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz"
+      source: "/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr"
+      binary: "/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -1229,19 +1295,19 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: false
       stdout: |
-        Change Dir: '/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz'
+        Change Dir: '/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr'
         
-        Run Build Command(s): /usr/local/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_5246b/fast
-        /Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/cmTC_5246b.dir/build.make CMakeFiles/cmTC_5246b.dir/build
-        Building CXX object CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o
-        /usr/bin/c++   -v -Wl,-v -MD -MT CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -c /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp
+        Run Build Command(s): /usr/local/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_4b1ec/fast
+        /Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/cmTC_4b1ec.dir/build.make CMakeFiles/cmTC_4b1ec.dir/build
+        Building CXX object CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o
+        /usr/bin/c++   -v -Wl,-v -MD -MT CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -c /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp
         Apple clang version 21.0.0 (clang-2100.1.1.101)
         Target: x86_64-apple-darwin25.5.0
         Thread model: posix
         InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
         clang++: warning: -Wl,-v: 'linker' input unused [-Wunused-command-line-argument]
         ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../include/c++/v1"
-         "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" -cc1 -triple x86_64-apple-macosx26.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-objc-isa-usage -Werror=deprecated-objc-isa-usage -Werror=implicit-function-declaration -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -mframe-pointer=all -fno-strict-return -ffp-contract=on -fno-rounding-math -funwind-tables=2 -fno-sized-deallocation -target-sdk-version=26.5 -fvisibility-inlines-hidden-static-local-var -fno-modulemap-allow-subdirectory-search -fdefine-target-os-macros -fno-assume-unique-vtables -fno-modulemap-allow-subdirectory-search -target-cpu penryn -tune-cpu generic -debugger-tuning=lldb -fdebug-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz -target-linker-version 1267 -v -fcoverage-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz -resource-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21 -dependency-file CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o.d -skip-unused-modulemap-deps -MT CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -I/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks -Wno-elaborated-enum-base -fdeprecated-macro -ferror-limit 19 -stack-protector 1 -fstack-check -mdarwin-stkchk-strong-link -fblocks -fencode-extended-block-signature -fregister-global-dtors-with-atexit -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -fmax-type-align=16 -fcommon -clang-vendor-feature=+disableNonDependentMemberExprInCurrentInstantiation -fno-odr-hash-protocols -clang-vendor-feature=+enableAggressiveVLAFolding -clang-vendor-feature=+revert09abecef7bbf -clang-vendor-feature=+thisNoAlignAttr -clang-vendor-feature=+thisNoNullAttr -clang-vendor-feature=+disableAtImportPrivateFrameworkInImplementationError -Wno-error=allocator-wrappers -fdwarf2-cfi-asm -o CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp
+         "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" -cc1 -triple x86_64-apple-macosx26.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-objc-isa-usage -Werror=deprecated-objc-isa-usage -Werror=implicit-function-declaration -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -mframe-pointer=all -fno-strict-return -ffp-contract=on -fno-rounding-math -funwind-tables=2 -fno-sized-deallocation -target-sdk-version=26.5 -fvisibility-inlines-hidden-static-local-var -fno-modulemap-allow-subdirectory-search -fdefine-target-os-macros -fno-assume-unique-vtables -fno-modulemap-allow-subdirectory-search -target-cpu penryn -tune-cpu generic -debugger-tuning=lldb -fdebug-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr -target-linker-version 1267 -v -fcoverage-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr -resource-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21 -dependency-file CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o.d -skip-unused-modulemap-deps -MT CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -I/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks -Wno-elaborated-enum-base -fdeprecated-macro -ferror-limit 19 -stack-protector 1 -fstack-check -mdarwin-stkchk-strong-link -fblocks -fencode-extended-block-signature -fregister-global-dtors-with-atexit -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -fmax-type-align=16 -fcommon -clang-vendor-feature=+disableNonDependentMemberExprInCurrentInstantiation -fno-odr-hash-protocols -clang-vendor-feature=+enableAggressiveVLAFolding -clang-vendor-feature=+revert09abecef7bbf -clang-vendor-feature=+thisNoAlignAttr -clang-vendor-feature=+thisNoNullAttr -clang-vendor-feature=+disableAtImportPrivateFrameworkInImplementationError -Wno-error=allocator-wrappers -fdwarf2-cfi-asm -o CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp
         clang -cc1 version 21.0.0 (clang-2100.1.1.101) default target x86_64-apple-darwin25.5.0
         ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include"
         ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks"
@@ -1255,13 +1321,13 @@ events:
          /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks (framework directory)
          /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks (framework directory)
         End of search list.
-        Linking CXX executable cmTC_5246b
-        /usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5246b.dir/link.txt --verbose=1
+        Linking CXX executable cmTC_4b1ec
+        /usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_4b1ec.dir/link.txt --verbose=1
         Apple clang version 21.0.0 (clang-2100.1.1.101)
         Target: x86_64-apple-darwin25.5.0
         Thread model: posix
         InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
-         "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_5246b -L/usr/local/lib -v CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a
+         "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_4b1ec -L/usr/local/lib -v CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a
         @(#)PROGRAM:ld PROJECT:ld-1267
         BUILD 18:28:38 Apr 22 2026
         configured to support archs: armv6 armv7 armv7s arm64 arm64e arm64_32 i386 x86_64 x86_64h armv6m armv7k armv7m armv7em armv8m.main armv8.1m.main
@@ -1274,7 +1340,7 @@ events:
         	/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/swift
         Framework search paths:
         	/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks
-        /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_5246b
+        /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_4b1ec
         
       exitCode: 0
   -
@@ -1320,19 +1386,19 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz']
+        ignore line: [Change Dir: '/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr']
         ignore line: []
-        ignore line: [Run Build Command(s): /usr/local/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_5246b/fast]
-        ignore line: [/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/cmTC_5246b.dir/build.make CMakeFiles/cmTC_5246b.dir/build]
-        ignore line: [Building CXX object CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o]
-        ignore line: [/usr/bin/c++   -v -Wl -v -MD -MT CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -c /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Run Build Command(s): /usr/local/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_4b1ec/fast]
+        ignore line: [/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/cmTC_4b1ec.dir/build.make CMakeFiles/cmTC_4b1ec.dir/build]
+        ignore line: [Building CXX object CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/usr/bin/c++   -v -Wl -v -MD -MT CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -c /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [Apple clang version 21.0.0 (clang-2100.1.1.101)]
         ignore line: [Target: x86_64-apple-darwin25.5.0]
         ignore line: [Thread model: posix]
         ignore line: [InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin]
         ignore line: [clang++: warning: -Wl -v: 'linker' input unused [-Wunused-command-line-argument]]
         ignore line: [ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../include/c++/v1"]
-        ignore line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" -cc1 -triple x86_64-apple-macosx26.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-objc-isa-usage -Werror=deprecated-objc-isa-usage -Werror=implicit-function-declaration -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -mframe-pointer=all -fno-strict-return -ffp-contract=on -fno-rounding-math -funwind-tables=2 -fno-sized-deallocation -target-sdk-version=26.5 -fvisibility-inlines-hidden-static-local-var -fno-modulemap-allow-subdirectory-search -fdefine-target-os-macros -fno-assume-unique-vtables -fno-modulemap-allow-subdirectory-search -target-cpu penryn -tune-cpu generic -debugger-tuning=lldb -fdebug-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz -target-linker-version 1267 -v -fcoverage-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-aETbrz -resource-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21 -dependency-file CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o.d -skip-unused-modulemap-deps -MT CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -I/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks -Wno-elaborated-enum-base -fdeprecated-macro -ferror-limit 19 -stack-protector 1 -fstack-check -mdarwin-stkchk-strong-link -fblocks -fencode-extended-block-signature -fregister-global-dtors-with-atexit -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -fmax-type-align=16 -fcommon -clang-vendor-feature=+disableNonDependentMemberExprInCurrentInstantiation -fno-odr-hash-protocols -clang-vendor-feature=+enableAggressiveVLAFolding -clang-vendor-feature=+revert09abecef7bbf -clang-vendor-feature=+thisNoAlignAttr -clang-vendor-feature=+thisNoNullAttr -clang-vendor-feature=+disableAtImportPrivateFrameworkInImplementationError -Wno-error=allocator-wrappers -fdwarf2-cfi-asm -o CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" -cc1 -triple x86_64-apple-macosx26.0.0 -Wundef-prefix=TARGET_OS_ -Wdeprecated-objc-isa-usage -Werror=deprecated-objc-isa-usage -Werror=implicit-function-declaration -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model pic -pic-level 2 -mframe-pointer=all -fno-strict-return -ffp-contract=on -fno-rounding-math -funwind-tables=2 -fno-sized-deallocation -target-sdk-version=26.5 -fvisibility-inlines-hidden-static-local-var -fno-modulemap-allow-subdirectory-search -fdefine-target-os-macros -fno-assume-unique-vtables -fno-modulemap-allow-subdirectory-search -target-cpu penryn -tune-cpu generic -debugger-tuning=lldb -fdebug-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr -target-linker-version 1267 -v -fcoverage-compilation-dir=/Users/360jr/Desktop/Aether/externals/Ctp.Net.Core/Ctp.Native/build-mac/CMakeFiles/CMakeScratch/TryCompile-pmarxr -resource-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21 -dependency-file CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o.d -skip-unused-modulemap-deps -MT CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -I/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -internal-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include -internal-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include -internal-externc-isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks -internal-iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks -Wno-elaborated-enum-base -fdeprecated-macro -ferror-limit 19 -stack-protector 1 -fstack-check -mdarwin-stkchk-strong-link -fblocks -fencode-extended-block-signature -fregister-global-dtors-with-atexit -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -fmax-type-align=16 -fcommon -clang-vendor-feature=+disableNonDependentMemberExprInCurrentInstantiation -fno-odr-hash-protocols -clang-vendor-feature=+enableAggressiveVLAFolding -clang-vendor-feature=+revert09abecef7bbf -clang-vendor-feature=+thisNoAlignAttr -clang-vendor-feature=+thisNoNullAttr -clang-vendor-feature=+disableAtImportPrivateFrameworkInImplementationError -Wno-error=allocator-wrappers -fdwarf2-cfi-asm -o CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/local/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [clang -cc1 version 21.0.0 (clang-2100.1.1.101) default target x86_64-apple-darwin25.5.0]
         ignore line: [ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/local/include"]
         ignore line: [ignoring nonexistent directory "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/Library/Frameworks"]
@@ -1346,14 +1412,14 @@ events:
         ignore line: [ /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks (framework directory)]
         ignore line: [ /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/SubFrameworks (framework directory)]
         ignore line: [End of search list.]
-        ignore line: [Linking CXX executable cmTC_5246b]
-        ignore line: [/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5246b.dir/link.txt --verbose=1]
+        ignore line: [Linking CXX executable cmTC_4b1ec]
+        ignore line: [/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_4b1ec.dir/link.txt --verbose=1]
         ignore line: [Apple clang version 21.0.0 (clang-2100.1.1.101)]
         ignore line: [Target: x86_64-apple-darwin25.5.0]
         ignore line: [Thread model: posix]
         ignore line: [InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin]
-        link line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_5246b -L/usr/local/lib -v CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a] ==> linker [/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld]
-        link line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_5246b -L/usr/local/lib -v CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a]
+        link line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_4b1ec -L/usr/local/lib -v CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a] ==> linker [/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld]
+        link line: [ "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld" -demangle -lto_library /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libLTO.dylib -dynamic -arch x86_64 -platform_version macos 26.0.0 26.5 -syslibroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mllvm -enable-linkonceodr-outlining -o cmTC_4b1ec -L/usr/local/lib -v CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o -lc++ -lSystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a]
           arg [/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld] ==> ignore
           arg [-demangle] ==> ignore
           arg [-lto_library] ==> ignore, skip following value
@@ -1370,10 +1436,10 @@ events:
           arg [-mllvm] ==> ignore
           arg [-enable-linkonceodr-outlining] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_5246b] ==> ignore
+          arg [cmTC_4b1ec] ==> ignore
           arg [-L/usr/local/lib] ==> dir [/usr/local/lib]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_5246b.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [CMakeFiles/cmTC_4b1ec.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
           arg [-lc++] ==> lib [c++]
           arg [-lSystem] ==> lib [System]
           arg [/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a] ==> lib [/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin/libclang_rt.osx.a]
