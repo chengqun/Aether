@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using Acme.Notes.AgentSource;
+using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

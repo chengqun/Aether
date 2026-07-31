@@ -1,76 +1,19 @@
 using System.Globalization;
+using Acme.Notes.Domain.Agents;
 
 namespace Acme.Notes.AgentSource;
 
-/// <summary>Agent 记忆模式。</summary>
-public enum AgentMemoryMode
-{
-    SlidingWindow = 0,
-    Full = 1,
-    Off = 2,
-}
-
-/// <summary>Agent 响应格式（与平台 Core 的 AgentResponseFormat 平行，business 层不引用 Aether.AI.*）。</summary>
-public enum AgentResponseFormat
-{
-    Default = 0,
-    Text = 1,
-    Json = 2,
-}
-
-/// <summary>Agent 源字段（解析结果）。</summary>
-public sealed class AgentSourceFields
-{
-    public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Category { get; set; } = "普通对话";
-    public List<string> Tools { get; set; } = new();
-    /// <summary>该 agent 启用 skills 时可用的 skill 名列表（空=全部已注册 skill）。</summary>
-    public List<string> Skills { get; set; } = new();
-    public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
-    public int MaxHistory { get; set; } = 20;
-    /// <summary>模型标识（宿主解析，如 LLM 配置 Id；空=默认）。</summary>
-    public string Model { get; set; } = string.Empty;
-
-    /// <summary>来源："Local"|"Marketplace"。空=本地。</summary>
-    public string Source { get; set; } = string.Empty;
-
-    /// <summary>市场云端 Id。</summary>
-    public Guid? MarketplaceId { get; set; }
-
-    /// <summary>上次同步市场的云端 LastModifiedAt。</summary>
-    public DateTimeOffset? MarketplaceSyncedAt { get; set; }
-
-    /// <summary>市场原名。</summary>
-    public string DisplayName { get; set; } = string.Empty;
-
-    public string Prompt { get; set; } = string.Empty;
-
-    // —— 采样 / 输出参数（可空=沿用 provider 默认）。
-    public double? TopP { get; set; }
-    public int? MaxOutputTokens { get; set; }
-    public AgentResponseFormat ResponseFormat { get; set; } = AgentResponseFormat.Default;
-
-    // —— HarnessAgent 扩展能力开关（默认全 false = 全部禁用，保持轻量运行时）。
-    public bool EnableWebSearch { get; set; }
-    public bool EnableTodoProvider { get; set; }
-    public bool EnableAgentModeProvider { get; set; }
-    public bool EnableFileMemory { get; set; }
-    public bool EnableAgentSkills { get; set; }
-    public bool EnableOpenTelemetry { get; set; }
-}
-
 /// <summary>
 /// 轻量 Agent 源文本解析器（无第三方依赖）。
-/// 格式：YAML-like front-matter + Markdown 正文。
-/// 支持简单 key: value 和 tools 列表（flow [a, b] 或 block - a）。
+/// 格式：YAML-like front-matter + Markdown 正文（正文=系统提示词）。
+/// 直接 (de)serialize <see cref="CustomAgentDefinition"/>（单模型，向 Knowledge 看齐）。
 /// </summary>
 public static class AgentSourceParser
 {
     /// <summary>尝试解析 agent 源文本。</summary>
-    public static bool TryParse(string source, out AgentSourceFields? fields, out string error)
+    public static bool TryParse(string source, out CustomAgentDefinition? definition, out string error)
     {
-        fields = null;
+        definition = null;
         error = string.Empty;
 
         if (string.IsNullOrWhiteSpace(source))
@@ -97,9 +40,8 @@ public static class AgentSourceParser
         var yamlLines = rest.Substring(0, idx).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         var prompt = rest.Substring(idx + 4).TrimStart('\r', '\n');
 
-        var result = new AgentSourceFields { Prompt = prompt };
-        var parseResult = ParseFrontMatter(yamlLines, result, out var parseError);
-        if (!parseResult)
+        var result = new CustomAgentDefinition { SystemPrompt = prompt };
+        if (!ParseFrontMatter(yamlLines, result, out var parseError))
         {
             error = parseError;
             return false;
@@ -111,11 +53,14 @@ public static class AgentSourceParser
             return false;
         }
 
-        fields = result;
+        if (string.IsNullOrWhiteSpace(result.Category))
+            result.Category = "普通对话";
+
+        definition = result;
         return true;
     }
 
-    private static bool ParseFrontMatter(string[] lines, AgentSourceFields result, out string error)
+    private static bool ParseFrontMatter(string[] lines, CustomAgentDefinition result, out string error)
     {
         error = string.Empty;
         var i = 0;
@@ -148,7 +93,7 @@ public static class AgentSourceParser
                     result.Description = value;
                     break;
                 case "category":
-                    result.Category = string.IsNullOrWhiteSpace(value) ? "普通对话" : value;
+                    result.Category = value;
                     break;
                 case "memory":
                     if (Enum.TryParse<AgentMemoryMode>(value, true, out var mm))
@@ -159,7 +104,7 @@ public static class AgentSourceParser
                         result.MaxHistory = mh;
                     break;
                 case "model":
-                    result.Model = value;
+                    result.ModelId = value;
                     break;
                 case "source":
                     result.Source = value;
@@ -272,8 +217,8 @@ response_format: Default
 （在此写系统提示词）";
     }
 
-    /// <summary>反向序列化：把字段组装成源文本。</summary>
-    public static string Serialize(AgentSourceFields f)
+    /// <summary>反向序列化：把定义组装成源文本。</summary>
+    public static string Serialize(CustomAgentDefinition f)
     {
         if (f is null) throw new ArgumentNullException(nameof(f));
 
@@ -295,7 +240,7 @@ category: {f.Category}
 {skillsLine}
 memory: {f.Memory}
 max_history: {f.MaxHistory}
-model: {f.Model ?? string.Empty}
+model: {f.ModelId ?? string.Empty}
 top_p: {(f.TopP.HasValue ? f.TopP.Value.ToString("R", CultureInfo.InvariantCulture) : string.Empty)}
 max_output_tokens: {(f.MaxOutputTokens.HasValue ? f.MaxOutputTokens.Value.ToString(CultureInfo.InvariantCulture) : string.Empty)}
 response_format: {f.ResponseFormat}
@@ -310,6 +255,6 @@ marketplace_id: {(f.MarketplaceId?.ToString() ?? string.Empty)}
 marketplace_synced_at: {(f.MarketplaceSyncedAt.HasValue ? f.MarketplaceSyncedAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) : string.Empty)}
 display_name: {f.DisplayName ?? string.Empty}
 ---
-{f.Prompt}";
+{f.SystemPrompt}";
     }
 }

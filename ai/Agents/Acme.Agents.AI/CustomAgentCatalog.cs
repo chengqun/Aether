@@ -1,6 +1,7 @@
 using Acme.Notes.Application;
 using Acme.Notes.AgentSource;
 using Acme.Notes.Domain;
+using Acme.Notes.Domain.Agents;
 using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 
@@ -31,9 +32,10 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         var result = new List<CustomAgentDefinition>();
         foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Agent))
         {
-            if (AgentSourceParser.TryParse(note.Content, out var fields, out _) && fields is not null)
+            if (AgentSourceParser.TryParse(note.Content, out var def, out _) && def is not null)
             {
-                result.Add(ToDefinition(note.Id, fields));
+                def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
+                result.Add(def);
             }
         }
         return result;
@@ -43,8 +45,9 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     {
         var note = await _notes.GetAsync(id.ToString(), ct);
         if (note is null || note.NodeType != NoteNodeType.Agent) return null;
-        if (!AgentSourceParser.TryParse(note.Content, out var fields, out _) || fields is null) return null;
-        return ToDefinition(note.Id, fields);
+        if (!AgentSourceParser.TryParse(note.Content, out var def, out _) || def is null) return null;
+        def.Id = id;
+        return def;
     }
 
     public async Task<CustomAgentDefinition?> GetByMarketplaceIdAsync(Guid marketplaceId, CancellationToken ct = default)
@@ -59,7 +62,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("名称不能为空", nameof(definition));
 
-        var source = AgentSourceParser.Serialize(definition.ToSourceFields());
+        var source = AgentSourceParser.Serialize(definition);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)
@@ -98,32 +101,4 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 
     public IReadOnlyList<CustomModelOption> GetAvailableModels()
         => _modelSource.GetModels();
-
-    private static CustomAgentDefinition ToDefinition(string noteId, AgentSourceFields fields)
-        => new()
-        {
-            Id = Guid.TryParse(noteId, out var gid) ? gid : Guid.NewGuid(),
-            Name = fields.Name,
-            Description = fields.Description,
-            Category = string.IsNullOrWhiteSpace(fields.Category) ? "普通对话" : fields.Category,
-            SystemPrompt = fields.Prompt,
-            ModelId = fields.Model,
-            Tools = fields.Tools,
-            Skills = fields.Skills,
-            Memory = fields.Memory,
-            MaxHistory = fields.MaxHistory,
-            Source = fields.Source,
-            MarketplaceId = fields.MarketplaceId,
-            MarketplaceSyncedAt = fields.MarketplaceSyncedAt,
-            DisplayName = fields.DisplayName,
-            TopP = fields.TopP,
-            MaxOutputTokens = fields.MaxOutputTokens,
-            ResponseFormat = fields.ResponseFormat,
-            EnableWebSearch = fields.EnableWebSearch,
-            EnableTodoProvider = fields.EnableTodoProvider,
-            EnableAgentModeProvider = fields.EnableAgentModeProvider,
-            EnableFileMemory = fields.EnableFileMemory,
-            EnableAgentSkills = fields.EnableAgentSkills,
-            EnableOpenTelemetry = fields.EnableOpenTelemetry,
-        };
 }

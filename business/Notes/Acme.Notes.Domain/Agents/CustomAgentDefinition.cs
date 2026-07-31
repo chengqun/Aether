@@ -1,11 +1,9 @@
-using Acme.Notes.AgentSource;
-
-namespace Acme.Agents.AI;
+namespace Acme.Notes.Domain.Agents;
 
 /// <summary>
 /// UI 无关的自定义 Agent 定义（目录数据模型）。持久化为 Notes 的
-/// <c>NoteNodeType.Agent</c> 笔记（<see cref="AgentSourceParser"/> 格式）。
-/// 与平台运行时 <c>AgentDefinition</c> 的映射由 <see cref="ICustomAgentRunner"/> 完成。
+/// <c>NoteNodeType.Agent</c> 笔记（<c>AgentSourceParser</c> YAML 格式）。
+/// 与平台运行时 <c>AgentDefinition</c> 的映射由 <c>ICustomAgentRunner</c> 完成。
 /// </summary>
 public sealed class CustomAgentDefinition
 {
@@ -62,31 +60,4 @@ public sealed class CustomAgentDefinition
     public bool EnableFileMemory { get; set; }
     public bool EnableAgentSkills { get; set; }
     public bool EnableOpenTelemetry { get; set; }
-
-    /// <summary>投影到持久化用的源字段（供 AgentSourceParser.Serialize 使用）。</summary>
-    public AgentSourceFields ToSourceFields() => new()
-    {
-        Name = Name,
-        Description = Description,
-        Category = string.IsNullOrWhiteSpace(Category) ? "普通对话" : Category,
-        Tools = Tools.ToList(),
-        Skills = Skills.ToList(),
-        Memory = Memory,
-        MaxHistory = MaxHistory,
-        Model = ModelId,
-        Source = Source,
-        MarketplaceId = MarketplaceId,
-        MarketplaceSyncedAt = MarketplaceSyncedAt,
-        DisplayName = DisplayName,
-        Prompt = SystemPrompt,
-        TopP = TopP,
-        MaxOutputTokens = MaxOutputTokens,
-        ResponseFormat = ResponseFormat,
-        EnableWebSearch = EnableWebSearch,
-        EnableTodoProvider = EnableTodoProvider,
-        EnableAgentModeProvider = EnableAgentModeProvider,
-        EnableFileMemory = EnableFileMemory,
-        EnableAgentSkills = EnableAgentSkills,
-        EnableOpenTelemetry = EnableOpenTelemetry,
-    };
 }

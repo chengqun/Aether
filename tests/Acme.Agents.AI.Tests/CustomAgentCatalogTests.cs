@@ -1,7 +1,7 @@
 using Acme.Agents.AI;
 using Acme.Notes.Application;
 using Acme.Notes.Application.DependencyInjection;
-using Acme.Notes.AgentSource;
+using Acme.Notes.Domain.Agents;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Harness.Skills;

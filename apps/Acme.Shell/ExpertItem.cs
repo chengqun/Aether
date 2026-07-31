@@ -1,4 +1,4 @@
-using Acme.Notes.AgentSource;
+using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Shell;

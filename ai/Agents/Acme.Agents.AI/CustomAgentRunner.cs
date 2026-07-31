@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
-using Acme.Notes.AgentSource;
-using NotesAgentMemoryMode = Acme.Notes.AgentSource.AgentMemoryMode;
+using Acme.Notes.Domain.Agents;
+using NotesAgentMemoryMode = Acme.Notes.Domain.Agents.AgentMemoryMode;
+using NotesAgentResponseFormat = Acme.Notes.Domain.Agents.AgentResponseFormat;
 
 namespace Acme.Agents.AI;
 
@@ -83,11 +84,11 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         };
 
     /// <summary>Notes 层 AgentResponseFormat → 平台 Core AgentResponseFormat（同名不同程序集，显式映射）。</summary>
-    private static Aether.AI.Core.Agents.AgentResponseFormat MapResponseFormat(Acme.Notes.AgentSource.AgentResponseFormat format)
+    private static Aether.AI.Core.Agents.AgentResponseFormat MapResponseFormat(NotesAgentResponseFormat format)
         => format switch
         {
-            Acme.Notes.AgentSource.AgentResponseFormat.Text => Aether.AI.Core.Agents.AgentResponseFormat.Text,
-            Acme.Notes.AgentSource.AgentResponseFormat.Json => Aether.AI.Core.Agents.AgentResponseFormat.Json,
+            NotesAgentResponseFormat.Text => Aether.AI.Core.Agents.AgentResponseFormat.Text,
+            NotesAgentResponseFormat.Json => Aether.AI.Core.Agents.AgentResponseFormat.Json,
             _ => Aether.AI.Core.Agents.AgentResponseFormat.Default,
         };
 

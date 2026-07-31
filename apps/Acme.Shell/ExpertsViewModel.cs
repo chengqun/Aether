@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Acme.Agents.AI;
 using Acme.AppAuth.Application.Auth;
 using Acme.Notes.AgentSource;
+using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -320,33 +321,17 @@ public partial class ExpertsViewModel : ObservableObject
             var detail = await _marketplace.GetAgentDetailAsync(dto.Id);
             if (detail is null) return (false, "取详情失败");
 
-            AgentSourceParser.TryParse(detail.Content, out var fields, out _);
-            var def = new CustomAgentDefinition
-            {
-                Id = Guid.NewGuid(),
-                Name = (detail.AgentName ?? "市场 Agent") + " [市场]",
-                Description = detail.Description,
-                Category = string.IsNullOrWhiteSpace(detail.Category) ? "普通对话" : detail.Category,
-                SystemPrompt = fields?.Prompt ?? detail.Content,
-                Tools = fields?.Tools ?? new List<string>(),
-                Skills = fields?.Skills ?? new List<string>(),
-                Memory = fields?.Memory ?? AgentMemoryMode.SlidingWindow,
-                MaxHistory = fields?.MaxHistory ?? 20,
-                ModelId = fields?.Model ?? string.Empty,
-                TopP = fields?.TopP,
-                MaxOutputTokens = fields?.MaxOutputTokens,
-                ResponseFormat = fields?.ResponseFormat ?? AgentResponseFormat.Default,
-                EnableWebSearch = fields?.EnableWebSearch ?? false,
-                EnableTodoProvider = fields?.EnableTodoProvider ?? false,
-                EnableAgentModeProvider = fields?.EnableAgentModeProvider ?? false,
-                EnableFileMemory = fields?.EnableFileMemory ?? false,
-                EnableAgentSkills = fields?.EnableAgentSkills ?? false,
-                EnableOpenTelemetry = fields?.EnableOpenTelemetry ?? false,
-                Source = "Marketplace",
-                MarketplaceId = detail.Id,
-                MarketplaceSyncedAt = detail.LastModifiedAt,
-                DisplayName = detail.AgentName,
-            };
+            AgentSourceParser.TryParse(detail.Content, out var parsed, out _);
+            var def = parsed ?? new CustomAgentDefinition();
+            def.Id = Guid.NewGuid();
+            def.Name = (detail.AgentName ?? "市场 Agent") + " [市场]";
+            def.Description = detail.Description;
+            def.Category = string.IsNullOrWhiteSpace(detail.Category) ? "普通对话" : detail.Category;
+            def.SystemPrompt = parsed?.SystemPrompt ?? detail.Content;
+            def.Source = "Marketplace";
+            def.MarketplaceId = detail.Id;
+            def.MarketplaceSyncedAt = detail.LastModifiedAt;
+            def.DisplayName = detail.AgentName;
             await _catalog.SaveAsync(def);
             await LoadAsync();
             // 自动召唤
@@ -369,9 +354,9 @@ public partial class ExpertsViewModel : ObservableObject
             var local = await _catalog.GetByMarketplaceIdAsync(dto.Id);
             if (local is null) return (false, "本地无副本");
 
-            AgentSourceParser.TryParse(detail.Content, out var fields, out _);
-            local.SystemPrompt = fields?.Prompt ?? detail.Content;
-            local.Tools = fields?.Tools ?? local.Tools;
+            AgentSourceParser.TryParse(detail.Content, out var parsed, out _);
+            local.SystemPrompt = parsed?.SystemPrompt ?? detail.Content;
+            local.Tools = parsed?.Tools ?? local.Tools;
             local.MarketplaceSyncedAt = detail.LastModifiedAt;
             await _catalog.SaveAsync(local);
             _runner.Invalidate(local.Id);
@@ -407,7 +392,7 @@ public partial class ExpertsViewModel : ObservableObject
         {
             var def = await _catalog.GetAsync(item.Id);
             if (def is null) return (false, "本地无定义");
-            var source = AgentSourceParser.Serialize(def.ToSourceFields());
+            var source = AgentSourceParser.Serialize(def);
 
             var cloudId = def.MarketplaceId;
             var input = new PublishLocalAgentInputDto

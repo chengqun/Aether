@@ -1,3 +1,4 @@
+using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 
 namespace Acme.Agents.AI;

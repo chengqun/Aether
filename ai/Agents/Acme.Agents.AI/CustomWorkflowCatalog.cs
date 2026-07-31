@@ -1,6 +1,7 @@
 using Acme.Notes.Application;
 using Acme.Notes.AgentSource;
 using Acme.Notes.Domain;
+using Acme.Notes.Domain.Agents;
 
 namespace Acme.Agents.AI;
 
@@ -23,8 +24,11 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
         var result = new List<CustomWorkflowDefinition>();
         foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Workflow))
         {
-            if (WorkflowSourceParser.TryParse(note.Content, out var fields, out _) && fields is not null)
-                result.Add(ToDefinition(note.Id, fields));
+            if (WorkflowSourceParser.TryParse(note.Content, out var def, out _) && def is not null)
+            {
+                def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
+                result.Add(def);
+            }
         }
         return result;
     }
@@ -33,8 +37,9 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
     {
         var note = await _notes.GetAsync(id.ToString(), ct);
         if (note is null || note.NodeType != NoteNodeType.Workflow) return null;
-        if (!WorkflowSourceParser.TryParse(note.Content, out var fields, out _) || fields is null) return null;
-        return ToDefinition(note.Id, fields);
+        if (!WorkflowSourceParser.TryParse(note.Content, out var def, out _) || def is null) return null;
+        def.Id = id;
+        return def;
     }
 
     public async Task SaveAsync(CustomWorkflowDefinition definition, CancellationToken ct = default)
@@ -43,7 +48,7 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
         if (string.IsNullOrWhiteSpace(definition.Name))
             throw new ArgumentException("名称不能为空", nameof(definition));
 
-        var source = WorkflowSourceParser.Serialize(ToFields(definition));
+        var source = WorkflowSourceParser.Serialize(definition);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)
@@ -69,27 +74,4 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
         => await _notes.DeleteAsync(id.ToString(), ct);
-
-    private static CustomWorkflowDefinition ToDefinition(string noteId, WorkflowSourceFields f) => new()
-    {
-        Id = Guid.TryParse(noteId, out var gid) ? gid : Guid.NewGuid(),
-        Name = f.Name,
-        Description = f.Description,
-        Category = string.IsNullOrWhiteSpace(f.Category) ? "工作流" : f.Category,
-        EntryAgentId = f.EntryAgentId,
-        Participants = f.Participants,
-        Handoffs = f.Handoffs,
-        HandoffInstructions = f.HandoffInstructions,
-    };
-
-    private static WorkflowSourceFields ToFields(CustomWorkflowDefinition d) => new()
-    {
-        Name = d.Name,
-        Description = d.Description,
-        Category = string.IsNullOrWhiteSpace(d.Category) ? "工作流" : d.Category,
-        EntryAgentId = d.EntryAgentId,
-        Participants = d.Participants.ToList(),
-        Handoffs = d.Handoffs.ToList(),
-        HandoffInstructions = d.HandoffInstructions,
-    };
 }

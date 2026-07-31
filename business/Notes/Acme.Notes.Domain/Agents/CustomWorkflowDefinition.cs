@@ -1,10 +1,16 @@
-using Acme.Notes.AgentSource;
+namespace Acme.Notes.Domain.Agents;
 
-namespace Acme.Agents.AI;
+/// <summary>workflow 转交边（持久化用，与 Core 的 WorkflowHandoff 平行，business 不引 Aether.AI.*）。</summary>
+public sealed class WorkflowHandoffField
+{
+    public Guid FromAgentId { get; set; }
+    public Guid ToAgentId { get; set; }
+    public string? Reason { get; set; }
+}
 
 /// <summary>
 /// UI 无关的自定义 Workflow 定义（目录数据模型）。持久化为 Notes 的
-/// <c>NoteNodeType.Workflow</c> 笔记（<see cref="WorkflowSourceParser"/> JSON 格式）。
+/// <c>NoteNodeType.Workflow</c> 笔记（<c>WorkflowSourceParser</c> JSON 格式）。
 /// </summary>
 public sealed class CustomWorkflowDefinition
 {

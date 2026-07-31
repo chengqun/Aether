@@ -1,3 +1,5 @@
+using Acme.Notes.Domain.Agents;
+
 namespace Acme.Agents.AI;
 
 /// <summary>
