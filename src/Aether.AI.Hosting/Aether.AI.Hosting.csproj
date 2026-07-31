@@ -7,7 +7,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.16.0" />
     <!-- Microsoft.Extensions.* (DI, Options, Logging) flow transitively from
          Microsoft.Agents.AI.OpenAI at the framework's pinned versions, so no
          explicit versions are required here. -->

@@ -165,7 +165,8 @@
                     IsVisible="{Binding RightPaneVisible}">
                 <!-- markdown 渲染 -->
                 <ctl:SelectableMarkdownViewer IsVisible="{Binding IsMarkdownNode}"
-                       Markdown="{Binding SelectedNode.Content}" MarkdownStyleName="Standard"/>
+                       Markdown="{Binding SelectedNode.Content}" MarkdownStyleName="Standard"
+                       AssetPathRoot="{Binding ImageRoot}"/>
                 <!-- Agent 表单 -->
                 <Border IsVisible="{Binding IsAgentNode}">
                   <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>

@@ -7,6 +7,7 @@ using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Acme.Shell;
 
@@ -32,6 +33,13 @@ public partial class NotesViewModel : ObservableObject
 
     private IKnowledgeSourceParser KnowledgeParser =>
         _knowledgeParser ??= _serviceProvider.GetRequiredService<IKnowledgeSourceParser>();
+
+    private NotesEditorOptions? _editorOptions;
+    private NotesEditorOptions EditorOptions =>
+        _editorOptions ??= _serviceProvider.GetService<IOptions<NotesEditorOptions>>()?.Value ?? new();
+    /// <summary>粘贴图片的保存根目录（markdown 引用相对文件名，预览通过 AssetPathRoot 解析）。</summary>
+    public string? ImageRoot => EditorOptions.ImageRoot;
+
     private bool _suppressExternalRefresh;
     private bool _dirty;
     private NoteNodeVM? _previousSelected;

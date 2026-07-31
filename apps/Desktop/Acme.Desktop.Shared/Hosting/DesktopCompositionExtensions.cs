@@ -61,6 +61,9 @@ public static class DesktopCompositionExtensions
             o.SkillsDirectory = Path.Combine(tenantDir, "skills");
         });
 
+        // Notes 编辑器：粘贴图片保存根目录（markdown 引用相对文件名，预览通过 AssetPathRoot 解析）
+        services.Configure<NotesEditorOptions>(o => o.ImageRoot = Path.Combine(tenantDir, "notes-media"));
+
         // —— 公共业务上下文（两租户共用）——
         services.AddAppAuthInfrastructure(o =>
         {

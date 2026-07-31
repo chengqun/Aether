@@ -6,9 +6,11 @@ using System.Xml;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit.Folding;
@@ -38,6 +40,8 @@ public partial class NotesView : UserControl
         InitializeComponent();
         CodeEditor.TextChanged += OnCodeEditorTextChanged;
         CodeEditor.PointerWheelChanged += OnCodeEditorWheelChanged;
+        // 隧道 KeyDown：在 AvaloniaEdit 默认粘贴之前接管 markdown 节点的 Ctrl/Cmd+V（图片→本地存档+markdown 引用）
+        CodeEditor.AddHandler(InputElement.KeyDownEvent, OnCodeEditorPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         CodeEditor.Loaded += (_, _) =>
         {
             ConfigureEditorAppearance();
@@ -292,6 +296,77 @@ public partial class NotesView : UserControl
             node.Content = CodeEditor.Text ?? "";
         _vm?.MarkDirty(); // 启动延迟自动保存
         UpdateFoldings();
+    }
+
+    private bool _pasting;
+
+    /// <summary>markdown 节点接管粘贴：剪贴板有图片→存本地+插 markdown 引用；否则文本回退。非 markdown 节点不处理。</summary>
+    private void OnCodeEditorPreviewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_vm?.IsMarkdownNode != true || _pasting) return;
+        if (e.Key != Key.V || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
+        e.Handled = true; // 阻断 AvaloniaEdit 默认粘贴，由我们 async 处理
+        _ = HandlePasteAsync();
+    }
+
+    private async Task HandlePasteAsync()
+    {
+        if (_pasting) return;
+        _pasting = true;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(CodeEditor)?.Clipboard;
+            if (clipboard is null) return;
+            // 图片（截图等）→ 存本地 + 插 markdown 引用
+            var bmp = await clipboard.TryGetBitmapAsync();
+            if (bmp is not null) { SaveBitmapAndInsert(bmp); return; }
+            // 文本回退：保持 markdown 节点正常粘贴文本
+            var text = await clipboard.TryGetTextAsync();
+            if (!string.IsNullOrEmpty(text)) InsertText(text);
+        }
+        finally { _pasting = false; }
+    }
+
+    private void SaveBitmapAndInsert(Bitmap bmp)
+    {
+        var root = _vm?.ImageRoot;
+        if (string.IsNullOrEmpty(root)) { if (_vm is not null) _vm.StatusMessage = "未配置图片目录"; return; }
+        try
+        {
+            Directory.CreateDirectory(root);
+            var noteId = _vm?.SelectedNode?.Id.ToString("N") ?? "note";
+            var fileName = $"{noteId}-{Guid.NewGuid():N}.png";
+            bmp.Save(Path.Combine(root, fileName)); // .png 扩展名 → PNG 编码
+            InsertText($"![图片]({fileName})");
+        }
+        catch (Exception ex)
+        {
+            if (_vm is not null) _vm.StatusMessage = $"图片保存失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>在选区/光标处插入文本（接管粘贴的插入路径，触发 TextChanged→自动落库）。</summary>
+    private void InsertText(string text)
+    {
+        var area = CodeEditor.TextArea;
+        var doc = CodeEditor.Document;
+        if (area is null || doc is null) return;
+        int off;
+        var seg = area.Selection.SurroundingSegment;
+        if (seg is { Length: > 0 })
+        {
+            doc.Replace(seg.Offset, seg.Length, text);
+            off = seg.Offset + text.Length;
+        }
+        else
+        {
+            off = area.Caret.Offset;
+            doc.Insert(off, text);
+            off += text.Length;
+        }
+        area.Caret.Offset = off;
+        area.ClearSelection();
+        area.Caret.BringCaretToView();
     }
 
     /// <summary>按语法类型生成折叠区域：大括号语言折叠 {}、SQL 折叠 ()、YAML 折叠 --- 文档段。</summary>
