@@ -370,10 +370,8 @@ public partial class NotesViewModel : ObservableObject
         try
         {
             var type = row.SelectedType;
-            var title = string.IsNullOrWhiteSpace(row.Name)
-                ? (type == NoteNodeType.Agent ? "新 Agent"
-                   : type == NoteNodeType.Workflow ? "新专家团" : "新笔记")
-                : row.Name;
+            var descriptor = NoteNodeTypeRegistry.Get(type);
+            var title = string.IsNullOrWhiteSpace(row.Name) ? descriptor.DefaultTitle : row.Name;
 
             Guid? parentId = asChild
                 ? SelectedNode?.Id
@@ -388,12 +386,7 @@ public partial class NotesViewModel : ObservableObject
             var dto = await NoteService.CreateAsync(new CreateNoteRequest
             {
                 Title = title,
-                Content = type switch
-                {
-                    NoteNodeType.Agent => "# Agent 模板\n\n系统提示词...",
-                    NoteNodeType.Workflow => "# Workflow 模板\n\n",
-                    _ => "",
-                },
+                Content = descriptor.DefaultContent,
                 ParentId = parentId?.ToString(),
                 Syntax = row.SyntaxValue,
                 Tags = row.Tags,

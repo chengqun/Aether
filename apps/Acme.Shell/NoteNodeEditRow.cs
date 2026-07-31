@@ -6,12 +6,8 @@ namespace Acme.Shell;
 
 public partial class NoteNodeEditRow : ObservableObject
 {
-    public ObservableCollection<NodeTypeOption> TypeOptions { get; } = new()
-    {
-        new("文本", NoteNodeType.Note),
-        new("Agent", NoteNodeType.Agent),
-        new("Workflow", NoteNodeType.Workflow),
-    };
+    public ObservableCollection<NodeTypeOption> TypeOptions { get; } =
+        new(NoteNodeTypeRegistry.All.Select(d => new NodeTypeOption(d.Display, d.Type)));
 
     /// <summary>可选图标列表（每行独立实例，避免选中态跨弹窗串扰）。</summary>
     public ObservableCollection<NoteIconOption> IconOptions { get; } =
@@ -23,14 +19,9 @@ public partial class NoteNodeEditRow : ObservableObject
 
     partial void OnSelectedTypeOptionChanged(NodeTypeOption? value)
     {
-        // 选 Agent/Workflow 时联动语法（→ 图标自动跟随）
+        // 选有强制语法的类型（Agent/Workflow）时联动语法（→ 图标自动跟随）
         if (value is null) return;
-        var syntaxKey = value.Value switch
-        {
-            NoteNodeType.Agent => "yaml",
-            NoteNodeType.Workflow => "json",
-            _ => null, // 文本类型不改语法
-        };
+        var syntaxKey = NoteNodeTypeRegistry.Get(value.Value).Syntax;
         if (syntaxKey is not null)
             SelectedSyntaxOption = SyntaxOptions.FirstOrDefault(o => o.Value == syntaxKey);
     }

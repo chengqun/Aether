@@ -43,21 +43,13 @@ public sealed partial class NoteNodeVM : ObservableObject
 
     public ObservableCollection<NoteNodeVM> Children { get; } = new();
 
-    /// <summary>渲染用矢量 path data：自定义图标优先，否则按 NodeType 默认。</summary>
-    public string Icon => NoteIcons.Find(IconKey)?.PathData ?? NodeType switch
-    {
-        NoteNodeType.Agent    => NavIcons.Bot,
-        NoteNodeType.Workflow => NavIcons.Workflow,
-        _                     => NavIcons.FileText,
-    };
+    /// <summary>渲染用矢量 path data：自定义图标优先，否则按 NodeType 注册表默认。</summary>
+    public string Icon => NoteIcons.Find(IconKey)?.PathData
+        ?? NoteNodeTypeRegistry.Get(NodeType).IconPathData;
 
-    /// <summary>图标配色：自定义图标用其目录色，否则按 NodeType 默认。</summary>
-    public string IconColor => NoteIcons.Find(IconKey)?.Color ?? NodeType switch
-    {
-        NoteNodeType.Agent    => "#5B5FC7",
-        NoteNodeType.Workflow => "#1F8A4C",
-        _                     => "#6B6B70",
-    };
+    /// <summary>图标配色：自定义图标用其目录色，否则按 NodeType 注册表默认。</summary>
+    public string IconColor => NoteIcons.Find(IconKey)?.Color
+        ?? NoteNodeTypeRegistry.Get(NodeType).IconColor;
 
     /// <summary>图标渲染模式：自定义语言 logo=true(填充)，其余 false(描边)。</summary>
     public bool IconIsFill => NoteIcons.Find(IconKey)?.IsFill ?? false;

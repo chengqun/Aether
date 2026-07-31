@@ -154,12 +154,11 @@ public partial class NotesView : UserControl
         CodeEditor.SyntaxHighlighting = HighlightingFor(node);
     }
 
-    /// <summary>节点 → 高亮定义：Agent=YAML、Workflow=Json、文本=按语法映射。统一 VSCode 配色。</summary>
+    /// <summary>节点 → 高亮定义：类型强制语法优先（Agent=YAML/Workflow=Json），否则按节点语法映射。统一 VSCode 配色。</summary>
     private static IHighlightingDefinition? HighlightingFor(NoteNodeVM node)
     {
-        if (node.NodeType == NoteNodeType.Agent) return LoadYaml();
-        if (node.NodeType == NoteNodeType.Workflow) return Load("Json");
-        var syntax = node.Syntax?.ToLowerInvariant();
+        var forced = NoteNodeTypeRegistry.Get(node.NodeType).Syntax;
+        var syntax = (forced ?? node.Syntax)?.ToLowerInvariant();
         if (syntax == "yaml") return LoadYaml();
         return Load(syntax switch
         {
@@ -284,12 +283,9 @@ public partial class NotesView : UserControl
         var text = CodeEditor.Document.Text;
         var foldings = new List<NewFolding>();
 
-        var kind = _vm?.SelectedNode?.NodeType switch
-        {
-            NoteNodeType.Agent => "yaml",
-            NoteNodeType.Workflow => "json",
-            _ => _vm?.SelectedNode?.Syntax?.ToLowerInvariant(),
-        };
+        var nodeType = _vm?.SelectedNode?.NodeType ?? NoteNodeType.Note;
+        var forced = NoteNodeTypeRegistry.Get(nodeType).Syntax;
+        var kind = forced ?? _vm?.SelectedNode?.Syntax?.ToLowerInvariant();
 
         if (kind == "yaml")
             FoldYamlDocuments(text, foldings);
