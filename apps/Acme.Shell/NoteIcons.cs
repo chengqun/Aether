@@ -43,6 +43,7 @@ public static class NoteIcons
         new("书签",   "bookmark",NavIcons.Bookmark,    "#5B5FC7"),
         new("机器人", "bot",     NavIcons.Bot,         "#5B5FC7"),
         new("工作流", "workflow",NavIcons.Workflow,    "#1F8A4C"),
+        new("知识",   "knowledge",NavIcons.Knowledge,  "#0891B2"),
         new("代码",   "code",    NavIcons.Code,        "#1F8A4C"),
         new("任务",   "task",    NavIcons.CheckSquare, "#1F8A4C"),
         new("待办",   "todo",    NavIcons.ListChecks,  "#1F8A4C"),

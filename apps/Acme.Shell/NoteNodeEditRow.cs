@@ -19,11 +19,15 @@ public partial class NoteNodeEditRow : ObservableObject
 
     partial void OnSelectedTypeOptionChanged(NodeTypeOption? value)
     {
-        // 选有强制语法的类型（Agent/Workflow）时联动语法（→ 图标自动跟随）
+        // 选有强制语法的类型（Agent/Workflow/Knowledge）时联动语法，
+        // 并把图标设为该类型的目录图标（Bot/Workflow/学士帽），而非语法对应的语言 logo。
         if (value is null) return;
-        var syntaxKey = NoteNodeTypeRegistry.Get(value.Value).Syntax;
-        if (syntaxKey is not null)
-            SelectedSyntaxOption = SyntaxOptions.FirstOrDefault(o => o.Value == syntaxKey);
+        var descriptor = NoteNodeTypeRegistry.Get(value.Value);
+        if (descriptor.Syntax is not null)
+        {
+            SelectedSyntaxOption = SyntaxOptions.FirstOrDefault(o => o.Value == descriptor.Syntax);
+            SelectIconByKey(descriptor.IconKey);
+        }
     }
 
     [ObservableProperty] private bool _isTypeEnabled = true;

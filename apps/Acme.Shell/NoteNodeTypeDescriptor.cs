@@ -12,6 +12,7 @@ public sealed record NoteNodeTypeDescriptor(
     string Display,
     string IconPathData,
     string IconColor,
+    string? IconKey,
     string? Syntax,
     string DefaultTitle,
     string DefaultContent)
