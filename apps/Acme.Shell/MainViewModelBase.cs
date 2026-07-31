@@ -1146,6 +1146,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             // 按时序持久化本轮 transcript（思考段 / 工具步 / 回答）
             foreach (var item in runItems)
             {
+                if (item.IsPlanCard || item.IsApprovalCard) continue; // 计划卡/审批卡为运行期实时态，不持久化
                 if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue; // 跳过空思考段
                 conv.Append(ToTranscriptMessage(item));
             }

@@ -205,13 +205,21 @@ public class ToolApprovalSpikeTests
         // 2) 带 approve 决定二次调用：应执行工具并给最终文本
         var decision = new ToolApprovalDecision(approvalReq.RequestId, Approved: true, Reason: null, AlwaysApprove: false);
         bool sawResult = false;
+        bool sawCall = false;
         string finalText = "";
         await runtime.RunStreamingAsync(session.SessionId, "查天气", new StreamHandlers(
             OnToken: (t, _) => { finalText += t; return Task.CompletedTask; },
-            OnToolEvent: (ev, _) => { if (ev.Kind == ToolStreamEventKind.Result) sawResult = true; return Task.CompletedTask; }),
+            OnToolEvent: (ev, _) =>
+            {
+                if (ev.Kind == ToolStreamEventKind.Result) sawResult = true;
+                else if (ev.Kind == ToolStreamEventKind.Call) sawCall = true;
+                return Task.CompletedTask;
+            }),
             decision);
 
         Assert.True(sawResult, "批准后应出现工具结果事件");
+        // 恢复轮 FICC 重新发出已批准工具的 Call（UI 据此建工具卡）+ Result（回填）。
+        Assert.True(sawCall, "恢复轮应重新发出工具 Call 事件（UI 才能建工具步卡片）");
         Assert.Contains("晴", finalText);
     }
 
