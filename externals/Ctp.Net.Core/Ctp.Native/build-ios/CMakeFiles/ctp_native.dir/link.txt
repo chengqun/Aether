@@ -1,2 +1,0 @@
-/usr/bin/ar qc /Users/360jr/Desktop/AlphaAgent/src/Ctp.Net.Core/build/native/ios/libctp_native.a CMakeFiles/ctp_native.dir/TraderWrapper.cpp.o CMakeFiles/ctp_native.dir/MdWrapper.cpp.o CMakeFiles/ctp_native.dir/CollectionInfoIOS.mm.o
-/usr/bin/ranlib /Users/360jr/Desktop/AlphaAgent/src/Ctp.Net.Core/build/native/ios/libctp_native.a

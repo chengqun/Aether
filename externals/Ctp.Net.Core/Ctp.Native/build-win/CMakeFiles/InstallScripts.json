@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"E:/agent/Aether/externals/Ctp.Net.Core/Ctp.Native/build-win/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

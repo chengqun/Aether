@@ -1,3 +1,0 @@
-/Users/360jr/Desktop/AlphaAgent/src/Ctp.Net.Core/Ctp.Native/build-ios/CMakeFiles/ctp_native.dir
-/Users/360jr/Desktop/AlphaAgent/src/Ctp.Net.Core/Ctp.Native/build-ios/CMakeFiles/edit_cache.dir
-/Users/360jr/Desktop/AlphaAgent/src/Ctp.Net.Core/Ctp.Native/build-ios/CMakeFiles/rebuild_cache.dir

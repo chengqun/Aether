@@ -1,3 +1,0 @@
-E:/agent/Aether/externals/Ctp.Net.Core/Ctp.Native/build-win/CMakeFiles/ctp_native.dir
-E:/agent/Aether/externals/Ctp.Net.Core/Ctp.Native/build-win/CMakeFiles/edit_cache.dir
-E:/agent/Aether/externals/Ctp.Net.Core/Ctp.Native/build-win/CMakeFiles/rebuild_cache.dir
