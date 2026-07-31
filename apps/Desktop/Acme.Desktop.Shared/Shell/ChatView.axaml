@@ -105,6 +105,58 @@
             </Border>
           </StackPanel>
         </Border>
+
+        <!-- 计划卡：待办列表，完成项划横线（类似 Trae/Claude Code 的 plan） -->
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
+                IsVisible="{Binding IsPlanCard}">
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="📋" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock Text="计划" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Todos}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                    <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsComplete}" />
+                    <TextBlock Text="✓" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                               IsVisible="{Binding IsComplete}" />
+                    <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsComplete}" />
+                    <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                               TextDecorations="Strikethrough"
+                               IsVisible="{Binding IsComplete}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- 审批卡：待审 ⏳ / 已批准 ✅ / 已拒绝 ❌ -->
+        <Border Classes="tool-card" HorizontalAlignment="Left"
+                Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
+                IsVisible="{Binding IsApprovalCard}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="⏳" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding IsApprovalPending}" />
+            <TextBlock Text="✅" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding IsApprovalApproved}" />
+            <TextBlock Text="❌" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding IsApprovalRejected}" />
+            <TextBlock Text="{Binding ToolName}" FontSize="13" FontWeight="SemiBold"
+                       Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="等待审批…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" IsVisible="{Binding IsApprovalPending}" />
+            <TextBlock Text="已批准" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" IsVisible="{Binding IsApprovalApproved}" />
+            <TextBlock Text="已拒绝" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" IsVisible="{Binding IsApprovalRejected}" />
+            <TextBlock Text="{Binding ArgSummary}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320" />
+          </StackPanel>
+        </Border>
       </Grid>
     </DataTemplate>
   </UserControl.Resources>

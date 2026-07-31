@@ -35,15 +35,15 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
 
     public async Task RunStreamingAsync(
         Guid conversationId, Guid workflowId, string message,
-        Func<string, CancellationToken, Task>? onToken = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException("消息不能为空", nameof(message));
 
         var (agent, session) = await GetOrCreateAsync(conversationId, workflowId, cancellationToken).ConfigureAwait(false);
-        await _runtime.RunStreamingAsync(agent, session, message, onToken, onToolEvent, cancellationToken).ConfigureAwait(false);
+        await _runtime.RunStreamingAsync(agent, session, message, handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid workflowId)

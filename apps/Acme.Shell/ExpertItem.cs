@@ -41,6 +41,7 @@ public sealed partial class ExpertItem : ObservableObject
     // —— HarnessAgent 扩展能力开关。
     [ObservableProperty] private bool _enableWebSearch;
     [ObservableProperty] private bool _enableTodoProvider;
+    [ObservableProperty] private bool _requireToolApproval;
     [ObservableProperty] private bool _enableAgentModeProvider;
     [ObservableProperty] private bool _enableFileMemory;
     [ObservableProperty] private bool _enableAgentSkills;

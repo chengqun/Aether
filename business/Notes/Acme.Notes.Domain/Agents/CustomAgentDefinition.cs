@@ -56,6 +56,8 @@ public sealed class CustomAgentDefinition
     // —— HarnessAgent 扩展能力开关（默认全 false = 全部禁用）。
     public bool EnableWebSearch { get; set; }
     public bool EnableTodoProvider { get; set; }
+    /// <summary>开启后该 agent 的工具调用前需经 UI 审批（包成 ApprovalRequiredAIFunction）。</summary>
+    public bool RequireToolApproval { get; set; }
     public bool EnableAgentModeProvider { get; set; }
     public bool EnableFileMemory { get; set; }
     public bool EnableAgentSkills { get; set; }

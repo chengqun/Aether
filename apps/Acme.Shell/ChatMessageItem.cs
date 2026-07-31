@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Shell;
@@ -8,6 +9,14 @@ public enum ChatMessageSide
 {
     Left,
     Right
+}
+
+/// <summary>计划卡里的单条待办（完成项 UI 划横线）。</summary>
+public partial class TodoItemVM : ObservableObject
+{
+    [ObservableProperty] private string _title = string.Empty;
+    [ObservableProperty] private string? _description;
+    [ObservableProperty] private bool _isComplete;
 }
 
 public partial class ChatMessageItem : ObservableObject
@@ -55,12 +64,29 @@ public partial class ChatMessageItem : ObservableObject
     [ObservableProperty]
     private bool _isReasoning;
 
+    /// <summary>本段持有 TextReasoningContent（模型推理），与 TextContent 的思考/答案段区分；推理段永不翻为答案。</summary>
+    [ObservableProperty]
+    private bool _isReasoningContent;
+
+    /// <summary>审批状态：0=待审 1=已批准 2=已拒绝。仅 ItemType="approval" 用。</summary>
+    [ObservableProperty]
+    private int _approvalState;
+
+    /// <summary>计划卡的待办列表（仅 ItemType="plan" 用）。完成项 UI 划横线。</summary>
+    public ObservableCollection<TodoItemVM> Todos { get; } = new();
+
     public bool IsUser => Side == ChatMessageSide.Right;
 
     public bool IsText => ItemType == "text";
 
     /// <summary>工具步骤（调用+结果合并为一条）。</summary>
     public bool IsToolStep => ItemType == "tool";
+
+    /// <summary>计划卡（todos_* 调用渲染）。</summary>
+    public bool IsPlanCard => ItemType == "plan";
+
+    /// <summary>审批卡（工具调用需审批）。</summary>
+    public bool IsApprovalCard => ItemType == "approval";
 
     public bool IsUserText => IsUser && IsText;
 
@@ -72,6 +98,10 @@ public partial class ChatMessageItem : ObservableObject
     /// <summary>最终回答：markdown 气泡（非思考段）。</summary>
     public bool IsAgentMarkdownText => !IsUser && IsText && !IsStreaming && !IsReasoning;
 
+    public bool IsApprovalPending => IsApprovalCard && ApprovalState == 0;
+    public bool IsApprovalApproved => IsApprovalCard && ApprovalState == 1;
+    public bool IsApprovalRejected => IsApprovalCard && ApprovalState == 2;
+
     /// <summary>输入一行摘要（折叠态展示），如 skill=hello-py  arguments=["张三"]。</summary>
     public string ArgSummary => Summarize(Input);
 
@@ -79,9 +109,17 @@ public partial class ChatMessageItem : ObservableObject
     public string ResultSummary => Summarize(Output);
 
     partial void OnInputChanged(Dictionary<string, object>? value) => OnPropertyChanged(nameof(ArgSummary));
+
     partial void OnOutputChanged(Dictionary<string, object>? value)
     {
         OnPropertyChanged(nameof(ResultSummary));
+    }
+
+    partial void OnApprovalStateChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsApprovalPending));
+        OnPropertyChanged(nameof(IsApprovalApproved));
+        OnPropertyChanged(nameof(IsApprovalRejected));
     }
 
     private static string Summarize(Dictionary<string, object>? dict)

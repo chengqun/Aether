@@ -15,8 +15,8 @@ public interface ICustomWorkflowRunner
         Guid conversationId,
         Guid workflowId,
         string message,
-        Func<string, CancellationToken, Task>? onToken = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>使该 workflow 的缓存会话失效（编辑/删除后调用）。</summary>

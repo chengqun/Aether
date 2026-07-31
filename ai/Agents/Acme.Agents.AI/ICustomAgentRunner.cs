@@ -10,16 +10,17 @@ namespace Acme.Agents.AI;
 public interface ICustomAgentRunner
 {
     /// <summary>
-    /// 运行一轮对话，流式回调每个 token 与工具调用/结果事件。每个 conversationId 拥有独立的运行时会话
-    /// （多会话间记忆隔离）；同一会话的后续轮次复用其会话（多轮记忆）。首次运行会按需注册 agent。
-    /// <paramref name="onToolEvent"/> 用于在 UI 展示思考过程中的工具调用输入/输出。
+    /// 运行一轮对话，经 <paramref name="handlers"/> 流式回调答案 token / 推理 / 工具事件 / 审批请求 /
+    /// 待办 / 错误 / 用量。每个 conversationId 拥有独立的运行时会话（多会话间记忆隔离）；同一会话的
+    /// 后续轮次复用其会话（多轮记忆）。首次运行会按需注册 agent。
+    /// <paramref name="approvalResponse"/> 非空表示审批恢复轮（带决定二次调用以恢复被审批挂起的工具执行）。
     /// </summary>
     Task RunStreamingAsync(
         Guid conversationId,
         Guid agentId,
         string message,
-        Func<string, CancellationToken, Task>? onToken = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

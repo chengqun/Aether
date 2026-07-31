@@ -29,8 +29,8 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         Guid conversationId,
         Guid agentId,
         string message,
-        Func<string, CancellationToken, Task>? onToken = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -50,7 +50,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             conversationId,
             _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
-        await _runtime.RunStreamingAsync(sessionId, message, onToken, onToolEvent, cancellationToken).ConfigureAwait(false);
+        await _runtime.RunStreamingAsync(sessionId, message, handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid agentId)
@@ -77,6 +77,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             ResponseFormat = MapResponseFormat(def.ResponseFormat),
             EnableWebSearch = def.EnableWebSearch,
             EnableTodoProvider = def.EnableTodoProvider,
+            RequireToolApproval = def.RequireToolApproval,
             EnableAgentModeProvider = def.EnableAgentModeProvider,
             EnableFileMemory = def.EnableFileMemory,
             EnableAgentSkills = def.EnableAgentSkills,

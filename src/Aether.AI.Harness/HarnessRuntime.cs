@@ -125,16 +125,16 @@ public sealed class HarnessRuntime
     }
 
     /// <summary>
-    /// Runs one turn as a streaming response. The assistant's text is streamed
-    /// to <paramref name="callback"/> as it arrives and the full text is
-    /// returned once complete. Tool invocations/results encountered in the
-    /// stream are surfaced via <paramref name="onToolEvent"/> (if provided).
+    /// Runs one turn as a streaming response. 答案文本经 <see cref="StreamHandlers.OnToken"/> 流式上抛，
+    /// 工具调用/结果、模型思考(<c>TextReasoningContent</c>)、审批请求、待办列表、非致命错误、用量等
+    /// 经 <paramref name="handlers"/> 的各回调上抛。<paramref name="approvalResponse"/> 非空表示
+    /// 审批恢复轮（带 <c>ToolApprovalResponseContent</c> 二次调用以恢复被审批挂起的工具执行）。
     /// </summary>
     public async Task<string> RunStreamingAsync(
         Guid sessionId,
         string userMessage,
-        Func<string, CancellationToken, Task>? callback = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default)
     {
         var session = _sessions.Get(sessionId)
@@ -144,11 +144,15 @@ public sealed class HarnessRuntime
         var agent = GetOrCreateAgent(definition);
         var frameworkSession = await GetOrCreateFrameworkSessionAsync(sessionId, agent, cancellationToken);
 
-        session.Messages.Add(Message.User(userMessage));
+        // 审批恢复轮不再追加用户消息（首轮已记录）；仅首轮记录用户消息。
+        if (approvalResponse is null)
+        {
+            session.Messages.Add(Message.User(userMessage));
+        }
         session.State = SessionState.Active;
         session.Touch();
 
-        var fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, callback, onToolEvent, cancellationToken,
+        var fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
             name => session.ToolCalls.Add(name));
 
         session.Messages.Add(Message.Assistant(fullText));
@@ -159,70 +163,192 @@ public sealed class HarnessRuntime
 
     /// <summary>
     /// 用一个**已构建好的** <see cref="AIAgent"/>（如 workflow 包成的 agent）流式运行一轮，
-    /// 复用与 <see cref="RunStreamingAsync(Guid,string,Func{string,CancellationToken,Task}?,Func{ToolStreamEvent,CancellationToken,Task}?,CancellationToken)"/>
-    /// 相同的流式循环 + ToolStreamEvent 提取。无 AetherSession 簿记（调用方自管会话）。
+    /// 复用与 <see cref="RunStreamingAsync(Guid,string,StreamHandlers?,ToolApprovalDecision?,CancellationToken)"/>
+    /// 相同的流式循环 + 事件提取。无 AetherSession 簿记（调用方自管会话）。
     /// 供 ICustomWorkflowRunner 等把组合 agent 当单 agent 跑的场景使用。
     /// </summary>
     public async Task<string> RunStreamingAsync(
         AIAgent agent,
         FrameworkAgentSession frameworkSession,
         string userMessage,
-        Func<string, CancellationToken, Task>? callback = null,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent = null,
+        StreamHandlers? handlers = null,
+        ToolApprovalDecision? approvalResponse = null,
         CancellationToken cancellationToken = default)
-        => await RunStreamingCoreAsync(agent, frameworkSession, userMessage, callback, onToolEvent, cancellationToken, onToolCallName: null);
+        => await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken, onToolCallName: null);
 
     /// <summary>
-    /// 流式运行核心：遍历 <see cref="AIAgent.RunStreamingAsync"/>，上抛文本 token 与工具调用/结果事件。
+    /// 流式运行核心：遍历 <see cref="AIAgent.RunStreamingAsync"/>，按 <see cref="StreamHandlers"/>
+    /// 上抛答案 token / 推理 / 工具事件 / 审批请求 / 待办 / 错误 / 用量。
     /// <paramref name="onToolCallName"/> 供带 AetherSession 的调用方记录工具名（可选）。
+    /// <para>审批恢复轮（<paramref name="approvalResponse"/> 非空）：从暂存取回原
+    /// <c>ToolApprovalRequestContent</c>，构造 <c>ToolApprovalResponseContent</c>（或 always-approve 包裹），
+    /// 经 <c>IEnumerable&lt;ChatMessage&gt;</c> 重载二次调用以恢复工具执行。</para>
     /// </summary>
     private static async Task<string> RunStreamingCoreAsync(
         AIAgent agent, FrameworkAgentSession frameworkSession, string userMessage,
-        Func<string, CancellationToken, Task>? callback,
-        Func<ToolStreamEvent, CancellationToken, Task>? onToolEvent,
+        StreamHandlers? handlers, ToolApprovalDecision? approvalResponse,
         CancellationToken cancellationToken,
         Action<string>? onToolCallName)
     {
         var sb = new System.Text.StringBuilder();
         // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
-        await foreach (var update in agent.RunStreamingAsync(userMessage, frameworkSession, cancellationToken: cancellationToken).ConfigureAwait(false))
+
+        // 选择调用重载：审批恢复轮带响应消息；首轮带用户文本。
+        IAsyncEnumerable<AgentResponseUpdate> stream;
+        if (approvalResponse is not null)
         {
+            var req = GetPendingApproval(frameworkSession, approvalResponse.RequestId);
+            if (req is null)
+            {
+                // 无对应待审请求（可能已被 always-approve 规则自动消化）→ 本轮无内容。
+                return string.Empty;
+            }
+            var reason = approvalResponse.Reason ?? string.Empty;
+            AIContent responseContent = approvalResponse.AlwaysApprove
+                ? (AIContent)req.CreateAlwaysApproveToolResponse(reason)
+                : (AIContent)req.CreateResponse(approvalResponse.Approved, reason);
+            RemovePendingApproval(frameworkSession, approvalResponse.RequestId);
+            var msg = new ChatMessage { Role = ChatRole.User };
+            msg.Contents.Add(responseContent);
+            stream = agent.RunStreamingAsync(new[] { msg }, frameworkSession, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            stream = agent.RunStreamingAsync(userMessage, frameworkSession, cancellationToken: cancellationToken);
+        }
+
+        await foreach (var update in stream.ConfigureAwait(false))
+        {
+            // 答案文本（update.Text 仅聚合 TextContent，不含推理）。
             if (!string.IsNullOrEmpty(update.Text))
             {
                 sb.Append(update.Text);
-                if (callback is not null)
-                    await callback(update.Text, cancellationToken).ConfigureAwait(false);
+                if (handlers?.OnToken is not null)
+                    await handlers.OnToken(update.Text, cancellationToken).ConfigureAwait(false);
             }
 
-            // 把流中的工具调用/结果内容片段上抛给 UI（思考过程展示）。
-            if (onToolEvent is not null && update.Contents is not null)
+            if (update.Contents is null) continue;
+
+            foreach (var content in update.Contents)
             {
-                foreach (var content in update.Contents)
+                switch (content)
                 {
-                    if (content is FunctionCallContent call && !string.IsNullOrEmpty(call.Name))
-                    {
+                    case FunctionCallContent call when !string.IsNullOrEmpty(call.Name):
                         if (!string.IsNullOrEmpty(call.CallId))
                             toolNamesByCallId[call.CallId] = call.Name!;
                         onToolCallName?.Invoke(call.Name!);
-                        await onToolEvent(
-                            new ToolStreamEvent(ToolStreamEventKind.Call, call.Name!, call.CallId ?? string.Empty,
-                                ToInputDict(call.Arguments), null),
-                            cancellationToken).ConfigureAwait(false);
-                    }
-                    else if (content is FunctionResultContent result)
+                        if (handlers?.OnToolEvent is not null)
+                        {
+                            await handlers.OnToolEvent(
+                                new ToolStreamEvent(ToolStreamEventKind.Call, call.Name!, call.CallId ?? string.Empty,
+                                    ToInputDict(call.Arguments), null),
+                                cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
+
+                    case FunctionResultContent result:
                     {
                         var name = (result.CallId is not null && toolNamesByCallId.TryGetValue(result.CallId, out var n))
                             ? n : "工具";
-                        await onToolEvent(
-                            new ToolStreamEvent(ToolStreamEventKind.Result, name, result.CallId ?? string.Empty,
-                                null, ToOutputDict(result.Result)),
-                            cancellationToken).ConfigureAwait(false);
+                        if (handlers?.OnToolEvent is not null)
+                        {
+                            await handlers.OnToolEvent(
+                                new ToolStreamEvent(ToolStreamEventKind.Result, name, result.CallId ?? string.Empty,
+                                    null, ToOutputDict(result.Result)),
+                                cancellationToken).ConfigureAwait(false);
+                        }
+                        // todos_* 调用后读 live 待办列表上抛（计划 UI）。
+                        if (name.StartsWith("todos_", StringComparison.Ordinal) && handlers?.OnTodoList is not null)
+                        {
+                            await RaiseTodoListAsync(agent, frameworkSession, handlers.OnTodoList, cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
                     }
+
+                    case TextReasoningContent tr when !string.IsNullOrEmpty(tr.Text):
+                        if (handlers?.OnReasoning is not null)
+                            await handlers.OnReasoning(tr.Text!, cancellationToken).ConfigureAwait(false);
+                        break;
+
+                    case ToolApprovalRequestContent approvalReq:
+                        // 暂存原 req，供恢复轮 CreateResponse 使用。
+                        SetPendingApproval(frameworkSession, approvalReq);
+                        if (handlers?.OnApprovalRequest is not null)
+                        {
+                            var fc = approvalReq.ToolCall as FunctionCallContent;
+                            await handlers.OnApprovalRequest(
+                                new ToolApprovalRequest(
+                                    approvalReq.RequestId ?? string.Empty,
+                                    fc?.Name ?? "工具",
+                                    approvalReq.ToolCall?.CallId ?? string.Empty,
+                                    fc is not null ? ToInputDict(fc.Arguments) : null),
+                                cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
+
+                    case ErrorContent err when !string.IsNullOrEmpty(err.Message):
+                        if (handlers?.OnError is not null)
+                            await handlers.OnError(err.Message!, cancellationToken).ConfigureAwait(false);
+                        break;
+
+                    case UsageContent usage:
+                        handlers?.OnUsage?.Invoke(SummarizeUsage(usage));
+                        break;
                 }
             }
         }
         return sb.ToString();
+    }
+
+    /// <summary>读 TodoProvider 当前 live 待办列表并映射为 <see cref="TodoItemInfo"/> 上抛。</summary>
+    private static async Task RaiseTodoListAsync(
+        AIAgent agent, FrameworkAgentSession session,
+        Func<IReadOnlyList<TodoItemInfo>, CancellationToken, Task> onTodoList, CancellationToken ct)
+    {
+        var provider = agent.GetService<TodoProvider>();
+        if (provider is null) return;
+        var items = await provider.GetAllTodosAsync(session, ct).ConfigureAwait(false);
+        var list = items
+            .Select(i => new TodoItemInfo(i.Id.ToString(), i.Title ?? string.Empty, i.Description, i.IsComplete))
+            .ToList();
+        await onTodoList(list, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>把 <see cref="UsageContent"/> 摘要为一行可展示文本。</summary>
+    private static string SummarizeUsage(UsageContent usage)
+    {
+        var d = usage.Details;
+        var input = d.InputTokenCount;
+        var output = d.OutputTokenCount;
+        return $"输入 {(input is null ? 0 : input)} / 输出 {(output is null ? 0 : output)} token";
+    }
+
+    // —— 审批请求暂存：frameworkSession -> (requestId -> 原 ToolApprovalRequestContent)。
+    //   流冒出请求时存入；恢复轮按 RequestId 取回以构造正确关联的响应。会话结束随键自动回收。
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FrameworkAgentSession, Dictionary<string, ToolApprovalRequestContent>> _pendingApprovals = new();
+
+    private static void SetPendingApproval(FrameworkAgentSession session, ToolApprovalRequestContent req)
+    {
+        var dict = _pendingApprovals.GetOrCreateValue(session);
+        lock (dict) dict[req.RequestId ?? string.Empty] = req;
+    }
+
+    private static ToolApprovalRequestContent? GetPendingApproval(FrameworkAgentSession session, string requestId)
+    {
+        if (_pendingApprovals.TryGetValue(session, out var dict))
+        {
+            lock (dict) return dict.TryGetValue(requestId, out var req) ? req : null;
+        }
+        return null;
+    }
+
+    private static void RemovePendingApproval(FrameworkAgentSession session, string requestId)
+    {
+        if (_pendingApprovals.TryGetValue(session, out var dict))
+        {
+            lock (dict) dict.Remove(requestId);
+        }
     }
 
     /// <summary>把 FunctionCallContent.Arguments（可能为字典/JsonElement/字符串）归一为可展示字典。</summary>

@@ -1,6 +1,7 @@
 using System.Text;
 using Acme.Agents.AI;
 using Acme.Automation.Domain.Interfaces;
+using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Messages;
 using Aether.AI.Memory;
@@ -68,11 +69,11 @@ public sealed class ConversationBackedAgentExecutor : IAgentExecutor
                 conversationId,
                 agentGuid,
                 userMessage,
-                async (token, _) =>
+                new StreamHandlers(OnToken: async (token, _) =>
                 {
                     buffer.Append(token);
                     await Task.CompletedTask;
-                },
+                }),
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)

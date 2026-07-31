@@ -40,6 +40,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private readonly IPreferencesStore _preferences;
     private readonly IConversationTitleService _titleService;
     private readonly IDeviceAutoConnectService _autoConnect;
+    private readonly IApprovalDialogService? _approvalDialog;
 
     // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
     private Guid _currentConversationId = Guid.Empty;
@@ -62,6 +63,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
+        _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
@@ -147,50 +149,130 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     }
 
     /// <summary>
-    /// 分段交错运行：agent 思考→调工具→再思考→… 的过程中，把每段思考与工具步骤按真实时序
-    /// 交错插入聊天流（思考段1 → 工具步(调用+结果合并) → 思考段2/回答）。
-    /// 返回本轮产生的 transcript 项（思考段/工具步/回答，按时序），供 PersistTurnAsync 持久化。
+    /// 分段交错运行：agent 推理→调工具→再推理→… 的过程中，把每段推理(<c>TextReasoningContent</c>)、
+    /// 答案(<c>TextContent</c>)、工具步、审批卡、计划卡按真实时序交错插入聊天流。
+    /// 推理进 💭 思考卡、答案进 markdown 气泡（建段时即区分 IsReasoning，不再靠末段翻转）。
+    /// 审批请求冒出时本轮流结束 → 弹审批框 → 带 <see cref="ToolApprovalDecision"/> 再次 runAsync 恢复执行（协作循环）。
+    /// 返回本轮产生的 transcript 项（按时序），供 PersistTurnAsync 持久化。
     /// </summary>
     private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(Guid conversationId, string userMessage,
         string senderName,
-        Func<Func<string, CancellationToken, Task>, Func<ToolStreamEvent, CancellationToken, Task>, CancellationToken, Task> runAsync,
+        Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
     {
         var runItems = new List<ChatMessageItem>();
-        var cursor = new StreamCursor(NewThinkingSegment(senderName));
+        var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
         await _dispatcher.InvokeAsync(() => { Messages.Add(cursor.Current); runItems.Add(cursor.Current); });
 
+        ToolApprovalDecision? approvalResponse = null;
         try
         {
-            await runAsync(
-                (token, _) =>
-                {
-                    fullText.Append(token);
-                    _dispatcher.Post(() =>
+            while (true)
+            {
+                ToolApprovalRequest? pendingApproval = null;
+                ChatMessageItem? approvalCard = null;
+
+                var handlers = new StreamHandlers(
+                    OnToken: (token, _) =>
                     {
-                        if (cursor.Current.IsText) cursor.Current.Content += token;
-                    });
-                    return Task.CompletedTask;
-                },
-                (ev, _) =>
+                        fullText.Append(token);
+                        _dispatcher.Post(() =>
+                        {
+                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
+                            cursor.Current.Content += token;
+                        });
+                        return Task.CompletedTask;
+                    },
+                    OnReasoning: (text, _) =>
+                    {
+                        _dispatcher.Post(() =>
+                        {
+                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: true);
+                            cursor.Current.Content += text;
+                        });
+                        return Task.CompletedTask;
+                    },
+                    OnToolEvent: (ev, _) =>
+                    {
+                        // todos_* 调用由 OnTodoList 渲染为计划卡，不重复出工具卡。
+                        if (ev.Name.StartsWith("todos_", StringComparison.Ordinal))
+                            return Task.CompletedTask;
+                        _dispatcher.Post(() => HandleToolEventSegmented(cursor, runItems, ev, senderName));
+                        return Task.CompletedTask;
+                    },
+                    OnApprovalRequest: (req, _) =>
+                    {
+                        pendingApproval = req;
+                        var card = new ChatMessageItem
+                        {
+                            Side = ChatMessageSide.Left,
+                            ItemType = "approval",
+                            Sender = senderName,
+                            ToolName = req.ToolName,
+                            CallId = req.CallId,
+                            Input = req.Input,
+                            ApprovalState = 0,
+                        };
+                        approvalCard = card;
+                        _dispatcher.Post(() =>
+                        {
+                            var idx = Messages.IndexOf(cursor.Current);
+                            if (idx < 0) idx = Messages.Count - 1;
+                            Messages.Insert(idx + 1, card);
+                            runItems.Add(card);
+                            cursor.Current = card;
+                        });
+                        return Task.CompletedTask;
+                    },
+                    OnTodoList: (list, _) =>
+                    {
+                        _dispatcher.Post(() => HandleTodoList(cursor, runItems, list, senderName));
+                        return Task.CompletedTask;
+                    },
+                    OnError: (text, _) =>
+                    {
+                        _dispatcher.Post(() =>
+                        {
+                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
+                            cursor.Current.Content += $"\n\n[错误：{text}]";
+                        });
+                        return Task.CompletedTask;
+                    },
+                    OnUsage: info => _dispatcher.Post(() => TokenInfo = info));
+
+                await runAsync(handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
+
+                if (pendingApproval is null) break;
+
+                // 弹审批框等用户决定
+                var decision = _approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false);
+                if (decision is null)
                 {
-                    _dispatcher.Post(() => HandleToolEventSegmented(cursor, runItems, ev, senderName));
-                    return Task.CompletedTask;
-                },
-                cancellationToken).ConfigureAwait(false);
+                    _dispatcher.Post(() => { if (approvalCard is not null) approvalCard.ApprovalState = 2; });
+                    break; // 取消 → 终止本轮
+                }
+                approvalResponse = decision;
+                var approved = decision.Approved;
+                var cardRef = approvalCard;
+                _dispatcher.Post(() => { if (cardRef is not null) cardRef.ApprovalState = approved ? 1 : 2; });
+                // 开新答案段承接恢复流
+                _dispatcher.Post(() =>
+                {
+                    var seg = NewTextSegment(senderName, isReasoningContent: false);
+                    var idx = Messages.IndexOf(cursor.Current);
+                    if (idx < 0) idx = Messages.Count - 1;
+                    Messages.Insert(idx + 1, seg);
+                    runItems.Add(seg);
+                    cursor.Current = seg;
+                });
+            }
         }
         catch (Exception ex)
         {
             fullText.Append($"\n\n[运行失败：{ex.Message}]");
             await _dispatcher.InvokeAsync(() =>
             {
-                if (!cursor.Current.IsText)
-                {
-                    var seg = NewThinkingSegment(senderName);
-                    Messages.Add(seg);
-                    runItems.Add(seg);
-                    cursor.Current = seg;
-                }
+                EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
                 cursor.Current.Content += $"\n\n[运行失败：{ex.Message}]";
             });
         }
@@ -201,17 +283,39 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         return runItems;
     }
 
-    private static ChatMessageItem NewThinkingSegment(string senderName) => new()
+    private static ChatMessageItem NewTextSegment(string senderName, bool isReasoningContent) => new()
     {
         Side = ChatMessageSide.Left,
         ItemType = "text",
         Sender = senderName,
         Content = string.Empty,
         IsStreaming = true,
-        IsReasoning = true,
+        IsReasoning = true, // 思考段；末段在 FinalizeSegment 翻为答案（推理段除外）
+        IsReasoningContent = isReasoningContent,
     };
 
-    /// <summary>工具事件处理：Call 冻结当前思考段并插一条工具步（带 CallId）；Result 按 CallId 回填到同一条，再开新思考段。</summary>
+    /// <summary>确保当前段是目标类型（TextContent 思考/答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。串行在 UI 线程调用。</summary>
+    private void EnsureTextSegment(StreamCursor cursor, List<ChatMessageItem> runItems, string senderName, bool isReasoningContent)
+    {
+        if (cursor.Current.IsText && cursor.Current.IsReasoningContent == isReasoningContent) return;
+        var idx = Messages.IndexOf(cursor.Current);
+        if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
+        {
+            Messages.RemoveAt(idx); // 空段不留
+            runItems.Remove(cursor.Current);
+        }
+        else
+        {
+            if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空异类段
+            idx++;
+        }
+        var seg = NewTextSegment(senderName, isReasoningContent);
+        Messages.Insert(idx, seg);
+        runItems.Add(seg);
+        cursor.Current = seg;
+    }
+
+    /// <summary>工具事件处理：Call 冻结当前段并插一条工具步（带 CallId）；Result 按 CallId 回填到同一条，再开新答案段。</summary>
     private void HandleToolEventSegmented(StreamCursor cursor, List<ChatMessageItem> runItems, ToolStreamEvent ev, string senderName)
     {
         if (ev.Kind == ToolStreamEventKind.Call)
@@ -219,12 +323,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var idx = Messages.IndexOf(cursor.Current);
             if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
             {
-                Messages.RemoveAt(idx); // 空思考段不留
+                Messages.RemoveAt(idx); // 空段不留
                 runItems.Remove(cursor.Current);
             }
             else
             {
-                if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空思考段
+                if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空段
                 idx++;
             }
             var tool = new ChatMessageItem
@@ -241,7 +345,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             cursor.Current = tool;
             if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
         }
-        else // Result：回填到对应工具步（合并为一条），再开新思考段
+        else // Result：回填到对应工具步（合并为一条），再开新答案段
         {
             ChatMessageItem? tool = null;
             if (!string.IsNullOrEmpty(ev.CallId) && cursor.PendingTools.TryGetValue(ev.CallId, out var t))
@@ -260,14 +364,37 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
             var idx = Messages.IndexOf(tool);
             if (idx < 0) idx = Messages.Count - 1;
-            var next = NewThinkingSegment(senderName);
+            var next = NewTextSegment(senderName, isReasoningContent: false);
             Messages.Insert(idx + 1, next);
             runItems.Add(next);
             cursor.Current = next;
         }
     }
 
-    /// <summary>运行结束：末段空则移除（从 Messages 与 runItems）；否则从"思考段"转为最终回答（markdown 气泡）。</summary>
+    /// <summary>更新/插入计划卡：当前 run 已有计划卡则刷新其待办列表，否则在当前位置后新建一张。</summary>
+    private void HandleTodoList(StreamCursor cursor, List<ChatMessageItem> runItems, IReadOnlyList<TodoItemInfo> list, string senderName)
+    {
+        ChatMessageItem? plan = null;
+        for (int i = runItems.Count - 1; i >= 0; i--)
+            if (runItems[i].IsPlanCard) { plan = runItems[i]; break; }
+
+        if (plan is null)
+        {
+            plan = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName };
+            var idx = Messages.IndexOf(cursor.Current);
+            if (idx < 0) idx = Messages.Count - 1;
+            Messages.Insert(idx + 1, plan);
+            runItems.Add(plan);
+            cursor.Current = plan;
+        }
+
+        plan.Todos.Clear();
+        foreach (var t in list)
+            plan.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+    }
+
+    /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
+    /// TextReasoningContent 段保持 💭 思考卡。中间各段保持思考态。</summary>
     private void FinalizeSegment(ChatMessageItem last, List<ChatMessageItem> runItems)
     {
         if (!last.IsText) return;
@@ -278,8 +405,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         else
         {
-            last.IsReasoning = false; // 末段 = 最终回答
             last.IsStreaming = false;
+            if (!last.IsReasoningContent) last.IsReasoning = false; // 末段 TextContent = 最终回答
         }
     }
 
@@ -307,7 +434,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         {
             var fullText = new System.Text.StringBuilder();
             await RunSegmentedStreamAsync(msg.ConversationId, msg.Content, expert.Name,
-                (onToken, onToolEvent, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, onToken, onToolEvent, ct),
+                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, handlers, approvalResponse, ct),
                 fullText);
 
             // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
@@ -482,6 +609,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private string _statusText = string.Empty;
 
+    /// <summary>本轮 token 用量摘要（UsageContent），绑定到顶栏 TokenInfo 槽。</summary>
     [ObservableProperty]
     private string _tokenInfo = string.Empty;
 
@@ -886,7 +1014,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
             var fullText = new System.Text.StringBuilder();
             var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, wf.Name,
-                (onToken, onToolEvent, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, onToken, onToolEvent, ct),
+                (handlers, approvalResponse, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, handlers, approvalResponse, ct),
                 fullText);
             await PersistTurnAsync(content, runItems, fullText.ToString());
             if (justCreated)
@@ -930,7 +1058,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
             var fullText = new System.Text.StringBuilder();
             var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, expert.Name,
-                (onToken, onToolEvent, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, onToken, onToolEvent, ct),
+                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, handlers, approvalResponse, ct),
                 fullText);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项

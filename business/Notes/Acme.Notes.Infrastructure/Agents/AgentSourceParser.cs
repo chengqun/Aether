@@ -137,6 +137,9 @@ public sealed class AgentSourceParser : IAgentSourceParser
                 case "enabletodoprovider":
                     if (bool.TryParse(value, out var td)) result.EnableTodoProvider = td;
                     break;
+                case "requiretoolapproval":
+                    if (bool.TryParse(value, out var ra)) result.RequireToolApproval = ra;
+                    break;
                 case "enableagentmodeprovider":
                     if (bool.TryParse(value, out var am)) result.EnableAgentModeProvider = am;
                     break;
@@ -229,6 +232,7 @@ max_output_tokens: {(f.MaxOutputTokens.HasValue ? f.MaxOutputTokens.Value.ToStri
 response_format: {f.ResponseFormat}
 enable_web_search: {f.EnableWebSearch.ToString().ToLowerInvariant()}
 enable_todo_provider: {f.EnableTodoProvider.ToString().ToLowerInvariant()}
+require_tool_approval: {f.RequireToolApproval.ToString().ToLowerInvariant()}
 enable_agent_mode_provider: {f.EnableAgentModeProvider.ToString().ToLowerInvariant()}
 enable_file_memory: {f.EnableFileMemory.ToString().ToLowerInvariant()}
 enable_agent_skills: {f.EnableAgentSkills.ToString().ToLowerInvariant()}

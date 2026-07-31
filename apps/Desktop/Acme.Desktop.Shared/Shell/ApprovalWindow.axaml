@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.ApprovalWindow"
+        Title="工具审批"
+        Width="460" Height="380"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="24,20,24,18">
+
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,14">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="🔐" FontSize="18" VerticalAlignment="Center" />
+        <TextBlock Text="该工具调用需要你的批准" FontSize="16" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+      </StackPanel>
+      <TextBlock Text="审查后选择批准或拒绝。拒绝会让模型改走其他方式。" FontSize="12"
+                 Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,0,10">
+      <TextBlock Text="工具" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="10,6">
+        <TextBlock Text="{Binding ToolName}" FontSize="14" FontWeight="SemiBold"
+                   FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+      </Border>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Spacing="4" Margin="0,0,0,10">
+      <TextBlock Text="输入" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+      <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="10,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+          <TextBlock Text="{Binding InputText}" FontSize="12" TextWrapping="NoWrap"
+                     FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+        </ScrollViewer>
+      </Border>
+    </StackPanel>
+
+    <CheckBox Grid.Row="3" Content="本会话不再询问此工具" IsChecked="{Binding AlwaysApprove}"
+              Margin="0,0,0,12" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+
+    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8" />
+      <Button Content="拒绝" Command="{Binding RejectCommand}" Padding="20,8" />
+      <Button Content="批准" Classes="primary" Command="{Binding ApproveCommand}" Padding="20,8" />
+    </StackPanel>
+
+  </Grid>
+</Window>

@@ -127,6 +127,9 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
         services.AddTransient<SettingsViewModel>();
 
+        // 工具审批对话框服务（HarnessAgent 协作式审批，按专家 RequireToolApproval 开启）
+        services.AddSingleton<IApprovalDialogService, ApprovalDialogService>();
+
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
     }

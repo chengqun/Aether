@@ -118,6 +118,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             ResponseFormat = existing.ResponseFormat;
             EnableWebSearch = existing.EnableWebSearch;
             EnableTodoProvider = existing.EnableTodoProvider;
+            RequireToolApproval = existing.RequireToolApproval;
             EnableAgentModeProvider = existing.EnableAgentModeProvider;
             EnableFileMemory = existing.EnableFileMemory;
             EnableAgentSkills = existing.EnableAgentSkills;
@@ -163,6 +164,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     // —— HarnessAgent 扩展能力开关。
     [ObservableProperty] private bool _enableWebSearch;
     [ObservableProperty] private bool _enableTodoProvider;
+    [ObservableProperty] private bool _requireToolApproval;
     [ObservableProperty] private bool _enableAgentModeProvider;
     [ObservableProperty] private bool _enableFileMemory;
     [ObservableProperty] private bool _enableAgentSkills;
@@ -294,6 +296,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             ResponseFormat = ResponseFormat,
             EnableWebSearch = EnableWebSearch,
             EnableTodoProvider = EnableTodoProvider,
+            RequireToolApproval = RequireToolApproval,
             EnableAgentModeProvider = EnableAgentModeProvider,
             EnableFileMemory = EnableFileMemory,
             EnableAgentSkills = EnableAgentSkills,

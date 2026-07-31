@@ -66,6 +66,13 @@ public sealed class AgentDefinition
     /// <summary>启用 todo provider（默认禁用）。</summary>
     public bool EnableTodoProvider { get; init; }
 
+    /// <summary>
+    /// 要求工具调用前审批（默认禁用）。开启后 Harness 会把该 agent 的所有工具包成
+    /// <c>ApprovalRequiredAIFunction</c>，模型调用工具时流里冒出审批请求，UI 弹审批框；
+    /// 用户批准后工具执行、拒绝则模型改走他法。复用 MAF <c>ToolApprovalAgent</c> 协作式审批。
+    /// </summary>
+    public bool RequireToolApproval { get; init; }
+
     /// <summary>启用 agent mode provider（默认禁用）。</summary>
     public bool EnableAgentModeProvider { get; init; }
 

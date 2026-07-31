@@ -76,6 +76,17 @@ public sealed class AgentFactory
         // AIFunction derives from AITool, but List<AIFunction> is not assignable
         // to IList<AITool>; widen to IList<AITool> for the framework APIs.
         IList<AITool> tools = _toolRegistry.ResolveAll(definition.Tools).Cast<AITool>().ToList();
+
+        // 按专家开关把工具包成 ApprovalRequiredAIFunction：模型调用工具时流冒出
+        // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。HarnessAgent 默认
+        // 已挂 ToolApprovalAgent 中间件做绑定/排队/免问，故这里只需包装工具。
+        if (definition.RequireToolApproval)
+        {
+            tools = tools
+                .Select(t => t is AIFunction fn ? new ApprovalRequiredAIFunction(fn) : t)
+                .ToList();
+        }
+
         var historyProvider = BuildHistoryProvider(definition);
 
         return UseChatClientAgent
