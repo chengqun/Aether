@@ -54,6 +54,10 @@ public static class NavIcons
     public const string Bot =
         "M12 8V4H8 M4 12a8 8 0 0 1 16 0v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z M2 14h2 M20 14h2 M15 13v2 M9 13v2";
 
+    /// <summary>知识对象（graduation-cap，领域知识）</summary>
+    public const string Knowledge =
+        "M21.42 10.922a1 1 0 0 0-.019-.839l-.919-2.066a1 1 0 0 0-.604-.548l-7.83-2.82a1 1 0 0 0-.68 0l-7.83 2.82a1 1 0 0 0-.604.548l-.919 2.066a1 1 0 0 0-.019.839 1 1 0 0 0 .019.078L2 12.5v4.5a1 1 0 0 0 1 1h0a1 1 0 0 0 1-1v-3.5l1.5.5v4.5a1 1 0 0 0 .5.866l5 3a1 1 0 0 0 1 0l5-3a1 1 0 0 0 .5-.866v-4.5L21 13.5V17a1 1 0 0 0 1 1h0a1 1 0 0 0 1-1v-4.5l-1.419-.578a1 1 0 0 0 .019-.078Z";
+
     /// <summary>便签</summary>
     public const string StickyNote =
         "M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z M15 3v6h6";

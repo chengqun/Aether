@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
+using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,10 @@ public partial class NotesViewModel : ObservableObject
         }
     }
     private INoteService? _noteService;
+    private IKnowledgeSourceParser? _knowledgeParser;
+
+    private IKnowledgeSourceParser KnowledgeParser =>
+        _knowledgeParser ??= _serviceProvider.GetRequiredService<IKnowledgeSourceParser>();
     private bool _suppressExternalRefresh;
     private bool _dirty;
     private NoteNodeVM? _previousSelected;
@@ -108,7 +113,8 @@ public partial class NotesViewModel : ObservableObject
 
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
     public bool IsWorkflowNode => SelectedNode?.NodeType == NoteNodeType.Workflow;
-    public bool IsFormNode => IsAgentNode || IsWorkflowNode;
+    public bool IsKnowledgeNode => SelectedNode?.NodeType == NoteNodeType.Knowledge;
+    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode;
     public bool HasRightPane => IsMarkdownNode || IsFormNode;
 
     public bool IsCodeEdit => SelectedNode is not null;
@@ -128,6 +134,7 @@ public partial class NotesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsMarkdownNode));
         OnPropertyChanged(nameof(IsWorkflowNode));
+        OnPropertyChanged(nameof(IsKnowledgeNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
@@ -140,6 +147,37 @@ public partial class NotesViewModel : ObservableObject
 
     /// <summary>语法变化后由视图调用，刷新 markdown 预览栏可见性。</summary>
     public void RaiseIsMarkdownNode() => RaiseLayout();
+
+    /// <summary>把知识对象节点的 YAML 内容解析为定义模型（供视图层构建编辑 VM）。</summary>
+    public (KnowledgeObjectDefinition? Def, string? Error) TryParseKnowledge(string content)
+    {
+        if (!KnowledgeParser.TryParse(content, out var def, out var error))
+            return (null, error);
+        return (def, null);
+    }
+
+    /// <summary>保存知识对象：序列化 def → 更新笔记 Content → 刷新树。</summary>
+    public async Task<(bool Success, string? Error)> SaveKnowledgeAsync(KnowledgeObjectDefinition def)
+    {
+        if (SelectedNode is null) return (false, "未选中节点");
+        try
+        {
+            var source = KnowledgeParser.Serialize(def);
+            await NoteService.UpdateAsync(new UpdateNoteRequest
+            {
+                Id = SelectedNode.Id.ToString(),
+                Title = def.Name,
+                Content = source,
+                NodeType = NoteNodeType.Knowledge,
+            });
+            await RefreshAsync();
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
 
     partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
 
@@ -158,6 +196,7 @@ public partial class NotesViewModel : ObservableObject
         ActiveEditVm = null; // 切换节点时清空表单 VM（视图层会按需重建）
 
         OnPropertyChanged(nameof(IsAgentNode));
+        OnPropertyChanged(nameof(IsKnowledgeNode));
         OnPropertyChanged(nameof(IsCodeEdit));
         RaiseLayout();
     }

@@ -120,6 +120,24 @@ public partial class NotesView : UserControl
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
         }
+        else if (node.NodeType == NoteNodeType.Knowledge)
+        {
+            var (def, parseErr) = _vm.TryParseKnowledge(node.Content ?? "");
+            if (def is null)
+            {
+                _vm.StatusMessage = "解析失败：" + parseErr;
+                return;
+            }
+            var editVm = new KnowledgeEditViewModel(node.Id, def);
+            editVm.SaveRequested += async saved =>
+            {
+                var (ok, err) = await _vm.SaveKnowledgeAsync(saved);
+                if (ok) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
+                else editVm.Error = err;
+            };
+            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
+            _vm.ActiveEditVm = editVm;
+        }
     }
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
