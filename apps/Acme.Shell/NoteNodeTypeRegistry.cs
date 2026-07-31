@@ -26,29 +26,13 @@ public static class NoteNodeTypeRegistry
     }
 
     /// <summary>
-    /// KnowledgeObject 默认模板（YAML，camelCase，与 KnowledgeSourceParser 往返一致）。
-    /// 结构对应设计文档 §7：Name/DisplayName/Kind/Meaning/Properties/Relations/DataBinding/Behavior/History。
+    /// KnowledgeObject 默认模板（front-matter + markdown 正文，与 KnowledgeSourceParser 往返一致）。
+    /// kind + typed links + 正文。name = 笔记标题。
     /// </summary>
-    private const string KnowledgeTemplate = @"# KnowledgeObject 定义
-kind: Entity  # Entity | Metric | Rule | Process | Action | Concept
-name: 新知识对象
-displayName:
-meaning:
-properties: []
-  # - name:
-  #   type: string | number | enum | reference
-  #   description:
-relations: []
-  # - target:        # 关联的另一个知识对象名
-  #   type: owns     # owns | generates | affects | references
-  #   description:
-dataBinding:
-  # source:
-  # table:
-behavior: []
-  # - name:
-  #   type: query    # query | action
-  #   expression:
-history: []
+    private const string KnowledgeTemplate = @"---
+kind: Entity
+links: []
+---
+（在此写知识说明 / 粘贴结构化数据 / 任何 markdown）
 ";
 }

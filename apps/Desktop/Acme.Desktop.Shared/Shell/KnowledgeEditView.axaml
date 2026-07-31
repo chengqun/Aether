@@ -10,9 +10,6 @@
     <Style Selector="TextBox">
       <Setter Property="HorizontalAlignment" Value="Stretch"/>
     </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    </Style>
   </UserControl.Styles>
 
   <DockPanel>
@@ -30,35 +27,26 @@
         <Expander Header="基本信息" IsExpanded="True">
           <StackPanel Spacing="6">
             <StackPanel Spacing="2">
-              <TextBlock Text="名称（name）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding Name}" PlaceholderText="如 customer"/>
+              <TextBlock Text="名称（笔记标题）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Name}" PlaceholderText="如 ExternalIntelTable / 崇齐网络案"/>
             </StackPanel>
             <StackPanel Spacing="2">
-              <TextBlock Text="显示名（displayName）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding DisplayName}" PlaceholderText="如 客户"/>
-            </StackPanel>
-            <StackPanel Spacing="2">
-              <TextBlock Text="类型（kind）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <ComboBox ItemsSource="{Binding KindOptions}" SelectedItem="{Binding SelectedKind}"/>
-            </StackPanel>
-            <StackPanel Spacing="2">
-              <TextBlock Text="含义（meaning）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding Meaning}" AcceptsReturn="True" TextWrapping="Wrap" Height="80"/>
+              <TextBlock Text="kind（分类）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Kind}" PlaceholderText="如 Entity / Rule / 情报案件"/>
             </StackPanel>
           </StackPanel>
         </Expander>
 
-        <Expander Header="属性（properties）" IsExpanded="False">
+        <Expander Header="links（typed 引用）" IsExpanded="True">
           <StackPanel Spacing="6">
-            <Button Content="+ 新增属性" Command="{Binding AddPropertyCommand}" HorizontalAlignment="Left" Padding="12,4"/>
-            <ItemsControl ItemsSource="{Binding Properties}">
+            <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" HorizontalAlignment="Left" Padding="12,4"/>
+            <ItemsControl ItemsSource="{Binding Links}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Grid ColumnDefinitions="*,*,2*,Auto" Margin="0,0,0,4">
-                    <TextBox Grid.Column="0" Text="{Binding Name}" PlaceholderText="name" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="1" Text="{Binding Type}" PlaceholderText="type" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="2" Text="{Binding Description}" PlaceholderText="description" Margin="0,0,4,0"/>
-                    <Button Grid.Column="3" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemovePropertyCommand}"
+                  <Grid ColumnDefinitions="*,2*,Auto" Margin="0,0,0,4">
+                    <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（property/behavior/verifies/depends-on…）" Margin="0,0,4,0"/>
+                    <TextBox Grid.Column="1" Text="{Binding Target}" PlaceholderText="target（子笔记标题）" Margin="0,0,4,0"/>
+                    <Button Grid.Column="2" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemoveLinkCommand}"
                             CommandParameter="{Binding}" Padding="8,4"/>
                   </Grid>
                 </DataTemplate>
@@ -67,72 +55,9 @@
           </StackPanel>
         </Expander>
 
-        <Expander Header="关系（relations）" IsExpanded="False">
-          <StackPanel Spacing="6">
-            <Button Content="+ 新增关系" Command="{Binding AddRelationCommand}" HorizontalAlignment="Left" Padding="12,4"/>
-            <ItemsControl ItemsSource="{Binding Relations}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Grid ColumnDefinitions="*,*,2*,Auto" Margin="0,0,0,4">
-                    <TextBox Grid.Column="0" Text="{Binding Target}" PlaceholderText="target" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="1" Text="{Binding Type}" PlaceholderText="type（owns/affects…）" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="2" Text="{Binding Description}" PlaceholderText="description" Margin="0,0,4,0"/>
-                    <Button Grid.Column="3" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemoveRelationCommand}"
-                            CommandParameter="{Binding}" Padding="8,4"/>
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </Expander>
-
-        <Expander Header="数据绑定（dataBinding）" IsExpanded="False">
-          <StackPanel Spacing="6">
-            <StackPanel Spacing="2">
-              <TextBlock Text="数据源（source）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding DataBindingSource}" PlaceholderText="如 crm"/>
-            </StackPanel>
-            <StackPanel Spacing="2">
-              <TextBlock Text="表/集合（table）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding DataBindingTable}" PlaceholderText="如 customer_table"/>
-            </StackPanel>
-          </StackPanel>
-        </Expander>
-
-        <Expander Header="行为（behavior）" IsExpanded="False">
-          <StackPanel Spacing="6">
-            <Button Content="+ 新增行为" Command="{Binding AddBehaviorCommand}" HorizontalAlignment="Left" Padding="12,4"/>
-            <ItemsControl ItemsSource="{Binding Behavior}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Grid ColumnDefinitions="*,*,2*,Auto" Margin="0,0,0,4">
-                    <TextBox Grid.Column="0" Text="{Binding Name}" PlaceholderText="name" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="1" Text="{Binding Type}" PlaceholderText="type（query/action）" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="2" Text="{Binding Expression}" PlaceholderText="expression" Margin="0,0,4,0"/>
-                    <Button Grid.Column="3" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemoveBehaviorCommand}"
-                            CommandParameter="{Binding}" Padding="8,4"/>
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </Expander>
-
-        <Expander Header="历史（history）" IsExpanded="False">
-          <StackPanel Spacing="6">
-            <Button Content="+ 新增条目" Command="{Binding AddHistoryCommand}" HorizontalAlignment="Left" Padding="12,4"/>
-            <ItemsControl ItemsSource="{Binding History}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                    <TextBox Grid.Column="0" Text="{Binding Value}" PlaceholderText="历史条目" Margin="0,0,4,0"/>
-                    <Button Grid.Column="1" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemoveHistoryCommand}"
-                            CommandParameter="{Binding}" Padding="8,4"/>
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
+        <Expander Header="正文（markdown / 结构化数据）" IsExpanded="True">
+          <TextBox Text="{Binding Body}" AcceptsReturn="True" TextWrapping="Wrap"
+                   Height="300" FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
         </Expander>
 
       </StackPanel>

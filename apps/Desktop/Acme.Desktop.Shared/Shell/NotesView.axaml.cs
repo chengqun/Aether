@@ -132,10 +132,10 @@ public partial class NotesView : UserControl
                 _vm.StatusMessage = "解析失败：" + parseErr;
                 return;
             }
-            var editVm = new KnowledgeEditViewModel(node.Id, def);
+            var editVm = new KnowledgeEditViewModel(node.Id, node.Title, def);
             editVm.SaveRequested += async saved =>
             {
-                var (ok, err) = await _vm.SaveKnowledgeAsync(saved);
+                var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);
                 if (ok) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = err;
             };

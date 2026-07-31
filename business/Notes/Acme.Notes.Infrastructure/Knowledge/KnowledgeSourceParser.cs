@@ -5,10 +5,8 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace Acme.Notes.Infrastructure.Knowledge;
 
 /// <summary>
-/// <see cref="IKnowledgeSourceParser"/> 的 YamlDotNet 实现。
-/// 用内部 DTO 承载 YAML（Kind 以字符串进出，未识别值回退 <see cref="KnowledgeObjectKind.Unknown"/>），
-/// 再与 Domain 的 <see cref="KnowledgeObjectDefinition"/>（枚举）互转。
-/// YAML 键采用 camelCase（与默认模板一致）。
+/// <see cref="IKnowledgeSourceParser"/> 实现：front-matter（kind + links）+ markdown 正文，
+/// 与 AgentSourceParser 同构。front-matter 用 YamlDotNet 解析，正文为余下文本。
 /// </summary>
 public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
 {
@@ -33,80 +31,63 @@ public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
             return false;
         }
 
-        try
+        var text = source.TrimStart();
+        string body;
+        string kind = string.Empty;
+        List<KnowledgeLink> links = new();
+
+        if (text.StartsWith("---", StringComparison.Ordinal))
         {
-            var yaml = _deserializer.Deserialize<KnowledgeObjectYaml>(source);
-            if (yaml is null)
+            var rest = text.Substring(3);
+            var idx = rest.IndexOf("\n---", StringComparison.Ordinal);
+            if (idx < 0)
             {
-                error = "解析结果为空";
-                return false;
+                // 有起始无结束：当作无 front-matter，全文为正文（容错）
+                body = text;
             }
-
-            var def = new KnowledgeObjectDefinition
+            else
             {
-                Name = yaml.Name ?? string.Empty,
-                DisplayName = yaml.DisplayName ?? string.Empty,
-                Kind = ParseKind(yaml.Kind),
-                Meaning = yaml.Meaning ?? string.Empty,
-                Properties = yaml.Properties ?? new(),
-                Relations = yaml.Relations ?? new(),
-                DataBinding = yaml.DataBinding,
-                Behavior = yaml.Behavior ?? new(),
-                History = yaml.History ?? new(),
-            };
-
-            if (string.IsNullOrWhiteSpace(def.Name))
-            {
-                error = "缺少 name 字段";
-                return false;
+                var yaml = rest.Substring(0, idx);
+                body = rest.Substring(idx + 4).TrimStart('\r', '\n');
+                try
+                {
+                    var head = _deserializer.Deserialize<KnowledgeHead>(yaml);
+                    if (head is not null)
+                    {
+                        kind = head.Kind ?? string.Empty;
+                        links = head.Links ?? new();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    error = "front-matter 解析失败：" + ex.Message;
+                    return false;
+                }
             }
-
-            definition = def;
-            return true;
         }
-        catch (Exception ex)
+        else
         {
-            error = "YAML 解析失败：" + ex.Message;
-            return false;
+            // 无 front-matter：全文为正文（容错旧笔记）
+            body = text;
         }
+
+        definition = new KnowledgeObjectDefinition { Kind = kind, Links = links, Body = body };
+        return true;
     }
 
     public string Serialize(KnowledgeObjectDefinition definition)
     {
         if (definition is null) throw new ArgumentNullException(nameof(definition));
 
-        var yaml = new KnowledgeObjectYaml
-        {
-            Name = definition.Name,
-            DisplayName = definition.DisplayName,
-            Kind = definition.Kind.ToString(),
-            Meaning = definition.Meaning,
-            Properties = definition.Properties,
-            Relations = definition.Relations,
-            DataBinding = definition.DataBinding,
-            Behavior = definition.Behavior,
-            History = definition.History,
-        };
-
-        return "# KnowledgeObject 定义\n" + _serializer.Serialize(yaml);
+        var head = new KnowledgeHead { Kind = definition.Kind, Links = definition.Links };
+        var yaml = _serializer.Serialize(head).TrimEnd();
+        return $"---\n{yaml}\n---\n{definition.Body ?? string.Empty}";
     }
 
-    private static KnowledgeObjectKind ParseKind(string? raw)
-        => Enum.TryParse<KnowledgeObjectKind>(raw, ignoreCase: true, out var k)
-            ? k
-            : KnowledgeObjectKind.Unknown;
-
-    /// <summary>YAML 承载 DTO：与 <see cref="KnowledgeObjectDefinition"/> 同构，但 Kind 为字符串以容忍未识别值。</summary>
-    private sealed class KnowledgeObjectYaml
+    /// <summary>front-matter 承载 DTO（kind + links）。</summary>
+    private sealed class KnowledgeHead
     {
-        public string Name { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
         public string Kind { get; set; } = string.Empty;
-        public string Meaning { get; set; } = string.Empty;
-        public List<KnowledgeProperty> Properties { get; set; } = new();
-        public List<KnowledgeRelation> Relations { get; set; } = new();
-        public KnowledgeDataBinding? DataBinding { get; set; }
-        public List<KnowledgeBehavior> Behavior { get; set; } = new();
-        public List<string> History { get; set; } = new();
+        public List<KnowledgeLink> Links { get; set; } = new();
     }
 }

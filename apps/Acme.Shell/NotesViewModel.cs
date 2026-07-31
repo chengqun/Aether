@@ -164,8 +164,8 @@ public partial class NotesViewModel : ObservableObject
         return (def, null);
     }
 
-    /// <summary>保存知识对象：序列化 def → 更新笔记 Content → 刷新树。</summary>
-    public async Task<(bool Success, string? Error)> SaveKnowledgeAsync(KnowledgeObjectDefinition def)
+    /// <summary>保存知识对象：序列化 def → 更新笔记 Content/Title → 刷新树。name 单独传（def 内无 Name）。</summary>
+    public async Task<(bool Success, string? Error)> SaveKnowledgeAsync(KnowledgeObjectDefinition def, string name)
     {
         if (SelectedNode is null) return (false, "未选中节点");
         try
@@ -174,7 +174,7 @@ public partial class NotesViewModel : ObservableObject
             await NoteService.UpdateAsync(new UpdateNoteRequest
             {
                 Id = SelectedNode.Id.ToString(),
-                Title = def.Name,
+                Title = name,
                 Content = source,
                 NodeType = NoteNodeType.Knowledge,
             });
