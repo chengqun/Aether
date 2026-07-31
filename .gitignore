@@ -34,6 +34,10 @@ business/Qifu/
 ai/Qifu/
 tests/Acme.Qifu.Infrastructure.Tests/
 
+## Local-only build scripts (不推 GitHub；磁盘文件保留)
+# 本地同时打 Qifu + Stockapp 的脚本；GitHub 只同步 build-stockapp-*.sh（仅 Stockapp 租户）。
+scripts/build-desktop-macos.sh
+
 ## Local config / secrets
 appsettings.Development.json
 .env

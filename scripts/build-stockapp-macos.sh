@@ -54,8 +54,23 @@ build_ctp_native() {
   cmake --build "${builddir}" --config Release
 
   local dylib="${ROOT}/externals/Ctp.Net.Core/build/native/libctp_native.dylib"
-  [ -f "${dylib}" ] && { echo "    libctp_native.dylib 已生成"; return 0; }
-  echo "  ! 编译未产出 libctp_native.dylib"; return 1
+  [ -f "${dylib}" ] || { echo "  ! 编译未产出 libctp_native.dylib"; return 1; }
+  echo "    libctp_native.dylib 已生成"
+
+  # rpath 归一化：cmake --build（非 --install）只写入 BUILD_RPATH（绝对路径，指向源码树
+  # ctp-sdk），不可移植。发布包里需要相对的 @loader_path，由随包的 3 个 framework 解析。
+  # - 删掉绝对 BUILD_RPATH（与本机路径绑死；删不掉也无妨——dyld 会忽略不存在的 rpath 目录）
+  # - 加 @loader_path（= libctp_native.dylib 所在目录 = .app 的 Contents/MacOS/）
+  # 注：dev 模式 `dotnet run` 仍用 build/native 里这份 dylib 的默认绝对 rpath 在源码树解析 framework，
+  #     不受影响；这里只在打包前把发布用的那份改成可移植。不动 CMakeLists → Windows/Linux 不受影响。
+  local build_rpath="${native}/../ctp-sdk/macos-universal"
+  install_name_tool -delete_rpath "${build_rpath}" "${dylib}" 2>/dev/null || true
+  if ! otool -l "${dylib}" | grep -q "path @loader_path"; then
+    install_name_tool -add_rpath "@loader_path" "${dylib}"
+    echo "    rpath 已归一化为 @loader_path（发布包可移植）"
+  fi
+  codesign -s - --force "${dylib}" >/dev/null 2>&1 || true   # 重写 rpath 后需重签，否则新版 macOS 拒载
+  return 0
 }
 
 build_one() {
@@ -101,6 +116,19 @@ build_one() {
   cp -R "${pubdir}/." "${bundle}/Contents/MacOS/"
   # 兜底确保 Playwright node 驱动可执行（.app 经 xattr/分发后可能丢权限）
   find "${bundle}/Contents/MacOS/.playwright" -type f -name "node" -exec chmod +x {} \; 2>/dev/null || true
+
+  # CTP framework 随包：libctp_native.dylib 用 @rpath/...framework（rpath=@loader_path）引用 3 个
+  # framework，而 csproj 只 copy *.dylib、不 copy framework。若不随包，运行时 dyld 报
+  # "Library not loaded: @rpath/thosttraderapi_se.framework/..."。ditto 保留 framework 的符号链接结构。
+  # 仅在 wrapper 编译成功（dylib 存在）时随包；无 dylib 时跳过（CTP 不可用，其余功能正常）。
+  local dylib_ship="${ROOT}/externals/Ctp.Net.Core/build/native/libctp_native.dylib"
+  if [ -f "${dylib_ship}" ]; then
+    local sdk="${ROOT}/externals/Ctp.Net.Core/ctp-sdk/macos-universal"
+    for fw in thosttraderapi_se thostmduserapi_se MacDataCollect; do
+      [ -d "${sdk}/${fw}.framework" ] && ditto "${sdk}/${fw}.framework" "${bundle}/Contents/MacOS/${fw}.framework"
+    done
+    echo "    已随包 3 个 CTP framework（@loader_path 解析）"
+  fi
 
   # 图标（可选）：项目 Assets/AppIcon.icns
   local icon="${ROOT}/apps/${variant}/Acme.${variant}.Desktop/Assets/AppIcon.icns"

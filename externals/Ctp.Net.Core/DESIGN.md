@@ -162,11 +162,11 @@ elseif(WIN32)     set(CTP_ROOT ${CTP_SDK}/win-x64 或 win-x86) ...
 
 ### 3.1 Windows ✅ 已验证
 
-**脚本**：`scripts/build-desktop-windows.ps1`（PowerShell 5.1 兼容，UTF-8 BOM）
+**脚本**：`scripts/build-stockapp-windows.ps1`（PowerShell 5.1 兼容，UTF-8 BOM）
 **前置**：.NET 10 SDK + CMake + MSVC（Visual Studio 2022 / Build Tools，含 VC++ 工作负载）
 
 ```
-.\scripts\build-desktop-windows.ps1
+.\scripts\build-stockapp-windows.ps1
 ```
 
 流程：
@@ -193,33 +193,47 @@ winget install --id Kitware.CMake
 winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --includeRecommended"
 ```
 
-### 3.2 macOS ⏳ 待验证
+### 3.2 macOS ✅ 已验证
 
-**脚本**：`scripts/build-desktop-macos.sh`
+**脚本**：`scripts/build-stockapp-macos.sh`（GitHub 同步，固定打 Stockapp 租户）。
+另有一个本地脚本 `scripts/build-desktop-macos.sh`（已加入 `.gitignore`，不推 GitHub），
+可同时打 Qifu + Stockapp（`./scripts/build-desktop-macos.sh [stockapp|qifu|all]`）；
+CTP 现场编译 + framework 随包逻辑与 stockapp 脚本一致，仅 Stockapp 走（Qifu 无 CTP）。
 **前置**：.NET 10 SDK + CMake + clang（Xcode Command Line Tools：`xcode-select --install`）
 
 ```bash
-./scripts/build-desktop-macos.sh
+./scripts/build-stockapp-macos.sh
 ```
 
 流程：
 1. `build_ctp_native`：`cmake` + clang，从 `ctp-sdk/macos-universal` 编出 `libctp_native.dylib`。
-2. `dotnet publish ... -r osx-x64 --self-contained true`（默认 osx-x64；Apple Silicon 走 Rosetta。
+2. **rpath 归一化**：`cmake --build`（非 `--install`）只写入绝对 `BUILD_RPATH`（指向源码树
+   `ctp-sdk/macos-universal`，不可移植）。脚本用 `install_name_tool` 删掉绝对 rpath、加
+   `@loader_path`，使发布包内 dylib 用相对 rpath 解析随包的 framework。dev 模式 `dotnet run`
+   仍用 build/native 里默认的绝对 rpath 在源码树解析，不受影响。**不动 CMakeLists** →
+   Windows/Linux 构建零影响（PE 无 rpath 概念；Linux 的 `$ORIGIN` 已由 CMakeLists 设好）。
+3. `dotnet publish ... -r osx-x64 --self-contained true`（默认 osx-x64；Apple Silicon 走 Rosetta。
    如需 arm64 原生，改 `RUNTIME=osx-arm64` 后重跑——注意 wrapper 架构需与 RUNTIME 匹配）。
-3. 组装 `dist/Aether-Stockapp.app` bundle（`Contents/MacOS` + `Info.plist` + `PkgInfo`），
+4. 组装 `dist/Aether-Stockapp.app` bundle（`Contents/MacOS` + `Info.plist` + `PkgInfo`），
+   **随包 3 个 CTP framework**（`ditto` 拷 `thosttraderapi_se`/`thostmduserapi_se`/
+   `MacDataCollect` framework 到 `Contents/MacOS/`，由 `@loader_path` 解析——csproj 只 copy
+   `*.dylib` 不 copy framework，不随包则运行时 `dyld: Library not loaded`），
    `xattr -cr` 去 Gatekeeper 隔离属性，`chmod +x`。
 
 **产物**：`dist/Aether-Stockapp.app` —— 双击运行，或 `open dist/Aether-Stockapp.app`
 
+**验证结果（2026-07，Intel x86_64 / macOS 26）**：干净状态重跑成功。`libctp_native.dylib`
+现场编译，`nm -gU` 确认 24 个导出符号齐全；bundle 内 dylib 的 `LC_RPATH` 仅 `@loader_path`
+（无绝对路径泄漏）；3 个 framework 随包；`python3 ctypes.CDLL` 运行时 dlopen 成功，
+`CtpTrader_Create` 符号可寻址（dyld 解析 libctp_native.dylib + 3 framework 全部通过）。
+
 **待验证点**：
-- 现场编译 `libctp_native.dylib` 是否成功（mac 脚本此前依赖入库的预编译 dylib，现已改为现场编）。
 - Apple Silicon（arm64）机器上 `RUNTIME=osx-x64` + Rosetta 的运行；以及切 `osx-arm64` 时
-  wrapper 编译架构与 RID 的一致性。
-- 之前在 mac 上跑通过（靠预编译 dylib），本次改为现场编译后需重新验证。
+  wrapper 编译架构与 RID 的一致性（SDK framework 已是 universal：x86_64+arm64）。
 
 ### 3.3 Linux ⏳ 待验证
 
-**脚本**：`scripts/build-desktop-linux.sh`
+**脚本**：`scripts/build-stockapp-linux.sh`
 **前置**：.NET 10 SDK + CMake + gcc/g++
 ```bash
 # Debian/Ubuntu
@@ -229,7 +243,7 @@ sudo dnf install -y cmake gcc-c++
 ```
 
 ```bash
-./scripts/build-desktop-linux.sh
+./scripts/build-stockapp-linux.sh
 ```
 
 流程：
@@ -251,9 +265,9 @@ sudo dnf install -y cmake gcc-c++
 
 | 平台 | 脚本 | wrapper 编译方式 | 状态 | 验证日期 |
 |---|---|---|---|---|
-| Windows | `build-desktop-windows.ps1` | 混合：现场编(CMake+MSVC) / 预编译兜底 | ✅ 已验证 | 2026-07 |
-| macOS | `build-desktop-macos.sh` | 混合：现场编(CMake+clang) / 预编译兜底 | ⏳ 待验证 | — |
-| Linux | `build-desktop-linux.sh` | 混合：现场编(CMake+gcc) / 预编译兜底 | ⏳ 待验证 | — |
+| Windows | `build-stockapp-windows.ps1` | 混合：现场编(CMake+MSVC) / 预编译兜底 | ✅ 已验证 | 2026-07 |
+| macOS | `build-stockapp-macos.sh` | 混合：现场编(CMake+clang) / 预编译兜底 | ✅ 已验证 | 2026-07 |
+| Linux | `build-stockapp-linux.sh` | 混合：现场编(CMake+gcc) / 预编译兜底 | ⏳ 待验证 | — |
 
 **验证方法**（mac/Linux）：clone 仓库到对应平台 → 装好工具链 → 跑脚本 → 确认
 `ctp_native` 产物生成 + 24 个符号导出 + 产物包内三件套齐全 → 启动应用进入期货页测试
@@ -277,6 +291,21 @@ mac 装 Xcode Command Line Tools；Linux 装 `cmake` + `build-essential`/`gcc-c+
 
 **CTP wrapper 编译失败但应用能启动**
 设计如此：编译失败只警告不中断。产物可启动，仅 CTP 期货功能不可用，其余功能正常。
+
+**macOS 链接报 `unknown file type in '.../*.framework/<name>'`**
+`ctp-sdk/macos-universal/` 下 3 个 framework 的符号链接（顶层二进制 / `Versions/Current` /
+`Headers` / `Resources`，共 12 个）被 git 存成了普通文本文件（mode 100644，内容是链接目标
+路径）。这是在禁用 symlink 的环境（Windows / `core.symlinks=false`）下 `git add` 提交导致的。
+链接器用 `-framework` 解析到顶层文本文件 → `unknown file type`。已修复：12 个符号链接恢复为
+真 symlink（mode 120000）。Windows 不受影响（Windows 走 `win-x64` 的 `.dll/.lib`，不碰
+`macos-universal`）。**注意**：若将来从 Windows 重新 `git add` 这些 framework 文件，
+可能再次腐化——在 mac/Linux 上提交 framework 改动最稳妥。
+
+**macOS 运行时 `dyld: Library not loaded: @rpath/thosttraderapi_se.framework/...`**
+`libctp_native.dylib` 用 `@rpath/...framework` 引用 3 个 framework（rpath=`@loader_path`），
+而 `Ctp.Net.Core.csproj` 只 copy `build/native/*.{dylib,so,dll}`、不 copy framework。发布包
+必须把 3 个 framework 随进 `Contents/MacOS/`（脚本用 `ditto` 拷贝，保留符号链接），否则
+`@loader_path` 解析不到。dev 模式 `dotnet run` 不受影响（dylib 默认绝对 rpath 指向源码树 ctp-sdk）。
 
 **CTP 官方 SDK 在哪**
 `externals/Ctp.Net.Core/ctp-sdk/<平台>`，全平台已入库，clone 即有，无需额外放置。
