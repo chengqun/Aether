@@ -47,12 +47,17 @@ public partial class ChatView : UserControl
     {
         base.OnPropertyChanged(change);
         if (change.Property == IsVisibleProperty && change.NewValue is bool visible && visible)
-        {
-            if (_vm?.IsAgentRunning ?? false)
-                _stickToBottom = true; // 流式中：切回应跟随最新输出
-            if (_stickToBottom)
-                RequestScrollToBottom();
-        }
+            OnBecameVisible();
+    }
+
+    /// <summary>切回可见：若应贴底，等隐藏期间欠下的布局刷新完成后再滚到底（避免 extent 是旧的滚不到真底）。</summary>
+    private async void OnBecameVisible()
+    {
+        if (_vm?.IsAgentRunning ?? false)
+            _stickToBottom = true; // 流式中：切回应跟随最新输出
+        if (!_stickToBottom) return;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        RequestScrollToBottom();
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
