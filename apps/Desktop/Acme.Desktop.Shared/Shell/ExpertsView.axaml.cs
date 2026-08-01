@@ -21,6 +21,7 @@ public partial class ExpertsView : UserControl
         if (VM == null) return;
         try
         {
+            await VM.Mcp.EnsureLoadedAsync(); // 确保 MCP 连完 + 刷新，编辑器 MCP 区用最新工具
             var vm = VM.CreateEditViewModel(null);
             await ShowDialogAsync(vm);
         }
@@ -42,6 +43,7 @@ public partial class ExpertsView : UserControl
         {
             try
             {
+                await VM.Mcp.EnsureLoadedAsync(); // 确保 MCP 连完 + 刷新，编辑器 MCP 区用最新工具
                 var vm = VM.CreateEditViewModel(item);
                 await ShowDialogAsync(vm);
             }

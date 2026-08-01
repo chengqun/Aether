@@ -17,7 +17,8 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
     private readonly Func<IEnumerable<McpServerConfig>> _configProvider;
     private readonly ILoggerFactory? _loggerFactory;
     private readonly List<Entry> _entries = new();
-    private int _started;
+    private Task? _startTask;
+    private readonly object _startLock = new();
 
     public McpServerRegistry(Func<IEnumerable<McpServerConfig>> configProvider, ILoggerFactory? loggerFactory = null)
     {
@@ -25,7 +26,7 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         _loggerFactory = loggerFactory;
     }
 
-    public bool IsStarted => Volatile.Read(ref _started) == 1;
+    public bool IsStarted => _startTask?.IsCompleted == true;
 
     public IReadOnlyList<AIFunction> GetTools() => _entries.SelectMany(e => e.Tools).ToList();
 
@@ -38,20 +39,27 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
             Error = e.Error,
         }).ToList();
 
-    /// <summary>连接所有已配置 server 并预解析工具。已启动则幂等返回。</summary>
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 连接所有已配置 server 并预解析工具。用 shared-task：首次调用发起连接，后续调用等同一个任务
+    /// （保证 <c>await StartAsync()</c> 总能等到连接真正完成，供编辑器打开时可靠加载）。
+    /// </summary>
+    public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (Interlocked.CompareExchange(ref _started, 1, 0) != 0) return;
-        await ConnectAllAsync(cancellationToken).ConfigureAwait(false);
+        if (_startTask is not null) return _startTask;
+        lock (_startLock)
+        {
+            if (_startTask is not null) return _startTask;
+            _startTask = ConnectAllAsync(CancellationToken.None);
+            return _startTask;
+        }
     }
 
     /// <summary>重读目录并重连所有 server（关闭旧 client）。</summary>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         await DisposeEntriesAsync().ConfigureAwait(false);
-        Volatile.Write(ref _started, 0);
-        if (Interlocked.CompareExchange(ref _started, 1, 0) != 0) return;
-        await ConnectAllAsync(cancellationToken).ConfigureAwait(false);
+        _startTask = null; // 失效，下次 StartAsync 重连
+        await StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ConnectAllAsync(CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
 using Aether.AI.Hosting;
+using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -8,18 +9,30 @@ namespace Aether.AI.Mcp;
 /// <summary>
 /// <see cref="IMcpManagementService"/> 实现：读写 <c>mcp-servers/&lt;name&gt;.json</c>（主流 mcpServers 映射格式）
 /// + 经 <see cref="IMcpServerRegistry"/> 重连 + 映射 <see cref="McpServerEntry"/> → <see cref="McpServerStatus"/> DTO。
+/// <see cref="EnsureStartedAsync"/> 连接后把工具注册进 <see cref="ToolRegistry"/>（供 AgentFactory 解析）。
 /// </summary>
 public sealed class McpManagementService : IMcpManagementService
 {
     private readonly IMcpServerRegistry _registry;
+    private readonly ToolRegistry? _toolRegistry;
     private readonly string _directory;
     private readonly ILoggerFactory? _loggerFactory;
 
-    public McpManagementService(IMcpServerRegistry registry, McpManagementServiceOptions options, ILoggerFactory? loggerFactory = null)
+    public McpManagementService(IMcpServerRegistry registry, McpManagementServiceOptions options,
+        ToolRegistry? toolRegistry = null, ILoggerFactory? loggerFactory = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _directory = options?.Directory ?? throw new ArgumentNullException(nameof(options));
+        _toolRegistry = toolRegistry;
         _loggerFactory = loggerFactory;
+    }
+
+    public async Task EnsureStartedAsync(CancellationToken cancellationToken = default)
+    {
+        await _registry.StartAsync(cancellationToken).ConfigureAwait(false);
+        // 连接完成后把工具注册进 ToolRegistry（TryAdd 幂等，多次调用安全）。
+        if (_toolRegistry is not null)
+            foreach (var t in _registry.GetTools()) _toolRegistry.RegisterMcpTool(t);
     }
 
     public Task<IReadOnlyList<McpServerStatus>> GetServersAsync(CancellationToken cancellationToken = default)

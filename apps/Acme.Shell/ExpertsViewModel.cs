@@ -161,6 +161,9 @@ public partial class ExpertsViewModel : ObservableObject
         {
             StatusMessage = $"加载失败：{ex.Message}";
         }
+
+        // 加载 MCP server 列表（编辑器 MCP 区用；MCP 连接是异步的，此处取当前快照）。
+        try { await Mcp.LoadAsync(); } catch { }
     }
 
     private void RefreshVisibleExperts()
@@ -275,13 +278,13 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>获取已召唤的专家列表。</summary>
     public List<ExpertItem> GetSummonedExperts() => Experts.Where(e => e.IsSummoned).ToList();
 
-    /// <summary>创建编辑弹窗 ViewModel（从目录加载可用工具与模型列表）。</summary>
+    /// <summary>创建编辑弹窗 ViewModel（从目录加载可用工具/技能/模型 + MCP server 工具）。</summary>
     public ExpertEditViewModel CreateEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
         var skills = _catalog.GetAvailableSkills();
         var models = _catalog.GetAvailableModels();
-        return new ExpertEditViewModel(existing, tools, skills, models);
+        return new ExpertEditViewModel(existing, tools, skills, models, Mcp.Servers.ToList());
     }
 
     // —— 市场 ——

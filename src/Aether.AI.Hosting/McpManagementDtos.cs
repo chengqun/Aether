@@ -29,6 +29,9 @@ public sealed record McpServerStatus(
 /// </summary>
 public interface IMcpManagementService
 {
+    /// <summary>确保 MCP server 已连接 + 工具已注册进 ToolRegistry（幂等，shared-task 等到连接完成）。</summary>
+    Task EnsureStartedAsync(CancellationToken cancellationToken = default);
+
     /// <summary>当前所有 server 的状态 + 工具（含未连接的，带 Error）。</summary>
     Task<IReadOnlyList<McpServerStatus>> GetServersAsync(CancellationToken cancellationToken = default);
 

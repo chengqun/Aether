@@ -93,6 +93,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     public IReadOnlyList<CustomToolMeta> GetAvailableTools()
         => _toolRegistry.GetAllMetas()
             .Where(m => !string.Equals(m.Name, "ask_user", StringComparison.OrdinalIgnoreCase)) // ask_user 为自动纳入的基础设施工具，不在选择器暴露
+            .Where(m => !string.Equals(m.Category, "MCP", StringComparison.OrdinalIgnoreCase)) // MCP 工具在编辑器单独的 MCP 区展示
             .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category, m.ApprovalLevel.ToString()))
             .ToList();
 

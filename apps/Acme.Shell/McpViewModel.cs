@@ -41,6 +41,13 @@ public partial class McpViewModel : ObservableObject
         finally { IsLoading = false; }
     }
 
+    /// <summary>确保 MCP 已连接（等连接完成）+ 刷新列表。编辑器打开前调用，保证 MCP 区有最新工具。</summary>
+    public async Task EnsureLoadedAsync()
+    {
+        try { await _mgmt.EnsureStartedAsync(); } catch { /* 连接失败不阻断，仍刷新状态 */ }
+        await LoadAsync();
+    }
+
     [RelayCommand]
     private async Task RefreshAsync() => await LoadAsync();
 

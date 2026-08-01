@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Acme.Agents.AI;
 using Acme.Notes.Domain.Agents;
+using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Shell;
@@ -67,6 +68,17 @@ public partial class ToolCategoryGroup : ObservableObject
     public void RefreshIsAllSelected() => OnPropertyChanged(nameof(IsAllSelected));
 }
 
+/// <summary>MCP server 工具分组（编辑器 MCP 区：server 名 + 连接状态 + 其工具勾选）。</summary>
+public partial class McpServerToolGroup : ObservableObject
+{
+    public string Name { get; set; } = string.Empty;
+    public bool IsConnected { get; set; }
+    public string? Error { get; set; }
+    public ObservableCollection<ToolOption> Tools { get; } = new();
+    public bool HasTools => Tools.Count > 0;
+    public string StatusText => IsConnected ? "已连接" : (string.IsNullOrEmpty(Error) ? "未连接" : "连接失败");
+}
+
 /// <summary>记忆模式下拉选项（值 + 中文显示）。</summary>
 public class MemoryModeOption
 {
@@ -83,14 +95,15 @@ public class ResponseFormatOption
 
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
-    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomSkillMeta> allSkills, IReadOnlyList<CustomModelOption> allModels)
+    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomSkillMeta> allSkills, IReadOnlyList<CustomModelOption> allModels,
+        IReadOnlyList<McpServerStatus>? mcpServers = null)
     {
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
         var selectedSkillSet = new HashSet<string>(existing?.Skills ?? Enumerable.Empty<string>());
 
-        // 按分类分组构建工具列表
+        // 按分类分组构建原生工具列表（MCP 工具已在 GetAvailableTools 过滤，单独走 MCP 区）
         foreach (var meta in allTools)
         {
             var opt = new ToolOption
@@ -115,6 +128,30 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             opt.PropertyChanged += (_, _) => group.RefreshIsAllSelected();
             Tools.Add(opt);
             group.Tools.Add(opt);
+        }
+
+        // MCP 工具区：按 server 分组，工具加入 flat Tools（保存时一并收集），MCP 工具默认 Dangerous。
+        if (mcpServers is not null)
+        {
+            foreach (var server in mcpServers)
+            {
+                var grp = new McpServerToolGroup { Name = server.Name, IsConnected = server.IsConnected, Error = server.Error };
+                foreach (var tool in server.Tools)
+                {
+                    var opt = new ToolOption
+                    {
+                        Name = tool.Name,
+                        Description = tool.Description,
+                        Category = "MCP",
+                        DeclaredLevel = "Dangerous",
+                        ApprovalLevel = "Dangerous",
+                        IsSelected = selectedSet.Contains(tool.Name),
+                    };
+                    Tools.Add(opt);
+                    grp.Tools.Add(opt);
+                }
+                McpServerGroups.Add(grp);
+            }
         }
 
         // 构建 skill 列表（skill 通常较少，平铺即可）
@@ -224,6 +261,12 @@ public sealed partial class ExpertEditViewModel : ObservableObject
 
     /// <summary>按类别分组的工具列表（UI 分组展示用）。</summary>
     public ObservableCollection<ToolCategoryGroup> ToolCategories { get; } = new();
+
+    /// <summary>MCP server 工具分组（编辑器 MCP 区展示：按 server 分组勾选 MCP 工具）。</summary>
+    public ObservableCollection<McpServerToolGroup> McpServerGroups { get; } = new();
+
+    /// <summary>是否有 MCP server（控制 MCP 区显隐）。</summary>
+    public bool HasMcpServers => McpServerGroups.Count > 0;
 
     /// <summary>可选 skill 列表（含选中状态）。</summary>
     public ObservableCollection<SkillOption> Skills { get; } = new();
