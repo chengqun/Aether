@@ -135,6 +135,7 @@ public sealed class HarnessRuntime
         string userMessage,
         StreamHandlers? handlers = null,
         ToolApprovalDecision? approvalResponse = null,
+        string? desiredMode = null,
         CancellationToken cancellationToken = default)
     {
         var session = _sessions.Get(sessionId)
@@ -143,6 +144,10 @@ public sealed class HarnessRuntime
         var definition = ResolveDefinition(session.AgentId);
         var agent = GetOrCreateAgent(definition);
         var frameworkSession = await GetOrCreateFrameworkSessionAsync(sessionId, agent, cancellationToken);
+
+        // 运行前应用期望模式（plan/execute 等）；会话新建或已存在均生效。null=不改变当前模式。
+        if (desiredMode is not null)
+            await TrySetModeAsync(agent, frameworkSession, desiredMode, cancellationToken).ConfigureAwait(false);
 
         // 审批恢复轮不再追加用户消息（首轮已记录）；仅首轮记录用户消息。
         if (approvalResponse is null)
@@ -163,7 +168,7 @@ public sealed class HarnessRuntime
 
     /// <summary>
     /// 用一个**已构建好的** <see cref="AIAgent"/>（如 workflow 包成的 agent）流式运行一轮，
-    /// 复用与 <see cref="RunStreamingAsync(Guid,string,StreamHandlers?,ToolApprovalDecision?,CancellationToken)"/>
+    /// 复用与 <see cref="RunStreamingAsync(Guid,string,StreamHandlers?,ToolApprovalDecision?,string?,CancellationToken)"/>
     /// 相同的流式循环 + 事件提取。无 AetherSession 簿记（调用方自管会话）。
     /// 供 ICustomWorkflowRunner 等把组合 agent 当单 agent 跑的场景使用。
     /// </summary>
@@ -173,8 +178,51 @@ public sealed class HarnessRuntime
         string userMessage,
         StreamHandlers? handlers = null,
         ToolApprovalDecision? approvalResponse = null,
+        string? desiredMode = null,
         CancellationToken cancellationToken = default)
-        => await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken, onToolCallName: null);
+    {
+        if (desiredMode is not null)
+            await TrySetModeAsync(agent, frameworkSession, desiredMode, cancellationToken).ConfigureAwait(false);
+        return await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken, onToolCallName: null);
+    }
+
+    /// <summary>读取当前会话的 AgentMode（plan/execute…）；agent 未启用 AgentModeProvider 返回 null。</summary>
+    public async Task<string?> GetModeAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessions.Get(sessionId);
+        if (session is null) return null;
+        var agent = GetOrCreateAgent(ResolveDefinition(session.AgentId));
+        var frameworkSession = await GetOrCreateFrameworkSessionAsync(sessionId, agent, cancellationToken);
+        return await TryGetModeAsync(agent, frameworkSession, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>读取已构建 agent 的当前 AgentMode（供 workflow 路径复用）。</summary>
+    public static async Task<string?> TryGetModeAsync(AIAgent agent, FrameworkAgentSession frameworkSession, CancellationToken cancellationToken = default)
+    {
+        var provider = agent.GetService<AgentModeProvider>();
+        if (provider is null) return null;
+        return await provider.GetModeAsync(frameworkSession, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>设置当前会话的 AgentMode；agent 未启用 AgentModeProvider 返回 false。</summary>
+    public async Task<bool> SetModeAsync(Guid sessionId, string mode, CancellationToken cancellationToken = default)
+    {
+        var session = _sessions.Get(sessionId);
+        if (session is null) return false;
+        var agent = GetOrCreateAgent(ResolveDefinition(session.AgentId));
+        var frameworkSession = await GetOrCreateFrameworkSessionAsync(sessionId, agent, cancellationToken);
+        return await TrySetModeAsync(agent, frameworkSession, mode, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>设置已构建 agent 的 AgentMode（供 workflow 路径复用）。</summary>
+    public static async Task<bool> TrySetModeAsync(AIAgent agent, FrameworkAgentSession frameworkSession, string mode, CancellationToken cancellationToken = default)
+    {
+        var provider = agent.GetService<AgentModeProvider>();
+        if (provider is null) return false;
+        await provider.SetModeAsync(frameworkSession, mode, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
 
     /// <summary>
     /// 流式运行核心：遍历 <see cref="AIAgent.RunStreamingAsync"/>，按 <see cref="StreamHandlers"/>

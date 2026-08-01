@@ -15,7 +15,8 @@ public partial class ChatView : UserControl
     private const double StickToBottomTolerance = 24;
 
     private MainViewModelBase? _vm;
-    private ChatMessageItem? _trackedMsg;
+    private ChatTurnItem? _trackedTurn;
+    private ChatMessageItem? _trackedChild;
 
     /// <summary>是否跟随到底部。流式追加 Content 不触发 CollectionChanged，需靠此标志 + 属性变化驱动滚动。</summary>
     private bool _stickToBottom = true;
@@ -50,7 +51,7 @@ public partial class ChatView : UserControl
                 chatVm.Messages.CollectionChanged -= OnMessagesChanged;
             }
         }
-        UntrackMessage();
+        UntrackAll();
         _vm = DataContext as MainViewModelBase;
         if (_vm != null)
         {
@@ -64,41 +65,69 @@ public partial class ChatView : UserControl
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // 切换会话（Reset）时重置贴底，并重新跟踪最后一条消息（流式追加只改其 Content，不再触发 CollectionChanged）。
+        // 切换会话（Reset）时重置贴底，并重新跟踪最后一轮（流式追加只改其 Content，不再触发 CollectionChanged）。
         if (e.Action == NotifyCollectionChangedAction.Reset)
             _stickToBottom = true;
-        TrackLastMessage();
+        TrackLastTurn();
         if (e.Action == NotifyCollectionChangedAction.Add || e.Action == NotifyCollectionChangedAction.Reset)
             RequestScrollToBottom();
     }
 
-    /// <summary>订阅最后一条消息的 PropertyChanged——流式 token 追加 Content 时由此驱动滚动。</summary>
-    private void TrackLastMessage()
+    /// <summary>订阅最后一轮——其 Children 增减与末子项 Content/IsStreaming 变化驱动滚动。</summary>
+    private void TrackLastTurn()
     {
-        UntrackMessage();
+        UntrackAll();
         if (_vm is IChatViewModel chatVm && chatVm.Messages.Count > 0)
         {
-            _trackedMsg = chatVm.Messages[^1];
-            _trackedMsg.PropertyChanged += OnTrackedMessageChanged;
+            _trackedTurn = chatVm.Messages[^1];
+            _trackedTurn.PropertyChanged += OnTrackedTurnChanged;
+            _trackedTurn.Children.CollectionChanged += OnTrackedChildrenChanged;
+            TrackLastChild();
         }
     }
 
-    private void UntrackMessage()
+    private void TrackLastChild()
     {
-        if (_trackedMsg != null)
-        {
-            _trackedMsg.PropertyChanged -= OnTrackedMessageChanged;
-            _trackedMsg = null;
-        }
+        if (_trackedChild != null)
+            _trackedChild.PropertyChanged -= OnTrackedChildChanged;
+        _trackedChild = _trackedTurn is not null && _trackedTurn.Children.Count > 0
+            ? _trackedTurn.Children[^1] : null;
+        if (_trackedChild != null)
+            _trackedChild.PropertyChanged += OnTrackedChildChanged;
     }
 
-    private void OnTrackedMessageChanged(object? sender, PropertyChangedEventArgs e)
+    private void UntrackAll()
+    {
+        if (_trackedChild != null)
+            _trackedChild.PropertyChanged -= OnTrackedChildChanged;
+        _trackedChild = null;
+        if (_trackedTurn != null)
+        {
+            _trackedTurn.PropertyChanged -= OnTrackedTurnChanged;
+            _trackedTurn.Children.CollectionChanged -= OnTrackedChildrenChanged;
+        }
+        _trackedTurn = null;
+    }
+
+    private void OnTrackedChildrenChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        TrackLastChild();
+        RequestScrollToBottom();
+    }
+
+    private void OnTrackedChildChanged(object? sender, PropertyChangedEventArgs e)
     {
         // Content 变化 = 流式 token 追加（或展开/折叠改变高度）。IsStreaming 结束也会重算高度，一并跟随。
         if (e.PropertyName != nameof(ChatMessageItem.Content)
             && e.PropertyName != nameof(ChatMessageItem.IsStreaming))
             return;
         RequestScrollToBottom();
+    }
+
+    private void OnTrackedTurnChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ChatTurnItem.Status))
+            RequestScrollToBottom();
     }
 
     /// <summary>用户滚动时维护贴底标志。OffsetDelta==0 表示仅内容尺寸变化（非用户滚动），不改变标志。</summary>

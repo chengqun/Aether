@@ -45,6 +45,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
     private Guid _currentConversationId = Guid.Empty;
     private bool _isInitializing;
+    private bool _syncingMode; // 程序化刷新 SelectedMode 时置 true，避免 OnSelectedModeChanged 回触 SetMode
 
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
@@ -103,6 +104,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _ => _dispatcher.Post(async () => await RefreshConversationsAsync());
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
+        // turn 增删影响 plan-accept 条显隐（ShowPlanAccept 依赖 Messages.Count）。
+        Messages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowPlanAccept));
 
         SubscribeToConnectionStateChanges();
     }
@@ -155,22 +158,29 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// 审批请求冒出时本轮流结束 → 弹审批框 → 带 <see cref="ToolApprovalDecision"/> 再次 runAsync 恢复执行（协作循环）。
     /// 返回本轮产生的 transcript 项（按时序），供 PersistTurnAsync 持久化。
     /// </summary>
-    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(Guid conversationId, string userMessage,
+    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(ChatTurnItem turn,
         string senderName,
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
     {
-        var runItems = new List<ChatMessageItem>();
+        var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
         var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
-        await _dispatcher.InvokeAsync(() => { Messages.Add(cursor.Current); runItems.Add(cursor.Current); });
+        await _dispatcher.InvokeAsync(() =>
+        {
+            items.Add(cursor.Current);
+            turn.Status = TurnStatus.Working;
+            IsAgentRunning = true;
+        });
 
         ToolApprovalDecision? approvalResponse = null;
+        var errored = false;
         try
         {
             while (true)
             {
                 ToolApprovalRequest? pendingApproval = null;
                 ChatMessageItem? approvalCard = null;
+                int answerTokens = 0; // 流式答案 markdown 节流计数
 
                 var handlers = new StreamHandlers(
                     OnToken: (token, _) =>
@@ -178,8 +188,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         fullText.Append(token);
                         _dispatcher.Post(() =>
                         {
-                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
+                            EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                             cursor.Current.Content += token;
+                            // 答案段实时 markdown：首 token 即刷，之后每 6 token 刷一次，避免逐 token 全量重渲染卡顿。
+                            answerTokens++;
+                            if (answerTokens == 1 || answerTokens % 6 == 0)
+                                cursor.Current.MarkdownContent = cursor.Current.Content;
                         });
                         return Task.CompletedTask;
                     },
@@ -187,7 +201,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     {
                         _dispatcher.Post(() =>
                         {
-                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: true);
+                            EnsureTextSegment(cursor, items, senderName, isReasoningContent: true);
                             cursor.Current.Content += text;
                         });
                         return Task.CompletedTask;
@@ -197,7 +211,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         // todos_* 调用由 OnTodoList 渲染为计划卡，不重复出工具卡。
                         if (ev.Name.StartsWith("todos_", StringComparison.Ordinal))
                             return Task.CompletedTask;
-                        _dispatcher.Post(() => HandleToolEventSegmented(cursor, runItems, ev, senderName));
+                        _dispatcher.Post(() => HandleToolEventSegmented(cursor, items, ev, senderName));
                         return Task.CompletedTask;
                     },
                     OnApprovalRequest: (req, _) =>
@@ -216,24 +230,24 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         approvalCard = card;
                         _dispatcher.Post(() =>
                         {
-                            var idx = Messages.IndexOf(cursor.Current);
-                            if (idx < 0) idx = Messages.Count - 1;
-                            Messages.Insert(idx + 1, card);
-                            runItems.Add(card);
+                            var idx = items.IndexOf(cursor.Current);
+                            if (idx < 0) idx = items.Count - 1;
+                            items.Insert(idx + 1, card);
                             cursor.Current = card;
+                            turn.Status = TurnStatus.AwaitingApproval;
                         });
                         return Task.CompletedTask;
                     },
                     OnTodoList: (list, _) =>
                     {
-                        _dispatcher.Post(() => HandleTodoList(cursor, runItems, list, senderName));
+                        _dispatcher.Post(() => HandleTodoList(items, list, senderName));
                         return Task.CompletedTask;
                     },
                     OnError: (text, _) =>
                     {
                         _dispatcher.Post(() =>
                         {
-                            EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
+                            EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                             cursor.Current.Content += $"\n\n[错误：{text}]";
                         });
                         return Task.CompletedTask;
@@ -254,33 +268,39 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 approvalResponse = decision;
                 var approved = decision.Approved;
                 var cardRef = approvalCard;
-                _dispatcher.Post(() => { if (cardRef is not null) cardRef.ApprovalState = approved ? 1 : 2; });
-                // 开新答案段承接恢复流
                 _dispatcher.Post(() =>
                 {
+                    if (cardRef is not null) cardRef.ApprovalState = approved ? 1 : 2;
+                    turn.Status = TurnStatus.Working;
+                    // 开新答案段承接恢复流
                     var seg = NewTextSegment(senderName, isReasoningContent: false);
-                    var idx = Messages.IndexOf(cursor.Current);
-                    if (idx < 0) idx = Messages.Count - 1;
-                    Messages.Insert(idx + 1, seg);
-                    runItems.Add(seg);
+                    var idx = items.IndexOf(cursor.Current);
+                    if (idx < 0) idx = items.Count - 1;
+                    items.Insert(idx + 1, seg);
                     cursor.Current = seg;
                 });
             }
         }
         catch (Exception ex)
         {
+            errored = true;
             fullText.Append($"\n\n[运行失败：{ex.Message}]");
             await _dispatcher.InvokeAsync(() =>
             {
-                EnsureTextSegment(cursor, runItems, senderName, isReasoningContent: false);
+                EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                 cursor.Current.Content += $"\n\n[运行失败：{ex.Message}]";
             });
         }
         finally
         {
-            await _dispatcher.InvokeAsync(() => FinalizeSegment(cursor.Current, runItems));
+            await _dispatcher.InvokeAsync(() =>
+            {
+                FinalizeSegment(cursor.Current, items);
+                turn.Finish(errored ? TurnStatus.Error : TurnStatus.Done);
+                IsAgentRunning = false;
+            });
         }
-        return runItems;
+        return items.ToList();
     }
 
     private static ChatMessageItem NewTextSegment(string senderName, bool isReasoningContent) => new()
@@ -295,14 +315,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     };
 
     /// <summary>确保当前段是目标类型（TextContent 思考/答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。串行在 UI 线程调用。</summary>
-    private void EnsureTextSegment(StreamCursor cursor, List<ChatMessageItem> runItems, string senderName, bool isReasoningContent)
+    private void EnsureTextSegment(StreamCursor cursor, IList<ChatMessageItem> items, string senderName, bool isReasoningContent)
     {
         if (cursor.Current.IsText && cursor.Current.IsReasoningContent == isReasoningContent) return;
-        var idx = Messages.IndexOf(cursor.Current);
+        var idx = items.IndexOf(cursor.Current);
         if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
         {
-            Messages.RemoveAt(idx); // 空段不留
-            runItems.Remove(cursor.Current);
+            items.RemoveAt(idx); // 空段不留
         }
         else
         {
@@ -310,21 +329,19 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             idx++;
         }
         var seg = NewTextSegment(senderName, isReasoningContent);
-        Messages.Insert(idx, seg);
-        runItems.Add(seg);
+        items.Insert(idx, seg);
         cursor.Current = seg;
     }
 
     /// <summary>工具事件处理：Call 冻结当前段并插一条工具步（带 CallId）；Result 按 CallId 回填到同一条，再开新答案段。</summary>
-    private void HandleToolEventSegmented(StreamCursor cursor, List<ChatMessageItem> runItems, ToolStreamEvent ev, string senderName)
+    private void HandleToolEventSegmented(StreamCursor cursor, IList<ChatMessageItem> items, ToolStreamEvent ev, string senderName)
     {
         if (ev.Kind == ToolStreamEventKind.Call)
         {
-            var idx = Messages.IndexOf(cursor.Current);
+            var idx = items.IndexOf(cursor.Current);
             if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
             {
-                Messages.RemoveAt(idx); // 空段不留
-                runItems.Remove(cursor.Current);
+                items.RemoveAt(idx); // 空段不留
             }
             else
             {
@@ -340,8 +357,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 CallId = ev.CallId,
                 Input = ev.Input,
             };
-            Messages.Insert(idx, tool);
-            runItems.Add(tool);
+            items.Insert(idx, tool);
             cursor.Current = tool;
             if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
         }
@@ -362,30 +378,26 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             tool.Output = ev.Output;
             tool.IsToolCompleted = true;
 
-            var idx = Messages.IndexOf(tool);
-            if (idx < 0) idx = Messages.Count - 1;
+            var idx = items.IndexOf(tool);
+            if (idx < 0) idx = items.Count - 1;
             var next = NewTextSegment(senderName, isReasoningContent: false);
-            Messages.Insert(idx + 1, next);
-            runItems.Add(next);
+            items.Insert(idx + 1, next);
             cursor.Current = next;
         }
     }
 
-    /// <summary>更新/插入计划卡：当前 run 已有计划卡则刷新其待办列表，否则在当前位置后新建一张。</summary>
-    private void HandleTodoList(StreamCursor cursor, List<ChatMessageItem> runItems, IReadOnlyList<TodoItemInfo> list, string senderName)
+    /// <summary>todos_* 调用后更新/插入计划卡（在 turn 顶部，items[1]）：本轮已有则刷新其待办，否则新建一张。
+    /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
+    private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
     {
         ChatMessageItem? plan = null;
-        for (int i = runItems.Count - 1; i >= 0; i--)
-            if (runItems[i].IsPlanCard) { plan = runItems[i]; break; }
+        for (int i = 1; i < items.Count; i++) // 跳过 items[0]（用户消息）
+            if (items[i].IsPlanCard) { plan = items[i]; break; }
 
         if (plan is null)
         {
             plan = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName };
-            var idx = Messages.IndexOf(cursor.Current);
-            if (idx < 0) idx = Messages.Count - 1;
-            Messages.Insert(idx + 1, plan);
-            runItems.Add(plan);
-            cursor.Current = plan;
+            items.Insert(1, plan); // 钉在 turn 顶部（用户消息之后）
         }
 
         plan.Todos.Clear();
@@ -395,18 +407,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
     /// TextReasoningContent 段保持 💭 思考卡。中间各段保持思考态。</summary>
-    private void FinalizeSegment(ChatMessageItem last, List<ChatMessageItem> runItems)
+    private void FinalizeSegment(ChatMessageItem last, IList<ChatMessageItem> items)
     {
         if (!last.IsText) return;
         if (string.IsNullOrWhiteSpace(last.Content))
         {
-            Messages.Remove(last);
-            runItems.Remove(last);
+            items.Remove(last);
         }
         else
         {
             last.IsStreaming = false;
-            if (!last.IsReasoningContent) last.IsReasoning = false; // 末段 TextContent = 最终回答
+            if (!last.IsReasoningContent)
+            {
+                last.IsReasoning = false; // 末段 TextContent = 最终回答
+                last.MarkdownContent = last.Content; // 终态 markdown 对齐，避免流式末帧与最终气泡不一致
+            }
         }
     }
 
@@ -417,25 +432,30 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         _recentConversationId = msg.ConversationId;
 
-        // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent）
+        // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent），并起一轮
+        ChatTurnItem remoteTurn = null!;
         await _dispatcher.InvokeAsync(() =>
         {
-            Messages.Add(new ChatMessageItem
+            remoteTurn = new ChatTurnItem { Header = msg.Content };
+            remoteTurn.Children.Add(new ChatMessageItem
             {
                 Side = ChatMessageSide.Right,
                 ItemType = "text",
                 Sender = msg.SenderName,
                 Content = msg.Content
             });
+            Messages.Add(remoteTurn);
         });
 
         // 选中已召唤的自定义专家时，用该专家流式回复
         if (SelectedAgentItem is ExpertItem expert)
         {
             var fullText = new System.Text.StringBuilder();
-            await RunSegmentedStreamAsync(msg.ConversationId, msg.Content, expert.Name,
-                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, handlers, approvalResponse, ct),
+            var desiredMode = HasModeSupport ? SelectedMode : null;
+            await RunSegmentedStreamAsync(remoteTurn, expert.Name,
+                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, handlers, approvalResponse, desiredMode, ct),
                 fullText);
+            await RefreshModeAsync(msg.ConversationId);
 
             // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
             // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
@@ -454,10 +474,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             return;
         }
 
-        // 未选用专家时本地简单回复
+        // 未选用专家时本地简单回复（单独一轮）
         await _dispatcher.InvokeAsync(() =>
         {
-            Messages.Add(new ChatMessageItem
+            var t = new ChatTurnItem { Header = msg.Content };
+            t.Children.Add(new ChatMessageItem
             {
                 Side = ChatMessageSide.Left,
                 ItemType = "text",
@@ -465,11 +486,31 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 Content = $"收到来自 {msg.SenderName} 的消息：{msg.Content}",
                 IsStreaming = false
             });
+            t.Finish(TurnStatus.Done);
+            Messages.Add(t);
         });
     }
 
     // —— 聊天消息列表 ——
-    public ObservableCollection<ChatMessageItem> Messages { get; } = new();
+    public ObservableCollection<ChatTurnItem> Messages { get; } = new();
+
+    /// <summary>当前 agent 是否启用 AgentModeProvider（控制模式选择器/plan-accept 显隐）。</summary>
+    [ObservableProperty]
+    private bool _hasModeSupport;
+
+    /// <summary>当前会话 AgentMode（plan/execute…）；null=未知/未启用。输入框选择器 + plan-accept 条绑定。</summary>
+    [ObservableProperty]
+    private string? _selectedMode = "plan";
+
+    /// <summary>agent 是否正在流式运行（驱动 plan-accept 条显隐）。</summary>
+    [ObservableProperty]
+    private bool _isAgentRunning;
+
+    /// <summary>plan 模式下一轮流结束后显示"接受计划→执行"条。</summary>
+    public bool ShowPlanAccept => HasModeSupport && SelectedMode == "plan" && !IsAgentRunning && Messages.Count > 0;
+
+    /// <summary>输入框模式选择器选项（默认 plan/execute）。</summary>
+    public ObservableCollection<string> ModeOptions { get; } = new() { "plan", "execute" };
 
     // —— 最近会话列表（侧边栏）——
     public ObservableCollection<ConversationItem> Conversations { get; } = new();
@@ -529,8 +570,25 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Messages.Clear();
             if (conv is not null)
             {
+                // 按 user 消息分组重建 turn：每条 user 消息开新轮，其后 assistant/tool 归入该轮。
+                ChatTurnItem? cur = null;
                 foreach (var m in conv.Messages)
-                    Messages.Add(FromTranscriptMessage(m, item.AgentName ?? "专家"));
+                {
+                    var ci = FromTranscriptMessage(m, item.AgentName ?? "专家");
+                    if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
+                    {
+                        cur = new ChatTurnItem { Header = m.Content };
+                        cur.Children.Add(ci);
+                        Messages.Add(cur);
+                    }
+                    else
+                    {
+                        cur ??= new ChatTurnItem { Header = string.Empty };
+                        if (cur.Children.Count == 0) Messages.Add(cur);
+                        cur.Children.Add(ci);
+                    }
+                }
+                foreach (var t in Messages) t.Finish(TurnStatus.Done); // 历史轮已结束
             }
             CurrentPage = "chat";
         }
@@ -909,15 +967,33 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         });
     }
 
-    /// <summary>选中专家变化时持久化（启动期 _isInitializing 抑制）。</summary>
+    /// <summary>选中专家变化时：始终更新模式支持/选择器（UI 态）；启动期 _isInitializing 仅抑制持久化与 SetMode 副作用。</summary>
     partial void OnSelectedAgentItemChanged(object? value)
     {
+        // 模式支持随选中 agent 变化（始终更新，否则启动期恢复选中时选择器/plan-accept 不显示）。
+        HasModeSupport = value is ExpertItem e && e.EnableAgentModeProvider;
+        _syncingMode = true;
+        SelectedMode = HasModeSupport ? "plan" : null;
+        _syncingMode = false;
+
         if (_isInitializing) return;
         if (value is ExpertItem expert)
         {
             _ = _preferences.SetAsync("selectedAgentId", expert.Id.ToString());
         }
+        _ = RefreshModeAsync();
     }
+
+    partial void OnSelectedModeChanged(string? value)
+    {
+        OnPropertyChanged(nameof(ShowPlanAccept));
+        if (_syncingMode || _isInitializing || value is null || !HasModeSupport) return;
+        // 已存在会话：立即 SetMode；新会话：不改，由 run delegate 的 desiredMode 在首轮应用。
+        if (_currentConversationId != Guid.Empty)
+            _ = SetModeOnSessionAsync(value);
+    }
+    partial void OnIsAgentRunningChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
+    partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
     /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家），保留当前选中。</summary>
     private void RefreshAgentSelectItems()
@@ -967,6 +1043,43 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await _settingsDialog.ShowSettingsAsync();
     }
 
+    /// <summary>用户在输入框切换 plan/execute 模式：新会话只记 SelectedMode（首轮 desiredMode 应用），已存在会话立即 SetMode。</summary>
+    private async Task SetModeOnSessionAsync(string mode)
+    {
+        if (_currentConversationId == Guid.Empty) return;
+        if (SelectedWorkflow is not null)
+            await _workflowRunner.SetModeAsync(_currentConversationId, mode);
+        else
+            await _agentRunner.SetModeAsync(_currentConversationId, mode);
+    }
+
+    /// <summary>轮后从会话读实际模式（捕获 agent 自行 set_mode 的切换），带 guard 不回触 SetMode。</summary>
+    private async Task RefreshModeAsync(Guid? conversationId = null)
+    {
+        var convId = conversationId ?? _currentConversationId;
+        if (convId == Guid.Empty || !HasModeSupport) return;
+        string? m = SelectedWorkflow is not null
+            ? await _workflowRunner.GetModeAsync(convId).ConfigureAwait(false)
+            : await _agentRunner.GetModeAsync(convId).ConfigureAwait(false);
+        if (m is not null)
+        {
+            _syncingMode = true;
+            SelectedMode = m;
+            _syncingMode = false;
+        }
+    }
+
+    /// <summary>接受计划：切 execute 模式 + 续跑一轮"已接受计划，进入执行"。</summary>
+    [RelayCommand]
+    private async Task AcceptPlanAsync()
+    {
+        if (!HasModeSupport || IsAgentRunning || _currentConversationId == Guid.Empty) return;
+        await SetModeOnSessionAsync("execute");
+        _syncingMode = true; SelectedMode = "execute"; _syncingMode = false;
+        InputText = "（已接受计划，进入执行模式）";
+        await SendInputAsync();
+    }
+
     [RelayCommand]
     private async Task SendInputAsync()
     {
@@ -975,14 +1088,16 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         var content = InputText.Trim();
         InputText = string.Empty;
 
-        // 本地显示用户消息（右侧）
-        Messages.Add(new ChatMessageItem
+        // 本地显示用户消息（右侧）并起一轮
+        var turn = new ChatTurnItem { Header = content };
+        turn.Children.Add(new ChatMessageItem
         {
             Side = ChatMessageSide.Right,
             ItemType = "text",
             Sender = "我",
             Content = content
         });
+        Messages.Add(turn);
 
         // 召唤了 workflow 时，本地流式运行 workflow（多 agent 转交）
         if (SelectedWorkflow is WorkflowItem wf)
@@ -1013,10 +1128,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
 
             var fullText = new System.Text.StringBuilder();
-            var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, wf.Name,
-                (handlers, approvalResponse, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, handlers, approvalResponse, ct),
+            var desiredMode = HasModeSupport ? SelectedMode : null;
+            var runItems = await RunSegmentedStreamAsync(turn, wf.Name,
+                (handlers, approvalResponse, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, handlers, approvalResponse, desiredMode, ct),
                 fullText);
             await PersistTurnAsync(content, runItems, fullText.ToString());
+            await RefreshModeAsync();
             if (justCreated)
                 _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
             return;
@@ -1057,12 +1174,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
 
             var fullText = new System.Text.StringBuilder();
-            var runItems = await RunSegmentedStreamAsync(_currentConversationId, content, expert.Name,
-                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, handlers, approvalResponse, ct),
+            var desiredMode = HasModeSupport ? SelectedMode : null;
+            var runItems = await RunSegmentedStreamAsync(turn, expert.Name,
+                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, handlers, approvalResponse, desiredMode, ct),
                 fullText);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
             await PersistTurnAsync(content, runItems, fullText.ToString());
+            await RefreshModeAsync();
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
@@ -1083,7 +1202,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
             catch (Exception ex)
             {
-                Messages.Add(new ChatMessageItem
+                turn.Children.Add(new ChatMessageItem
                 {
                     Side = ChatMessageSide.Left,
                     ItemType = "text",
@@ -1091,12 +1210,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     Content = $"发送失败：{ex.Message}",
                     IsStreaming = false
                 });
+                turn.Finish(TurnStatus.Error);
             }
         }
         else
         {
             // 未连接时本地回复
-            Messages.Add(new ChatMessageItem
+            turn.Children.Add(new ChatMessageItem
             {
                 Side = ChatMessageSide.Left,
                 ItemType = "text",
@@ -1104,6 +1224,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 Content = "设备未连接，请在设置中配置设备连接后重试。",
                 IsStreaming = false
             });
+            turn.Finish(TurnStatus.Done);
         }
     }
 
@@ -1143,10 +1264,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var last = conv.Messages.Count > 0 ? conv.Messages[^1] : null;
             if (last is null || last.Role != Aether.AI.Core.Messages.MessageRole.User || last.Content != userContent)
                 conv.Append(Aether.AI.Core.Messages.Message.User(userContent));
-            // 按时序持久化本轮 transcript（思考段 / 工具步 / 回答）
+            // 按时序持久化本轮 transcript（计划卡 / 思考段 / 工具步 / 回答）。用户消息已单独追加，审批卡运行期态不持久化。
             foreach (var item in runItems)
             {
-                if (item.IsPlanCard || item.IsApprovalCard) continue; // 计划卡/审批卡为运行期实时态，不持久化
+                if (item.IsUser || item.IsApprovalCard) continue;
                 if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue; // 跳过空思考段
                 conv.Append(ToTranscriptMessage(item));
             }
@@ -1168,10 +1289,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         catch { /* transcript 持久化失败不阻塞对话 */ }
     }
 
-    /// <summary>ChatMessageItem → 持久化 Message。工具步用 metadata 存 input/output JSON；思考段用 metadata kind=reasoning 标记。</summary>
+    /// <summary>ChatMessageItem → 持久化 Message。工具步用 metadata 存 input/output JSON；思考段 kind=reasoning；计划卡 kind=plan + todos JSON。</summary>
     private static Aether.AI.Core.Messages.Message ToTranscriptMessage(ChatMessageItem item)
     {
         var jsonOpts = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        if (item.IsPlanCard)
+        {
+            var todosJson = System.Text.Json.JsonSerializer.Serialize(
+                item.Todos.Select(t => new { t.Title, Desc = t.Description, t.IsComplete }), jsonOpts);
+            return new Aether.AI.Core.Messages.Message
+            {
+                Role = Aether.AI.Core.Messages.MessageRole.Assistant,
+                Content = string.Empty,
+                Metadata = new Dictionary<string, string> { ["kind"] = "plan", ["todos"] = todosJson },
+            };
+        }
         if (item.IsToolStep)
         {
             return new Aether.AI.Core.Messages.Message
@@ -1215,7 +1347,24 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 IsToolCompleted = MetaHas(m, "output"),
             };
 
-        var isReasoning = MetaVal(m, "kind") == "reasoning";
+        var kind = MetaVal(m, "kind");
+        if (kind == "plan")
+        {
+            var card = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = agentName, IsStreaming = false };
+            var todosJson = MetaVal(m, "todos");
+            if (!string.IsNullOrEmpty(todosJson))
+            {
+                try
+                {
+                    foreach (var t in System.Text.Json.JsonSerializer.Deserialize<List<TodoDto>>(todosJson)!)
+                        card.Todos.Add(new TodoItemVM { Title = t.Title ?? string.Empty, Description = t.Desc, IsComplete = t.IsComplete });
+                }
+                catch { /* 计划反序列化失败不阻塞恢复 */ }
+            }
+            return card;
+        }
+
+        var isReasoning = kind == "reasoning";
         return new ChatMessageItem
         {
             Side = ChatMessageSide.Left,

@@ -21,7 +21,14 @@ public interface ICustomAgentRunner
         string message,
         StreamHandlers? handlers = null,
         ToolApprovalDecision? approvalResponse = null,
+        string? desiredMode = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>读取当前会话的 AgentMode（plan/execute…）；未启用 AgentModeProvider 返回 null。</summary>
+    Task<string?> GetModeAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>设置当前会话的 AgentMode；未启用返回 false。</summary>
+    Task<bool> SetModeAsync(Guid conversationId, string mode, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 使该 agent 的缓存失效（编辑/删除后调用，清掉该 agent 所有会话，下次运行重建 agent 与会话）。

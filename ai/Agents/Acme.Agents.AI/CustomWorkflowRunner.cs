@@ -37,13 +37,26 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
         Guid conversationId, Guid workflowId, string message,
         StreamHandlers? handlers = null,
         ToolApprovalDecision? approvalResponse = null,
+        string? desiredMode = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException("消息不能为空", nameof(message));
 
         var (agent, session) = await GetOrCreateAsync(conversationId, workflowId, cancellationToken).ConfigureAwait(false);
-        await _runtime.RunStreamingAsync(agent, session, message, handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
+        await _runtime.RunStreamingAsync(agent, session, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetModeAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(conversationId, out var entry)) return null;
+        return await HarnessRuntime.TryGetModeAsync(entry.agent, entry.session, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetModeAsync(Guid conversationId, string mode, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(conversationId, out var entry)) return false;
+        return await HarnessRuntime.TrySetModeAsync(entry.agent, entry.session, mode, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid workflowId)

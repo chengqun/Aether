@@ -31,6 +31,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         string message,
         StreamHandlers? handlers = null,
         ToolApprovalDecision? approvalResponse = null,
+        string? desiredMode = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -50,7 +51,19 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             conversationId,
             _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
-        await _runtime.RunStreamingAsync(sessionId, message, handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
+        await _runtime.RunStreamingAsync(sessionId, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetModeAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        if (!_sessionsByConversation.TryGetValue(conversationId, out var entry)) return null;
+        return await _runtime.GetModeAsync(entry.sessionId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetModeAsync(Guid conversationId, string mode, CancellationToken cancellationToken = default)
+    {
+        if (!_sessionsByConversation.TryGetValue(conversationId, out var entry)) return false;
+        return await _runtime.SetModeAsync(entry.sessionId, mode, cancellationToken).ConfigureAwait(false);
     }
 
     public void Invalidate(Guid agentId)

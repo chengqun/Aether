@@ -75,7 +75,11 @@ public sealed class AgentFactory
 
         // AIFunction derives from AITool, but List<AIFunction> is not assignable
         // to IList<AITool>; widen to IList<AITool> for the framework APIs.
-        IList<AITool> tools = _toolRegistry.ResolveAll(definition.Tools).Cast<AITool>().ToList();
+        // ask_user（交互提问工具）若已注册则自动纳入各 agent，免逐 agent 配置；agent 仍需 prompt 指示才会调用。
+        var toolNames = definition.Tools.ToList();
+        if (!toolNames.Contains("ask_user") && _toolRegistry.Contains("ask_user"))
+            toolNames.Add("ask_user");
+        IList<AITool> tools = _toolRegistry.ResolveAll(toolNames).Cast<AITool>().ToList();
 
         // 按专家开关把工具包成 ApprovalRequiredAIFunction：模型调用工具时流冒出
         // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。HarnessAgent 默认

@@ -20,24 +20,36 @@
           </StackPanel>
         </Border>
 
+        <!-- 流式推理段（TextReasoningContent）：淡色"思考中…"卡，等宽限高 -->
         <Border Classes="tool-card" HorizontalAlignment="Left"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
-                IsVisible="{Binding IsAgentStreamingText}" PointerPressed="OnStreamingCardTapped">
+                IsVisible="{Binding IsAgentStreamingReasoning}" PointerPressed="OnStreamingCardTapped">
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="🤔" FontSize="13" VerticalAlignment="Center" />
-              <TextBlock Text="正在思考…" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsStreamingExpanded}" />
-              <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsStreamingExpanded}" />
+              <TextBlock Text="💭" FontSize="13" VerticalAlignment="Center" Opacity="0.7" />
+              <TextBlock Text="思考中…" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
             </StackPanel>
             <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsStreamingExpanded}" Margin="0,2,0,0">
-              <ScrollViewer MaxHeight="200" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+              <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                             ScrollChanged="OnStreamingScrollChanged">
                 <TextBlock Text="{Binding Content}" FontSize="12" TextWrapping="Wrap"
                            FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.85" />
               </ScrollViewer>
             </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- 流式答案段（TextContent）：实时 markdown（MarkdownContent 节流刷新） -->
+        <Border Classes="bubble-agent" HorizontalAlignment="Stretch"
+                IsVisible="{Binding IsAgentStreamingAnswer}">
+          <StackPanel Spacing="6" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="✍" FontSize="12" VerticalAlignment="Center" Opacity="0.7" />
+              <TextBlock Text="回答中…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+            <ctl:SelectableMarkdownViewer Markdown="{Binding MarkdownContent}" MarkdownStyleName="Standard"
+                                          SelectionEnabled="True" SelectionBrush="#3300A2ED" />
           </StackPanel>
         </Border>
 
@@ -51,14 +63,18 @@
           </StackPanel>
         </Border>
 
-        <!-- 已结束的思考段（agent 运行中途的推理，可折叠） -->
+        <!-- 已结束的思考段（agent 运行中途的推理，可折叠）：淡色斜体，默认折叠 -->
         <Border Classes="tool-card" HorizontalAlignment="Left"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsAgentThinkingCard}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="💭" FontSize="13" VerticalAlignment="Center" />
-              <TextBlock Text="思考" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="💭" FontSize="13" VerticalAlignment="Center" Opacity="0.7" />
+              <TextBlock Text="思考" FontSize="12" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+              <TextBlock FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.8" VerticalAlignment="Center"
+                         IsVisible="{Binding ElapsedText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Run Text="· " /><Run Text="{Binding ElapsedText}" />
+              </TextBlock>
               <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
               <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
@@ -66,7 +82,7 @@
               <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                 <TextBlock Text="{Binding Content}" FontSize="12" TextWrapping="Wrap"
                            FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9" />
               </ScrollViewer>
             </Border>
           </StackPanel>
@@ -78,12 +94,15 @@
                 IsVisible="{Binding IsToolStep}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="✅" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding IsToolCompleted}" />
-              <TextBlock Text="🔧" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsToolCompleted}" />
+              <TextBlock Text="{Binding VerbIcon}" FontSize="13" VerticalAlignment="Center" />
               <TextBlock Text="{Binding ToolName}" FontSize="13" FontWeight="SemiBold"
                          Foreground="{DynamicResource ToolCallTextBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding ArgSummary}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
+              <TextBlock Text="{Binding MainArg}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="380" />
+              <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.6" VerticalAlignment="Center"
+                         IsVisible="{Binding !IsToolCompleted}" />
+              <TextBlock Text="✓" FontSize="12" Foreground="#16A34A" VerticalAlignment="Center"
+                         IsVisible="{Binding IsToolCompleted}" />
               <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
               <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
@@ -96,17 +115,45 @@
                              Foreground="{DynamicResource TextPrimaryBrush}" />
                 </StackPanel>
                 <StackPanel Spacing="2" IsVisible="{Binding IsToolCompleted}">
-                  <TextBlock Text="输出" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="结果" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.7"
+                               IsVisible="{Binding IsResultLong}">
+                      <Run Text="· " /><Run Text="{Binding ResultLineCount}" /><Run Text=" 行" />
+                    </TextBlock>
+                  </StackPanel>
+                  <!-- text：短结果一行/多行正文 -->
+                  <TextBlock Text="{Binding ResultText}" FontSize="12" TextWrapping="Wrap"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             IsVisible="{Binding IsResultText}" />
+                  <!-- code：等宽代码块，限高滚动（长结果默认折叠到 240） -->
+                  <Border Background="{DynamicResource CardBgBrush}" CornerRadius="4" Padding="8,6"
+                          IsVisible="{Binding IsResultCode}">
+                    <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                      <TextBlock Text="{Binding ResultText}" FontSize="11" TextWrapping="NoWrap"
+                                 FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                    </ScrollViewer>
+                  </Border>
+                  <!-- error：红色 -->
+                  <TextBlock Text="{Binding ResultText}" FontSize="12" TextWrapping="Wrap"
+                             Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding IsResultError}" />
+                  <!-- table / json：回退键值 JSON -->
                   <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
                              FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             IsVisible="{Binding IsResultTable}" />
+                  <TextBlock Text="{Binding Output, Converter={StaticResource DictToString}}" FontSize="11" TextWrapping="Wrap"
+                             FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             IsVisible="{Binding IsResultJson}" />
                 </StackPanel>
               </StackPanel>
             </Border>
           </StackPanel>
         </Border>
 
-        <!-- 计划卡：待办列表，完成项划横线（类似 Trae/Claude Code 的 plan） -->
+        <!-- 计划卡：待办列表，完成项划横线（随 transcript 持久化、恢复） -->
         <Border Classes="tool-card" HorizontalAlignment="Left"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsPlanCard}">
@@ -121,7 +168,7 @@
                   <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
                     <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
                                IsVisible="{Binding !IsComplete}" />
-                    <TextBlock Text="✓" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                    <TextBlock Text="✓" FontSize="12" Foreground="#16A34A" VerticalAlignment="Center"
                                IsVisible="{Binding IsComplete}" />
                     <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
@@ -159,6 +206,43 @@
         </Border>
       </Grid>
     </DataTemplate>
+
+    <!-- 一轮对话分组容器：左竖线 + Children（MsgTemplate）+ 状态/耗时 -->
+    <DataTemplate x:Key="TurnTemplate" DataType="vm:ChatTurnItem">
+      <Border BorderBrush="#2200A2ED" BorderThickness="2,0,0,0" Margin="0,8" Padding="10,0,0,0">
+        <StackPanel Spacing="4">
+          <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{StaticResource MsgTemplate}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Vertical" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+          <!-- 运行中 -->
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0" IsVisible="{Binding IsWorking}">
+            <TextBlock Text="●" FontSize="9" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="运行中…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <!-- 完成 -->
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0" IsVisible="{Binding IsDone}">
+            <TextBlock Text="✓" FontSize="11" Foreground="#16A34A" VerticalAlignment="Center" />
+            <TextBlock Text="完成" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+            <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.7" VerticalAlignment="Center"
+                       IsVisible="{Binding ElapsedText, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Run Text="· " /><Run Text="{Binding ElapsedText}" />
+            </TextBlock>
+          </StackPanel>
+          <!-- 出错 -->
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0" IsVisible="{Binding IsError}">
+            <TextBlock Text="❌" FontSize="11" VerticalAlignment="Center" />
+            <TextBlock Text="出错" FontSize="11" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <!-- 等待审批 -->
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0" IsVisible="{Binding IsAwaitingApproval}">
+            <TextBlock Text="⏳" FontSize="11" VerticalAlignment="Center" />
+            <TextBlock Text="等待审批…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
   </UserControl.Resources>
 
   <DockPanel>
@@ -186,6 +270,16 @@
 
     <Border DockPanel.Dock="Bottom" Padding="16,10,16,8" Background="{DynamicResource ContentBgBrush}">
       <StackPanel Spacing="6">
+        <!-- plan-accept 条：plan 模式下一轮流结束后提示接受计划→执行 -->
+        <Border Classes="chat-input-card" Padding="12,8" IsVisible="{Binding ShowPlanAccept}" CornerRadius="12">
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <TextBlock Text="📋" FontSize="14" VerticalAlignment="Center" />
+            <TextBlock Text="计划已就绪，是否接受并进入执行？" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <Button Classes="primary" Content="接受计划，进入执行" Command="{Binding AcceptPlanCommand}"
+                    Padding="14,6" FontSize="12" />
+          </StackPanel>
+        </Border>
         <Border Classes="chat-input-card">
           <Grid RowDefinitions="Auto,*">
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="10,10,0,8" HorizontalAlignment="Left">
@@ -222,6 +316,9 @@
                   </ComboBox.ItemTemplate>
                 </ComboBox>
               </Border>
+              <Border Classes="chip" IsVisible="{Binding HasModeSupport}" ToolTip.Tip="Agent 模式：plan 规划（交互）/ execute 执行（自主）">
+                <ComboBox Classes="compact" ItemsSource="{Binding ModeOptions}" SelectedItem="{Binding SelectedMode}" />
+              </Border>
             </StackPanel>
             <Grid Grid.Row="1">
               <TextBox Classes="chat-text" Text="{Binding InputText}" PlaceholderText="输入消息与助手对话…"
@@ -244,7 +341,7 @@
 
     <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
                   ScrollChanged="OnMessagesScrollChanged">
-      <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MsgTemplate}">
+      <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Orientation="Vertical" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>

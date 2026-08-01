@@ -28,6 +28,7 @@ using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.SystemTools.AI;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.AI;
 
 namespace Acme.Desktop.Shared.Hosting;
 
@@ -102,6 +103,14 @@ public static class DesktopCompositionExtensions
 
         // —— 公共 AI 工具（两租户共用）——
         aether.AddSystemTools().AddApkParserTools().AddNotesTools();
+
+        // ask_user 交互对话框工具：agent 需用户拍板/澄清时调用（替代纯文本提问）。AgentFactory 自动纳入各 agent。
+        services.AddSingleton<IAskUserDialogService, AskUserDialogService>();
+        services.AddTransient<AskUserTool>();
+        aether.ConfigureToolRegistry(reg => reg.Register(
+            "ask_user", "向用户提问/确认并阻塞等待回答（返回用户选择或自由文本）。需要用户拍板/澄清时用此工具而非纯文本提问。", "交互",
+            sp => AIFunctionFactory.Create(
+                typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>())));
         // —— 公共 AI skill（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）——
         var skillsDir = Path.Combine(tenantDir, "skills");
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));
