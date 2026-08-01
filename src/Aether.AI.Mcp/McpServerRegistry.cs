@@ -71,7 +71,14 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                entry.Error = ex.Message;
+                // 透传完整异常消息链（含 inner），便于定位「command not found / 编译失败 / 握手超时」等真实原因。
+                var sb = new System.Text.StringBuilder();
+                for (var e = ex; e is not null; e = e.InnerException)
+                {
+                    if (sb.Length > 0) sb.Append(" → ");
+                    sb.Append(e.Message);
+                }
+                entry.Error = sb.ToString();
                 log?.LogWarning(ex, "连接 MCP server {Name} 失败，跳过。", cfg.Name);
             }
         }

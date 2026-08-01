@@ -32,7 +32,7 @@ public partial class McpServerEditViewModel : ObservableObject
         var config = McpServerConfig.TryParse(Json);
         if (config is null || string.IsNullOrWhiteSpace(config.Name))
         {
-            Error = "JSON 解析失败或缺少 name 字段。示例见模板。";
+            Error = "解析失败：未识别 server 配置。mcpServers 映射里 key 即名称（如 {\"mcpServers\":{\"my-server\":{...}}}），或用单对象 {\"name\":\"my-server\",...}。";
             return;
         }
         Error = null;

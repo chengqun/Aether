@@ -37,20 +37,31 @@ public sealed class McpServerConfig
         try
         {
             using var doc = JsonDocument.Parse(json);
-            JsonElement el = doc.RootElement;
-            if (el.ValueKind == JsonValueKind.Array)
+            var root = doc.RootElement;
+
+            // 数组：取第一个对象
+            if (root.ValueKind == JsonValueKind.Array)
             {
-                foreach (var item in el.EnumerateArray())
-                    if (item.ValueKind == JsonValueKind.Object) { el = item; break; }
-                if (el.ValueKind != JsonValueKind.Object) return null;
+                foreach (var item in root.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.Object) return ParseElement(item, null);
+                return null;
             }
-            else if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty("mcpServers", out var map) && map.ValueKind == JsonValueKind.Object)
+
+            // mcpServers 映射：key 即 name，取第一个 server
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("mcpServers", out var map) && map.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prop in map.EnumerateObject())
-                    if (prop.Value.ValueKind == JsonValueKind.Object) { el = prop.Value; break; }
-                if (el.ValueKind != JsonValueKind.Object) return null;
+                    if (prop.Value.ValueKind == JsonValueKind.Object)
+                        return ParseElement(prop.Value, prop.Name); // key 就是 name
+                return null;
             }
-            return ParseElement(el, null);
+
+            // 单个 server 对象：name 从内部 name 字段读
+            if (root.ValueKind == JsonValueKind.Object)
+                return ParseElement(root, null);
+
+            return null;
         }
         catch { return null; }
     }
