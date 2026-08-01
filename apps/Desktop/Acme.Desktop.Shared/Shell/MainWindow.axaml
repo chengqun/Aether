@@ -79,8 +79,9 @@
           </Button>
           <TextBlock Text="暂无会话" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                      Margin="14,4" IsVisible="{Binding IsRecentEmptyVisible}"/>
-          <ScrollViewer IsVisible="{Binding IsRecentExpanded}"
-                        HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <ScrollViewer x:Name="ConversationsScrollViewer" IsVisible="{Binding IsRecentExpanded}"
+                        HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                        ScrollChanged="OnConversationsScrollChanged">
             <ItemsControl ItemsSource="{Binding Conversations}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>

@@ -47,6 +47,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private bool _isInitializing;
     private bool _syncingMode; // 程序化刷新 SelectedMode 时置 true，避免 OnSelectedModeChanged 回触 SetMode
 
+    // —— 历史增量加载：切换会话时只渲染最近若干轮，更早的暂存，滚到顶部再加载 ——
+    // 避免长会话一次性重建全部消息 + 同步 markdown 解析导致的卡顿（全在 UI 线程）。
+    private List<ChatTurnItem>? _pendingHistoryTurns; // 暂存的更早轮（时间正序，最旧在前；尚未加入 Messages 渲染）
+    private const int HistoryInitialBatch = 10;       // 切换会话时初始渲染的最近轮数
+    private const int HistoryLoadBatch = 10;          // 每次滚到顶部增量加载的轮数
+
+    // —— 侧边栏「最近会话」增量加载：摘要全量拉取（轻量，无 transcript），但只渲染最近若干条，滚到底部再加载 ——
+    private List<ConversationItem>? _pendingConversationItems; // 暂存的更早会话项（按 UpdatedAt 倒序，较旧在前；尚未加入 Conversations 渲染）
+    private const int ConversationsInitialBatch = 20;          // 初始渲染的会话条数
+    private const int ConversationsLoadBatch = 20;             // 每次滚到底部增量加载的会话条数
+
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
         _auth = auth;
@@ -548,6 +559,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
+        _pendingHistoryTurns = null;
         foreach (var c in Conversations) c.IsCurrent = false;
         CurrentPage = "chat";
     }
@@ -573,27 +585,22 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _isInitializing = false;
 
             Messages.Clear();
+            _pendingHistoryTurns = null;
             if (conv is not null)
             {
-                // 按 user 消息分组重建 turn：每条 user 消息开新轮，其后 assistant/tool 归入该轮。
-                ChatTurnItem? cur = null;
-                foreach (var m in conv.Messages)
+                // 一次性按 user 消息分组重建全部 turn（POCO 构建 + metadata 解析，开销小），
+                // 但只把最近 N 轮加入 Messages 渲染——markdown 解析仅在绑定时发生，分批可避免卡顿。
+                // 更早的轮暂存 _pendingHistoryTurns，待用户滚到顶部时由 View 触发 LoadMoreHistory 增量加载。
+                var all = BuildTurns(conv.Messages, item.AgentName ?? "专家");
+                if (all.Count <= HistoryInitialBatch)
                 {
-                    var ci = FromTranscriptMessage(m, item.AgentName ?? "专家");
-                    if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
-                    {
-                        cur = new ChatTurnItem { Header = m.Content };
-                        cur.Children.Add(ci);
-                        Messages.Add(cur);
-                    }
-                    else
-                    {
-                        cur ??= new ChatTurnItem { Header = string.Empty };
-                        if (cur.Children.Count == 0) Messages.Add(cur);
-                        cur.Children.Add(ci);
-                    }
+                    foreach (var t in all) Messages.Add(t);
                 }
-                foreach (var t in Messages) t.Finish(TurnStatus.Done); // 历史轮已结束
+                else
+                {
+                    _pendingHistoryTurns = all.Take(all.Count - HistoryInitialBatch).ToList();
+                    foreach (var t in all.Skip(all.Count - HistoryInitialBatch)) Messages.Add(t);
+                }
             }
             CurrentPage = "chat";
         }
@@ -623,7 +630,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
     }
 
-    /// <summary>从存储加载最近会话列表（按 UpdatedAt 倒序）。</summary>
+    /// <summary>从存储加载最近会话列表（按 UpdatedAt 倒序）。增量渲染：只把最近若干条加入列表，更早的滚到底部再加载。</summary>
     private async Task RefreshConversationsAsync()
     {
         try
@@ -632,9 +639,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await _dispatcher.InvokeAsync(() =>
             {
                 Conversations.Clear();
+                // 摘要轻量（无 transcript），一次性构建全部 ConversationItem（POCO，开销小），
+                // 但只渲染最近 N 条——侧边栏 ItemsControl 非虚拟化，全量渲染条目多时启动会卡。
+                var all = new List<ConversationItem>(summaries.Count);
                 foreach (var s in summaries)
                 {
-                    Conversations.Add(new ConversationItem
+                    all.Add(new ConversationItem
                     {
                         Id = s.ConversationId,
                         Title = string.IsNullOrWhiteSpace(s.Title) ? "新会话" : s.Title,
@@ -645,9 +655,34 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         IsCurrent = s.ConversationId == _currentConversationId,
                     });
                 }
+                if (all.Count <= ConversationsInitialBatch)
+                {
+                    foreach (var c in all) Conversations.Add(c);
+                    _pendingConversationItems = null;
+                }
+                else
+                {
+                    _pendingConversationItems = all.Skip(ConversationsInitialBatch).ToList();
+                    foreach (var c in all.Take(ConversationsInitialBatch)) Conversations.Add(c);
+                }
             });
         }
         catch { /* 启动期失败不阻塞 */ }
+    }
+
+    /// <summary>侧边栏是否还有更早的会话未渲染（供 View 判断是否触发增量加载）。</summary>
+    public bool HasMoreConversations => _pendingConversationItems is { Count: > 0 };
+
+    /// <summary>增量加载更早的会话条目：从暂存队列取出最多 <see cref="ConversationsLoadBatch"/> 条追加到列表尾部。返回实际加载数。</summary>
+    public int LoadMoreConversations()
+    {
+        if (_pendingConversationItems is null || _pendingConversationItems.Count == 0) return 0;
+        int take = Math.Min(ConversationsLoadBatch, _pendingConversationItems.Count);
+        // 暂存按 UpdatedAt 倒序（较旧在前），追加到列表尾部保持「最新在上、往下渐旧」的顺序。
+        for (int i = 0; i < take; i++)
+            Conversations.Add(_pendingConversationItems[i]);
+        _pendingConversationItems.RemoveRange(0, take);
+        return take;
     }
 
     private static string FormatTime(DateTimeOffset t)
@@ -1331,6 +1366,50 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Content = item.Content ?? string.Empty,
             Metadata = item.IsReasoning ? new Dictionary<string, string> { ["kind"] = "reasoning" } : null,
         };
+    }
+
+    /// <summary>是否还有更早的历史轮未渲染（供 View 判断是否触发增量加载）。</summary>
+    public bool HasMoreHistory => _pendingHistoryTurns is { Count: > 0 };
+
+    /// <summary>
+    /// 增量加载更早的历史轮：从暂存队列取出最多 <see cref="HistoryLoadBatch"/> 轮，插入到 <see cref="Messages"/> 顶部。
+    /// 返回实际加载的轮数（0 表示无更多历史）。markdown 解析仅在加入 Messages 绑定时发生，故分批可避免一次性卡顿。
+    /// </summary>
+    public int LoadMoreHistory()
+    {
+        if (_pendingHistoryTurns is null || _pendingHistoryTurns.Count == 0) return 0;
+        int take = Math.Min(HistoryLoadBatch, _pendingHistoryTurns.Count);
+        // 暂存按时间正序（最旧在前）；取最新的待加载批次（队列尾部），倒序 Insert(0) 以保持正序。
+        int start = _pendingHistoryTurns.Count - take;
+        for (int i = start + take - 1; i >= start; i--)
+            Messages.Insert(0, _pendingHistoryTurns[i]);
+        _pendingHistoryTurns.RemoveRange(start, take);
+        return take;
+    }
+
+    /// <summary>按 user 消息分组重建全部 turn：每条 user 消息开新轮，其后 assistant/tool 归入该轮。历史轮标记 Done。</summary>
+    private static List<ChatTurnItem> BuildTurns(IEnumerable<Aether.AI.Core.Messages.Message> messages, string agentName)
+    {
+        var turns = new List<ChatTurnItem>();
+        ChatTurnItem? cur = null;
+        foreach (var m in messages)
+        {
+            var ci = FromTranscriptMessage(m, agentName);
+            if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
+            {
+                cur = new ChatTurnItem { Header = m.Content };
+                cur.Children.Add(ci);
+                turns.Add(cur);
+            }
+            else
+            {
+                cur ??= new ChatTurnItem { Header = string.Empty };
+                if (cur.Children.Count == 0) turns.Add(cur);
+                cur.Children.Add(ci);
+            }
+        }
+        foreach (var t in turns) t.Finish(TurnStatus.Done); // 历史轮已结束
+        return turns;
     }
 
     /// <summary>持久化 Message → ChatMessageItem（还原历史时）。工具步/思考段从 metadata 还原。</summary>

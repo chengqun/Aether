@@ -2,6 +2,7 @@ using Acme.Shell;
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -14,6 +15,9 @@ public partial class ChatView : UserControl
     /// <summary>判定「贴底」的垂直容差（逻辑像素）。距底部小于此值视为用户在底部，流式时自动跟随。</summary>
     private const double StickToBottomTolerance = 24;
 
+    /// <summary>距顶部小于此值（逻辑像素）时触发加载更早的历史轮。</summary>
+    private const double HistoryLoadThreshold = 120;
+
     private MainViewModelBase? _vm;
     private ChatTurnItem? _trackedTurn;
     private ChatMessageItem? _trackedChild;
@@ -23,6 +27,9 @@ public partial class ChatView : UserControl
 
     /// <summary>合并同帧多次滚动请求，避免每个 token 都触发一次 ScrollToEnd。</summary>
     private bool _scrollPending;
+
+    /// <summary>正在增量加载更早历史（抑制此期间的自动滚到底 + 滚动事件处理）。</summary>
+    private bool _loadingHistory;
 
     public ChatView()
     {
@@ -69,6 +76,7 @@ public partial class ChatView : UserControl
         if (e.Action == NotifyCollectionChangedAction.Reset)
             _stickToBottom = true;
         TrackLastTurn();
+        if (_loadingHistory) return; // 历史增量加载（Insert(0)）：不触发自动滚到底
         if (e.Action == NotifyCollectionChangedAction.Add || e.Action == NotifyCollectionChangedAction.Reset)
             RequestScrollToBottom();
     }
@@ -134,9 +142,39 @@ public partial class ChatView : UserControl
     private void OnMessagesScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (sender is not ScrollViewer sv) return;
+        if (_loadingHistory) return; // 增量加载 / offset 补偿期间忽略
         if (e.OffsetDelta.Y == 0) return; // 仅 Extent/Viewport 变化，不视为用户主动滚动
         var distFromBottom = sv.Extent.Height - sv.Viewport.Height - sv.Offset.Y;
         _stickToBottom = distFromBottom < StickToBottomTolerance;
+
+        // 滚到顶部附近且还有更早历史：增量加载，避免切换长会话时一次性渲染全部消息卡顿。
+        if (_vm?.HasMoreHistory == true && sv.Extent.Height > sv.Viewport.Height
+            && sv.Offset.Y < HistoryLoadThreshold)
+        {
+            TryLoadHistory(sv);
+        }
+    }
+
+    /// <summary>滚到顶部时增量加载更早的历史轮，并补偿滚动偏移使视窗停留原位（不被新插入内容顶走）。</summary>
+    private async void TryLoadHistory(ScrollViewer sv)
+    {
+        if (_vm is null || _loadingHistory) return;
+        double beforeExtent = sv.Extent.Height;
+        double beforeOffset = sv.Offset.Y;
+        _loadingHistory = true;
+        try
+        {
+            int loaded = _vm.LoadMoreHistory();
+            if (loaded > 0)
+            {
+                // 等待插入项布局生效后读取 extent 增量，补偿 offset 使原视窗内容停留原位。
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                double delta = sv.Extent.Height - beforeExtent;
+                if (delta > 0)
+                    sv.Offset = new Vector(0, beforeOffset + delta);
+            }
+        }
+        finally { _loadingHistory = false; }
     }
 
     private void RequestScrollToBottom()
