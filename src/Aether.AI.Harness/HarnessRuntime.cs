@@ -252,6 +252,17 @@ public sealed class HarnessRuntime
                 // 无对应待审请求（可能已被 always-approve 规则自动消化）→ 本轮无内容。
                 return string.Empty;
             }
+            // 防御：原请求必须带可绑定的 tool_use（FunctionCallContent + CallId）。否则构造出的
+            // ToolApprovalResponseContent（本质 tool result）会成为「无前置 tool_use 的孤儿」，
+            // 让 GLM/Anthropic 兼容端点报 messages 非法（如 GLM [1214]）。正常流程下 tool_use 是
+            // 历史里最新的 assistant 消息、不会被滑动窗口截断；此守卫兜底暂存被污染/失效的异常情形。
+            if (req.ToolCall is not FunctionCallContent fc || string.IsNullOrEmpty(fc.CallId))
+            {
+                RemovePendingApproval(frameworkSession, approvalResponse.RequestId);
+                if (handlers?.OnError is not null)
+                    await handlers.OnError("审批请求已失效（缺少对应的工具调用），请重试。", cancellationToken).ConfigureAwait(false);
+                return string.Empty;
+            }
             var reason = approvalResponse.Reason ?? string.Empty;
             AIContent responseContent = approvalResponse.AlwaysApprove
                 ? (AIContent)req.CreateAlwaysApproveToolResponse(reason)

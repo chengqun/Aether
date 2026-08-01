@@ -226,6 +226,71 @@ public class ToolApprovalSpikeTests
         Assert.Contains("报单", finalText);
     }
 
+    /// <summary>
+    /// 审批恢复轮在 SlidingWindow + 小窗口下仍能正常工作：待审批的 tool_use 是历史里最新的
+    /// assistant 消息，reducer 不会截断它；恢复轮发出的 ToolApprovalResponseContent 能正确绑定。
+    /// 回归守卫：SlidingWindowChatReducer 的配对感知截断不应破坏审批协作循环。
+    /// </summary>
+    [Fact]
+    public async Task HarnessRuntime_approval_loop_works_under_sliding_window()
+    {
+        var client = new ScriptedChatClient();
+        // 先两轮纯文本把历史堆过 MaxHistory，迫使恢复轮走 reducer 截断路径
+        client.Script.Add(new ChatResponseUpdate { Contents = new AIContent[] { new TextContent("ok1") } });
+        client.Script.Add(new ChatResponseUpdate { Contents = new AIContent[] { new TextContent("ok2") } });
+        // 第三轮：调用需审批的 PlaceOrder
+        client.Script.Add(new ChatResponseUpdate
+        {
+            Contents = new AIContent[]
+            {
+                new FunctionCallContent("call-1", "PlaceOrder",
+                    new Dictionary<string, object?> { ["symbol"] = "IF2406" })
+            }
+        });
+        // 恢复轮：最终文本
+        client.Script.Add(new ChatResponseUpdate { Contents = new AIContent[] { new TextContent("已报单 IF2406") } });
+
+        var registry = new ToolRegistry();
+        registry.Register("PlaceOrder", "Place a trading order.", "test",
+            _ => AIFunctionFactory.Create((Func<string, string>)PlaceOrder), ToolApprovalLevel.Dangerous);
+        var factory = new AgentFactory(new ConstChatClientFactory(client), registry, new SkillRegistry());
+        var runtime = new HarnessRuntime(factory, new SessionManager());
+        runtime.RegisterAgent(new AgentDefinition
+        {
+            Id = "spike-sw",
+            Name = "SpikeSW",
+            Instructions = "be brief",
+            Tools = new[] { "PlaceOrder" },
+            RequireToolApproval = true,
+            Memory = AgentMemoryMode.SlidingWindow,
+            MaxHistory = 4, // 小窗口：恢复轮历史经 reducer 处理
+        });
+
+        var session = runtime.StartSession("spike-sw");
+
+        // 轮 1、2：纯文本堆积历史
+        await runtime.RunStreamingAsync(session.SessionId, "t1");
+        await runtime.RunStreamingAsync(session.SessionId, "t2");
+
+        // 轮 3：应冒出审批请求（tool_use 是历史最新消息，reducer 不会截断）
+        ToolApprovalRequest? approvalReq = null;
+        await runtime.RunStreamingAsync(session.SessionId, "t3", new StreamHandlers(
+            OnApprovalRequest: (req, _) => { approvalReq = req; return Task.CompletedTask; }));
+        Assert.NotNull(approvalReq);
+
+        // 恢复轮：批准 → 应执行工具并给最终文本
+        var decision = new ToolApprovalDecision(approvalReq!.RequestId, Approved: true, Reason: null, AlwaysApprove: false);
+        bool sawResult = false;
+        string finalText = "";
+        await runtime.RunStreamingAsync(session.SessionId, "t3", new StreamHandlers(
+            OnToken: (t, _) => { finalText += t; return Task.CompletedTask; },
+            OnToolEvent: (ev, _) => { if (ev.Kind == ToolStreamEventKind.Result) sawResult = true; return Task.CompletedTask; }),
+            decision);
+
+        Assert.True(sawResult, "SlidingWindow 下批准后应出现工具结果事件");
+        Assert.Contains("报单", finalText);
+    }
+
     private sealed class ConstChatClientFactory : IChatClientFactory
     {
         private readonly IChatClient _client;
