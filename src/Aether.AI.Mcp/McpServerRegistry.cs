@@ -80,14 +80,22 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
                 Arguments = cfg.Arguments?.ToList() ?? new List<string>(),
             };
             if (!string.IsNullOrEmpty(cfg.WorkingDirectory)) opts.WorkingDirectory = cfg.WorkingDirectory;
-            // 环境变量：v1 暂不透传（StdioClientTransportOptions 1.2.0 无 Environment 属性），子进程继承当前进程环境。
+            if (cfg.Env is not null)
+            {
+                foreach (var kv in cfg.Env) opts.EnvironmentVariables[kv.Key] = kv.Value;
+            }
             return await McpClient.CreateAsync(new StdioClientTransport(opts), cancellationToken: ct).ConfigureAwait(false);
         }
 
         if (cfg.IsSse)
         {
             // 1.2.0：SSE/流式 HTTP 统一走 HttpClientTransport，按 endpoint 自动协商传输模式。
-            return await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions { Endpoint = new Uri(cfg.Url!) }), cancellationToken: ct).ConfigureAwait(false);
+            var opts = new HttpClientTransportOptions { Endpoint = new Uri(cfg.Url!) };
+            if (cfg.Headers is not null)
+            {
+                foreach (var kv in cfg.Headers) opts.AdditionalHeaders.Add(kv.Key, kv.Value);
+            }
+            return await McpClient.CreateAsync(new HttpClientTransport(opts), cancellationToken: ct).ConfigureAwait(false);
         }
 
         throw new InvalidOperationException($"MCP server '{cfg.Name}' 既未配置 Command(stdio) 也未配置 Url(sse)。");

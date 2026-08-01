@@ -134,6 +134,7 @@
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Acme.Agents.AI.Tests/Acme.Agents.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />
+    <Project Path="tests/Aether.AI.Mcp.Tests/Aether.AI.Mcp.Tests.csproj" />
     <Project Path="tests/Aether.AI.Memory.Tests/Aether.AI.Memory.Tests.csproj" />
     <Project Path="tests/Acme.Trading.Domain.Tests/Acme.Trading.Domain.Tests.csproj" />
     <Project Path="tests/Acme.Trading.Runtime.Tests/Acme.Trading.Runtime.Tests.csproj" />

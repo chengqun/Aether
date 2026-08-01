@@ -12,22 +12,29 @@ Agent 通过 `mcp-servers/` 目录下的 JSON 配置连接它们（走 stdio）�
 
 ## 启用一个 server
 
-在租户数据目录的 `mcp-servers/` 下放一个 JSON 文件（每个 server 一个，或一个数组文件多个）：
+在租户数据目录的 `mcp-servers/` 下放一个 JSON 文件。格式与 Claude Code / Cursor 的 `.mcp.json` **完全兼容**——可直接把现成的 `.mcp.json` 丢进来用：
 
-**源码 server（stdio，本仓库内）：**
 ```json
 {
-  "name": "sample",
-  "command": "dotnet",
-  "arguments": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"]
+  "mcpServers": {
+    "sample": {
+      "command": "dotnet",
+      "args": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"]
+    },
+    "remote": { "url": "https://host/sse", "headers": { "Authorization": "Bearer xxx" } },
+    "fs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": { "API_KEY": "xxx" }
+    }
+  }
 }
 ```
-> 注意：从 `.app` 启动时 CWD 是 `/`，`--project` 用**绝对路径**最稳。
 
-**远程 HTTP/SSE server：**
-```json
-{ "name": "remote", "url": "https://host/sse" }
-```
+也支持单 server 对象 `{ "name","command","args","env","url","headers" }` 或数组（`arguments` 作为 `args` 别名）。
+
+字段：`command`+`args`+`env`（stdio）或 `url`+`headers`（HTTP）。
+> 从 `.app` 启动时 CWD 是 `/`，`--project` / 路径用**绝对路径**最稳。
 
 启动时 Aether 扫描 `mcp-servers/*.json` 自动连接（单个 server 失败跳过不阻断）。专家编辑页勾「MCP工具」即纳入该 server 的所有工具（默认按 Dangerous 审批）。
 

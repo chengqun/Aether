@@ -44,9 +44,15 @@ public static class AetherAIBuilderMcpExtensions
 }
 
 /// <summary>
-/// 从目录加载 <see cref="McpServerConfig"/>：扫描 <c>*.json</c>，每个文件可为单个对象或对象数组。
-/// 格式示例（stdio）：{"name":"fs","command":"npx","arguments":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}
-/// （SSE）：{"name":"remote","url":"https://host/sse"}。解析失败的文件跳过。
+/// 从目录加载 <see cref="McpServerConfig"/>：扫描 <c>*.json</c>。兼容三种格式：
+/// <list type="bullet">
+/// <item><b>主流 mcpServers 映射</b>（Claude Code / Cursor 的 <c>.mcp.json</c>，可直接复用）：
+///   <c>{ "mcpServers": { "name": { "command","args","env","url","headers" } } }</c></item>
+/// <item><b>单个 server 对象</b>：<c>{ "name","command","args","env","url","headers" }</c></item>
+/// <item><b>数组</b>：<c>[ { ... }, { ... } ]</c></item>
+/// </list>
+/// 字段：<c>command</c>+<c>args</c>+<c>env</c>（stdio）或 <c>url</c>+<c>headers</c>（HTTP）。
+/// 也接受 <c>arguments</c> 作为 <c>args</c> 的别名。解析失败的文件跳过。
 /// </summary>
 public static class McpServerConfigLoader
 {
@@ -61,15 +67,7 @@ public static class McpServerConfigLoader
             {
                 var json = File.ReadAllText(file);
                 using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var el in doc.RootElement.EnumerateArray())
-                        list.Add(ParseConfig(el));
-                }
-                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                {
-                    list.Add(ParseConfig(doc.RootElement));
-                }
+                AddFromElement(doc.RootElement, list);
             }
             catch
             {
@@ -79,23 +77,62 @@ public static class McpServerConfigLoader
         return list;
     }
 
-    private static McpServerConfig ParseConfig(JsonElement el)
+    private static void AddFromElement(JsonElement el, List<McpServerConfig> list)
     {
-        string? Get(string name) =>
-            el.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+        if (el.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in el.EnumerateArray())
+                if (item.ValueKind == JsonValueKind.Object) list.Add(ParseConfig(item, null));
+        }
+        else if (el.ValueKind == JsonValueKind.Object)
+        {
+            // 主流 mcpServers 映射：{ "mcpServers": { "name": { ... } } }
+            if (el.TryGetProperty("mcpServers", out var map) && map.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in map.EnumerateObject())
+                    if (prop.Value.ValueKind == JsonValueKind.Object)
+                        list.Add(ParseConfig(prop.Value, prop.Name));
+            }
+            else
+            {
+                list.Add(ParseConfig(el, null));
+            }
+        }
+    }
 
+    private static McpServerConfig ParseConfig(JsonElement el, string? name)
+    {
+        string? Get(string n) =>
+            el.TryGetProperty(n, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+
+        // args 优先（主流），arguments 作为别名
         IReadOnlyList<string>? args = null;
-        if (el.TryGetProperty("arguments", out var a) && a.ValueKind == JsonValueKind.Array)
+        if (el.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
+            args = a.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()).ToList();
+        else if (el.TryGetProperty("arguments", out a) && a.ValueKind == JsonValueKind.Array)
             args = a.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()).ToList();
 
         return new McpServerConfig
         {
-            Name = Get("name") ?? string.Empty,
+            Name = name ?? Get("name") ?? string.Empty,
             Command = Get("command"),
             Arguments = args,
-            WorkingDirectory = Get("workingDirectory"),
+            WorkingDirectory = Get("workingDirectory") ?? Get("cwd"),
+            Env = ParseStringMap(el, "env"),
             Url = Get("url"),
+            Headers = ParseStringMap(el, "headers"),
         };
     }
+
+    private static IReadOnlyDictionary<string, string>? ParseStringMap(JsonElement el, string name)
+    {
+        if (!el.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.Object) return null;
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in p.EnumerateObject())
+            if (prop.Value.ValueKind == JsonValueKind.String)
+                dict[prop.Name] = prop.Value.GetString() ?? "";
+        return dict.Count == 0 ? null : dict;
+    }
 }
+
 
