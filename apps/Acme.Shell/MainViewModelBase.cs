@@ -310,7 +310,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         Sender = senderName,
         Content = string.Empty,
         IsStreaming = true,
-        IsReasoning = true, // 思考段；末段在 FinalizeSegment 翻为答案（推理段除外）
+        // 只有 TextReasoningContent（真·思考）才 IsReasoning=true（折叠 💭）；
+        // TextContent（可见叙述/答案）IsReasoning=false，冻结后渲染为展开的 markdown 文本，不折叠。
+        IsReasoning = isReasoningContent,
         IsReasoningContent = isReasoningContent,
     };
 
