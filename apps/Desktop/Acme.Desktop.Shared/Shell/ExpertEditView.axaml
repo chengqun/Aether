@@ -97,6 +97,8 @@
                 <CheckBox Content="技能" IsChecked="{Binding EnableAgentSkills}" Margin="0,0,12,2"/>
                 <CheckBox Content="Agent模式" IsChecked="{Binding EnableAgentModeProvider}" Margin="0,0,12,2"/>
                 <CheckBox Content="遥测" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,0,12,2"/>
+                <CheckBox Content="长期记忆" IsChecked="{Binding EnableLongTermMemory}" Margin="0,0,12,2"/>
+                <CheckBox Content="MCP工具" IsChecked="{Binding EnableMcpTools}" Margin="0,0,12,2"/>
               </WrapPanel>
             </StackPanel>
           </StackPanel>

@@ -96,6 +96,8 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             EnableFileMemory = def.EnableFileMemory,
             EnableAgentSkills = def.EnableAgentSkills,
             EnableOpenTelemetry = def.EnableOpenTelemetry,
+            EnableLongTermMemory = def.EnableLongTermMemory,
+            EnableMcpTools = def.EnableMcpTools,
         };
 
     /// <summary>Notes 层 AgentResponseFormat → 平台 Core AgentResponseFormat（同名不同程序集，显式映射）。</summary>

@@ -90,4 +90,17 @@ public sealed class AgentDefinition
 
     /// <summary>启用 OpenTelemetry（默认禁用）。</summary>
     public bool EnableOpenTelemetry { get; init; }
+
+    /// <summary>
+    /// 启用长期记忆（默认禁用）。开启后 agent 构建/运行时接入 <c>IMemoryStore</c>：每轮 run 前
+    /// 召回该用户的长期记忆注入 system 指令，run 后把本轮 Q&amp;A 沉淀为 <c>TaskHistory</c> 记忆项，
+    /// 跨会话保留。区别于 <see cref="Memory"/>（会话内聊天历史窗口）。
+    /// </summary>
+    public bool EnableLongTermMemory { get; init; }
+
+    /// <summary>
+    /// 启用 MCP 工具（默认禁用）。开启后 agent 自动纳入宿主配置的所有 MCP server 工具
+    /// （由 <c>McpServerRegistry</c> 预解析提供）。MCP 工具默认按 Dangerous 审批等级处理。
+    /// </summary>
+    public bool EnableMcpTools { get; init; }
 }

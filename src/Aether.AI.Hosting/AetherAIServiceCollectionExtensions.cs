@@ -4,8 +4,10 @@ using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Sessions;
 using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
+using Aether.AI.Hosting.Agents;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -71,13 +73,32 @@ public static class AetherAIServiceCollectionExtensions
 
         // Harness
         services.AddSingleton<IChatClientFactory, DefaultChatClientFactory>();
+
+        // 长期记忆 userId 解析器（运行时取当前用户）。默认 () => null（全局记忆）；
+        // 桌面宿主用 ICurrentUser 覆盖。AgentFactory 经此构造 MemoryContextProvider。
+        Func<string?> defaultUserIdAccessor = () => null;
+        services.AddSingleton(defaultUserIdAccessor);
+
+        // 长期记忆 provider 工厂：仅 EnableLongTermMemory 的 agent 注入 MemoryContextProvider。
+        services.AddSingleton<Func<AgentDefinition, AIContextProvider?>>(sp =>
+        {
+            var store = sp.GetRequiredService<IMemoryStore>();
+            var userIdAccessor = sp.GetRequiredService<Func<string?>>();
+            var logger = sp.GetService<ILoggerFactory>();
+            return definition => definition.EnableLongTermMemory
+                ? new MemoryContextProvider(store, userIdAccessor, logger)
+                : null;
+        });
+
         services.AddSingleton<AgentFactory>(sp =>
         {
             var factory = new AgentFactory(
                 sp.GetRequiredService<IChatClientFactory>(),
                 sp.GetRequiredService<ToolRegistry>(),
                 sp.GetRequiredService<SkillRegistry>(),
-                sp.GetService<ILoggerFactory>());
+                sp.GetService<ILoggerFactory>(),
+                sp.GetService<Func<AgentDefinition, AIContextProvider?>>(),
+                sp.GetService<Func<IReadOnlyList<AIFunction>>>()); // MCP 工具 accessor：未注册则为 null（无 MCP）
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
             factory.SkillsDirectory = sp.GetRequiredService<AetherAIOptions>().SkillsDirectory;

@@ -48,6 +48,8 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private bool _enableFileMemory;
     [ObservableProperty] private bool _enableAgentSkills;
     [ObservableProperty] private bool _enableOpenTelemetry;
+    [ObservableProperty] private bool _enableLongTermMemory;
+    [ObservableProperty] private bool _enableMcpTools;
 
     public string DisplayIcon => "🤖";
     /// <summary>来源徽章：本地 / 市场。</summary>

@@ -123,6 +123,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IChatClientFactory, DesktopChatClientFactory>();
         // 会话持久化（覆盖平台默认的 InMemoryConversationStore）+ 偏好持久化（跨重启保留召唤/选中）
         services.AddSingleton<IConversationStore>(sp => SqliteConversationStore.ForFile(Path.Combine(tenantDir, "conversations.db")));
+        // 长期记忆持久化（覆盖平台默认的 InMemoryMemoryStore）。桌面端单用户 → userId=null 即全局记忆。
+        services.AddSingleton<IMemoryStore>(sp => SqliteMemoryStore.ForFile(Path.Combine(tenantDir, "memory.db")));
         services.AddSingleton<IPreferencesStore>(sp => new JsonPreferencesStore(tenantDir));
         // UI 线程调度抽象（供 UI 无关的 ExpertsViewModel 使用）
         services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
