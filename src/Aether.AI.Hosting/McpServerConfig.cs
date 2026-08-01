@@ -55,42 +55,50 @@ public sealed class McpServerConfig
         catch { return null; }
     }
 
-    /// <summary>序列化为单个 server 对象的 pretty JSON（编辑表单回填用）。</summary>
+    /// <summary>序列化为 mcpServers 映射格式（与 Trae/Claude Code/Cursor 一致）的 pretty JSON。</summary>
     public string ToJson()
     {
         using var ms = new MemoryStream();
         using (var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
         {
             w.WriteStartObject();
-            w.WriteString("name", Name);
-            if (!string.IsNullOrEmpty(Command))
-            {
-                w.WriteString("command", Command);
-                w.WritePropertyName("args");
-                w.WriteStartArray();
-                if (Arguments is not null) foreach (var a in Arguments) w.WriteStringValue(a);
-                w.WriteEndArray();
-                if (!string.IsNullOrEmpty(WorkingDirectory)) w.WriteString("cwd", WorkingDirectory);
-                if (Env is not null && Env.Count > 0)
-                {
-                    w.WriteStartObject("env");
-                    foreach (var kv in Env) w.WriteString(kv.Key, kv.Value);
-                    w.WriteEndObject();
-                }
-            }
-            else if (!string.IsNullOrEmpty(Url))
-            {
-                w.WriteString("url", Url);
-                if (Headers is not null && Headers.Count > 0)
-                {
-                    w.WriteStartObject("headers");
-                    foreach (var kv in Headers) w.WriteString(kv.Key, kv.Value);
-                    w.WriteEndObject();
-                }
-            }
+            w.WriteStartObject("mcpServers");
+            w.WriteStartObject(Name);
+            WriteBody(w);
+            w.WriteEndObject();
+            w.WriteEndObject();
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private void WriteBody(Utf8JsonWriter w)
+    {
+        if (!string.IsNullOrEmpty(Command))
+        {
+            w.WriteString("command", Command);
+            w.WritePropertyName("args");
+            w.WriteStartArray();
+            if (Arguments is not null) foreach (var a in Arguments) w.WriteStringValue(a);
+            w.WriteEndArray();
+            if (!string.IsNullOrEmpty(WorkingDirectory)) w.WriteString("cwd", WorkingDirectory);
+            if (Env is not null && Env.Count > 0)
+            {
+                w.WriteStartObject("env");
+                foreach (var kv in Env) w.WriteString(kv.Key, kv.Value);
+                w.WriteEndObject();
+            }
+        }
+        else if (!string.IsNullOrEmpty(Url))
+        {
+            w.WriteString("url", Url);
+            if (Headers is not null && Headers.Count > 0)
+            {
+                w.WriteStartObject("headers");
+                foreach (var kv in Headers) w.WriteString(kv.Key, kv.Value);
+                w.WriteEndObject();
+            }
+        }
     }
 
     public static McpServerConfig ParseElement(JsonElement el, string? name)

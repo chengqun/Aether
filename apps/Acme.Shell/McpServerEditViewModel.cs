@@ -44,10 +44,13 @@ public partial class McpServerEditViewModel : ObservableObject
 
     private const string DefaultTemplate = """
 {
-  "name": "my-server",
-  "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  "env": {}
+  "mcpServers": {
+    "my-server": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {}
+    }
+  }
 }
 """;
 }

@@ -21,35 +21,35 @@ Agent 通过 MCP 协议（stdio）调用它们——和 Claude Code / Cursor 配
 
 ### JSON 格式
 
-单个 server 对象（app 内编辑用这种）：
+采用主流 `mcpServers` 映射格式（与 Trae / Claude Code / Cursor 一致，可直接互拷）：
 ```json
 {
-  "name": "sample",
-  "command": "dotnet",
-  "args": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"],
-  "env": {}
+  "mcpServers": {
+    "sample": {
+      "command": "dotnet",
+      "args": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"],
+      "env": {}
+    }
+  }
 }
 ```
-也兼容主流 `.mcp.json` 的 `mcpServers` 映射（可直接把 Claude Code/Cursor 的配置丢进 `mcp-servers/`）：
-```json
-{ "mcpServers": { "sample": { "command": "...", "args": [...] } } }
-```
+也接受单个 server 对象 `{ "name": "...", "command": "...", ... }` 或数组。字段：`command`+`args`+`env`（stdio）或 `url`+`headers`（HTTP/SSE 远程）；`arguments` 作为 `args` 别名。
 
-字段：`command`+`args`+`env`（stdio）或 `url`+`headers`（HTTP/SSE 远程）。`arguments` 作为 `args` 别名。
+> app 内编辑一次配一个 server（粘贴 mcpServers 映射时取第一个）；要一次配多个，直接把含多 server 的 `.mcp.json` 文件放进 `mcp-servers/`。
 
 ### 配置本地程序（两种都行）
 
 - **跑源码**（开发期方便，但机器需装 .NET SDK）：
   ```json
-  { "name": "sample", "command": "dotnet", "args": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"] }
+  { "mcpServers": { "sample": { "command": "dotnet", "args": ["run", "--project", "/绝对路径/Aether/mcp/SampleServer"] } } }
   ```
 - **跑编译好的程序**（分发用，无需 SDK；先 `dotnet publish` 出可执行文件）：
   ```json
-  { "name": "sample", "command": "/绝对路径/Aether/mcp/SampleServer/bin/Release/net10.0/osx-arm64/publish/SampleServer" }
+  { "mcpServers": { "sample": { "command": "/绝对路径/Aether/mcp/SampleServer/bin/.../publish/SampleServer" } } }
   ```
 - **远程 HTTP server**：
   ```json
-  { "name": "remote", "url": "https://host/sse", "headers": { "Authorization": "Bearer xxx" } }
+  { "mcpServers": { "remote": { "url": "https://host/sse", "headers": { "Authorization": "Bearer xxx" } } } }
   ```
 
 > 从 `.app` 启动时 CWD 是 `/`，`--project` / 程序路径用**绝对路径**最稳。
