@@ -155,9 +155,6 @@ public sealed class AgentSourceParser : IAgentSourceParser
                 case "enablelongtermmemory":
                     if (bool.TryParse(value, out var ltm)) result.EnableLongTermMemory = ltm;
                     break;
-                case "enablemcpools":
-                    if (bool.TryParse(value, out var mcp)) result.EnableMcpTools = mcp;
-                    break;
                 case "tools":
                     result.Tools = ParseListValue(value, lines, ref i);
                     break;
@@ -259,7 +256,6 @@ enable_file_memory: {f.EnableFileMemory.ToString().ToLowerInvariant()}
 enable_agent_skills: {f.EnableAgentSkills.ToString().ToLowerInvariant()}
 enable_open_telemetry: {f.EnableOpenTelemetry.ToString().ToLowerInvariant()}
 enable_long_term_memory: {f.EnableLongTermMemory.ToString().ToLowerInvariant()}
-enable_mcp_tools: {f.EnableMcpTools.ToString().ToLowerInvariant()}
 source: {f.Source ?? string.Empty}
 marketplace_id: {(f.MarketplaceId?.ToString() ?? string.Empty)}
 marketplace_synced_at: {(f.MarketplaceSyncedAt.HasValue ? f.MarketplaceSyncedAt.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) : string.Empty)}

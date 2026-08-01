@@ -85,6 +85,18 @@ public sealed class ToolRegistry
         return this;
     }
 
+    /// <summary>
+    /// 注册一个**已实例化**的工具（如 MCP server 解析出的 <see cref="AIFunction"/>）。
+    /// 用 <see cref="ToolApprovalLevel.Dangerous"/> 默认等级（MCP 工具来源未知，强制审批更安全）。
+    /// 名称冲突时跳过（不覆盖已注册的原生工具 / 先注册的 MCP 工具）。
+    /// </summary>
+    public bool RegisterMcpTool(AIFunction tool, string category = "MCP",
+        ToolApprovalLevel approvalLevel = ToolApprovalLevel.Dangerous)
+    {
+        if (tool is null || string.IsNullOrEmpty(tool.Name)) return false;
+        return _entries.TryAdd(tool.Name, new ToolEntry(tool.Name, tool.Description ?? "", category, _ => tool, approvalLevel));
+    }
+
     /// <summary>获取所有工具的元数据（名称 + 描述 + 分类 + 审批等级），不实例化 AIFunction。</summary>
     public IReadOnlyList<ToolMeta> GetAllMetas()
         => _entries.Values

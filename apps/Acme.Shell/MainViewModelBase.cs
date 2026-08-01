@@ -902,10 +902,19 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _ = _serviceProvider.GetRequiredService<IAutomationService>()
             .StartSchedulerAsync(CancellationToken.None);
 
-        // 启动 MCP server 连接（若 mcp-servers 目录配了 server）。后台连接，失败跳过不阻断。
+        // 启动 MCP server 连接（若 mcp-servers 目录配了 server）。后台连接，连好后把工具注册进
+        // ToolRegistry——这样 MCP 工具就和原生工具一样出现在专家编辑器的工具选择器里，按需勾选。
         _ = Task.Run(async () =>
         {
-            try { if (_serviceProvider.GetService<IMcpServerRegistry>() is { } mcp) await mcp.StartAsync(CancellationToken.None); }
+            try
+            {
+                if (_serviceProvider.GetService<IMcpServerRegistry>() is { } mcp)
+                {
+                    await mcp.StartAsync(CancellationToken.None);
+                    if (_serviceProvider.GetService<Aether.AI.Harness.Tools.ToolRegistry>() is { } toolRegistry)
+                        foreach (var t in mcp.GetTools()) toolRegistry.RegisterMcpTool(t);
+                }
+            }
             catch { /* MCP 启动失败不阻断主流程 */ }
         });
 

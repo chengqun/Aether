@@ -67,6 +67,4 @@ public sealed class CustomAgentDefinition
     public bool EnableOpenTelemetry { get; set; }
     /// <summary>开启后接入 IMemoryStore 长期记忆：每轮召回用户记忆注入指令 + 沉淀本轮 Q&amp;A，跨会话保留。</summary>
     public bool EnableLongTermMemory { get; set; }
-    /// <summary>开启后该 agent 自动纳入宿主配置的所有 MCP server 工具。</summary>
-    public bool EnableMcpTools { get; set; }
 }

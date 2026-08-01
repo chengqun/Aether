@@ -97,8 +97,7 @@ public static class AetherAIServiceCollectionExtensions
                 sp.GetRequiredService<ToolRegistry>(),
                 sp.GetRequiredService<SkillRegistry>(),
                 sp.GetService<ILoggerFactory>(),
-                sp.GetService<Func<AgentDefinition, AIContextProvider?>>(),
-                sp.GetService<Func<IReadOnlyList<AIFunction>>>()); // MCP 工具 accessor：未注册则为 null（无 MCP）
+                sp.GetService<Func<AgentDefinition, AIContextProvider?>>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
             factory.SkillsDirectory = sp.GetRequiredService<AetherAIOptions>().SkillsDirectory;

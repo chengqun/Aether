@@ -36,7 +36,6 @@ public sealed class AgentFactory
     private readonly ILoggerFactory? _loggerFactory;
     private readonly AgentFileSkillScriptRunner _skillScriptRunner;
     private readonly Func<AgentDefinition, AIContextProvider?>? _memoryContextProviderFactory;
-    private readonly Func<IReadOnlyList<AIFunction>>? _mcpToolsAccessor;
 
     /// <summary>
     /// When <c>true</c> (default), builds a <see cref="HarnessAgent"/>. When
@@ -62,8 +61,7 @@ public sealed class AgentFactory
     /// Invoked lazily per agent so the runtime does not eagerly build a client.
     /// </param>
     public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, SkillRegistry skillRegistry, ILoggerFactory? loggerFactory = null,
-        Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null,
-        Func<IReadOnlyList<AIFunction>>? mcpToolsAccessor = null)
+        Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
@@ -71,7 +69,6 @@ public sealed class AgentFactory
         _loggerFactory = loggerFactory;
         _skillScriptRunner = RunSkillScriptAsync;
         _memoryContextProviderFactory = memoryContextProviderFactory;
-        _mcpToolsAccessor = mcpToolsAccessor;
     }
 
     /// <summary>Builds a cached, runnable agent for the given definition.</summary>
@@ -82,44 +79,22 @@ public sealed class AgentFactory
         // AIFunction derives from AITool, but List<AIFunction> is not assignable
         // to IList<AITool>; widen to IList<AITool> for the framework APIs.
         // ask_user（交互提问工具）若已注册则自动纳入各 agent，免逐 agent 配置；agent 仍需 prompt 指示才会调用。
+        // MCP 工具由宿主在启动后注册进 ToolRegistry（与原生工具同源），专家在工具选择器勾选 → definition.Tools，
+        // 这里一并 ResolveAll 解析——MCP 工具走与原生工具完全相同的路径（含审批包装）。
         var toolNames = definition.Tools.ToList();
         if (!toolNames.Contains("ask_user") && _toolRegistry.Contains("ask_user"))
             toolNames.Add("ask_user");
         IList<AITool> tools = _toolRegistry.ResolveAll(toolNames).Cast<AITool>().ToList();
 
-        // MCP 工具：EnableMcpTools 时纳入宿主预解析的所有 MCP server 工具（去重 by name，避与已注册工具冲突）。
-        var mcpToolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (definition.EnableMcpTools && _mcpToolsAccessor is not null)
-        {
-            var mcpTools = _mcpToolsAccessor();
-            if (mcpTools is { Count: > 0 })
-            {
-                var existing = new HashSet<string>(tools.OfType<AIFunction>().Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
-                foreach (var mt in mcpTools)
-                {
-                    if (string.IsNullOrEmpty(mt.Name) || existing.Contains(mt.Name)) continue;
-                    tools.Add(mt);
-                    mcpToolNames.Add(mt.Name);
-                    existing.Add(mt.Name);
-                }
-            }
-        }
-
         // 按专家开关把"危险"工具包成 ApprovalRequiredAIFunction：模型调用时流冒出
         // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。等级优先取专家的 ToolApprovals 覆盖，
         // 否则取 ToolRegistry 声明等级——Safe 自动放行，Confirm/Dangerous 才包装。
-        // MCP 工具来源未知，统一按 Dangerous 处理（强制审批）。
+        // MCP 工具注册时默认标 Dangerous（来源未知），故 RequireToolApproval 时也会被包装。
         if (definition.RequireToolApproval)
         {
             tools = tools
-                .Select(t =>
-                {
-                    if (t is not AIFunction fn) return t;
-                    var level = mcpToolNames.Contains(fn.Name)
-                        ? ToolApprovalLevel.Dangerous
-                        : ResolveApprovalLevel(fn.Name, definition);
-                    return level != ToolApprovalLevel.Safe ? new ApprovalRequiredAIFunction(fn) : t;
-                })
+                .Select(t => t is AIFunction fn && ResolveApprovalLevel(fn.Name, definition) != ToolApprovalLevel.Safe
+                    ? new ApprovalRequiredAIFunction(fn) : t)
                 .ToList();
         }
 

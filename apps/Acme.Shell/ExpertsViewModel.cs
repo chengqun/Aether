@@ -130,7 +130,6 @@ public partial class ExpertsViewModel : ObservableObject
                         EnableAgentSkills = def.EnableAgentSkills,
                         EnableOpenTelemetry = def.EnableOpenTelemetry,
                         EnableLongTermMemory = def.EnableLongTermMemory,
-                        EnableMcpTools = def.EnableMcpTools,
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
@@ -214,7 +213,6 @@ public partial class ExpertsViewModel : ObservableObject
                 EnableAgentSkills = item.EnableAgentSkills,
                 EnableOpenTelemetry = item.EnableOpenTelemetry,
                 EnableLongTermMemory = item.EnableLongTermMemory,
-                EnableMcpTools = item.EnableMcpTools,
             };
 
             await _catalog.SaveAsync(def);

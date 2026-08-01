@@ -23,9 +23,6 @@ public static class AetherAIBuilderMcpExtensions
             builder.Services.AddSingleton<McpServerRegistry>(sp =>
                 new McpServerRegistry(sp.GetServices<McpServerConfig>(), sp.GetService<ILoggerFactory>()));
             builder.Services.AddSingleton<IMcpServerRegistry>(sp => sp.GetRequiredService<McpServerRegistry>());
-            // 工具 accessor：AgentFactory 经此同步取已预解析的 MCP 工具（StartAsync 前为空）。
-            builder.Services.AddSingleton<Func<IReadOnlyList<AIFunction>>>(sp =>
-                () => sp.GetRequiredService<IMcpServerRegistry>().GetTools());
         }
         return builder;
     }

@@ -150,7 +150,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             EnableAgentSkills = existing.EnableAgentSkills;
             EnableOpenTelemetry = existing.EnableOpenTelemetry;
             EnableLongTermMemory = existing.EnableLongTermMemory;
-            EnableMcpTools = existing.EnableMcpTools;
             IsEditing = true;
         }
         else
@@ -198,7 +197,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private bool _enableAgentSkills;
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
-    [ObservableProperty] private bool _enableMcpTools;
 
     [ObservableProperty] private string? _error;
 
@@ -334,7 +332,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             EnableAgentSkills = EnableAgentSkills,
             EnableOpenTelemetry = EnableOpenTelemetry,
             EnableLongTermMemory = EnableLongTermMemory,
-            EnableMcpTools = EnableMcpTools,
         };
 
         SaveRequested?.Invoke(item);

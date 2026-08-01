@@ -97,10 +97,4 @@ public sealed class AgentDefinition
     /// 跨会话保留。区别于 <see cref="Memory"/>（会话内聊天历史窗口）。
     /// </summary>
     public bool EnableLongTermMemory { get; init; }
-
-    /// <summary>
-    /// 启用 MCP 工具（默认禁用）。开启后 agent 自动纳入宿主配置的所有 MCP server 工具
-    /// （由 <c>McpServerRegistry</c> 预解析提供）。MCP 工具默认按 Dangerous 审批等级处理。
-    /// </summary>
-    public bool EnableMcpTools { get; init; }
 }
