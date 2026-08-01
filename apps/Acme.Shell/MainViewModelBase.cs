@@ -902,6 +902,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _ = _serviceProvider.GetRequiredService<IAutomationService>()
             .StartSchedulerAsync(CancellationToken.None);
 
+        // 启动 MCP server 连接（若 mcp-servers 目录配了 server）。后台连接，失败跳过不阻断。
+        _ = Task.Run(async () =>
+        {
+            try { if (_serviceProvider.GetService<IMcpServerRegistry>() is { } mcp) await mcp.StartAsync(CancellationToken.None); }
+            catch { /* MCP 启动失败不阻断主流程 */ }
+        });
+
         await TryAutoConnectDeviceAsync();
     }
 

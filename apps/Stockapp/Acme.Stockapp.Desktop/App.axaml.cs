@@ -40,6 +40,12 @@ public partial class App : global::Avalonia.Application
         {
             var vm = Services.GetRequiredService<StockappMainViewModel>();
             desktop.MainWindow = new MainWindow { DataContext = vm };
+            // 退出时释放 DI 容器（含 MCP server 连接等 IAsyncDisposable 单例，关闭 stdio 子进程）。
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                try { (Services as System.IAsyncDisposable)?.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+                catch { /* 退出期释放失败忽略 */ }
+            };
             // 窗口打开后异步初始化登录态（检查已缓存 token，刷新账户显示），不阻塞 UI
             _ = vm.InitializeAsync();
         }

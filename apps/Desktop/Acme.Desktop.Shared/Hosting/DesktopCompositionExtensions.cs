@@ -3,6 +3,8 @@ using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Shell;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Hosting;
+using Aether.AI.Mcp;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
 using Acme.AppAuth.Application.DependencyInjection;
@@ -61,6 +63,10 @@ public static class DesktopCompositionExtensions
             // skills 目录：MAF AgentFileSkillsSource 从此加载 SKILL.md（+ 脚本/资源）。
             o.SkillsDirectory = Path.Combine(tenantDir, "skills");
         });
+
+        // MCP server 配置目录：扫描 <tenantDir>/mcp-servers/*.json 自动注册 MCP server（stdio/SSE）。
+        // 放配置文件即可启用，无需改代码。空目录 = 无 MCP。连接在 InitializeAsync 启动。
+        aether.AddMcpServersFromDirectory(Path.Combine(tenantDir, "mcp-servers"));
 
         // Notes 编辑器：粘贴图片保存根目录（markdown 引用相对文件名，预览通过 AssetPathRoot 解析）
         services.Configure<NotesEditorOptions>(o => o.ImageRoot = Path.Combine(tenantDir, "notes-media"));

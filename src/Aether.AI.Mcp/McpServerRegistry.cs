@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Aether.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -12,7 +13,7 @@ namespace Aether.AI.Mcp;
 /// <para>单个 server 连接失败记录并跳过，不阻断其它 server 或 agent 构建。</para>
 /// <para>工具预解析后缓存（MCP 工具在 server 重启前不变）；<see cref="RefreshAsync"/> 可重连刷新。</para>
 /// </summary>
-public sealed class McpServerRegistry : IAsyncDisposable
+public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
 {
     private readonly List<McpServerConfig> _configs;
     private readonly ILoggerFactory? _loggerFactory;

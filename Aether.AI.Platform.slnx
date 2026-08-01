@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/mcp/">
+    <Project Path="mcp/SampleServer/SampleServer.csproj" />
+  </Folder>
   <Folder Name="/ai/" />
   <Folder Name="/ai/ApkParser/">
     <Project Path="ai/ApkParser/Acme.ApkParser.AI/Acme.ApkParser.AI.csproj" />
