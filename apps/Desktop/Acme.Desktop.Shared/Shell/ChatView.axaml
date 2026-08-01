@@ -21,7 +21,7 @@
         </Border>
 
         <!-- 流式推理段（TextReasoningContent）：淡色"思考中…"卡，等宽限高 -->
-        <Border Classes="tool-card" HorizontalAlignment="Left"
+        <Border Classes="tool-card" HorizontalAlignment="Stretch"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsAgentStreamingReasoning}" PointerPressed="OnStreamingCardTapped">
           <StackPanel Spacing="4">
@@ -64,7 +64,7 @@
         </Border>
 
         <!-- 已结束的思考段（agent 运行中途的推理，可折叠）：淡色斜体，默认折叠 -->
-        <Border Classes="tool-card" HorizontalAlignment="Left"
+        <Border Classes="tool-card" HorizontalAlignment="Stretch"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsAgentThinkingCard}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
@@ -89,7 +89,7 @@
         </Border>
 
         <!-- 工具步骤：调用+结果合并为一条。折叠态一行摘要，展开看完整输入/输出 JSON -->
-        <Border Classes="tool-card" HorizontalAlignment="Left"
+        <Border Classes="tool-card" HorizontalAlignment="Stretch"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsToolStep}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
@@ -103,6 +103,11 @@
                          IsVisible="{Binding !IsToolCompleted}" />
               <TextBlock Text="✓" FontSize="12" Foreground="#16A34A" VerticalAlignment="Center"
                          IsVisible="{Binding IsToolCompleted}" />
+              <TextBlock Text="→" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                         IsVisible="{Binding HasResultPreview}" />
+              <TextBlock Text="{Binding ResultPreview}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"
+                         IsVisible="{Binding HasResultPreview}" />
               <TextBlock Text="▸" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
               <TextBlock Text="▾" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
@@ -154,7 +159,7 @@
         </Border>
 
         <!-- 计划卡：待办列表，完成项划横线（随 transcript 持久化、恢复） -->
-        <Border Classes="tool-card" HorizontalAlignment="Left"
+        <Border Classes="tool-card" HorizontalAlignment="Stretch"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsPlanCard}">
           <StackPanel Spacing="4">
@@ -185,7 +190,7 @@
         </Border>
 
         <!-- 审批卡：待审 ⏳ / 已批准 ✅ / 已拒绝 ❌ -->
-        <Border Classes="tool-card" HorizontalAlignment="Left"
+        <Border Classes="tool-card" HorizontalAlignment="Stretch"
                 Background="{DynamicResource ToolCallBrush}" BorderBrush="{DynamicResource ToolCallBorderBrush}"
                 IsVisible="{Binding IsApprovalCard}">
           <StackPanel Orientation="Horizontal" Spacing="6">

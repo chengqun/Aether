@@ -147,6 +147,19 @@ public partial class ChatMessageItem : ObservableObject
     /// <summary>输出一行摘要（折叠态展示）。</summary>
     public string ResultSummary => Summarize(Output);
 
+    /// <summary>折叠态结果预览：结果首行截断 60 字（无需展开即可看到工具产出）。</summary>
+    public string ResultPreview
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(ResultText)) return string.Empty;
+            var first = ResultText.Split('\n')[0].Trim();
+            return first.Length > 60 ? first[..60] + "…" : first;
+        }
+    }
+
+    public bool HasResultPreview => IsToolCompleted && !string.IsNullOrEmpty(ResultPreview);
+
     /// <summary>工具动词图标（按 ToolName 关键字映射：📖读/✏写/▶命令/🔎查询/📈行情/🔏下单/🧩技能…）。</summary>
     public string VerbIcon => VerbFor(ToolName);
 
@@ -227,6 +240,14 @@ public partial class ChatMessageItem : ObservableObject
         OnPropertyChanged(nameof(IsResultTable));
         OnPropertyChanged(nameof(IsResultJson));
     }
+
+    partial void OnResultTextChanged(string? value)
+    {
+        OnPropertyChanged(nameof(ResultPreview));
+        OnPropertyChanged(nameof(HasResultPreview));
+    }
+
+    partial void OnIsToolCompletedChanged(bool value) => OnPropertyChanged(nameof(HasResultPreview));
 
     private static string Summarize(Dictionary<string, object>? dict)
     {

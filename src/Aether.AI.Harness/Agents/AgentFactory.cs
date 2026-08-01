@@ -249,8 +249,9 @@ public sealed class AgentFactory
         if (tools.Any(t => t is AIFunction f && string.Equals(f.Name, "ask_user", StringComparison.OrdinalIgnoreCase)))
         {
             chatOptions.Instructions = (string.IsNullOrEmpty(chatOptions.Instructions) ? "" : chatOptions.Instructions + "\n\n")
-                + "当需要用户确认、拍板、或从多个选项中选择时，必须调用 ask_user 工具（传入 question 和 options）阻塞等待用户回答；"
-                + "不要用纯文本提问后结束轮次等待用户输入。";
+                + "当需要用户确认、拍板、或从多个选项中选择时，必须调用 ask_user 工具阻塞等待用户回答；"
+                + "不要用纯文本提问后结束轮次等待用户输入。有多个需要确认的问题时，一次性传入 questions 数组（表单一次提交），"
+                + "返回 JSON 数组按提问顺序给出每个的回答。";
         }
 
         if (definition.Temperature is { } temperature)

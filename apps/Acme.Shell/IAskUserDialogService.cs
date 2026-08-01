@@ -1,10 +1,17 @@
 namespace Acme.Shell;
 
+/// <summary>单个待确认问题（问题文本 + 可选选项）。</summary>
+public sealed class AskUserQuestionInput
+{
+    public string Question { get; set; } = string.Empty;
+    public IReadOnlyList<string> Options { get; set; } = Array.Empty<string>();
+}
+
 /// <summary>
-/// 弹出提问/确认对话框，返回用户的选择或自由文本回答；用户取消返回 <c>null</c>。
-/// 供 <c>ask_user</c> 工具在 agent 需要用户拍板/澄清时调用（替代纯文本提问）。UI 无关接口。
+/// 弹出提问/确认表单（支持多个问题一次确认，类似 Claude Code AskUserQuestion），
+/// 返回按提问顺序的回答数组；用户取消返回 <c>null</c>。供 <c>ask_user</c> 工具调用。UI 无关接口。
 /// </summary>
 public interface IAskUserDialogService
 {
-    Task<string?> ShowAsync(string question, IReadOnlyList<string> options);
+    Task<string[]?> ShowAsync(IReadOnlyList<AskUserQuestionInput> questions);
 }

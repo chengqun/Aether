@@ -1,44 +1,51 @@
 using System.ComponentModel;
 using System.Windows.Input;
+using Acme.Shell;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>提问/确认对话框 ViewModel：展示问题 + 选项按钮 + 自由文本；返回用户回答。</summary>
-public partial class AskUserDialogViewModel : ObservableObject
+/// <summary>表单里单个问题的状态：选项 + 自定义文本 + 当前回答。</summary>
+public partial class QuestionFormItem : ObservableObject
 {
     public string Question { get; }
     public IReadOnlyList<string> Options { get; }
-
-    /// <summary>用户回答；null=取消。命令触发后由 Service 读取并关窗。</summary>
-    public string? Result { get; private set; }
-
     [ObservableProperty] private string? _customText;
+    [ObservableProperty] private string? _selectedOption;
 
-    public event Action? Finished;
-
-    public AskUserDialogViewModel(string question, IReadOnlyList<string> options)
+    public QuestionFormItem(string question, IReadOnlyList<string> options)
     {
         Question = question;
         Options = options ?? Array.Empty<string>();
     }
 
+    /// <summary>该问的回答：选中选项优先，否则自定义文本，再否则空。</summary>
+    public string Answer => !string.IsNullOrWhiteSpace(SelectedOption) ? SelectedOption
+        : (!string.IsNullOrWhiteSpace(CustomText) ? CustomText! : "");
+
     [RelayCommand]
-    private void SelectOption(string option)
+    private void SelectOption(string option) => SelectedOption = option;
+}
+
+/// <summary>提问/确认表单 ViewModel：多个问题一次提交，返回按序回答数组；取消返回 null。</summary>
+public partial class AskUserDialogViewModel : ObservableObject
+{
+    public IReadOnlyList<QuestionFormItem> Questions { get; }
+
+    public event Action? Finished;
+    public string[]? Result { get; private set; }
+
+    public AskUserDialogViewModel(IReadOnlyList<AskUserQuestionInput> questions)
     {
-        Result = option;
-        Finished?.Invoke();
+        Questions = questions.Select(q => new QuestionFormItem(q.Question, q.Options)).ToList();
     }
 
     [RelayCommand]
-    private void SubmitCustom()
+    private void Submit()
     {
-        if (!string.IsNullOrWhiteSpace(CustomText))
-        {
-            Result = CustomText;
-            Finished?.Invoke();
-        }
+        Result = Questions.Select(q => q.Answer).ToArray();
+        Finished?.Invoke();
     }
 
     [RelayCommand]

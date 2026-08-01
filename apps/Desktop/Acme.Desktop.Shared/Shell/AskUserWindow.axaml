@@ -2,47 +2,49 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Acme.Desktop.Shared.Shell.AskUserWindow"
         Title="待确认"
-        Width="460" Height="420"
-        CanResize="False"
+        Width="500" Height="460"
+        CanResize="True"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto" Margin="24,20,24,18">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20,24,18">
 
-    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,14">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <TextBlock Text="❓" FontSize="18" VerticalAlignment="Center" />
-        <TextBlock Text="需要你的确认" FontSize="16" FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-      </StackPanel>
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="❓" FontSize="18" VerticalAlignment="Center" />
+      <TextBlock Text="需要你的确认" FontSize="16" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
     </StackPanel>
 
-    <Border Grid.Row="1" Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="10,8" Margin="0,0,0,12"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-      <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <TextBlock Text="{Binding Question}" FontSize="13" TextWrapping="Wrap"
-                   Foreground="{DynamicResource TextPrimaryBrush}" />
-      </ScrollViewer>
-    </Border>
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Questions}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="10,8" Margin="0,0,0,10"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+              <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Question}" FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}" />
+                <ItemsControl ItemsSource="{Binding Options}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Content="{Binding}"
+                              Command="{Binding DataContext.SelectOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                              CommandParameter="{Binding}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              Margin="0,3" Padding="12,7" FontSize="13" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBox Text="{Binding CustomText}" PlaceholderText="或输入自定义回答…" FontSize="12" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
 
-    <ItemsControl Grid.Row="2" ItemsSource="{Binding Options}" Margin="0,0,0,10">
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <Button Content="{Binding}"
-                  Command="{Binding DataContext.SelectOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                  CommandParameter="{Binding}"
-                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                  Margin="0,3" Padding="12,8" FontSize="13" />
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
-
-    <StackPanel Grid.Row="3" Spacing="8">
-      <TextBox Text="{Binding CustomText}" PlaceholderText="或输入自定义回答…" FontSize="13" />
-      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-        <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8" />
-        <Button Content="提交自定义" Classes="primary" Command="{Binding SubmitCustomCommand}" Padding="20,8" />
-      </StackPanel>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8" />
+      <Button Content="提交" Classes="primary" Command="{Binding SubmitCommand}" Padding="24,8" />
     </StackPanel>
 
   </Grid>
