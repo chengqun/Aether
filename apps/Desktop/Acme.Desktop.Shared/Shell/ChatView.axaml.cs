@@ -38,6 +38,23 @@ public partial class ChatView : UserControl
         Loaded += OnLoaded;
     }
 
+    /// <summary>
+    /// 切回聊天页时补一次滚到底。视图实例驻留、切页只切 IsVisible：隐藏期间 ScrollViewer 不布局，
+    /// 流式追加的 token 触发的 ScrollToEnd 是空操作；切回来时滚动位置停在旧处，正在流式输出的气泡
+    /// 落在视窗下方看不到。故切回可见时，若正在流式输出则强制贴底并滚到底。
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty && change.NewValue is bool visible && visible)
+        {
+            if (_vm?.IsAgentRunning ?? false)
+                _stickToBottom = true; // 流式中：切回应跟随最新输出
+            if (_stickToBottom)
+                RequestScrollToBottom();
+        }
+    }
+
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         Dispatcher.UIThread.Post(ScrollToBottom);
