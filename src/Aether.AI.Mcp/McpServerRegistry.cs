@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -7,67 +6,75 @@ using ModelContextProtocol.Client;
 namespace Aether.AI.Mcp;
 
 /// <summary>
-/// 管理所有已配置 MCP server 的连接与工具。宿主在启动时（桌面 InitializeAsync）调用
-/// <see cref="StartAsync"/> 连接各 server 并预解析其工具；<see cref="GetTools"/> 供
-/// <c>AgentFactory</c>（经 <c>Func&lt;IReadOnlyList&lt;AIFunction&gt;&gt;</c> 注入）按需取用。
-/// <para>单个 server 连接失败记录并跳过，不阻断其它 server 或 agent 构建。</para>
-/// <para>工具预解析后缓存（MCP 工具在 server 重启前不变）；<see cref="RefreshAsync"/> 可重连刷新。</para>
+/// 管理所有已配置 MCP server 的连接与工具。宿主启动时调用 <see cref="StartAsync"/> 连接各 server 并预解析工具；
+/// <see cref="GetTools"/> 供 ToolRegistry 注册（专家选择器勾选）；<see cref="GetServers"/> 供管理 UI 展示状态+工具。
+/// <para>配置经 <see cref="_configProvider"/> 获取——<see cref="RefreshAsync"/> 重读目录，支持增删改后重连。</para>
+/// <para>单个 server 连接失败记 Error 并跳过，不阻断其它 server。</para>
 /// </summary>
 public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
 {
-    private readonly List<McpServerConfig> _configs;
+    private readonly Func<IEnumerable<McpServerConfig>> _configProvider;
     private readonly ILoggerFactory? _loggerFactory;
-    private readonly List<McpClient> _clients = new();
-    private IReadOnlyList<AIFunction> _tools = Array.Empty<AIFunction>();
+    private readonly List<Entry> _entries = new();
     private int _started;
 
-    public McpServerRegistry(IEnumerable<McpServerConfig> configs, ILoggerFactory? loggerFactory = null)
+    public McpServerRegistry(Func<IEnumerable<McpServerConfig>> configProvider, ILoggerFactory? loggerFactory = null)
     {
-        _configs = configs?.ToList() ?? new List<McpServerConfig>();
+        _configProvider = configProvider ?? throw new ArgumentNullException(nameof(configProvider));
         _loggerFactory = loggerFactory;
     }
 
     public bool IsStarted => Volatile.Read(ref _started) == 1;
 
-    /// <summary>已解析的 MCP 工具（StartAsync 前为空）。供 AgentFactory 同步取用。</summary>
-    public IReadOnlyList<AIFunction> GetTools() => _tools;
+    public IReadOnlyList<AIFunction> GetTools() => _entries.SelectMany(e => e.Tools).ToList();
+
+    public IReadOnlyList<McpServerEntry> GetServers()
+        => _entries.Select(e => new McpServerEntry
+        {
+            Config = e.Config,
+            IsConnected = e.IsConnected,
+            Tools = e.Tools,
+            Error = e.Error,
+        }).ToList();
 
     /// <summary>连接所有已配置 server 并预解析工具。已启动则幂等返回。</summary>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         if (Interlocked.CompareExchange(ref _started, 1, 0) != 0) return;
-        var log = _loggerFactory?.CreateLogger<McpServerRegistry>();
-        var all = new List<AIFunction>();
+        await ConnectAllAsync(cancellationToken).ConfigureAwait(false);
+    }
 
-        foreach (var cfg in _configs)
+    /// <summary>重读目录并重连所有 server（关闭旧 client）。</summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        await DisposeEntriesAsync().ConfigureAwait(false);
+        Volatile.Write(ref _started, 0);
+        if (Interlocked.CompareExchange(ref _started, 1, 0) != 0) return;
+        await ConnectAllAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ConnectAllAsync(CancellationToken cancellationToken)
+    {
+        var log = _loggerFactory?.CreateLogger<McpServerRegistry>();
+        _entries.Clear();
+        foreach (var cfg in _configProvider())
         {
+            var entry = new Entry(cfg);
+            _entries.Add(entry);
             try
             {
-                var client = await ConnectAsync(cfg, cancellationToken).ConfigureAwait(false);
-                _clients.Add(client);
-                var tools = await client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                entry.Client = await ConnectAsync(cfg, cancellationToken).ConfigureAwait(false);
+                var tools = await entry.Client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
                 foreach (var t in tools)
-                {
-                    if (t is AIFunction fn) all.Add(fn);
-                }
+                    if (t is AIFunction fn) entry.Tools.Add(fn);
                 log?.LogInformation("已连接 MCP server {Name}，工具 {Count} 个。", cfg.Name, tools.Count);
             }
             catch (Exception ex)
             {
-                // 单个 server 失败不阻断其它。
+                entry.Error = ex.Message;
                 log?.LogWarning(ex, "连接 MCP server {Name} 失败，跳过。", cfg.Name);
             }
         }
-
-        _tools = all;
-    }
-
-    /// <summary>重新连接并刷新工具（关闭旧 client 再重连）。</summary>
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        await DisposeClientsAsync().ConfigureAwait(false);
-        Volatile.Write(ref _started, 0);
-        await StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<McpClient> ConnectAsync(McpServerConfig cfg, CancellationToken ct)
@@ -98,22 +105,31 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
             return await McpClient.CreateAsync(new HttpClientTransport(opts), cancellationToken: ct).ConfigureAwait(false);
         }
 
-        throw new InvalidOperationException($"MCP server '{cfg.Name}' 既未配置 Command(stdio) 也未配置 Url(sse)。");
+        throw new InvalidOperationException($"MCP server '{cfg.Name}' 既未配置 Command(stdio) 也未配置 Url(http)。");
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await DisposeClientsAsync().ConfigureAwait(false);
-    }
+    public async ValueTask DisposeAsync() => await DisposeEntriesAsync().ConfigureAwait(false);
 
-    private async Task DisposeClientsAsync()
+    private async Task DisposeEntriesAsync()
     {
-        foreach (var c in _clients)
+        foreach (var e in _entries)
         {
-            try { await c.DisposeAsync().ConfigureAwait(false); }
-            catch { }
+            if (e.Client is not null)
+            {
+                try { await e.Client.DisposeAsync().ConfigureAwait(false); }
+                catch { }
+            }
         }
-        _clients.Clear();
-        _tools = Array.Empty<AIFunction>();
+        _entries.Clear();
+    }
+
+    private sealed class Entry
+    {
+        public McpServerConfig Config { get; }
+        public McpClient? Client { get; set; }
+        public List<AIFunction> Tools { get; } = new();
+        public string? Error { get; set; }
+        public bool IsConnected => Client is not null && Error is null;
+        public Entry(McpServerConfig config) => Config = config;
     }
 }

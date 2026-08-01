@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.McpServerEditWindow"
+        Title="MCP 服务器配置"
+        Width="520" Height="640"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Window.Styles>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+  </Window.Styles>
+
+  <DockPanel LastChildFill="True">
+    <!-- 底部按钮 -->
+    <Border DockPanel.Dock="Bottom" Padding="16,10" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="取消" Classes="ghost" Command="{Binding CancelCommand}" Padding="16,6"/>
+        <Button Content="保存" Classes="primary" Command="{Binding SaveCommand}" Padding="20,6"/>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Padding="20,16">
+      <StackPanel Spacing="12">
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="名称" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBox Text="{Binding Name}" IsReadOnly="{Binding IsEditing}" Watermark="如 filesystem / my-server"/>
+          <TextBlock Text="编辑时不可改名（按名称定位配置文件）" FontSize="10"
+                     Foreground="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding IsEditing}"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="传输方式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <RadioButton Content="stdio（本地命令）" IsChecked="{Binding IsStdio}" GroupName="transport"/>
+            <RadioButton Content="HTTP/SSE（远程）" IsChecked="{Binding !IsStdio}" GroupName="transport"/>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- stdio 字段 -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsStdio}">
+          <StackPanel Spacing="4">
+            <TextBlock Text="命令（command）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Command}" Watermark="如 npx / dotnet / python3"/>
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="参数（args，每行一个）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Arguments}" AcceptsReturn="True" Height="100"
+                     Watermark="-y&#10;@modelcontextprotocol/server-filesystem&#10;/tmp"/>
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="环境变量（env，KEY=VALUE 每行）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Env}" AcceptsReturn="True" Height="70" Watermark="API_KEY=xxx"/>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- http 字段 -->
+        <StackPanel Spacing="12" IsVisible="{Binding !IsStdio}">
+          <StackPanel Spacing="4">
+            <TextBlock Text="URL" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Url}" Watermark="https://host/sse"/>
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="请求头（headers，KEY: VALUE 每行）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Headers}" AcceptsReturn="True" Height="70" Watermark="Authorization: Bearer xxx"/>
+          </StackPanel>
+        </StackPanel>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

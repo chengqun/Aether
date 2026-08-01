@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Shell;
 
 /// <summary>专家页 tab。</summary>
-public enum ExpertsTab { Agent, Workflow, Connector, Market }
+public enum ExpertsTab { Agent, Workflow, Connector, Market, Mcp }
 
 /// <summary>专家页面 ViewModel：从自定义 Agent 目录加载，展示为专家卡片。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject
@@ -21,7 +21,8 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly IAgentSourceParser _agentParser;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IAgentSourceParser agentParser, IConnectorViewModel? connector = null)
+        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IAgentSourceParser agentParser,
+        McpViewModel mcp, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -30,6 +31,7 @@ public partial class ExpertsViewModel : ObservableObject
         _auth = auth ?? throw new ArgumentNullException(nameof(auth));
         Workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
+        Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
         Connector = connector;
         _ = RefreshLoginStateAsync();
     }
@@ -60,11 +62,15 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>工作流 VM（专家团 tab）。</summary>
     public WorkflowsViewModel Workflows { get; }
 
+    /// <summary>MCP 工具服务器 VM（MCP tab）。</summary>
+    public McpViewModel Mcp { get; }
+
     public bool IsAgentTab => CurrentTab == ExpertsTab.Agent;
 
     public bool IsWorkflowTab => CurrentTab == ExpertsTab.Workflow;
     public bool IsConnectorTab => CurrentTab == ExpertsTab.Connector;
     public bool IsMarketTab => CurrentTab == ExpertsTab.Market;
+    public bool IsMcpTab => CurrentTab == ExpertsTab.Mcp;
     public bool HasConnector => Connector is not null;
 
     partial void OnCurrentTabChanged(ExpertsTab value)
@@ -73,6 +79,7 @@ public partial class ExpertsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsWorkflowTab));
         OnPropertyChanged(nameof(IsConnectorTab));
         OnPropertyChanged(nameof(IsMarketTab));
+        OnPropertyChanged(nameof(IsMcpTab));
         if (value == ExpertsTab.Connector && Connector is not null)
             _ = Connector.RefreshAsync();
         if (value == ExpertsTab.Market)
@@ -80,12 +87,15 @@ public partial class ExpertsViewModel : ObservableObject
             _ = RefreshLoginStateAsync();
             _ = LoadMarketplaceAsync();
         }
+        if (value == ExpertsTab.Mcp)
+            _ = Mcp.LoadAsync();
     }
 
     [RelayCommand] private void ShowAgentTab() => CurrentTab = ExpertsTab.Agent;
     [RelayCommand] private void ShowWorkflowTab() => CurrentTab = ExpertsTab.Workflow;
     [RelayCommand] private void ShowConnectorTab() { if (HasConnector) CurrentTab = ExpertsTab.Connector; }
     [RelayCommand] private void ShowMarketTab() => CurrentTab = ExpertsTab.Market;
+    [RelayCommand] private void ShowMcpTab() => CurrentTab = ExpertsTab.Mcp;
 
     /// <summary>召唤变化事件（聊天页订阅）。</summary>
     public event Action? SummonChanged;

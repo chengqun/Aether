@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Acme.Desktop.Shared.Shell.McpView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Border.mcp-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="16,14"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="Border.tool-row">
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="Margin" Value="0,1"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- 顶部操作栏 -->
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="MCP 工具服务器" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+          <TextBlock Text="{Binding Servers.Count, StringFormat={}{0} 个}" Foreground="{DynamicResource TextSecondaryBrush}"
+                     FontSize="12" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Content="↻ 刷新" Classes="ghost" Command="{Binding RefreshCommand}" Padding="12,5" FontSize="12"/>
+          <Button Content="+ 添加" Classes="primary" Click="OnAddClick" Padding="14,5" FontSize="12"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Padding="20,12">
+      <Panel>
+        <!-- 空态 -->
+        <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="White"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"
+                VerticalAlignment="Top" Margin="0,30,0,0">
+          <StackPanel Spacing="6" HorizontalAlignment="Center">
+            <TextBlock Text="尚未配置 MCP 服务器" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="点右上「+ 添加」配置一个 MCP server（stdio 或 http），或在 mcp-servers/ 目录放 .mcp.json。"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                       TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+
+        <!-- server 列表 -->
+        <ItemsControl ItemsSource="{Binding Servers}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="mcp-card">
+                <StackPanel Spacing="8">
+                  <!-- 头部：名称 + 状态 + 操作 -->
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                      <TextBlock Text="● 已连接" Foreground="#52C41A" FontSize="10" IsVisible="{Binding IsConnected}"/>
+                      <TextBlock Text="● 未连接" Foreground="#FF5252" FontSize="10" IsVisible="{Binding !IsConnected}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                      <Button Content="编辑" Classes="ghost" Click="OnEditClick" Tag="{Binding}" Padding="10,3" FontSize="11"/>
+                      <Button Content="删除" Classes="ghost" Click="OnDeleteClick" Tag="{Binding}" Padding="10,3" FontSize="11"/>
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- transport + 错误 -->
+                  <TextBlock Text="{Binding Transport}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"/>
+                  <TextBlock Text="{Binding Error}" Foreground="#FF5252" FontSize="11" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                             TextWrapping="Wrap"/>
+
+                  <!-- 工具列表 -->
+                  <StackPanel Spacing="0" IsVisible="{Binding Tools.Count}">
+                    <TextBlock Text="{Binding Tools.Count, StringFormat={}工具 {0} 个}" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,4"/>
+                    <ItemsControl ItemsSource="{Binding Tools}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Classes="tool-row">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <TextBlock Text="🔧" FontSize="11"/>
+                              <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"/>
+                              <TextBlock Text="{Binding Description}" FontSize="11"
+                                         Foreground="{DynamicResource TextSecondaryBrush}"
+                                         TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

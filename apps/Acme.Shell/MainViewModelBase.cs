@@ -106,6 +106,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _auth,
             Workflows,
             serviceProvider.GetRequiredService<IAgentSourceParser>(),
+            serviceProvider.GetRequiredService<McpViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
         Experts.SummonChanged += OnSummonChanged;
         Experts.SummonChanged += async () => await Notes.LoadAsync();

@@ -1,5 +1,4 @@
 using Aether.AI.Hosting;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -7,37 +6,45 @@ using System.Text.Json;
 namespace Aether.AI.Mcp;
 
 /// <summary>
-/// <see cref="AetherAIBuilder"/> 的 MCP 扩展：注册 MCP server 配置 + <see cref="McpServerRegistry"/>，
-/// 并把工具 accessor（<c>Func&lt;IReadOnlyList&lt;AIFunction&gt;&gt;</c>）注册到 DI 供 AgentFactory 取用。
+/// <see cref="AetherAIBuilder"/> 的 MCP 扩展：注册 MCP server 配置 + <see cref="McpServerRegistry"/> +
+/// <see cref="IMcpManagementService"/>（管理 UI 用）。
 /// </summary>
 public static class AetherAIBuilderMcpExtensions
 {
-    /// <summary>添加一个 MCP server（stdio 或 SSE）。可多次调用注册多个。</summary>
+    /// <summary>添加一个 MCP server（stdio 或 SSE，编程式）。可多次调用注册多个。</summary>
     public static AetherAIBuilder AddMcpServer(this AetherAIBuilder builder, McpServerConfig config)
     {
         if (config is null) throw new ArgumentNullException(nameof(config));
         builder.Services.AddSingleton(config);
-        // McpServerRegistry（IMcpServerRegistry）收集所有 McpServerConfig；首次 AddMcpServer 时注册（幂等）。
-        if (!builder.Services.Any(d => d.ServiceType == typeof(IMcpServerRegistry)))
-        {
-            builder.Services.AddSingleton<McpServerRegistry>(sp =>
-                new McpServerRegistry(sp.GetServices<McpServerConfig>(), sp.GetService<ILoggerFactory>()));
-            builder.Services.AddSingleton<IMcpServerRegistry>(sp => sp.GetRequiredService<McpServerRegistry>());
-        }
+        EnsureRegistry(builder.Services, sp => sp.GetServices<McpServerConfig>());
         return builder;
     }
 
     /// <summary>
-    /// 从目录扫描 MCP server 配置文件（<c>*.json</c>，每个文件一个对象或一个数组）并注册。
-    /// 目录不存在则创建（空目录 = 无 MCP server）。镜像 skills 目录的模式：放配置文件即可，无需改代码。
+    /// 从目录扫描 MCP server 配置（<c>*.json</c>，兼容主流 <c>.mcp.json</c>）并注册。目录不存在则创建。
+    /// 同时注册 <see cref="IMcpManagementService"/>（管理 UI 增删改 server，写回此目录）。镜像 skills 目录模式。
     /// </summary>
     public static AetherAIBuilder AddMcpServersFromDirectory(this AetherAIBuilder builder, string directory)
     {
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-        foreach (var cfg in McpServerConfigLoader.LoadFromDirectory(directory))
-            builder.AddMcpServer(cfg);
+        EnsureRegistry(builder.Services, _ => McpServerConfigLoader.LoadFromDirectory(directory));
+        builder.Services.AddSingleton(new McpManagementServiceOptions(directory));
+        builder.Services.AddSingleton<IMcpManagementService, McpManagementService>();
         return builder;
     }
+
+    private static void EnsureRegistry(IServiceCollection services, Func<IServiceProvider, IEnumerable<McpServerConfig>> provider)
+    {
+        if (services.Any(d => d.ServiceType == typeof(IMcpServerRegistry))) return;
+        services.AddSingleton<McpServerRegistry>(sp => new McpServerRegistry(() => provider(sp), sp.GetService<ILoggerFactory>()));
+        services.AddSingleton<IMcpServerRegistry>(sp => sp.GetRequiredService<McpServerRegistry>());
+    }
+}
+
+/// <summary>管理服务选项：配置目录路径。</summary>
+public sealed class McpManagementServiceOptions(string directory)
+{
+    public string Directory { get; } = directory;
 }
 
 /// <summary>
@@ -83,7 +90,6 @@ public static class McpServerConfigLoader
         }
         else if (el.ValueKind == JsonValueKind.Object)
         {
-            // 主流 mcpServers 映射：{ "mcpServers": { "name": { ... } } }
             if (el.TryGetProperty("mcpServers", out var map) && map.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prop in map.EnumerateObject())
@@ -102,7 +108,6 @@ public static class McpServerConfigLoader
         string? Get(string n) =>
             el.TryGetProperty(n, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
 
-        // args 优先（主流），arguments 作为别名
         IReadOnlyList<string>? args = null;
         if (el.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
             args = a.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()).ToList();
@@ -131,5 +136,3 @@ public static class McpServerConfigLoader
         return dict.Count == 0 ? null : dict;
     }
 }
-
-

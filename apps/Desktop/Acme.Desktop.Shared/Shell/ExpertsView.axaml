@@ -56,6 +56,8 @@
           <Button Classes="top-tab" Content="市场" Command="{Binding ShowMarketTabCommand}"
                   IsEnabled="{Binding !IsMarketTab}" Padding="12,4" FontSize="13"
                   IsVisible="{Binding CanShowMarket}" />
+          <Button Classes="top-tab" Content="MCP工具" Command="{Binding ShowMcpTabCommand}"
+                  IsEnabled="{Binding !IsMcpTab}" Padding="12,4" FontSize="13" />
         </StackPanel>
         <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick"
                 Padding="14,6" IsVisible="{Binding IsAgentTab}" />
@@ -264,6 +266,11 @@
           </ItemsControl>
         </StackPanel>
       </ScrollViewer>
+    </Panel>
+
+    <!-- ===== MCP 工具服务器面板 ===== -->
+    <Panel IsVisible="{Binding IsMcpTab}">
+      <shell:McpView DataContext="{Binding Mcp}" />
     </Panel>
     </Grid>
   </DockPanel>

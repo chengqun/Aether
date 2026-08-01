@@ -16,6 +16,12 @@ public interface IMcpServerRegistry
     /// <summary>连接所有已配置 MCP server 并预解析工具。幂等。</summary>
     Task StartAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>重读目录并重连所有 server（增删改配置后调用）。</summary>
+    Task RefreshAsync(CancellationToken cancellationToken = default);
+
     /// <summary>已解析的 MCP 工具（StartAsync 前为空）。</summary>
     IReadOnlyList<AIFunction> GetTools();
+
+    /// <summary>各 server 的连接结果（配置 + 状态 + 工具 + 错误），供管理 UI 展示。</summary>
+    IReadOnlyList<McpServerEntry> GetServers();
 }

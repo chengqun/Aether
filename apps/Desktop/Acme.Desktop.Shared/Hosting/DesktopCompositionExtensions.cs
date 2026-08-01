@@ -134,6 +134,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IPreferencesStore>(sp => new JsonPreferencesStore(tenantDir));
         // UI 线程调度抽象（供 UI 无关的 ExpertsViewModel 使用）
         services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
+        // MCP 工具服务器管理 VM（Experts 页 MCP tab；IMcpManagementService 由 AddMcpServersFromDirectory 注册）
+        services.AddSingleton<McpViewModel>();
         // 启动期设备自动连接（委托给 SettingsViewModel）
         services.AddSingleton<IDeviceAutoConnectService, DeviceAutoConnectService>();
 
