@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -88,12 +89,46 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
     {
         if (cfg.IsStdio)
         {
+            // CWD：未配置时用用户主目录，避免从 .app 启动时 CWD=/（只读）导致子进程异常。
+            var workingDirectory = !string.IsNullOrEmpty(cfg.WorkingDirectory)
+                ? cfg.WorkingDirectory
+                : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            string command;
+            List<string> arguments;
+            if (Path.IsPathRooted(cfg.Command))
+            {
+                // 绝对路径（编译好的二进制）直接跑。
+                command = cfg.Command!;
+                arguments = cfg.Arguments?.ToList() ?? new List<string>();
+            }
+            else
+            {
+                // GUI 启动的 app 继承受限 PATH（缺 /usr/local/bin、/opt/homebrew/bin 等），Process.Start("dotnet")
+                // 用父进程 PATH 解析命令——子进程 env 的 PATH 改了也来不及。故相对命令（dotnet/npx/python3）
+                // 经登录 shell 跑（shell source profile 拿到完整 PATH 再 exec），像 Trae/VS Code 那样。
+                var shell = Environment.GetEnvironmentVariable("SHELL");
+                if (!string.IsNullOrEmpty(shell))
+                {
+                    command = shell;
+                    var cmd = ShellQuote(cfg.Command!) + " " +
+                              string.Join(" ", (cfg.Arguments ?? Array.Empty<string>()).Select(ShellQuote));
+                    arguments = new List<string> { "-l", "-c", cmd };
+                }
+                else
+                {
+                    // Windows / 无 SHELL：相对命令直接跑（系统 PATH 通常已含 dotnet）。
+                    command = cfg.Command!;
+                    arguments = cfg.Arguments?.ToList() ?? new List<string>();
+                }
+            }
+
             var opts = new StdioClientTransportOptions
             {
-                Command = cfg.Command!,
-                Arguments = cfg.Arguments?.ToList() ?? new List<string>(),
+                Command = command,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory,
             };
-            if (!string.IsNullOrEmpty(cfg.WorkingDirectory)) opts.WorkingDirectory = cfg.WorkingDirectory;
             if (cfg.Env is not null)
             {
                 foreach (var kv in cfg.Env) opts.EnvironmentVariables[kv.Key] = kv.Value;
@@ -113,6 +148,13 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         }
 
         throw new InvalidOperationException($"MCP server '{cfg.Name}' 既未配置 Command(stdio) 也未配置 Url(http)。");
+    }
+
+    /// <summary>POSIX 单引号转义：把参数包成 '…'，内部 ' 转义为 '\''。</summary>
+    private static string ShellQuote(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "''";
+        return "'" + s.Replace("'", "'\\''") + "'";
     }
 
     public async ValueTask DisposeAsync() => await DisposeEntriesAsync().ConfigureAwait(false);
