@@ -86,7 +86,7 @@ public static class McpServerConfigLoader
         if (el.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in el.EnumerateArray())
-                if (item.ValueKind == JsonValueKind.Object) list.Add(ParseConfig(item, null));
+                if (item.ValueKind == JsonValueKind.Object) list.Add(McpServerConfig.ParseElement(item, null));
         }
         else if (el.ValueKind == JsonValueKind.Object)
         {
@@ -94,45 +94,12 @@ public static class McpServerConfigLoader
             {
                 foreach (var prop in map.EnumerateObject())
                     if (prop.Value.ValueKind == JsonValueKind.Object)
-                        list.Add(ParseConfig(prop.Value, prop.Name));
+                        list.Add(McpServerConfig.ParseElement(prop.Value, prop.Name));
             }
             else
             {
-                list.Add(ParseConfig(el, null));
+                list.Add(McpServerConfig.ParseElement(el, null));
             }
         }
-    }
-
-    private static McpServerConfig ParseConfig(JsonElement el, string? name)
-    {
-        string? Get(string n) =>
-            el.TryGetProperty(n, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
-
-        IReadOnlyList<string>? args = null;
-        if (el.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
-            args = a.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()).ToList();
-        else if (el.TryGetProperty("arguments", out a) && a.ValueKind == JsonValueKind.Array)
-            args = a.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()).ToList();
-
-        return new McpServerConfig
-        {
-            Name = name ?? Get("name") ?? string.Empty,
-            Command = Get("command"),
-            Arguments = args,
-            WorkingDirectory = Get("workingDirectory") ?? Get("cwd"),
-            Env = ParseStringMap(el, "env"),
-            Url = Get("url"),
-            Headers = ParseStringMap(el, "headers"),
-        };
-    }
-
-    private static IReadOnlyDictionary<string, string>? ParseStringMap(JsonElement el, string name)
-    {
-        if (!el.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.Object) return null;
-        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var prop in p.EnumerateObject())
-            if (prop.Value.ValueKind == JsonValueKind.String)
-                dict[prop.Name] = prop.Value.GetString() ?? "";
-        return dict.Count == 0 ? null : dict;
     }
 }
