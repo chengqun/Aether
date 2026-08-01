@@ -1,6 +1,7 @@
 using System.Reflection;
 using Acme.Notes.AI.Tools;
 using Aether.AI.Hosting;
+using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,19 +28,19 @@ public static class NotesAIBuilderExtensions
         builder.ConfigureToolRegistry(reg =>
         {
             reg.Register("CreateNote", "新建笔记", cat,
-                sp => CreateTool<NoteTool>(sp, "CreateNote"));
+                sp => CreateTool<NoteTool>(sp, "CreateNote"), ToolApprovalLevel.Confirm);
             reg.Register("ReadNote", "读取笔记内容", cat,
                 sp => CreateTool<NoteTool>(sp, "ReadNote"));
             reg.Register("AppendNote", "追加内容到笔记", cat,
-                sp => CreateTool<NoteTool>(sp, "AppendNote"));
+                sp => CreateTool<NoteTool>(sp, "AppendNote"), ToolApprovalLevel.Confirm);
             reg.Register("UpdateNote", "更新笔记内容", cat,
-                sp => CreateTool<NoteTool>(sp, "UpdateNote"));
+                sp => CreateTool<NoteTool>(sp, "UpdateNote"), ToolApprovalLevel.Confirm);
             reg.Register("SearchNotes", "搜索笔记", cat,
                 sp => CreateTool<NoteTool>(sp, "SearchNotes"));
             reg.Register("ListNotes", "列出笔记", cat,
                 sp => CreateTool<NoteTool>(sp, "ListNotes"));
             reg.Register("DeleteNote", "删除笔记", cat,
-                sp => CreateTool<NoteTool>(sp, "DeleteNote"));
+                sp => CreateTool<NoteTool>(sp, "DeleteNote"), ToolApprovalLevel.Dangerous);
             reg.Register("ListKnowledgeObjects", "列出知识对象", kCat,
                 sp => CreateTool<KnowledgeTool>(sp, "ListKnowledgeObjects"));
             reg.Register("ReadKnowledgeObject", "读取知识对象定义", kCat,

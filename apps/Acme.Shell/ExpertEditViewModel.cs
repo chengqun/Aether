@@ -11,8 +11,31 @@ public partial class ToolOption : ObservableObject
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    /// <summary>审批等级（可编辑）：Safe/Confirm/Dangerous。默认取工具声明等级，专家作者可覆盖。</summary>
+    [ObservableProperty] private string _approvalLevel = "Safe";
+    /// <summary>工具声明的等级（不可改，保存时仅持久化与它不同的覆盖）。</summary>
+    public string DeclaredLevel { get; set; } = "Safe";
+    public bool IsDangerous => ApprovalLevel == "Dangerous";
+    /// <summary>展示标签：Safe→"自动" / Confirm→"审批" / Dangerous→"危险"。</summary>
+    public string ApprovalBadge => ApprovalLevel switch { "Dangerous" => "危险", "Confirm" => "审批", _ => "自动" };
+    partial void OnApprovalLevelChanged(string value)
+    {
+        OnPropertyChanged(nameof(ApprovalBadge));
+        OnPropertyChanged(nameof(IsDangerous));
+    }
     [ObservableProperty] private bool _isSelected;
+
+    /// <summary>审批等级可选项（ComboBox 用）。</summary>
+    public static IReadOnlyList<ApprovalLevelOption> ApprovalLevelOptions { get; } = new[]
+    {
+        new ApprovalLevelOption("Safe", "自动"),
+        new ApprovalLevelOption("Confirm", "审批"),
+        new ApprovalLevelOption("Dangerous", "危险"),
+    };
 }
+
+/// <summary>审批等级选项（值 + 中文标签）。</summary>
+public sealed record ApprovalLevelOption(string Value, string Label);
 
 /// <summary>skill 选项（skill 池项，供自定义 Agent 勾选）。</summary>
 public partial class SkillOption : ObservableObject
@@ -75,6 +98,9 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                 Name = meta.Name,
                 Description = meta.Description,
                 Category = meta.Category,
+                DeclaredLevel = meta.ApprovalLevel,
+                ApprovalLevel = (existing?.ToolApprovals is not null
+                    && existing.ToolApprovals.TryGetValue(meta.Name, out var ov)) ? ov : meta.ApprovalLevel,
                 IsSelected = selectedSet.Contains(meta.Name),
             };
 
@@ -288,6 +314,8 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             SystemPrompt = SystemPrompt,
             ModelId = ModelId ?? string.Empty,
             Tools = toolList,
+            ToolApprovals = Tools.Where(t => t.IsSelected && t.ApprovalLevel != t.DeclaredLevel)
+                .ToDictionary(t => t.Name, t => t.ApprovalLevel),
             Skills = skillList,
             Memory = Memory,
             MaxHistory = MaxHistory,

@@ -81,6 +81,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             Name = def.Name,
             Instructions = def.SystemPrompt,
             Tools = def.Tools,
+            ToolApprovals = def.ToolApprovals,
             Skills = def.Skills,
             ModelId = def.ModelId ?? string.Empty,
             Memory = MapMemory(def.Memory),

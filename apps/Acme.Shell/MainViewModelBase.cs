@@ -506,8 +506,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private bool _isAgentRunning;
 
-    /// <summary>plan 模式下一轮流结束后显示"接受计划→执行"条。</summary>
-    public bool ShowPlanAccept => HasModeSupport && SelectedMode == "plan" && !IsAgentRunning && Messages.Count > 0;
+    /// <summary>plan 模式下、末轮产生了计划卡、且非运行中时显示"接受计划→执行"条（避免每轮盲弹）。</summary>
+    public bool ShowPlanAccept => HasModeSupport && SelectedMode == "plan" && !IsAgentRunning && LastTurnHasPlan;
+
+    /// <summary>末轮是否有计划卡（plan-accept 的触发信号）。</summary>
+    private bool LastTurnHasPlan => Messages.Count > 0 && Messages[^1].Children.Any(c => c.IsPlanCard);
 
     /// <summary>输入框模式选择器选项（默认 plan/execute）。</summary>
     public ObservableCollection<string> ModeOptions { get; } = new() { "plan", "execute" };

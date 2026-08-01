@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Shell"
              x:Class="Acme.Desktop.Shared.Shell.ExpertEditView">
 
   <UserControl.Styles>
@@ -133,6 +134,21 @@
                         <CheckBox IsChecked="{Binding IsSelected}" Margin="0,1">
                           <StackPanel Orientation="Horizontal" Spacing="4">
                             <TextBlock Text="{Binding Name}" FontSize="11"/>
+                            <ComboBox ItemsSource="{x:Static vm:ToolOption.ApprovalLevelOptions}"
+                                      SelectedValue="{Binding ApprovalLevel}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      FontSize="9" MinWidth="54" Padding="4,1">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding Label}" FontSize="10" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                              <ComboBox.SelectionBoxItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding Label}" FontSize="10" />
+                                </DataTemplate>
+                              </ComboBox.SelectionBoxItemTemplate>
+                            </ComboBox>
                             <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
                           </StackPanel>
                         </CheckBox>

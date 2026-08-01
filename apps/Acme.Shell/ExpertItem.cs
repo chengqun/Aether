@@ -14,6 +14,8 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private string _modelName = string.Empty;
     [ObservableProperty] private List<string> _tools = new();
+    /// <summary>按工具名覆盖审批等级（"Safe"/"Confirm"/"Dangerous"）；专家编辑页可调。</summary>
+    [ObservableProperty] private Dictionary<string, string> _toolApprovals = new();
     /// <summary>勾选启用的 skill 名（空=启用 skills 时用全部）。</summary>
     [ObservableProperty] private List<string> _skills = new();
     [ObservableProperty] private bool _isSummoned;

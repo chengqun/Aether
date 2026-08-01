@@ -28,6 +28,9 @@ public sealed class CustomAgentDefinition
     /// <summary>勾选启用的工具名（对应 ToolRegistry 中的工具）。</summary>
     public IReadOnlyList<string> Tools { get; set; } = Array.Empty<string>();
 
+    /// <summary>按工具名覆盖审批等级（"Safe"/"Confirm"/"Dangerous"）；未列入取工具声明等级。专家编辑页可调。</summary>
+    public Dictionary<string, string> ToolApprovals { get; set; } = new();
+
     /// <summary>勾选启用的 skill 名（对应 SkillRegistry 中的 skill；空=启用 skills 时用全部）。</summary>
     public IReadOnlyList<string> Skills { get; set; } = Array.Empty<string>();
 

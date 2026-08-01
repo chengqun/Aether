@@ -157,6 +157,9 @@ public class ToolApprovalSpikeTests
     [Description("Get the weather for a city.")]
     private static string GetWeather([Description("The city.")] string city) => $"{city}：晴";
 
+    [Description("Place a trading order.")]
+    private static string PlaceOrder([Description("The symbol.")] string symbol) => $"已报单 {symbol}";
+
     /// <summary>
     /// 端到端验证 HarnessRuntime 的审批协作循环：首轮流经 OnApprovalRequest 上抛请求，
     /// 带 ToolApprovalDecision 二次调用恢复 → 工具执行(FunctionResultContent) + 最终文本。
@@ -169,18 +172,18 @@ public class ToolApprovalSpikeTests
         {
             Contents = new AIContent[]
             {
-                new FunctionCallContent("call-1", "GetWeather",
-                    new Dictionary<string, object?> { ["city"] = "北京" })
+                new FunctionCallContent("call-1", "PlaceOrder",
+                    new Dictionary<string, object?> { ["symbol"] = "IF2406" })
             }
         });
         client.Script.Add(new ChatResponseUpdate
         {
-            Contents = new AIContent[] { new TextContent("北京：晴") }
+            Contents = new AIContent[] { new TextContent("已报单 IF2406") }
         });
 
         var registry = new ToolRegistry();
-        registry.Register("GetWeather", "Get the weather for a city.", "test",
-            _ => AIFunctionFactory.Create((Func<string, string>)GetWeather));
+        registry.Register("PlaceOrder", "Place a trading order.", "test",
+            _ => AIFunctionFactory.Create((Func<string, string>)PlaceOrder), Aether.AI.Harness.Tools.ToolApprovalLevel.Dangerous);
         var factory = new AgentFactory(new ConstChatClientFactory(client), registry, new SkillRegistry());
         var runtime = new HarnessRuntime(factory, new SessionManager());
         runtime.RegisterAgent(new AgentDefinition
@@ -188,7 +191,7 @@ public class ToolApprovalSpikeTests
             Id = "spike-rt",
             Name = "SpikeRT",
             Instructions = "be brief",
-            Tools = new[] { "GetWeather" },
+            Tools = new[] { "PlaceOrder" },
             RequireToolApproval = true,
         });
 
@@ -200,7 +203,7 @@ public class ToolApprovalSpikeTests
             OnApprovalRequest: (req, _) => { approvalReq = req; return Task.CompletedTask; }));
 
         Assert.NotNull(approvalReq);
-        Assert.Equal("GetWeather", approvalReq!.ToolName);
+        Assert.Equal("PlaceOrder", approvalReq!.ToolName);
 
         // 2) 带 approve 决定二次调用：应执行工具并给最终文本
         var decision = new ToolApprovalDecision(approvalReq.RequestId, Approved: true, Reason: null, AlwaysApprove: false);
@@ -220,7 +223,7 @@ public class ToolApprovalSpikeTests
         Assert.True(sawResult, "批准后应出现工具结果事件");
         // 恢复轮 FICC 重新发出已批准工具的 Call（UI 据此建工具卡）+ Result（回填）。
         Assert.True(sawCall, "恢复轮应重新发出工具 Call 事件（UI 才能建工具步卡片）");
-        Assert.Contains("晴", finalText);
+        Assert.Contains("报单", finalText);
     }
 
     private sealed class ConstChatClientFactory : IChatClientFactory

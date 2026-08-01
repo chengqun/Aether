@@ -31,6 +31,12 @@ public sealed class AgentDefinition
     public IReadOnlyList<string> Tools { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// 按工具名覆盖审批等级（值："Safe"/"Confirm"/"Dangerous"）。未列入的工具取 ToolRegistry 声明等级。
+    /// 供专家作者在编辑页逐工具调整危险等级（默认取声明等级，可覆盖）。
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? ToolApprovals { get; init; }
+
+    /// <summary>
     /// Names of skills (registered with the SkillRegistry) the agent may use when
     /// <see cref="EnableAgentSkills"/> is on. Empty = use all registered skills.
     /// </summary>

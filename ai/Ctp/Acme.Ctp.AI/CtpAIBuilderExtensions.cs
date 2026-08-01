@@ -1,6 +1,7 @@
 using System.Reflection;
 using Acme.Ctp.AI.Tools;
 using Aether.AI.Hosting;
+using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,9 +36,9 @@ public static class CtpAIBuilderExtensions
             reg.Register("QueryPositions", "查询持仓", cat,
                 sp => CreateTool<QueryPositionTool>(sp, nameof(QueryPositionTool.QueryPositionsAsync)));
             reg.Register("OrderInsert", "报单（下单）", cat,
-                sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)));
+                sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)), ToolApprovalLevel.Dangerous);
             reg.Register("OrderAction", "撤单", cat,
-                sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)));
+                sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)), ToolApprovalLevel.Dangerous);
             reg.Register("QueryLatestTick", "查询最新行情快照", cat,
                 sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)));
             reg.Register("QueryAllLatestTicks", "查询所有订阅行情快照", cat,

@@ -155,6 +155,15 @@ public sealed class AgentSourceParser : IAgentSourceParser
                 case "tools":
                     result.Tools = ParseListValue(value, lines, ref i);
                     break;
+                case "toolapprovals":
+                    // JSON map: {"OrderInsert":"Dangerous","ReadFile":"Safe"}
+                    try
+                    {
+                        var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(value);
+                        if (map is not null) result.ToolApprovals = map;
+                    }
+                    catch { /* 工具审批覆盖反序列化失败：忽略，用声明等级 */ }
+                    break;
                 case "skills":
                     result.Skills = ParseListValue(value, lines, ref i);
                     break;
@@ -218,12 +227,18 @@ public sealed class AgentSourceParser : IAgentSourceParser
             ? "skills: []"
             : "skills:\n" + string.Join("\n", skillList.Select(s => $"- {s}"));
 
+        // tool_approvals: 仅在有覆盖时输出（JSON map，单行）
+        var approvalsLine = (f.ToolApprovals is null || f.ToolApprovals.Count == 0)
+            ? null
+            : "tool_approvals: " + System.Text.Json.JsonSerializer.Serialize(f.ToolApprovals);
+
         return $@"---
 name: {f.Name}
 description: {f.Description}
 category: {f.Category}
 {toolsLine}
 {skillsLine}
+{approvalsLine}
 memory: {f.Memory}
 max_history: {f.MaxHistory}
 model: {f.ModelId ?? string.Empty}

@@ -81,13 +81,14 @@ public sealed class AgentFactory
             toolNames.Add("ask_user");
         IList<AITool> tools = _toolRegistry.ResolveAll(toolNames).Cast<AITool>().ToList();
 
-        // 按专家开关把工具包成 ApprovalRequiredAIFunction：模型调用工具时流冒出
-        // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。HarnessAgent 默认
-        // 已挂 ToolApprovalAgent 中间件做绑定/排队/免问，故这里只需包装工具。
+        // 按专家开关把"危险"工具包成 ApprovalRequiredAIFunction：模型调用时流冒出
+        // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。等级优先取专家的 ToolApprovals 覆盖，
+        // 否则取 ToolRegistry 声明等级——Safe 自动放行，Confirm/Dangerous 才包装。
         if (definition.RequireToolApproval)
         {
             tools = tools
-                .Select(t => t is AIFunction fn ? new ApprovalRequiredAIFunction(fn) : t)
+                .Select(t => t is AIFunction fn && ResolveApprovalLevel(fn.Name, definition) != ToolApprovalLevel.Safe
+                    ? new ApprovalRequiredAIFunction(fn) : t)
                 .ToList();
         }
 
@@ -212,6 +213,18 @@ public sealed class AgentFactory
     /// memory policy. <c>null</c> (Full) lets the framework use its default
     /// unbounded in-memory provider.
     /// </summary>
+    /// <summary>解析工具审批等级：专家 ToolApprovals 覆盖优先，否则取 ToolRegistry 声明等级。</summary>
+    private ToolApprovalLevel ResolveApprovalLevel(string toolName, AgentDefinition definition)
+    {
+        if (definition.ToolApprovals is not null
+            && definition.ToolApprovals.TryGetValue(toolName, out var overrideLevel)
+            && Enum.TryParse<ToolApprovalLevel>(overrideLevel, ignoreCase: true, out var lvl))
+        {
+            return lvl;
+        }
+        return _toolRegistry.LevelOf(toolName);
+    }
+
     private static ChatHistoryProvider? BuildHistoryProvider(AgentDefinition definition)
         => definition.Memory switch
         {
@@ -231,6 +244,14 @@ public sealed class AgentFactory
             Instructions = definition.Instructions,
             Tools = tools,
         };
+
+        // ask_user 可用时自动追加使用指示（否则 agent 默认纯文本提问，交互对话框形同虚设）。
+        if (tools.Any(t => t is AIFunction f && string.Equals(f.Name, "ask_user", StringComparison.OrdinalIgnoreCase)))
+        {
+            chatOptions.Instructions = (string.IsNullOrEmpty(chatOptions.Instructions) ? "" : chatOptions.Instructions + "\n\n")
+                + "当需要用户确认、拍板、或从多个选项中选择时，必须调用 ask_user 工具（传入 question 和 options）阻塞等待用户回答；"
+                + "不要用纯文本提问后结束轮次等待用户输入。";
+        }
 
         if (definition.Temperature is { } temperature)
         {

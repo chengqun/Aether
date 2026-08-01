@@ -92,7 +92,8 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 
     public IReadOnlyList<CustomToolMeta> GetAvailableTools()
         => _toolRegistry.GetAllMetas()
-            .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category))
+            .Where(m => !string.Equals(m.Name, "ask_user", StringComparison.OrdinalIgnoreCase)) // ask_user 为自动纳入的基础设施工具，不在选择器暴露
+            .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category, m.ApprovalLevel.ToString()))
             .ToList();
 
     public IReadOnlyList<CustomSkillMeta> GetAvailableSkills()
