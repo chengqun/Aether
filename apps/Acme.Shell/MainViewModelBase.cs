@@ -746,7 +746,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
 
-    // —— 侧边栏收起 ——
+    // —— 侧边栏（原样：展开/收起）——
     [ObservableProperty]
     private double _sidebarWidth = 220;
 
@@ -758,19 +758,27 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         IsSidebarExpanded = !IsSidebarExpanded;
         SidebarWidth = IsSidebarExpanded ? 220 : 48;
-        // 用户手动切换后，不再由笔记页自动恢复
         _sidebarCollapsedForNotes = false;
     }
 
-    /// <summary>是否因进入笔记页而自动收起了侧边栏（离开时据此恢复，避免覆盖用户手动操作）。</summary>
     private bool _sidebarCollapsedForNotes;
+
+    // —— 聊天面板（右侧外挂，可收起）——
+    [ObservableProperty]
+    private bool _isChatPanelExpanded = true;
+
+    [RelayCommand]
+    private void ToggleChatPanel() => IsChatPanelExpanded = !IsChatPanelExpanded;
 
     // —— 导航 ——
     [ObservableProperty]
-    private string _currentPage = "chat";
+    private string _currentPage = "experts";
 
-    /// <summary>是否是聊天页</summary>
+    /// <summary>是否是聊天页（聊天区始终可见，此值控制中间面板显示最近会话列表）</summary>
     public bool IsChatPage => CurrentPage == "chat";
+
+    /// <summary>是否是功能面板页（非 chat，中间面板显示对应功能 View）</summary>
+    public bool IsPanelPage => !IsChatPage;
 
     /// <summary>是否是笔记页</summary>
     public bool IsNotesPage => CurrentPage == "notes";
@@ -819,6 +827,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     partial void OnCurrentPageChanged(string? value)
     {
         OnPropertyChanged(nameof(IsChatPage));
+        OnPropertyChanged(nameof(IsPanelPage));
         OnPropertyChanged(nameof(IsNotesPage));
         OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsAutomationPage));
@@ -830,7 +839,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [RelayCommand]
     private void NavigateTo(string pageKey)
     {
-        // 离开笔记页时恢复侧边栏（在 chat 提前 return 之前处理）
+        // 离开笔记页时恢复侧边栏
         if (CurrentPage == "notes" && pageKey != "notes" && _sidebarCollapsedForNotes)
         {
             IsSidebarExpanded = true;
@@ -838,16 +847,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _sidebarCollapsedForNotes = false;
         }
 
-        // “新聊天”导航项（chat）真正开一个新会话，而非仅跳页
+        // "chat" = 新聊天 + 确保聊天面板展开
         if (pageKey == "chat")
         {
             NewChat();
+            IsChatPanelExpanded = true;
             foreach (var item in NavItems)
                 item.IsCurrent = item.Key == pageKey;
             return;
         }
 
-        // 进入笔记页：自动收起侧边栏，给笔记树更大空间
+        // 进入笔记页：自动收起侧边栏给笔记更大空间
         if (pageKey == "notes" && IsSidebarExpanded)
         {
             IsSidebarExpanded = false;
