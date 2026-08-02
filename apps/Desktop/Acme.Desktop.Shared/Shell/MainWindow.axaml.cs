@@ -25,4 +25,8 @@ public partial class MainWindow : Window
             window.Show();
         }
     }
+
+    /// <summary>点击历史会话行后收起下拉（Command 仍照常触发加载会话）。</summary>
+    public void OnConversationClicked(object? sender, RoutedEventArgs e)
+        => HistoryFlyoutButton.Flyout?.Hide();
 }

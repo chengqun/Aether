@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Shell;
@@ -17,4 +18,11 @@ public sealed partial class ConversationItem : ObservableObject
 
     /// <summary>是否是当前激活会话（高亮）。</summary>
     [ObservableProperty] private bool _isCurrent;
+
+    /// <summary>打开此会话的命令（由 VM 注入）。
+    /// 直接绑在行上，避免在 Flyout/ContextMenu 弹出子树里用 AncestorType=Window 取不到 Window 的问题。</summary>
+    public ICommand? ResumeCommand { get; set; }
+
+    /// <summary>删除此会话的命令（由 VM 注入），同上。</summary>
+    public ICommand? DeleteCommand { get; set; }
 }

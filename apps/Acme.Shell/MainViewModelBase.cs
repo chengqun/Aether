@@ -676,6 +676,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         AgentId = s.AgentId,
                         AgentName = s.AgentName,
                         IsCurrent = s.ConversationId == _currentConversationId,
+                        ResumeCommand = ResumeConversationCommand,
+                        DeleteCommand = DeleteConversationCommand,
                     });
                 }
                 foreach (var c in all) Conversations.Add(c);
@@ -1218,6 +1220,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     {
                         Id = conv.ConversationId, Title = conv.Title, Preview = content,
                         DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
+                        ResumeCommand = ResumeConversationCommand,
+                        DeleteCommand = DeleteConversationCommand,
                     });
                     foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
                 });
@@ -1264,6 +1268,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         AgentId = conv.AgentId,
                         AgentName = conv.AgentName,
                         IsCurrent = true,
+                        ResumeCommand = ResumeConversationCommand,
+                        DeleteCommand = DeleteConversationCommand,
                     });
                     foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
                 });

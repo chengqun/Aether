@@ -160,7 +160,7 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
           <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
             <!-- 历史会话（Flyout 下拉） -->
-            <Button Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
+            <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
               <TextBlock Text="≡" FontSize="14"/>
               <Button.Flyout>
                 <Flyout Placement="BottomEdgeAlignedRight">
@@ -173,12 +173,13 @@
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
                               <Button Classes="settings-nav" HorizontalAlignment="Stretch" Margin="0,2"
-                                      Command="{Binding DataContext.ResumeConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                      CommandParameter="{Binding}">
+                                      Command="{Binding ResumeCommand}"
+                                      CommandParameter="{Binding}"
+                                      Click="OnConversationClicked">
                                 <Button.ContextFlyout>
                                   <MenuFlyout>
                                     <MenuItem Header="删除"
-                                              Command="{Binding DataContext.DeleteConversationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              Command="{Binding DeleteCommand}"
                                               CommandParameter="{Binding}"/>
                                   </MenuFlyout>
                                 </Button.ContextFlyout>
