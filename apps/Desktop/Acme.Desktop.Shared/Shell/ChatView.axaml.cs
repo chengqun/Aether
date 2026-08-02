@@ -5,6 +5,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 
@@ -172,6 +173,9 @@ public partial class ChatView : UserControl
         var distFromBottom = sv.Extent.Height - sv.Viewport.Height - sv.Offset.Y;
         _stickToBottom = distFromBottom < StickToBottomTolerance;
 
+        // 滚到底部浮动按钮显隐
+        ScrollToBottomButton.IsVisible = !_stickToBottom && sv.Extent.Height > sv.Viewport.Height;
+
         // 滚到顶部附近且还有更早历史：增量加载，避免切换长会话时一次性渲染全部消息卡顿。
         if (_vm?.HasMoreHistory == true && sv.Extent.Height > sv.Viewport.Height
             && sv.Offset.Y < HistoryLoadThreshold)
@@ -233,6 +237,25 @@ public partial class ChatView : UserControl
     private void OnStreamingScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (sender is ScrollViewer sv) sv.ScrollToEnd();
+    }
+
+    /// <summary>复制 agent 回答内容到剪贴板。</summary>
+    private async void OnCopyMessage(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is ChatMessageItem item && !string.IsNullOrEmpty(item.Content))
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is not null)
+                await ClipboardExtensions.SetTextAsync(clipboard, item.Content);
+        }
+    }
+
+    /// <summary>点击浮动按钮滚到底部。</summary>
+    private void OnScrollToBottomClick(object? sender, RoutedEventArgs e)
+    {
+        _stickToBottom = true;
+        ScrollToBottomButton.IsVisible = false;
+        ScrollToBottom();
     }
 
     private void OnDeviceConfigClick(object? sender, RoutedEventArgs e)

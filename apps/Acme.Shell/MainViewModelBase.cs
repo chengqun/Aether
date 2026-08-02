@@ -46,6 +46,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private Guid _currentConversationId = Guid.Empty;
     private bool _isInitializing;
     private bool _syncingMode; // 程序化刷新 SelectedMode 时置 true，避免 OnSelectedModeChanged 回触 SetMode
+    private CancellationTokenSource? _runCts; // 当前流式运行的取消令牌（停止生成用）
 
     // —— 历史增量加载：切换会话时只渲染最近若干轮，更早的暂存，滚到顶部再加载 ——
     // 避免长会话一次性重建全部消息 + 同步 markdown 解析导致的卡顿（全在 UI 线程）。
@@ -311,6 +312,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 FinalizeSegment(cursor.Current, items);
                 turn.Finish(errored ? TurnStatus.Error : TurnStatus.Done);
                 IsAgentRunning = false;
+                _runCts?.Dispose();
+                _runCts = null;
             });
         }
         return items.ToList();
@@ -1118,6 +1121,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await _settingsDialog.ShowSettingsAsync();
     }
 
+    /// <summary>停止当前流式生成（取消 CancellationToken）。</summary>
+    [RelayCommand]
+    private void StopGeneration()
+    {
+        _runCts?.Cancel();
+    }
+
     /// <summary>用户在输入框切换 plan/execute 模式：新会话只记 SelectedMode（首轮 desiredMode 应用），已存在会话立即 SetMode。</summary>
     private async Task SetModeOnSessionAsync(string mode)
     {
@@ -1162,6 +1172,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
         var content = InputText.Trim();
         InputText = string.Empty;
+        _runCts = new CancellationTokenSource();
 
         // 本地显示用户消息（右侧）并起一轮
         var turn = new ChatTurnItem { Header = content };
@@ -1206,7 +1217,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var desiredMode = HasModeSupport ? SelectedMode : null;
             var runItems = await RunSegmentedStreamAsync(turn, wf.Name,
                 (handlers, approvalResponse, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, handlers, approvalResponse, desiredMode, ct),
-                fullText);
+                fullText, _runCts?.Token ?? default);
             await PersistTurnAsync(content, runItems, fullText.ToString());
             await RefreshModeAsync();
             if (justCreated)
@@ -1252,7 +1263,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var desiredMode = HasModeSupport ? SelectedMode : null;
             var runItems = await RunSegmentedStreamAsync(turn, expert.Name,
                 (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, handlers, approvalResponse, desiredMode, ct),
-                fullText);
+                fullText, _runCts?.Token ?? default);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
             await PersistTurnAsync(content, runItems, fullText.ToString());
