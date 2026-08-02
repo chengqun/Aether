@@ -71,6 +71,24 @@ public sealed class McpManagementService : IMcpManagementService
     public Task RefreshAsync(CancellationToken cancellationToken = default)
         => _registry.RefreshAsync(cancellationToken);
 
+    public Task StartHealthMonitoringAsync(TimeSpan interval, CancellationToken cancellationToken = default)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(interval);
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    await _registry.CheckHealthAsync(cancellationToken).ConfigureAwait(false);
+                    await EnsureStartedAsync(cancellationToken).ConfigureAwait(false); // 重连后重新注册工具
+                }
+                catch { /* 监控失败不终止 */ }
+            }
+        }, cancellationToken);
+        return Task.CompletedTask;
+    }
+
     /// <summary>序列化为主流 mcpServers 映射格式（与 Claude Code .mcp.json 兼容）。</summary>
     private static string SerializeConfig(McpServerConfig c)
     {

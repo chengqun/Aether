@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Aether.AI.Core.Memory;
+using Aether.AI.Harness;
+using Aether.AI.Harness.Agents;
 using Aether.AI.Memory;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -22,12 +25,16 @@ public sealed class MemoryContextProvider : AIContextProvider
     private readonly IMemoryStore _store;
     private readonly Func<string?> _userIdAccessor;
     private readonly ILoggerFactory? _loggerFactory;
+    private readonly IChatClientFactory? _chatClientFactory;
+    private int _storeCount;
 
-    public MemoryContextProvider(IMemoryStore store, Func<string?> userIdAccessor, ILoggerFactory? loggerFactory = null)
+    public MemoryContextProvider(IMemoryStore store, Func<string?> userIdAccessor, ILoggerFactory? loggerFactory = null,
+        IChatClientFactory? chatClientFactory = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _userIdAccessor = userIdAccessor ?? throw new ArgumentNullException(nameof(userIdAccessor));
         _loggerFactory = loggerFactory;
+        _chatClientFactory = chatClientFactory;
     }
 
     /// <summary>召回长期记忆并注入为 system 指令。无记忆时返回空 <see cref="AIContext"/>（不改变行为）。</summary>
@@ -57,6 +64,10 @@ public sealed class MemoryContextProvider : AIContextProvider
             var item = BuildEpisodicMemory(userId, question, answer);
             if (item is null) return;
             await _store.SaveAsync(item, cancellationToken).ConfigureAwait(false);
+
+            // 每 5 轮提炼一次：把近期 episodic 压成 Knowledge/UserPreference（少而精）。
+            if (_chatClientFactory is not null && Interlocked.Increment(ref _storeCount) % 5 == 0)
+                _ = Task.Run(() => DistillAsync(userId, CancellationToken.None));
         }
         catch (Exception ex)
         {
@@ -64,11 +75,88 @@ public sealed class MemoryContextProvider : AIContextProvider
         }
     }
 
-    /// <summary>召回并格式化为注入指令块；无记忆返回 null。</summary>
+    /// <summary>
+    /// LLM 提炼：读近期 episodic + 已有 Knowledge/Preference，让 LLM 提取持久事实/偏好，
+    /// 存为 Knowledge/UserPreference 记忆项。fire-and-forget，失败静默。
+    /// </summary>
+    private async Task DistillAsync(string? userId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var episodic = await _store.FindByTypeAsync(userId, MemoryType.TaskHistory, cancellationToken).ConfigureAwait(false);
+            if (episodic.Count < 3) return; // 太少不提炼
+
+            var existing = (await _store.FindByTypeAsync(userId, MemoryType.Knowledge, cancellationToken).ConfigureAwait(false))
+                .Concat(await _store.FindByTypeAsync(userId, MemoryType.UserPreference, cancellationToken).ConfigureAwait(false)).ToList();
+
+            var recentEpisodic = string.Join("\n---\n", episodic.Take(10).Select(e => e.Content));
+            var existingText = existing.Count == 0 ? "（无）" : string.Join("\n", existing.Select(e => $"[{e.Type}] {e.Content}"));
+
+            var prompt = $@"你是记忆提炼器。从以下用户与 AI 的对话片段中，提取持久的用户偏好和事实（不是临时任务/一次性问题，不要重复已有记忆）。
+
+已有记忆：
+{existingText}
+
+对话片段：
+{recentEpisodic}
+
+输出 JSON 数组，每条：{{""type"":""UserPreference""或""Knowledge"",""key"":""简短标签"",""content"":""事实/偏好描述""}}
+如果没有新的持久信息，返回 []。只输出 JSON，不要其他文字。";
+
+            var client = _chatClientFactory!.Create(null);
+            var response = await client.GetResponseAsync(new[]
+            {
+                new ChatMessage(ChatRole.System, prompt),
+                new ChatMessage(ChatRole.User, "提取"),
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            var json = response.Text?.Trim();
+            if (string.IsNullOrEmpty(json) || json == "[]") return;
+
+            // 解析 LLM 输出的 JSON 数组并保存。
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var type = el.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String
+                    ? t.GetString() : "Knowledge";
+                var key = el.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                var content = el.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "";
+                if (string.IsNullOrWhiteSpace(content)) continue;
+
+                await _store.SaveAsync(new MemoryItem
+                {
+                    UserId = userId,
+                    Type = Enum.TryParse<MemoryType>(type, out var mt) ? mt : MemoryType.Knowledge,
+                    Key = Truncate(key, 40),
+                    Content = Truncate(content, 200),
+                    Importance = 0.8,
+                }, cancellationToken).ConfigureAwait(false);
+            }
+
+            _loggerFactory?.CreateLogger<MemoryContextProvider>()?.LogInformation("记忆提炼完成：从 {EpisodicCount} 条 episodic 提取了新 Knowledge/Preference。", episodic.Count);
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory?.CreateLogger<MemoryContextProvider>()?.LogWarning(ex, "记忆提炼失败。");
+        }
+    }
+
+    /// <summary>
+    /// 召回并格式化为注入指令块。按类型召回：Knowledge + UserPreference（提炼后的，少而精）+
+    /// 最近 5 条 TaskHistory（episodic 上下文）。比全量返回更精准、token 更省。
+    /// </summary>
     public async Task<string?> RecallInstructionsAsync(string? userId, CancellationToken cancellationToken)
     {
-        var items = await _store.FindByUserAsync(userId, cancellationToken).ConfigureAwait(false);
-        if (items is null || items.Count == 0) return null;
+        var knowledge = await _store.FindByTypeAsync(userId, MemoryType.Knowledge, cancellationToken).ConfigureAwait(false);
+        var preferences = await _store.FindByTypeAsync(userId, MemoryType.UserPreference, cancellationToken).ConfigureAwait(false);
+        var episodic = await _store.FindByTypeAsync(userId, MemoryType.TaskHistory, cancellationToken).ConfigureAwait(false);
+
+        var items = new List<MemoryItem>();
+        items.AddRange(knowledge);
+        items.AddRange(preferences);
+        items.AddRange(episodic.Take(5)); // 最近 5 条 episodic 作为上下文
+        if (items.Count == 0) return null;
         return FormatMemoryBlock(items);
     }
 

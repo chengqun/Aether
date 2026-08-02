@@ -165,6 +165,25 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         return "'" + s.Replace("'", "'\\''") + "'";
     }
 
+    /// <summary>健康检查：探活每个已连接 server（ListToolsAsync），任何掉线则 RefreshAsync 重连。</summary>
+    public async Task CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in _entries)
+        {
+            if (entry.Client is null || entry.Error is not null) continue;
+            try
+            {
+                await entry.Client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // server 掉线 → 重连全部
+                await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+        }
+    }
+
     public async ValueTask DisposeAsync() => await DisposeEntriesAsync().ConfigureAwait(false);
 
     private async Task DisposeEntriesAsync()

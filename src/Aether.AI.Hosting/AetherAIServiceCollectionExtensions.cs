@@ -85,8 +85,9 @@ public static class AetherAIServiceCollectionExtensions
             var store = sp.GetRequiredService<IMemoryStore>();
             var userIdAccessor = sp.GetRequiredService<Func<string?>>();
             var logger = sp.GetService<ILoggerFactory>();
+            var chatClientFactory = sp.GetService<IChatClientFactory>();
             return definition => definition.EnableLongTermMemory
-                ? new MemoryContextProvider(store, userIdAccessor, logger)
+                ? new MemoryContextProvider(store, userIdAccessor, logger, chatClientFactory)
                 : null;
         });
 

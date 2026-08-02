@@ -24,4 +24,7 @@ public interface IMcpServerRegistry
 
     /// <summary>各 server 的连接结果（配置 + 状态 + 工具 + 错误），供管理 UI 展示。</summary>
     IReadOnlyList<McpServerEntry> GetServers();
+
+    /// <summary>健康检查：探活每个已连接 server，任何掉线则触发 RefreshAsync 重连。</summary>
+    Task CheckHealthAsync(CancellationToken cancellationToken = default);
 }

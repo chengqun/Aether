@@ -911,7 +911,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 用 shared-task：编辑器打开时 EnsureLoadedAsync 会 await 同一连接任务，确保 MCP 区有最新工具。
         _ = Task.Run(async () =>
         {
-            try { if (_serviceProvider.GetService<IMcpManagementService>() is { } mgmt) await mgmt.EnsureStartedAsync(); }
+            try
+            {
+                if (_serviceProvider.GetService<IMcpManagementService>() is { } mgmt)
+                {
+                    await mgmt.EnsureStartedAsync();
+                    _ = mgmt.StartHealthMonitoringAsync(TimeSpan.FromMinutes(2)); // 每 2 分钟探活，掉线自动重连
+                }
+            }
             catch { /* MCP 启动失败不阻断主流程 */ }
         });
 

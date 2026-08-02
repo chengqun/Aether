@@ -43,4 +43,7 @@ public interface IMcpManagementService
 
     /// <summary>重连所有 server（重读目录）。</summary>
     Task RefreshAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>启动定时健康监控：周期性探活各 server，掉线自动重连 + 重新注册工具。</summary>
+    Task StartHealthMonitoringAsync(TimeSpan interval, CancellationToken cancellationToken = default);
 }
