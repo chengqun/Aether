@@ -127,13 +127,25 @@
     </Grid>
 
     <!-- ═══ 聊天区（右侧外挂，可收起） ═══ -->
-    <Grid Grid.Column="2" IsVisible="{Binding IsChatPanelExpanded}" Background="{DynamicResource ContentBgBrush}">
+    <Grid Grid.Column="2" Background="{DynamicResource ContentBgBrush}">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="1"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
       <Border Grid.Column="0" Background="{DynamicResource BorderBrush}"/>
-      <DockPanel Grid.Column="1">
+
+      <!-- 收起态：薄条 + ◀ 展开按钮 -->
+      <Border Grid.Column="1" IsVisible="{Binding !IsChatPanelExpanded}"
+              Background="{DynamicResource SidebarBgBrush}" Width="28">
+        <Button Command="{Binding ToggleChatPanelCommand}" Background="Transparent" BorderThickness="0"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ToolTip.Tip="展开聊天">
+          <TextBlock Text="◀" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Button>
+      </Border>
+
+      <!-- 展开态：聊天面板 -->
+      <DockPanel Grid.Column="1" IsVisible="{Binding IsChatPanelExpanded}">
         <!-- 聊天头部：历史 + 新聊天 + 收起 -->
         <Border DockPanel.Dock="Top" Padding="12,8" Background="{DynamicResource CardBgBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
