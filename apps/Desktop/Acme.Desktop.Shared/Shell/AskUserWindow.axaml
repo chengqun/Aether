@@ -17,8 +17,8 @@
                  Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="4,0,0,0"/>
     </StackPanel>
 
-    <!-- TabControl：每个问题一个 tab -->
-    <TabControl Grid.Row="1" ItemsSource="{Binding Questions}">
+    <!-- TabControl：每个问题一个 tab，选中选项后自动跳到下一个 -->
+    <TabControl Grid.Row="1" ItemsSource="{Binding Questions}" SelectedIndex="{Binding SelectedTabIndex}">
       <TabControl.ItemTemplate>
         <DataTemplate>
           <TextBlock Text="{Binding TabLabel}" FontSize="12"/>

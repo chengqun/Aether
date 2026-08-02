@@ -43,6 +43,9 @@ public partial class AskUserDialogViewModel : ObservableObject
     public event Action? Finished;
     public string[]? Result { get; private set; }
 
+    /// <summary>当前选中的 tab 索引。</summary>
+    [ObservableProperty] private int _selectedTabIndex;
+
     /// <summary>已回答的问题数（提交按钮提示用）。</summary>
     public int AnsweredCount => Questions.Count(q => q.IsAnswered);
 
@@ -50,7 +53,38 @@ public partial class AskUserDialogViewModel : ObservableObject
     {
         Questions = questions.Select((q, i) => new QuestionFormItem(i, q.Question, q.Options)).ToList();
         foreach (var q in Questions)
+        {
             q.PropertyChanged += (_, _) => OnPropertyChanged(nameof(AnsweredCount));
+            // 选中选项后自动跳到下一个未回答的 tab
+            q.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(QuestionFormItem.SelectedOption) && q.IsAnswered)
+                    AdvanceToNextUnanswered(q.Index);
+            };
+        }
+    }
+
+    /// <summary>跳到下一个未回答的问题（跳过已回答的）。最后一个则不跳。</summary>
+    private void AdvanceToNextUnanswered(int currentIndex)
+    {
+        for (int i = currentIndex + 1; i < Questions.Count; i++)
+        {
+            if (!Questions[i].IsAnswered)
+            {
+                SelectedTabIndex = i;
+                return;
+            }
+        }
+        // 后面都回答了 → 往前找未回答的
+        for (int i = 0; i < currentIndex; i++)
+        {
+            if (!Questions[i].IsAnswered)
+            {
+                SelectedTabIndex = i;
+                return;
+            }
+        }
+        // 全回答了 → 停在当前
     }
 
     [RelayCommand]
