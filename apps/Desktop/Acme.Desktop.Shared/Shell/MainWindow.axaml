@@ -143,18 +143,8 @@
       </Grid.ColumnDefinitions>
       <Border Grid.Column="0" Background="{DynamicResource BorderBrush}"/>
 
-      <!-- 收起态：薄条 + ◀ 展开按钮 -->
-      <Border Grid.Column="1" IsVisible="{Binding !IsChatPanelExpanded}"
-              Background="{DynamicResource SidebarBgBrush}" Width="28">
-        <Button Command="{Binding ToggleChatPanelCommand}" Background="Transparent" BorderThickness="0"
-                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ToolTip.Tip="展开聊天">
-          <TextBlock Text="◀" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Button>
-      </Border>
-
-      <!-- 展开态：聊天面板 -->
-      <DockPanel Grid.Column="1" IsVisible="{Binding IsChatPanelExpanded}">
+      <!-- 聊天面板 -->
+      <DockPanel Grid.Column="1">
         <!-- 聊天头部：历史 + 新聊天 + 收起 -->
         <Border DockPanel.Dock="Top" Padding="12,8" Background="{DynamicResource CardBgBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
@@ -208,10 +198,6 @@
             <!-- 新聊天 -->
             <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
               <TextBlock Text="✚" FontSize="14"/>
-            </Button>
-            <!-- 收起聊天面板 -->
-            <Button Command="{Binding ToggleChatPanelCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="收起聊天">
-              <TextBlock Text="▶" FontSize="12"/>
             </Button>
           </StackPanel>
         </Border>

@@ -740,13 +740,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     private bool _sidebarCollapsedForNotes;
 
-    // —— 聊天面板（右侧外挂，可收起）——
-    [ObservableProperty]
-    private bool _isChatPanelExpanded = true;
-
-    [RelayCommand]
-    private void ToggleChatPanel() => IsChatPanelExpanded = !IsChatPanelExpanded;
-
     // —— 导航 ——
     [ObservableProperty]
     private string _currentPage = "notes";
@@ -818,11 +811,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _sidebarCollapsedForNotes = false;
         }
 
-        // "chat" = 新聊天 + 确保聊天面板展开
+        // "chat" = 新聊天
         if (pageKey == "chat")
         {
             NewChat();
-            IsChatPanelExpanded = true;
             foreach (var item in NavItems)
                 item.IsCurrent = item.Key == pageKey;
             return;
