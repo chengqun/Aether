@@ -314,6 +314,10 @@ public sealed class AgentFactory
         IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
         var args = ParseCliArgs(rawArguments);
+        var log = _loggerFactory?.CreateLogger<AgentFactory>();
+        log?.LogDebug("run_skill_script {Script} raw={Raw} → args={Args}", script.FullPath, rawArguments, string.Join(" ", args));
+        if (rawArguments is not null && args.Count == 0)
+            log?.LogWarning("run_skill_script 收到的参数未能解析出 CLI 参数（raw={Raw}），脚本将以无参数运行。", rawArguments);
         var interpreter = ResolveInterpreter(script.FullPath);
 
         var psi = new ProcessStartInfo
@@ -349,11 +353,86 @@ public sealed class AgentFactory
     private static List<string> ParseCliArgs(JsonElement? raw)
     {
         var list = new List<string>();
-        if (raw is { } el && el.ValueKind == JsonValueKind.Array)
+        if (raw is not { } el) return list;
+
+        switch (el.ValueKind)
         {
-            foreach (var item in el.EnumerateArray())
-                list.Add(item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : item.ToString());
+            case JsonValueKind.Array:
+                foreach (var item in el.EnumerateArray()) list.Add(ToArg(item));
+                break;
+            case JsonValueKind.String:
+                var s = el.GetString();
+                if (!string.IsNullOrEmpty(s)) list.AddRange(ShellSplit(s));
+                break;
+            case JsonValueKind.Object:
+                // {key: value} → --key value（bool true → 仅 --key 标志，false → 跳过）
+                foreach (var prop in el.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.False) continue;
+                    list.Add("--" + prop.Name);
+                    if (prop.Value.ValueKind == JsonValueKind.True) continue;
+                    list.Add(ToArg(prop.Value));
+                }
+                break;
         }
+        return StripLeadingPrefix(list);
+    }
+
+    private static string ToArg(JsonElement item)
+    {
+        if (item.ValueKind == JsonValueKind.String) return item.GetString() ?? "";
+        if (item.ValueKind == JsonValueKind.Number) return item.GetRawText();
+        if (item.ValueKind == JsonValueKind.True) return "true";
+        if (item.ValueKind == JsonValueKind.False) return "false";
+        return item.ToString();
+    }
+
+    /// <summary>
+    /// 剥掉 agent 可能带进来的前缀：SKILL.md 里写的是 <c>python "&lt;SQLQ&gt;" asyncSqlQuery ...</c>（Bash 写法），
+    /// agent 可能把 <c>python</c> 解释器和 <c>&lt;SQLQ&gt;</c> 占位符 / 脚本路径也塞进参数。run_skill_script 已自带
+    /// 解释器 + 脚本路径，这里把它们剥掉，只留真正的子命令 + 参数。
+    /// </summary>
+    private static List<string> StripLeadingPrefix(List<string> args)
+    {
+        int i = 0;
+        if (i < args.Count && IsPython(args[i])) i++;
+        if (i < args.Count && IsScriptRef(args[i])) i++;
+        return i == 0 ? args : args.Skip(i).ToList();
+    }
+
+    private static bool IsPython(string s)
+        => s is "python" or "python3" or "py"
+           || s.EndsWith("/python", StringComparison.OrdinalIgnoreCase)
+           || s.EndsWith("/python3", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsScriptRef(string s)
+        => !string.IsNullOrEmpty(s)
+           && (s.EndsWith(".py", StringComparison.OrdinalIgnoreCase)
+               || (s.StartsWith('<') && s.EndsWith('>'))            // <SQLQ> 占位符
+               || s.Contains("sql_query", StringComparison.OrdinalIgnoreCase)
+               || s.Contains('/') || s.Contains('\\'));
+
+    /// <summary>简单 shell 分词（支持单/双引号 + 反斜杠转义），用于 agent 传整条命令串的情况。</summary>
+    private static List<string> ShellSplit(string s)
+    {
+        var list = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        char? quote = null;
+        bool inTok = false;
+        for (int i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (quote is not null)
+            {
+                if (c == quote.Value) quote = null;
+                else if (c == '\\' && i + 1 < s.Length) sb.Append(s[++i]);
+                else sb.Append(c);
+            }
+            else if (c == '"' || c == '\'') { quote = c; inTok = true; }
+            else if (char.IsWhiteSpace(c)) { if (inTok) { list.Add(sb.ToString()); sb.Clear(); inTok = false; } }
+            else { sb.Append(c); inTok = true; }
+        }
+        if (inTok) list.Add(sb.ToString());
         return list;
     }
 
