@@ -8,7 +8,12 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
-  <Grid ColumnDefinitions="Auto,*,420">
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto"/>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="420" MinWidth="300" MaxWidth="800"/>
+    </Grid.ColumnDefinitions>
 
     <!-- ═══ 展开态侧边栏（200px） ═══ -->
     <Border Grid.Column="0" Width="200" IsVisible="{Binding IsSidebarExpanded}"
@@ -126,7 +131,11 @@
           IsVisible="{Binding IsTradingPage}" />
     </Grid>
 
-    <!-- ═══ 聊天区（右侧外挂，可收起） ═══ -->
+    <!-- ═══ 分隔条（拖动调整聊天宽度） ═══ -->
+    <GridSplitter Grid.Column="1" ResizeDirection="Columns" Width="4" Background="{DynamicResource BorderBrush}"
+                  HorizontalAlignment="Right" Margin="0,0,-2,0"/>
+
+    <!-- ═══ 聊天区（右侧外挂，可收起，可拖宽） ═══ -->
     <Grid Grid.Column="2" Background="{DynamicResource ContentBgBrush}">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="1"/>
