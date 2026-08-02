@@ -50,12 +50,15 @@ public partial class ChatView : UserControl
             OnBecameVisible();
     }
 
-    /// <summary>切回可见：若应贴底，等隐藏期间欠下的布局刷新完成后再滚到底（避免 extent 是旧的滚不到真底）。</summary>
+    /// <summary>切回可见：若应贴底，等布局 + markdown 重新渲染后滚到底（隐藏期间积累的内容需要时间渲染）。</summary>
     private async void OnBecameVisible()
     {
         if (_vm?.IsAgentRunning ?? false)
             _stickToBottom = true; // 流式中：切回应跟随最新输出
         if (!_stickToBottom) return;
+        // 等一帧布局刷新，再等一帧 markdown 渲染完成，双次滚动确保到位
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        RequestScrollToBottom();
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
         RequestScrollToBottom();
     }

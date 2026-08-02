@@ -229,7 +229,11 @@ public partial class ExpertsViewModel : ObservableObject
             await _catalog.SaveAsync(def);
             // 配置变更后丢弃运行时缓存的旧 agent
             _runner.Invalidate(item.Id);
+            // 保存召唤状态，LoadAsync 后恢复（避免编辑后丢失召唤）
+            var summonedIds = Experts.Where(e => e.IsSummoned).Select(e => e.Id).ToHashSet();
             await LoadAsync();
+            foreach (var e in Experts)
+                e.IsSummoned = summonedIds.Contains(e.Id);
             StatusMessage = existing == null ? $"已创建：{item.Name}" : "已保存";
             SummonChanged?.Invoke();
             return (true, string.Empty);
