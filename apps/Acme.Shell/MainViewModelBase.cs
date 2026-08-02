@@ -772,7 +772,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     // —— 导航 ——
     [ObservableProperty]
-    private string _currentPage = "experts";
+    private string _currentPage = "notes";
 
     /// <summary>是否是聊天页（聊天区始终可见，此值控制中间面板显示最近会话列表）</summary>
     public bool IsChatPage => CurrentPage == "chat";
