@@ -8,7 +8,7 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
-  <Grid ColumnDefinitions="Auto,*,Auto">
+  <Grid ColumnDefinitions="Auto,*,420">
 
     <!-- ═══ 展开态侧边栏（200px） ═══ -->
     <Border Grid.Column="0" Width="200" IsVisible="{Binding IsSidebarExpanded}"

@@ -412,6 +412,7 @@
     <!-- 消息区 + 浮动按钮（Panel 叠加，ScrollViewer 填满剩余空间） -->
     <Panel>
       <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+                    HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                     ScrollChanged="OnMessagesScrollChanged">
         <Panel>
           <!-- 空态引导 -->
