@@ -229,11 +229,37 @@ public partial class ExpertsViewModel : ObservableObject
             await _catalog.SaveAsync(def);
             // 配置变更后丢弃运行时缓存的旧 agent
             _runner.Invalidate(item.Id);
-            // 保存召唤状态，LoadAsync 后恢复（避免编辑后丢失召唤）
-            var summonedIds = Experts.Where(e => e.IsSummoned).Select(e => e.Id).ToHashSet();
-            await LoadAsync();
-            foreach (var e in Experts)
-                e.IsSummoned = summonedIds.Contains(e.Id);
+
+            if (existing is not null)
+            {
+                // 编辑：在原 ExpertItem 上更新属性（不重建，IsSummoned 不丢，无需重新召唤）
+                existing.Name = item.Name;
+                existing.Description = item.Description;
+                existing.Category = string.IsNullOrWhiteSpace(item.Category) ? "普通对话" : item.Category;
+                existing.SystemPrompt = item.SystemPrompt;
+                existing.ModelId = item.ModelId;
+                existing.Tools = item.Tools;
+                existing.ToolApprovals = item.ToolApprovals;
+                existing.Skills = item.Skills;
+                existing.Memory = item.Memory;
+                existing.MaxHistory = item.MaxHistory;
+                existing.TopP = item.TopP;
+                existing.MaxOutputTokens = item.MaxOutputTokens;
+                existing.ResponseFormat = item.ResponseFormat;
+                existing.RequireToolApproval = item.RequireToolApproval;
+                existing.EnableWebSearch = item.EnableWebSearch;
+                existing.EnableTodoProvider = item.EnableTodoProvider;
+                existing.EnableAgentModeProvider = item.EnableAgentModeProvider;
+                existing.EnableFileMemory = item.EnableFileMemory;
+                existing.EnableOpenTelemetry = item.EnableOpenTelemetry;
+                existing.EnableLongTermMemory = item.EnableLongTermMemory;
+            }
+            else
+            {
+                // 新建：加载到列表
+                await LoadAsync();
+            }
+
             StatusMessage = existing == null ? $"已创建：{item.Name}" : "已保存";
             SummonChanged?.Invoke();
             return (true, string.Empty);

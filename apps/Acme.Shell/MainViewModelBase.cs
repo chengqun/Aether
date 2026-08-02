@@ -1004,6 +1004,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private async void OnSummonChanged()
     {
         RefreshAgentSelectItems();
+        // 编辑后 EnableAgentModeProvider 可能变了，重新评估模式选择器显隐
+        if (SelectedAgentItem is ExpertItem ei)
+            HasModeSupport = ei.EnableAgentModeProvider;
         try
         {
             var ids = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToArray();
@@ -1047,10 +1050,22 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     partial void OnSelectedModeChanged(string? value)
     {
         OnPropertyChanged(nameof(ShowPlanAccept));
+        OnPropertyChanged(nameof(IsPlanMode));
         if (_syncingMode || _isInitializing || value is null || !HasModeSupport) return;
         // 已存在会话：立即 SetMode；新会话：不改，由 run delegate 的 desiredMode 在首轮应用。
         if (_currentConversationId != Guid.Empty)
             _ = SetModeOnSessionAsync(value);
+    }
+
+    /// <summary>是否在规划模式（ToggleButton 绑定用）。设值切换 plan/execute。</summary>
+    public bool IsPlanMode
+    {
+        get => SelectedMode == "plan";
+        set
+        {
+            var target = value ? "plan" : "execute";
+            if (SelectedMode != target) SelectedMode = target;
+        }
     }
     partial void OnIsAgentRunningChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
