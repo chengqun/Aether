@@ -68,6 +68,7 @@
               <TextBlock Text="窗口大小" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
               <NumericUpDown Value="{Binding MaxHistory}" Minimum="1" Maximum="200" FormatString="0"/>
             </StackPanel>
+            <CheckBox Content="长期记忆（跨会话召回+沉淀）" IsChecked="{Binding EnableLongTermMemory}" Margin="0,2"/>
           </StackPanel>
         </Expander>
 
@@ -87,19 +88,31 @@
                 <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
               </ComboBox>
             </StackPanel>
-            <StackPanel Spacing="2">
-              <TextBlock Text="扩展能力" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <WrapPanel>
-                <CheckBox Content="Web搜索" IsChecked="{Binding EnableWebSearch}" Margin="0,0,12,2"/>
-                <CheckBox Content="文件记忆" IsChecked="{Binding EnableFileMemory}" Margin="0,0,12,2"/>
-                <CheckBox Content="待办" IsChecked="{Binding EnableTodoProvider}" Margin="0,0,12,2"/>
-                <CheckBox Content="工具审批" IsChecked="{Binding RequireToolApproval}" Margin="0,0,12,2"/>
-                <CheckBox Content="Agent模式" IsChecked="{Binding EnableAgentModeProvider}" Margin="0,0,12,2"/>
-                <CheckBox Content="遥测" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,0,12,2"/>
-                <CheckBox Content="长期记忆" IsChecked="{Binding EnableLongTermMemory}" Margin="0,0,12,2"/>
-              </WrapPanel>
-            </StackPanel>
           </StackPanel>
+        </Expander>
+
+        <Expander Header="工具审批" IsExpanded="False">
+          <CheckBox Content="启用工具调用前审批（Dangerous 工具弹审批框）" IsChecked="{Binding RequireToolApproval}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="Web 搜索" IsExpanded="False">
+          <CheckBox Content="启用 Web 搜索" IsChecked="{Binding EnableWebSearch}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="文件记忆" IsExpanded="False">
+          <CheckBox Content="启用文件记忆 provider" IsChecked="{Binding EnableFileMemory}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="待办" IsExpanded="False">
+          <CheckBox Content="启用 TodoProvider（计划 UI）" IsChecked="{Binding EnableTodoProvider}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="Agent 模式" IsExpanded="False">
+          <CheckBox Content="启用 plan/execute 模式切换" IsChecked="{Binding EnableAgentModeProvider}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="遥测" IsExpanded="False">
+          <CheckBox Content="启用 OpenTelemetry（Trace 查看）" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,4"/>
         </Expander>
 
         <Expander x:Name="ExpSkills" Header="技能" IsExpanded="False">
