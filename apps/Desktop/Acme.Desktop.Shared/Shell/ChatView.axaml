@@ -365,35 +365,38 @@
       </StackPanel>
     </Border>
 
-    <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
-                  ScrollChanged="OnMessagesScrollChanged">
-      <Panel>
-        <!-- 空态引导 -->
-        <Border IsVisible="{Binding !Messages.Count}" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center">
-          <StackPanel Spacing="12" HorizontalAlignment="Center" MaxWidth="380">
-            <TextBlock Text="👋" FontSize="36" HorizontalAlignment="Center"/>
-            <TextBlock Text="开始对话" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-            <TextBlock Text="选择一个专家，输入你的问题。支持工具调用、MCP、技能、长期记忆等能力。"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       TextWrapping="Wrap" HorizontalAlignment="Center"/>
-          </StackPanel>
-        </Border>
+    <!-- 消息区 + 浮动按钮（Panel 叠加，ScrollViewer 填满剩余空间） -->
+    <Panel>
+      <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+                    ScrollChanged="OnMessagesScrollChanged">
+        <Panel>
+          <!-- 空态引导 -->
+          <Border IsVisible="{Binding !Messages.Count}" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel Spacing="12" HorizontalAlignment="Center" MaxWidth="380">
+              <TextBlock Text="👋" FontSize="36" HorizontalAlignment="Center"/>
+              <TextBlock Text="开始对话" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+              <TextBlock Text="选择一个专家，输入你的问题。支持工具调用、MCP、技能、长期记忆等能力。"
+                         FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                         TextWrapping="Wrap" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Border>
 
-        <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate><VirtualizingStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-        </ItemsControl>
-      </Panel>
-    </ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><VirtualizingStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </Panel>
+      </ScrollViewer>
 
-    <!-- 滚到底部浮动按钮 -->
-    <Button x:Name="ScrollToBottomButton" Click="OnScrollToBottomClick"
-            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,80"
-            Width="36" Height="36" CornerRadius="18" Padding="0"
-            Background="{DynamicResource AccentBrush}" BorderThickness="0"
-            IsVisible="False" ToolTip.Tip="滚到底部">
-      <TextBlock Text="↓" FontSize="16" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-    </Button>
+      <!-- 滚到底部浮动按钮（叠加在 ScrollViewer 上） -->
+      <Button x:Name="ScrollToBottomButton" Click="OnScrollToBottomClick"
+              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,80"
+              Width="36" Height="36" CornerRadius="18" Padding="0"
+              Background="{DynamicResource AccentBrush}" BorderThickness="0"
+              IsVisible="False" ToolTip.Tip="滚到底部">
+        <TextBlock Text="↓" FontSize="16" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Button>
+    </Panel>
   </DockPanel>
 </UserControl>
