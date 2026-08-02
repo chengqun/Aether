@@ -149,15 +149,17 @@ public sealed class AgentFactory
             options.AIContextProviders = combined;
         }
 
-        return _chatClientFactory.Create(definition.ModelId).AsHarnessAgent(options, _loggerFactory);
-    }
+        var client = _chatClientFactory.Create(definition.ModelId);
 
-    /// <summary>
-    /// 配置 skills provider。自建 <see cref="AgentSkillsProvider"/>（关闭 load/read/run 审批），
-    /// 经 <see cref="HarnessAgentOptions.AIContextProviders"/> 注入，并关掉 HarnessAgent 内部默认
-    /// skills provider（其用默认 options 要求审批，会挡住 <c>run_skill_script</c>）。
-    /// 配了 <see cref="SkillsDirectory"/> 用文件型 source（支持脚本）；否则退回 SkillRegistry 纯提示词。
-    /// </summary>
+        // AgentModeProvider 开启时，过滤掉 get_mode/set_mode 工具不暴露给 LLM
+        // （GLM 会无限调用 mode_get；但保留 AgentModeProvider 的模式注入 + 状态管理）
+        if (definition.EnableAgentModeProvider)
+        {
+            client = new ToolFilteringChatClient(client, "get_mode", "set_mode");
+        }
+
+        return client.AsHarnessAgent(options, _loggerFactory);
+    }
     private void ConfigureSkillsProvider(HarnessAgentOptions options, AgentDefinition definition)
     {
         // 技能选择器是唯一控制：选了技能 = 启用，没选 = 禁用。不再需要 EnableAgentSkills 开关。
