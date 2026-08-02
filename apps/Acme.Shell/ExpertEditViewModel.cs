@@ -184,7 +184,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             RequireToolApproval = existing.RequireToolApproval;
             EnableAgentModeProvider = existing.EnableAgentModeProvider;
             EnableFileMemory = existing.EnableFileMemory;
-            EnableAgentSkills = existing.EnableAgentSkills;
             EnableOpenTelemetry = existing.EnableOpenTelemetry;
             EnableLongTermMemory = existing.EnableLongTermMemory;
             IsEditing = true;
@@ -372,7 +371,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             RequireToolApproval = RequireToolApproval,
             EnableAgentModeProvider = EnableAgentModeProvider,
             EnableFileMemory = EnableFileMemory,
-            EnableAgentSkills = EnableAgentSkills,
             EnableOpenTelemetry = EnableOpenTelemetry,
             EnableLongTermMemory = EnableLongTermMemory,
         };

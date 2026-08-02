@@ -94,7 +94,6 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             RequireToolApproval = def.RequireToolApproval,
             EnableAgentModeProvider = def.EnableAgentModeProvider,
             EnableFileMemory = def.EnableFileMemory,
-            EnableAgentSkills = def.EnableAgentSkills,
             EnableOpenTelemetry = def.EnableOpenTelemetry,
             EnableLongTermMemory = def.EnableLongTermMemory,
         };

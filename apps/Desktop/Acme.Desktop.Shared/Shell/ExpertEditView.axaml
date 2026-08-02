@@ -94,7 +94,6 @@
                 <CheckBox Content="文件记忆" IsChecked="{Binding EnableFileMemory}" Margin="0,0,12,2"/>
                 <CheckBox Content="待办" IsChecked="{Binding EnableTodoProvider}" Margin="0,0,12,2"/>
                 <CheckBox Content="工具审批" IsChecked="{Binding RequireToolApproval}" Margin="0,0,12,2"/>
-                <CheckBox Content="技能" IsChecked="{Binding EnableAgentSkills}" Margin="0,0,12,2"/>
                 <CheckBox Content="Agent模式" IsChecked="{Binding EnableAgentModeProvider}" Margin="0,0,12,2"/>
                 <CheckBox Content="遥测" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,0,12,2"/>
                 <CheckBox Content="长期记忆" IsChecked="{Binding EnableLongTermMemory}" Margin="0,0,12,2"/>

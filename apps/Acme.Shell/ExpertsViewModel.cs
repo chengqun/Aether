@@ -137,7 +137,6 @@ public partial class ExpertsViewModel : ObservableObject
                         RequireToolApproval = def.RequireToolApproval,
                         EnableAgentModeProvider = def.EnableAgentModeProvider,
                         EnableFileMemory = def.EnableFileMemory,
-                        EnableAgentSkills = def.EnableAgentSkills,
                         EnableOpenTelemetry = def.EnableOpenTelemetry,
                         EnableLongTermMemory = def.EnableLongTermMemory,
                         Source = def.Source,
@@ -223,7 +222,6 @@ public partial class ExpertsViewModel : ObservableObject
                 RequireToolApproval = item.RequireToolApproval,
                 EnableAgentModeProvider = item.EnableAgentModeProvider,
                 EnableFileMemory = item.EnableFileMemory,
-                EnableAgentSkills = item.EnableAgentSkills,
                 EnableOpenTelemetry = item.EnableOpenTelemetry,
                 EnableLongTermMemory = item.EnableLongTermMemory,
             };

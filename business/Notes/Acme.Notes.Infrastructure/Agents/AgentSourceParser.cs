@@ -146,9 +146,6 @@ public sealed class AgentSourceParser : IAgentSourceParser
                 case "enablefilememory":
                     if (bool.TryParse(value, out var fm)) result.EnableFileMemory = fm;
                     break;
-                case "enableagentskills":
-                    if (bool.TryParse(value, out var sk)) result.EnableAgentSkills = sk;
-                    break;
                 case "enableopentelemetry":
                     if (bool.TryParse(value, out var ot)) result.EnableOpenTelemetry = ot;
                     break;
@@ -253,7 +250,6 @@ enable_todo_provider: {f.EnableTodoProvider.ToString().ToLowerInvariant()}
 require_tool_approval: {f.RequireToolApproval.ToString().ToLowerInvariant()}
 enable_agent_mode_provider: {f.EnableAgentModeProvider.ToString().ToLowerInvariant()}
 enable_file_memory: {f.EnableFileMemory.ToString().ToLowerInvariant()}
-enable_agent_skills: {f.EnableAgentSkills.ToString().ToLowerInvariant()}
 enable_open_telemetry: {f.EnableOpenTelemetry.ToString().ToLowerInvariant()}
 enable_long_term_memory: {f.EnableLongTermMemory.ToString().ToLowerInvariant()}
 source: {f.Source ?? string.Empty}

@@ -160,7 +160,8 @@ public sealed class AgentFactory
     /// </summary>
     private void ConfigureSkillsProvider(HarnessAgentOptions options, AgentDefinition definition)
     {
-        if (!definition.EnableAgentSkills)
+        // 技能选择器是唯一控制：选了技能 = 启用，没选 = 禁用。不再需要 EnableAgentSkills 开关。
+        if (definition.Skills.Count == 0)
         {
             options.DisableAgentSkillsProvider = true;
             return;
@@ -304,7 +305,7 @@ public sealed class AgentFactory
     }
 
     /// <summary>
-    /// 当 agent 启用 skills（<see cref="AgentDefinition.EnableAgentSkills"/>）时构建 skill 源。
+    /// 当 agent 选了技能（<see cref="AgentDefinition.Skills"/> 非空）时构建 skill 源。
     /// 配了 <see cref="SkillsDirectory"/> 时用 MAF <see cref="AgentFileSkillsSource"/>（支持 SKILL.md 正文 + 脚本/resources），
     /// 并按 <see cref="AgentDefinition.Skills"/> 过滤；否则退回 SkillRegistry 的纯提示词 <see cref="AgentInMemorySkillsSource"/>。
     /// </summary>

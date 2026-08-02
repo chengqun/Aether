@@ -38,7 +38,6 @@ public sealed class AgentDefinition
 
     /// <summary>
     /// Names of skills (registered with the SkillRegistry) the agent may use when
-    /// <see cref="EnableAgentSkills"/> is on. Empty = use all registered skills.
     /// </summary>
     public IReadOnlyList<string> Skills { get; init; } = Array.Empty<string>();
 
@@ -86,7 +85,6 @@ public sealed class AgentDefinition
     public bool EnableFileMemory { get; init; }
 
     /// <summary>启用 agent skills provider（默认禁用）。</summary>
-    public bool EnableAgentSkills { get; init; }
 
     /// <summary>启用 OpenTelemetry（默认禁用）。</summary>
     public bool EnableOpenTelemetry { get; init; }

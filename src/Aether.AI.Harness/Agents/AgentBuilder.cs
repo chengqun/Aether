@@ -53,7 +53,6 @@ public sealed class AgentBuilder
     // —— 技能 ——
     public AgentBuilder WithSkill(string skillName) { _skills.Add(skillName); return this; }
     public AgentBuilder WithSkills(IEnumerable<string> skillNames) { _skills.AddRange(skillNames); return this; }
-    public AgentBuilder EnableAgentSkills(bool enable = true) { _enableAgentSkills = enable; return this; }
 
     // —— 记忆 ——
     public AgentBuilder Memory(AgentMemoryMode memory) { _memory = memory; return this; }
@@ -87,7 +86,6 @@ public sealed class AgentBuilder
         EnableTodoProvider = _enableTodoProvider,
         EnableAgentModeProvider = _enableAgentModeProvider,
         EnableFileMemory = _enableFileMemory,
-        EnableAgentSkills = _enableAgentSkills,
         EnableOpenTelemetry = _enableOpenTelemetry,
         EnableLongTermMemory = _enableLongTermMemory,
     };
