@@ -36,6 +36,7 @@ public sealed class AgentFactory
     private readonly ILoggerFactory? _loggerFactory;
     private readonly AgentFileSkillScriptRunner _skillScriptRunner;
     private readonly Func<AgentDefinition, AIContextProvider?>? _memoryContextProviderFactory;
+    private readonly Func<AgentDefinition, ChatHistoryProvider?>? _historyProviderFactory;
 
     /// <summary>
     /// When <c>true</c> (default), builds a <see cref="HarnessAgent"/>. When
@@ -61,7 +62,8 @@ public sealed class AgentFactory
     /// Invoked lazily per agent so the runtime does not eagerly build a client.
     /// </param>
     public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, SkillRegistry skillRegistry, ILoggerFactory? loggerFactory = null,
-        Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null)
+        Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null,
+        Func<AgentDefinition, ChatHistoryProvider?>? historyProviderFactory = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
@@ -69,6 +71,7 @@ public sealed class AgentFactory
         _loggerFactory = loggerFactory;
         _skillScriptRunner = RunSkillScriptAsync;
         _memoryContextProviderFactory = memoryContextProviderFactory;
+        _historyProviderFactory = historyProviderFactory;
     }
 
     /// <summary>Builds a cached, runnable agent for the given definition.</summary>
@@ -98,7 +101,7 @@ public sealed class AgentFactory
                 .ToList();
         }
 
-        var historyProvider = BuildHistoryProvider(definition);
+        var historyProvider = _historyProviderFactory?.Invoke(definition) ?? BuildHistoryProvider(definition);
 
         return UseChatClientAgent
             ? BuildChatClientAgent(definition, tools, historyProvider)

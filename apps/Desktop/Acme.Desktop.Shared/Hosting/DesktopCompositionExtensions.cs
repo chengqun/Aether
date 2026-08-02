@@ -64,6 +64,9 @@ public static class DesktopCompositionExtensions
             o.SkillsDirectory = Path.Combine(tenantDir, "skills");
         });
 
+        // OTel：控制台导出（dev 调试；专家需开 EnableOpenTelemetry 才发 Activity）。OTLP 端点按需配。
+        services.AddAetherTelemetry(o => o.ConsoleEnabled = true);
+
         // MCP server 配置目录：扫描 <tenantDir>/mcp-servers/*.json 自动注册 MCP server（stdio/SSE）。
         // 放配置文件即可启用，无需改代码。空目录 = 无 MCP。连接在 InitializeAsync 启动。
         aether.AddMcpServersFromDirectory(Path.Combine(tenantDir, "mcp-servers"));

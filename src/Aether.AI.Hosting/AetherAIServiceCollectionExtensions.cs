@@ -90,6 +90,24 @@ public static class AetherAIServiceCollectionExtensions
                 : null;
         });
 
+        // 会话真恢复：session→conversationId 映射（HarnessRuntime 建 session 时写入）+ history provider 工厂。
+        // Full/SlidingWindow → RestoringChatHistoryProvider（从 IConversationStore 加载 transcript 重建 LLM 历史）；
+        // Off → NoMemoryChatHistoryProvider。
+        services.AddSingleton<SessionConversationMap>();
+        services.AddSingleton<Func<AgentDefinition, ChatHistoryProvider?>>(sp =>
+        {
+            var store = sp.GetService<IConversationStore>();
+            var map = sp.GetRequiredService<SessionConversationMap>();
+            var logger = sp.GetService<ILoggerFactory>();
+            return definition => definition.Memory switch
+            {
+                AgentMemoryMode.Off => new NoMemoryChatHistoryProvider(),
+                AgentMemoryMode.SlidingWindow => new RestoringChatHistoryProvider(store, map,
+                    new SlidingWindowChatReducer(definition.MaxHistory), logger),
+                _ => new RestoringChatHistoryProvider(store, map, null, logger), // Full
+            };
+        });
+
         services.AddSingleton<AgentFactory>(sp =>
         {
             var factory = new AgentFactory(
@@ -97,7 +115,8 @@ public static class AetherAIServiceCollectionExtensions
                 sp.GetRequiredService<ToolRegistry>(),
                 sp.GetRequiredService<SkillRegistry>(),
                 sp.GetService<ILoggerFactory>(),
-                sp.GetService<Func<AgentDefinition, AIContextProvider?>>());
+                sp.GetService<Func<AgentDefinition, AIContextProvider?>>(),
+                sp.GetService<Func<AgentDefinition, ChatHistoryProvider?>>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
             factory.SkillsDirectory = sp.GetRequiredService<AetherAIOptions>().SkillsDirectory;
@@ -109,7 +128,8 @@ public static class AetherAIServiceCollectionExtensions
         {
             var runtime = new HarnessRuntime(
                 sp.GetRequiredService<AgentFactory>(),
-                sp.GetRequiredService<SessionManager>());
+                sp.GetRequiredService<SessionManager>(),
+                sp.GetService<SessionConversationMap>());
             // Register every agent definition contributed via the builder.
             foreach (var definition in sp.GetServices<AgentDefinition>())
             {

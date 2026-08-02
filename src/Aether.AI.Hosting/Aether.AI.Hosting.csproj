@@ -11,6 +11,10 @@
     <!-- Microsoft.Extensions.* (DI, Options, Logging) flow transitively from
          Microsoft.Agents.AI.OpenAI at the framework's pinned versions, so no
          explicit versions are required here. -->
+    <PackageReference Include="OpenTelemetry" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.12.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.12.0" />
   </ItemGroup>
 
   <PropertyGroup>

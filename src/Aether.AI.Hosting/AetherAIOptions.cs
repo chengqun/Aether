@@ -33,6 +33,19 @@ public sealed class AetherAIOptions
     /// 建议填绝对路径（如 /usr/bin/python3 / /opt/homebrew/bin/python3）。
     /// </summary>
     public string? PythonExecutable { get; set; }
+
+    /// <summary>OpenTelemetry 导出配置。配了任一项才启用 OTel SDK（接 Aether.AI.Harness + MAF 的 Activity 源）。</summary>
+    public OpenTelemetryOptions OpenTelemetry { get; set; } = new();
+}
+
+/// <summary>OTel 导出选项：控制台 + OTLP（至少配一个才导出；agent 的 EnableOpenTelemetry 控制是否发 Activity）。</summary>
+public sealed class OpenTelemetryOptions
+{
+    /// <summary>是否输出到控制台（调试用）。</summary>
+    public bool ConsoleEnabled { get; set; }
+
+    /// <summary>OTLP 导出端点（如 http://localhost:4317）；null 不导出 OTLP。</summary>
+    public string? OtlpEndpoint { get; set; }
 }
 
 /// <summary>

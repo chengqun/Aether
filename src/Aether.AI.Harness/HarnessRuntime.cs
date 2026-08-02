@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Messages;
 using Aether.AI.Core.Sessions;
@@ -33,14 +34,16 @@ public sealed class HarnessRuntime
 {
     private readonly AgentFactory _factory;
     private readonly SessionManager _sessions;
+    private readonly SessionConversationMap _sessionConversationMap;
     private readonly ConcurrentDictionary<string, AgentDefinition> _definitions = new();
     private readonly ConcurrentDictionary<string, AIAgent> _agents = new();
     private readonly ConcurrentDictionary<Guid, FrameworkAgentSession> _frameworkSessions = new();
 
-    public HarnessRuntime(AgentFactory factory, SessionManager sessions)
+    public HarnessRuntime(AgentFactory factory, SessionManager sessions, SessionConversationMap? sessionConversationMap = null)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+        _sessionConversationMap = sessionConversationMap ?? new SessionConversationMap();
     }
 
     public SessionManager Sessions => _sessions;
@@ -158,7 +161,8 @@ public sealed class HarnessRuntime
         session.Touch();
 
         var fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
-            name => session.ToolCalls.Add(name));
+            name => session.ToolCalls.Add(name),
+            emitTelemetry: definition.EnableOpenTelemetry, agentId: definition.Id, conversationId: sessionId.ToString(), mode: desiredMode);
 
         session.Messages.Add(Message.Assistant(fullText));
         session.State = SessionState.Idle;
@@ -236,11 +240,23 @@ public sealed class HarnessRuntime
         AIAgent agent, FrameworkAgentSession frameworkSession, string userMessage,
         StreamHandlers? handlers, ToolApprovalDecision? approvalResponse,
         CancellationToken cancellationToken,
-        Action<string>? onToolCallName)
+        Action<string>? onToolCallName,
+        bool emitTelemetry = false, string? agentId = null, string? conversationId = null, string? mode = null)
     {
         var sb = new System.Text.StringBuilder();
         // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
+
+        // OpenTelemetry：EnableOpenTelemetry 时围本轮 run 起 Activity（无 listener 时 StartActivity 返回 null，cheap）。
+        using var activity = emitTelemetry
+            ? Aether.AI.Harness.Telemetry.AetherActivitySource.Instance.StartActivity(Aether.AI.Harness.Telemetry.AetherActivitySource.ActivityAgentRun)
+            : null;
+        if (activity is not null)
+        {
+            if (agentId is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagAgentId, agentId);
+            if (conversationId is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagConversationId, conversationId);
+            if (mode is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagMode, mode);
+        }
 
         // 选择调用重载：审批恢复轮带响应消息；首轮带用户文本。
         IAsyncEnumerable<AgentResponseUpdate> stream;
@@ -297,6 +313,8 @@ public sealed class HarnessRuntime
                         if (!string.IsNullOrEmpty(call.CallId))
                             toolNamesByCallId[call.CallId] = call.Name!;
                         onToolCallName?.Invoke(call.Name!);
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventToolCall,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("name", call.Name), new KeyValuePair<string, object?>("callId", call.CallId) })));
                         if (handlers?.OnToolEvent is not null)
                         {
                             await handlers.OnToolEvent(
@@ -310,6 +328,8 @@ public sealed class HarnessRuntime
                     {
                         var name = (result.CallId is not null && toolNamesByCallId.TryGetValue(result.CallId, out var n))
                             ? n : "工具";
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventToolResult,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("name", name), new KeyValuePair<string, object?>("callId", result.CallId) })));
                         if (handlers?.OnToolEvent is not null)
                         {
                             await handlers.OnToolEvent(
@@ -333,6 +353,8 @@ public sealed class HarnessRuntime
                     case ToolApprovalRequestContent approvalReq:
                         // 暂存原 req，供恢复轮 CreateResponse 使用。
                         SetPendingApproval(frameworkSession, approvalReq);
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventApproval,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("requestId", approvalReq.RequestId) })));
                         if (handlers?.OnApprovalRequest is not null)
                         {
                             var fc = approvalReq.ToolCall as FunctionCallContent;
@@ -347,16 +369,21 @@ public sealed class HarnessRuntime
                         break;
 
                     case ErrorContent err when !string.IsNullOrEmpty(err.Message):
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventError,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("message", err.Message) })));
                         if (handlers?.OnError is not null)
                             await handlers.OnError(err.Message!, cancellationToken).ConfigureAwait(false);
                         break;
 
                     case UsageContent usage:
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventUsage,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("summary", SummarizeUsage(usage)) })));
                         handlers?.OnUsage?.Invoke(SummarizeUsage(usage));
                         break;
                 }
             }
         }
+        if (activity is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagStatus, "ok");
         return sb.ToString();
     }
 
@@ -477,6 +504,7 @@ public sealed class HarnessRuntime
 
         var created = await agent.CreateSessionAsync(cancellationToken);
         _frameworkSessions[sessionId] = created;
+        _sessionConversationMap.Register(created, sessionId); // 供 RestoringChatHistoryProvider 按 conversationId 加载 transcript
         return created;
     }
 
