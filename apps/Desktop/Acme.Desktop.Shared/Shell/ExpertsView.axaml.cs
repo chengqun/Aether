@@ -68,13 +68,16 @@ public partial class ExpertsView : UserControl
             var window = new ExpertEditWindow { DataContext = vm };
             var owner = GetOwnerWindow();
 
+            // 自动保存：保存到 DB + invalidate，不关窗
+            vm.AutoSaveRequested += async saved =>
+            {
+                await VM.SaveAsync(saved);
+            };
+            // 手动保存（点"完成"）：保存 + 关窗
             vm.SaveRequested += async saved =>
             {
-                var result = await VM.SaveAsync(saved);
-                if (result.Success)
-                    window.Close();
-                else
-                    vm.Error = result.Error;
+                await VM.SaveAsync(saved);
+                window.Close();
             };
             vm.CancelRequested += () => window.Close();
 

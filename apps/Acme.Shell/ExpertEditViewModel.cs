@@ -235,6 +235,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private bool _enableLongTermMemory;
 
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _autoSaveStatus;
 
     /// <summary>可选模型列表（由目录 IModelSource 提供）。</summary>
     public IReadOnlyList<CustomModelOption> AvailableModels { get; }
@@ -253,7 +254,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         }
     }
 
-    partial void OnModelIdChanged(string value) => OnPropertyChanged(nameof(SelectedModelOption));
+    partial void OnModelIdChanged(string value) { OnPropertyChanged(nameof(SelectedModelOption)); ScheduleAutoSave(); }
 
     /// <summary>扁平工具列表（所有工具，含选中状态）。</summary>
     public ObservableCollection<ToolOption> Tools { get; } = new();
@@ -310,6 +311,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsWindowVisible));
         OnPropertyChanged(nameof(SelectedMemoryModeOption));
+        ScheduleAutoSave();
     }
 
     /// <summary>当前选中的响应格式选项。</summary>
@@ -326,30 +328,62 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         }
     }
 
-    partial void OnResponseFormatChanged(AgentResponseFormat value) => OnPropertyChanged(nameof(SelectedResponseFormatOption));
+    partial void OnResponseFormatChanged(AgentResponseFormat value) { OnPropertyChanged(nameof(SelectedResponseFormatOption)); ScheduleAutoSave(); }
 
     /// <summary>Name 变化时刷新保存按钮可用性（CanSave 是计算属性，需手动通知）。</summary>
-    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(CanSave));
+    partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanSave)); ScheduleAutoSave(); }
 
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool CanSave => !string.IsNullOrWhiteSpace(Name);
 
     public event Action<ExpertItem>? SaveRequested;
     public event Action? CancelRequested;
+    public event Action<ExpertItem>? AutoSaveRequested;
 
-    [CommunityToolkit.Mvvm.Input.RelayCommand]
-    private void Save()
+    // —— 自动保存（防抖 500ms）——
+    private CancellationTokenSource? _autoSaveCts;
+    partial void OnDescriptionChanged(string value) => ScheduleAutoSave();
+    partial void OnCategoryChanged(string value) => ScheduleAutoSave();
+    partial void OnSystemPromptChanged(string value) => ScheduleAutoSave();
+    partial void OnMaxHistoryChanged(int value) => ScheduleAutoSave();
+    partial void OnTopPChanged(double? value) => ScheduleAutoSave();
+    partial void OnMaxOutputTokensChanged(int? value) => ScheduleAutoSave();
+    partial void OnRequireToolApprovalChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableWebSearchChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableTodoProviderChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableAgentModeProviderChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableFileMemoryChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableOpenTelemetryChanged(bool value) => ScheduleAutoSave();
+    partial void OnEnableLongTermMemoryChanged(bool value) => ScheduleAutoSave();
+
+    private void ScheduleAutoSave()
     {
-        if (!CanSave)
+        if (!IsEditing || string.IsNullOrWhiteSpace(Name)) return;
+        _autoSaveCts?.Cancel();
+        _autoSaveCts = new CancellationTokenSource();
+        var ct = _autoSaveCts.Token;
+        _ = Task.Delay(500, ct).ContinueWith(_ =>
         {
-            Error = "名称不能为空";
-            return;
-        }
+            if (ct.IsCancellationRequested) return;
+            DoAutoSave();
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
 
+    private void DoAutoSave()
+    {
+        var item = BuildExpertItem();
+        if (item is null) return;
+        AutoSaveRequested?.Invoke(item);
+        AutoSaveStatus = "✓ 已自动保存";
+        _ = Task.Delay(1500).ContinueWith(_ => AutoSaveStatus = null, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private ExpertItem? BuildExpertItem()
+    {
+        if (string.IsNullOrWhiteSpace(Name)) return null;
         var toolList = Tools.Where(t => t.IsSelected).Select(t => t.Name).ToList();
         var skillList = Skills.Where(s => s.IsSelected).Select(s => s.Name).ToList();
-
-        var item = new ExpertItem
+        return new ExpertItem
         {
             Id = Id,
             Name = Name.Trim(),
@@ -374,8 +408,19 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             EnableOpenTelemetry = EnableOpenTelemetry,
             EnableLongTermMemory = EnableLongTermMemory,
         };
+    }
 
-        SaveRequested?.Invoke(item);
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void Save()
+    {
+        if (!CanSave)
+        {
+            Error = "名称不能为空";
+            return;
+        }
+        var item = BuildExpertItem();
+        if (item is not null)
+            SaveRequested?.Invoke(item);
     }
 
     [CommunityToolkit.Mvvm.Input.RelayCommand]
