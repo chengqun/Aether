@@ -54,10 +54,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private const int HistoryInitialBatch = 10;       // 切换会话时初始渲染的最近轮数
     private const int HistoryLoadBatch = 10;          // 每次滚到顶部增量加载的轮数
 
-    // —— 侧边栏「最近会话」增量加载：摘要全量拉取（轻量，无 transcript），但只渲染最近若干条，滚到底部再加载 ——
-    private List<ConversationItem>? _pendingConversationItems; // 暂存的更早会话项（按 UpdatedAt 倒序，较旧在前；尚未加入 Conversations 渲染）
-    private const int ConversationsInitialBatch = 20;          // 初始渲染的会话条数
-    private const int ConversationsLoadBatch = 20;             // 每次滚到底部增量加载的会话条数
 
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
@@ -681,35 +677,13 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                         IsCurrent = s.ConversationId == _currentConversationId,
                     });
                 }
-                if (all.Count <= ConversationsInitialBatch)
-                {
-                    foreach (var c in all) Conversations.Add(c);
-                    _pendingConversationItems = null;
-                }
-                else
-                {
-                    _pendingConversationItems = all.Skip(ConversationsInitialBatch).ToList();
-                    foreach (var c in all.Take(ConversationsInitialBatch)) Conversations.Add(c);
-                }
+                foreach (var c in all) Conversations.Add(c);
             });
         }
         catch { /* 启动期失败不阻塞 */ }
     }
 
     /// <summary>侧边栏是否还有更早的会话未渲染（供 View 判断是否触发增量加载）。</summary>
-    public bool HasMoreConversations => _pendingConversationItems is { Count: > 0 };
-
-    /// <summary>增量加载更早的会话条目：从暂存队列取出最多 <see cref="ConversationsLoadBatch"/> 条追加到列表尾部。返回实际加载数。</summary>
-    public int LoadMoreConversations()
-    {
-        if (_pendingConversationItems is null || _pendingConversationItems.Count == 0) return 0;
-        int take = Math.Min(ConversationsLoadBatch, _pendingConversationItems.Count);
-        // 暂存按 UpdatedAt 倒序（较旧在前），追加到列表尾部保持「最新在上、往下渐旧」的顺序。
-        for (int i = 0; i < take; i++)
-            Conversations.Add(_pendingConversationItems[i]);
-        _pendingConversationItems.RemoveRange(0, take);
-        return take;
-    }
 
     private static string FormatTime(DateTimeOffset t)
     {
@@ -777,9 +751,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是聊天页（聊天区始终可见，此值控制中间面板显示最近会话列表）</summary>
     public bool IsChatPage => CurrentPage == "chat";
 
-    /// <summary>是否是功能面板页（非 chat，中间面板显示对应功能 View）</summary>
-    public bool IsPanelPage => !IsChatPage;
-
     /// <summary>是否是笔记页</summary>
     public bool IsNotesPage => CurrentPage == "notes";
 
@@ -796,7 +767,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     public bool IsTradingPage => CurrentPage == "backtest";
 
     /// <summary>是否是占位页（非聊天/笔记/专家/自动化/期货/回测）</summary>
-    public bool IsPlaceholderPage => !IsChatPage && !IsNotesPage && !IsExpertsPage && !IsAutomationPage && !IsFuturesPage && !IsTradingPage;
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
@@ -827,13 +797,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     partial void OnCurrentPageChanged(string? value)
     {
         OnPropertyChanged(nameof(IsChatPage));
-        OnPropertyChanged(nameof(IsPanelPage));
         OnPropertyChanged(nameof(IsNotesPage));
         OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsAutomationPage));
         OnPropertyChanged(nameof(IsFuturesPage));
         OnPropertyChanged(nameof(IsTradingPage));
-        OnPropertyChanged(nameof(IsPlaceholderPage));
     }
 
     [RelayCommand]
