@@ -197,8 +197,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
     <Setter Property="AcceptsReturn" Value="True"/>
     <Setter Property="TextWrapping" Value="Wrap"/>
-    <Setter Property="MinHeight" Value="48"/>
-    <Setter Property="MaxHeight" Value="200"/>
+    <Setter Property="Height" Value="88"/>
+    <Setter Property="MaxHeight" Value="88"/>
   </Style>
 
   <!-- 工具条芯片容器 -->
