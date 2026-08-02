@@ -64,20 +64,41 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <summary>
-    /// 保存 per-session 消息列表（请求 + 响应）到内存。不再 no-op——MAF 的 TodoProvider/AgentModeProvider
-    /// 依赖 StoreChatHistoryAsync 被正确调用来维护 session state。
+    /// 保存 per-session 消息列表到内存。过滤掉 GLM/Anthropic 不认识的内容类型
+    /// （ToolApprovalRequest/Response、TextReasoning、Error、Usage 等），只保留
+    /// TextContent / FunctionCallContent / FunctionResultContent + 跳过空消息。
     /// </summary>
     protected override ValueTask StoreChatHistoryAsync(InvokedContext context, CancellationToken cancellationToken)
     {
-        if (context.Session is not null)
+        if (context.Session is null) return default;
+
+        var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
+        foreach (var msg in context.RequestMessages ?? Enumerable.Empty<ChatMessage>())
         {
-            var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
-            // 追加本轮的请求 + 响应消息
-            if (context.RequestMessages is not null)
-                list.AddRange(context.RequestMessages);
-            if (context.ResponseMessages is not null)
-                list.AddRange(context.ResponseMessages);
+            var filtered = FilterMessage(msg);
+            if (filtered is not null) list.Add(filtered);
+        }
+        foreach (var msg in context.ResponseMessages ?? Enumerable.Empty<ChatMessage>())
+        {
+            var filtered = FilterMessage(msg);
+            if (filtered is not null) list.Add(filtered);
         }
         return default;
+    }
+
+    /// <summary>
+    /// 过滤消息：只保留 GLM 能理解的 content（TextContent / FunctionCallContent / FunctionResultContent）。
+    /// 跳过 ToolApprovalRequest/Response、TextReasoning、Error、Usage 等 MAF 内部类型。
+    /// 空消息（过滤后无 content）也跳过——空 assistant 会触发 400。
+    /// </summary>
+    private static ChatMessage? FilterMessage(ChatMessage msg)
+    {
+        var validContents = msg.Contents.Where(c => c is TextContent or FunctionCallContent or FunctionResultContent).ToList();
+        if (validContents.Count == 0) return null; // 过滤后为空 → 跳过
+
+        // 如果没过滤掉任何 content，直接返回原消息（避免不必要拷贝）
+        if (validContents.Count == msg.Contents.Count) return msg;
+
+        return new ChatMessage { Role = msg.Role, Contents = validContents };
     }
 }

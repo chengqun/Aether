@@ -182,6 +182,26 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             IsAgentRunning = true;
         });
 
+        // —— Token 批量更新：不逐 token Post 到 UI 线程（会假死），攒 50ms 批量刷新一次 ——
+        var pendingTokens = new System.Text.StringBuilder();
+        var pendingReasoning = new System.Text.StringBuilder();
+        var flushTimer = new System.Threading.Timer(_ => _dispatcher.Post(() =>
+        {
+            if (pendingTokens.Length > 0)
+            {
+                EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
+                cursor.Current.Content += pendingTokens.ToString();
+                cursor.Current.MarkdownContent = cursor.Current.Content;
+                pendingTokens.Clear();
+            }
+            if (pendingReasoning.Length > 0)
+            {
+                EnsureTextSegment(cursor, items, senderName, isReasoningContent: true);
+                cursor.Current.Content += pendingReasoning.ToString();
+                pendingReasoning.Clear();
+            }
+        }), null, Timeout.Infinite, Timeout.Infinite);
+
         ToolApprovalDecision? approvalResponse = null;
         var errored = false;
         try
@@ -190,30 +210,20 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             {
                 ToolApprovalRequest? pendingApproval = null;
                 ChatMessageItem? approvalCard = null;
-                int answerTokens = 0; // 流式答案 markdown 节流计数
+                // answerTokens 节流已由 50ms 批量 flush 替代
 
                 var handlers = new StreamHandlers(
                     OnToken: (token, _) =>
                     {
                         fullText.Append(token);
-                        _dispatcher.Post(() =>
-                        {
-                            EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
-                            cursor.Current.Content += token;
-                            // 答案段实时 markdown：首 token 即刷，之后每 6 token 刷一次，避免逐 token 全量重渲染卡顿。
-                            answerTokens++;
-                            if (answerTokens == 1 || answerTokens % 6 == 0)
-                                cursor.Current.MarkdownContent = cursor.Current.Content;
-                        });
+                        pendingTokens.Append(token);
+                        flushTimer.Change(50, Timeout.Infinite); // 50ms 后批量刷新
                         return Task.CompletedTask;
                     },
                     OnReasoning: (text, _) =>
                     {
-                        _dispatcher.Post(() =>
-                        {
-                            EnsureTextSegment(cursor, items, senderName, isReasoningContent: true);
-                            cursor.Current.Content += text;
-                        });
+                        pendingReasoning.Append(text);
+                        flushTimer.Change(50, Timeout.Infinite);
                         return Task.CompletedTask;
                     },
                     OnToolEvent: (ev, _) =>
@@ -303,6 +313,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         finally
         {
+            // 最后一次 flush（确保剩余 token 写入）+ 停止定时器
+            flushTimer.Change(0, Timeout.Infinite);
+            await Task.Delay(60); // 等 flush 完成
+            flushTimer.Dispose();
+
             await _dispatcher.InvokeAsync(() =>
             {
                 FinalizeSegment(cursor.Current, items);
@@ -404,21 +419,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
     private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
     {
-        ChatMessageItem? plan = null;
-        for (int i = 1; i < items.Count; i++) // 跳过 items[0]（用户消息）
-            if (items[i].IsPlanCard) { plan = items[i]; break; }
-
-        if (plan is null)
-        {
-            plan = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName };
-            items.Insert(1, plan); // 钉在 turn 顶部（用户消息之后）
-        }
-
-        plan.Todos.Clear();
-        foreach (var t in list)
-            plan.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
-
-        // 同步到浮动计划面板（贴着输入框上方，实时显示最新计划状态）
+        // 计划只显示在浮动面板（输入框上方），不在对话流里重复显示
         ActiveTodos.Clear();
         foreach (var t in list)
             ActiveTodos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
