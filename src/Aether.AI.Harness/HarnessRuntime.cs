@@ -338,7 +338,9 @@ public sealed class HarnessRuntime
                                 cancellationToken).ConfigureAwait(false);
                         }
                         // todos_* 调用后读 live 待办列表上抛（计划 UI）。
-                        if (name.StartsWith("todos_", StringComparison.Ordinal) && handlers?.OnTodoList is not null)
+                        // 放宽匹配：MAF 版本不同工具名可能为 todos_add / todos / todo_add 等。
+                        if ((name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
+                            && handlers?.OnTodoList is not null)
                         {
                             await RaiseTodoListAsync(agent, frameworkSession, handlers.OnTodoList, cancellationToken).ConfigureAwait(false);
                         }

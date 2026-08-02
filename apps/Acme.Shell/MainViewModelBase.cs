@@ -223,7 +223,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     OnToolEvent: (ev, _) =>
                     {
                         // todos_* 调用由 OnTodoList 渲染为计划卡，不重复出工具卡。
-                        if (ev.Name.StartsWith("todos_", StringComparison.Ordinal))
+                        if (ev.Name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
                             return Task.CompletedTask;
                         _dispatcher.Post(() => HandleToolEventSegmented(cursor, items, ev, senderName));
                         return Task.CompletedTask;
