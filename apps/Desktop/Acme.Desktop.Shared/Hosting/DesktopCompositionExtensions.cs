@@ -139,6 +139,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IUiDispatcher, AvaloniaDispatcher>();
         // MCP 工具服务器管理 VM（Experts 页 MCP tab；IMcpManagementService 由 AddMcpServersFromDirectory 注册）
         services.AddSingleton<McpViewModel>();
+        // 运行 Trace 查看 VM（桌面端无控制台时看 OTel agent.run span）
+        services.AddSingleton<TraceViewModel>();
         // 启动期设备自动连接（委托给 SettingsViewModel）
         services.AddSingleton<IDeviceAutoConnectService, DeviceAutoConnectService>();
 

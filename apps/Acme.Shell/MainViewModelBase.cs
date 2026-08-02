@@ -76,6 +76,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
+        Trace = serviceProvider.GetService<TraceViewModel>();
         Tenant = tenant;
 
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
@@ -507,6 +508,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     // —— 聊天消息列表 ——
     public ObservableCollection<ChatTurnItem> Messages { get; } = new();
+
+    /// <summary>运行 Trace 查看 VM（桌面端注册；null = 无 trace 查看，如 sample console）。</summary>
+    public TraceViewModel? Trace { get; }
 
     /// <summary>当前 agent 是否启用 AgentModeProvider（控制模式选择器/plan-accept 显隐）。</summary>
     [ObservableProperty]

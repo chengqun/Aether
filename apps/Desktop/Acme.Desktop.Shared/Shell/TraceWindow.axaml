@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.TraceWindow"
+        Title="运行 Trace"
+        Width="640" Height="600"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="16,10" Background="White"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="最近 Agent 运行（OTel Activity）" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Content="↻ 刷新" Command="{Binding RefreshCommand}" Padding="10,4" FontSize="11"/>
+          <Button Content="清空" Command="{Binding ClearCommand}" Padding="10,4" FontSize="11"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Padding="16,8">
+      <ItemsControl ItemsSource="{Binding Traces}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
+              <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <TextBlock Grid.Column="0" Text="{Binding StatusBadge}" FontSize="14"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                    <TextBlock Text="{Binding AgentId}" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Mode, StringFormat={}[{0}]}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                               IsVisible="{Binding Mode, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <TextBlock Text="{Binding ToolCallCount, StringFormat={}🔧 {0}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Events}" Margin="20,2,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding Name}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding Detail}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

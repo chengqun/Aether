@@ -146,6 +146,9 @@ public static class AetherAIServiceCollectionExtensions
         // 会话标题自动生成（LLM，首轮后异步补；无 key 时退化为 no-op）
         services.AddSingleton<IConversationTitleService, ConversationTitleService>();
 
+        // 应用内 trace 收集器（ActivityListener 收集最近 50 条 agent.run，供 trace 查看页展示）。
+        services.AddSingleton<Aether.AI.Harness.Telemetry.TraceCollector>();
+
         return new AetherAIBuilder(services);
     }
 }

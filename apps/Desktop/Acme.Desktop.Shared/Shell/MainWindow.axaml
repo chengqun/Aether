@@ -21,6 +21,7 @@
             <MenuFlyout Placement="Top">
               <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
+              <MenuItem Header="运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
@@ -146,6 +147,7 @@
             <MenuFlyout Placement="Top">
               <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
+              <MenuItem Header="运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>

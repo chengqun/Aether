@@ -1,5 +1,6 @@
 using Acme.Shell;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -26,5 +27,15 @@ public partial class MainWindow : Window
         double distFromBottom = sv.Extent.Height - sv.Viewport.Height - sv.Offset.Y;
         if (distFromBottom < ConversationsLoadThreshold)
             vm.LoadMoreConversations();
+    }
+
+    /// <summary>打开运行 Trace 查看窗口（OTel agent.run span）。</summary>
+    public void OnOpenTrace(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModelBase vm && vm.Trace is { } trace)
+        {
+            var window = new TraceWindow { DataContext = trace };
+            window.Show();
+        }
     }
 }

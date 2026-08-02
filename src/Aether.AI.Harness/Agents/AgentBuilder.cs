@@ -14,7 +14,17 @@ public sealed class AgentBuilder
     private string _instructions = string.Empty;
     private string _modelId = string.Empty;
     private double? _temperature;
+    private double? _topP;
+    private int? _maxOutputTokens;
+    private AgentResponseFormat _responseFormat = AgentResponseFormat.Default;
     private readonly List<string> _tools = new();
+    private readonly Dictionary<string, string> _toolApprovals = new();
+    private readonly List<string> _skills = new();
+    private AgentMemoryMode _memory = AgentMemoryMode.Full;
+    private int _maxHistory = 20;
+    private bool _requireToolApproval;
+    private bool _enableWebSearch, _enableTodoProvider, _enableAgentModeProvider;
+    private bool _enableFileMemory, _enableAgentSkills, _enableOpenTelemetry, _enableLongTermMemory;
 
     public AgentBuilder(string id)
     {
@@ -23,12 +33,39 @@ public sealed class AgentBuilder
         _id = id;
     }
 
+    // —— 身份 ——
     public AgentBuilder Name(string name) { _name = name; return this; }
     public AgentBuilder Instructions(string instructions) { _instructions = instructions; return this; }
     public AgentBuilder ModelId(string modelId) { _modelId = modelId; return this; }
+
+    // —— 采样 ——
     public AgentBuilder Temperature(double temperature) { _temperature = temperature; return this; }
+    public AgentBuilder TopP(double topP) { _topP = topP; return this; }
+    public AgentBuilder MaxOutputTokens(int max) { _maxOutputTokens = max; return this; }
+    public AgentBuilder ResponseFormat(AgentResponseFormat format) { _responseFormat = format; return this; }
+
+    // —— 工具 ——
     public AgentBuilder WithTool(string toolName) { _tools.Add(toolName); return this; }
     public AgentBuilder WithTools(IEnumerable<string> toolNames) { _tools.AddRange(toolNames); return this; }
+    public AgentBuilder WithToolApproval(string toolName, string level) { _toolApprovals[toolName] = level; return this; }
+    public AgentBuilder RequireToolApproval(bool require = true) { _requireToolApproval = require; return this; }
+
+    // —— 技能 ——
+    public AgentBuilder WithSkill(string skillName) { _skills.Add(skillName); return this; }
+    public AgentBuilder WithSkills(IEnumerable<string> skillNames) { _skills.AddRange(skillNames); return this; }
+    public AgentBuilder EnableAgentSkills(bool enable = true) { _enableAgentSkills = enable; return this; }
+
+    // —— 记忆 ——
+    public AgentBuilder Memory(AgentMemoryMode memory) { _memory = memory; return this; }
+    public AgentBuilder MaxHistory(int max) { _maxHistory = max; return this; }
+    public AgentBuilder EnableLongTermMemory(bool enable = true) { _enableLongTermMemory = enable; return this; }
+
+    // —— Provider 开关 ——
+    public AgentBuilder EnableWebSearch(bool enable = true) { _enableWebSearch = enable; return this; }
+    public AgentBuilder EnableTodoProvider(bool enable = true) { _enableTodoProvider = enable; return this; }
+    public AgentBuilder EnableAgentModeProvider(bool enable = true) { _enableAgentModeProvider = enable; return this; }
+    public AgentBuilder EnableFileMemory(bool enable = true) { _enableFileMemory = enable; return this; }
+    public AgentBuilder EnableOpenTelemetry(bool enable = true) { _enableOpenTelemetry = enable; return this; }
 
     public AgentDefinition Build() => new()
     {
@@ -37,6 +74,21 @@ public sealed class AgentBuilder
         Instructions = _instructions,
         ModelId = _modelId,
         Temperature = _temperature,
-        Tools = _tools
+        TopP = _topP,
+        MaxOutputTokens = _maxOutputTokens,
+        ResponseFormat = _responseFormat,
+        Tools = _tools,
+        ToolApprovals = _toolApprovals.Count == 0 ? null : _toolApprovals,
+        Skills = _skills,
+        Memory = _memory,
+        MaxHistory = _maxHistory,
+        RequireToolApproval = _requireToolApproval,
+        EnableWebSearch = _enableWebSearch,
+        EnableTodoProvider = _enableTodoProvider,
+        EnableAgentModeProvider = _enableAgentModeProvider,
+        EnableFileMemory = _enableFileMemory,
+        EnableAgentSkills = _enableAgentSkills,
+        EnableOpenTelemetry = _enableOpenTelemetry,
+        EnableLongTermMemory = _enableLongTermMemory,
     };
 }
