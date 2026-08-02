@@ -322,17 +322,49 @@ public sealed class AgentFactory
         if (rawArguments is not null && args.Count == 0)
             log?.LogWarning("run_skill_script 收到的参数未能解析出 CLI 参数（raw={Raw}），脚本将以无参数运行。", rawArguments);
         var interpreter = ResolveInterpreter(script.FullPath);
+        var allArgs = new List<string> { script.FullPath };
+        allArgs.AddRange(args);
 
-        var psi = new ProcessStartInfo
+        // 和 MCP 一样：相对解释器（python3/sh/node）经登录 shell 跑（解 GUI 受限 PATH）；
+        // 绝对路径（PythonExecutable）直接跑。CWD 默认用户主目录（避 .app CWD=/）。
+        ProcessStartInfo psi;
+        if (Path.IsPathRooted(interpreter))
         {
-            FileName = interpreter,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.ArgumentList.Add(script.FullPath);
-        foreach (var a in args) psi.ArgumentList.Add(a);
+            psi = new ProcessStartInfo
+            {
+                FileName = interpreter,
+                RedirectStandardOutput = true, RedirectStandardError = true,
+                UseShellExecute = false, CreateNoWindow = true,
+            };
+            foreach (var a in allArgs) psi.ArgumentList.Add(a);
+        }
+        else
+        {
+            var shell = Environment.GetEnvironmentVariable("SHELL");
+            if (!string.IsNullOrEmpty(shell))
+            {
+                var cmd = ShellQuote(interpreter) + " " + string.Join(" ", allArgs.Select(ShellQuote));
+                psi = new ProcessStartInfo
+                {
+                    FileName = shell,
+                    RedirectStandardOutput = true, RedirectStandardError = true,
+                    UseShellExecute = false, CreateNoWindow = true,
+                };
+                psi.ArgumentList.Add("-l");
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add(cmd);
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = interpreter,
+                    RedirectStandardOutput = true, RedirectStandardError = true,
+                    UseShellExecute = false, CreateNoWindow = true,
+                };
+                foreach (var a in allArgs) psi.ArgumentList.Add(a);
+            }
+        }
 
         try
         {
@@ -449,5 +481,12 @@ public sealed class AgentFactory
             ".js" => "node",
             _ => "sh",
         };
+    }
+
+    /// <summary>POSIX 单引号转义：把参数包成 '…'，内部 ' 转义为 '\''。</summary>
+    private static string ShellQuote(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "''";
+        return "'" + s.Replace("'", "'\\''") + "'";
     }
 }
