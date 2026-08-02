@@ -1,4 +1,4 @@
-using Acme.Securities.Domain;
+using Acme.Securities.Application;
 using System;
 using System.ComponentModel;
 using System.Text;
@@ -14,11 +14,11 @@ public class SecurityQueryTool
         public string Result { get; set; } = string.Empty;
     }
 
-    private readonly ISecurityManager _securityManager;
+    private readonly ISecurityService _securityService;
 
-    public SecurityQueryTool(ISecurityManager securityManager)
+    public SecurityQueryTool(ISecurityService securityService)
     {
-        _securityManager = securityManager ?? throw new ArgumentNullException(nameof(securityManager));
+        _securityService = securityService ?? throw new ArgumentNullException(nameof(securityService));
     }
 
     [Description("查询证券信息，根据关键词搜索股票/期货代码和名称。当用户询问某只股票或期货的信息时调用此工具。")]
@@ -31,7 +31,7 @@ public class SecurityQueryTool
                 return new Output { Result = "请提供搜索关键词" };
             }
 
-            var results = await _securityManager.SearchSecuritiesAsync(keyword);
+            var results = await _securityService.SearchSecuritiesAsync(keyword);
 
             if (results.Count == 0)
             {

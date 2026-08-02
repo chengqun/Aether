@@ -6,7 +6,7 @@ using Acme.Quotes.Domain;
 
 namespace Acme.Quotes.Application;
 
-public class AnalysisManager : IAnalysisManager
+public class AnalysisManager : IAnalysisManager, IAnalysisService
 {
     private readonly ISecurityLookup _securityLookup;
     private readonly IQuoteRepository _quoteRepository;

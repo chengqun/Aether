@@ -15,6 +15,8 @@ public static class QuotesApplicationExtensions
     public static IServiceCollection AddQuotesApplication(this IServiceCollection services)
     {
         services.AddSingleton<IAnalysisManager, AnalysisManager>();
+        services.AddSingleton<IAnalysisService>(sp => sp.GetRequiredService<IAnalysisManager>() as IAnalysisService
+            ?? throw new InvalidOperationException("AnalysisManager must implement IAnalysisService"));
         return services;
     }
 }

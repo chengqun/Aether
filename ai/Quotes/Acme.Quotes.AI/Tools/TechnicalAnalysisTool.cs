@@ -1,4 +1,4 @@
-using Acme.Quotes.Domain;
+using Acme.Quotes.Application;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,11 +12,11 @@ public class TechnicalAnalysisTool
         public string Result { get; set; } = string.Empty;
     }
 
-    private readonly IAnalysisManager _analysisManager;
+    private readonly IAnalysisService _analysisService;
 
-    public TechnicalAnalysisTool(IAnalysisManager analysisManager)
+    public TechnicalAnalysisTool(IAnalysisService analysisService)
     {
-        _analysisManager = analysisManager;
+        _analysisService = analysisService;
     }
 
     [Description("计算股票的技术指标，包括SMA、EMA、RSI、MACD、BB、SAR、KDJ、ADX等。当用户要求分析技术指标时调用此工具。")]
@@ -24,7 +24,7 @@ public class TechnicalAnalysisTool
     {
         try
         {
-            var result = await _analysisManager.CalculateAsync(keyword, freq, indicators, rowCount);
+            var result = await _analysisService.CalculateAsync(keyword, freq, indicators, rowCount);
 
             return new Output
             {

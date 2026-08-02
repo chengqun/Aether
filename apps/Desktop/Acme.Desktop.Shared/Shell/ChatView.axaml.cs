@@ -40,9 +40,9 @@ public partial class ChatView : UserControl
     }
 
     /// <summary>
-    /// 切回聊天页时补一次滚到底。视图实例驻留、切页只切 IsVisible：隐藏期间 ScrollViewer 不布局，
-    /// 流式追加的 token 触发的 ScrollToEnd 是空操作；切回来时滚动位置停在旧处，正在流式输出的气泡
-    /// 落在视窗下方看不到。故切回可见时，若正在流式输出则强制贴底并滚到底。
+    /// 展开聊天面板时补一次滚到底。面板收起时 DockPanel IsVisible=false → ScrollViewer 不布局，
+    /// 流式追加的 token 触发的 ScrollToEnd 是空操作；展开时滚动位置停在旧处，正在流式输出的气泡
+    /// 落在视窗下方看不到。故展开可见时，若正在流式输出则强制贴底并滚到底。
     /// </summary>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -51,11 +51,11 @@ public partial class ChatView : UserControl
             OnBecameVisible();
     }
 
-    /// <summary>切回可见：若应贴底，等布局 + markdown 重新渲染后滚到底（隐藏期间积累的内容需要时间渲染）。</summary>
+    /// <summary>展开可见：若应贴底，等布局 + markdown 重新渲染后滚到底（收起期间积累的内容需要时间渲染）。</summary>
     private async void OnBecameVisible()
     {
         if (_vm?.IsAgentRunning ?? false)
-            _stickToBottom = true; // 流式中：切回应跟随最新输出
+            _stickToBottom = true; // 流式中：展开应跟随最新输出
         if (!_stickToBottom) return;
         // 等一帧布局刷新，再等一帧 markdown 渲染完成，双次滚动确保到位
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
@@ -65,11 +65,6 @@ public partial class ChatView : UserControl
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
-    {
-        Dispatcher.UIThread.Post(ScrollToBottom);
-    }
-
-    public void ScrollToBottomOnShow()
     {
         Dispatcher.UIThread.Post(ScrollToBottom);
     }
