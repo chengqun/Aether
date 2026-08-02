@@ -12,12 +12,25 @@ public sealed record TraceEntry(
     string Status, TimeSpan Duration, DateTimeOffset StartTime,
     IReadOnlyList<TraceEventEntry> Events)
 {
-    /// <summary>展示用：时长（秒）。</summary>
     public string DurationText => Duration.TotalSeconds < 1 ? $"{Duration.TotalMilliseconds:F0}ms" : $"{Duration.TotalSeconds:F1}s";
-    /// <summary>展示用：工具调用数。</summary>
     public int ToolCallCount => Events.Count(e => e.Name == AetherActivitySource.EventToolCall);
-    /// <summary>展示用：状态徽章。</summary>
     public string StatusBadge => Status == "ok" ? "✅" : Status == "error" ? "❌" : "⏳";
+    public bool IsError => Status != "ok";
+    /// <summary>相对时间（"刚刚" / "5分钟前" / "2小时前"）。</summary>
+    public string RelativeTime
+    {
+        get
+        {
+            var diff = DateTimeOffset.UtcNow - StartTime;
+            return diff.TotalMinutes switch
+            {
+                < 1 => "刚刚",
+                < 60 => $"{(int)diff.TotalMinutes}分钟前",
+                < 1440 => $"{(int)diff.TotalHours}小时前",
+                _ => StartTime.ToString("MM-dd HH:mm"),
+            };
+        }
+    }
 }
 
 /// <summary>

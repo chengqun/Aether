@@ -19,6 +19,7 @@ public partial class TraceViewModel : ObservableObject
     public ObservableCollection<TraceEntry> VisibleTraces { get; } = new();
 
     [ObservableProperty] private string _filterText = string.Empty;
+    [ObservableProperty] private bool _showErrorsOnly;
 
     public TraceViewModel(TraceCollector collector, IUiDispatcher dispatcher)
     {
@@ -29,6 +30,7 @@ public partial class TraceViewModel : ObservableObject
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
+    partial void OnShowErrorsOnlyChanged(bool value) => ApplyFilter();
 
     private void OnTraceCompleted(TraceEntry entry)
     {
@@ -45,6 +47,7 @@ public partial class TraceViewModel : ObservableObject
         VisibleTraces.Clear();
         foreach (var t in Traces)
         {
+            if (ShowErrorsOnly && !t.IsError) continue;
             if (string.IsNullOrEmpty(FilterText)
                 || (t.AgentId?.Contains(FilterText, StringComparison.OrdinalIgnoreCase) ?? false)
                 || t.Status.Contains(FilterText, StringComparison.OrdinalIgnoreCase)

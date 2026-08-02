@@ -7,59 +7,101 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
+  <Window.Styles>
+    <Style Selector="Border.trace-card">
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="12,8"/>
+      <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+    <Style Selector="Border.trace-card.error">
+      <Setter Property="BorderBrush" Value="#FF5252"/>
+      <Setter Property="Background" Value="#FFF8F8"/>
+    </Style>
+    <Style Selector="ToggleButton.compact">
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+  </Window.Styles>
+
   <DockPanel>
     <!-- 顶部工具栏 -->
     <Border DockPanel.Dock="Top" Padding="16,10" Background="White"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-        <TextBox Grid.Column="0" Text="{Binding FilterText}" Watermark="筛选（agent / status / 事件）"
-                 Padding="8,4" FontSize="12" VerticalAlignment="Center"/>
-        <Button Grid.Column="1" Content="↻" Command="{Binding RefreshCommand}" Padding="10,4" FontSize="12" Margin="6,0,0,0" ToolTip.Tip="刷新"/>
-        <Button Grid.Column="2" Content="导出" Click="OnExportClick" Padding="10,4" FontSize="11" Margin="6,0,0,0" ToolTip.Tip="导出 JSON"/>
-        <Button Grid.Column="3" Content="清空" Command="{Binding ClearCommand}" Padding="10,4" FontSize="11" Margin="6,0,0,0"/>
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBox Text="{Binding FilterText}" Watermark="筛选（agent / 事件关键词）"
+                   Padding="8,4" FontSize="12" MinWidth="180"/>
+          <ToggleButton Content="仅错误" IsChecked="{Binding ShowErrorsOnly}" Classes="compact" Margin="4,0,0,0"/>
+        </StackPanel>
+        <TextBlock Grid.Column="1" Text="{Binding VisibleTraces.Count, StringFormat={}{0} 条}"
+                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0"/>
+        <Button Grid.Column="2" Content="↻" Command="{Binding RefreshCommand}" Classes="compact" Margin="6,0,0,0" ToolTip.Tip="刷新"/>
+        <Button Grid.Column="3" Content="导出" Click="OnExportClick" Classes="compact" Margin="6,0,0,0" ToolTip.Tip="导出 JSON"/>
+        <Button Grid.Column="4" Content="清空" Command="{Binding ClearCommand}" Classes="compact" Margin="6,0,0,0"/>
       </Grid>
     </Border>
 
     <ScrollViewer Padding="16,8">
-      <ItemsControl ItemsSource="{Binding VisibleTraces}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
-              <Expander IsExpanded="False">
-                <Expander.Header>
-                  <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                    <TextBlock Grid.Column="0" Text="{Binding StatusBadge}" FontSize="14"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
-                      <TextBlock Text="{Binding AgentId}" FontSize="12" FontWeight="SemiBold"/>
-                      <TextBlock Text="{Binding Mode, StringFormat={}[{0}]}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
-                                 IsVisible="{Binding Mode, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                      <TextBlock Text="{Binding ToolCallCount, StringFormat={}🔧 {0}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+      <Panel>
+        <!-- 空状态 -->
+        <Border IsVisible="{Binding !VisibleTraces.Count}" Padding="40" CornerRadius="12"
+                Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,40,0,0">
+          <StackPanel Spacing="6" HorizontalAlignment="Center">
+            <TextBlock Text="📭" FontSize="28" HorizontalAlignment="Center"/>
+            <TextBlock Text="暂无运行 Trace" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="专家编辑器 → 遥测 → 开启 OpenTelemetry 后，每轮 agent 运行会在这里显示。"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
+                       TextWrapping="Wrap" MaxWidth="400" HorizontalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+
+        <!-- trace 列表 -->
+        <ItemsControl ItemsSource="{Binding VisibleTraces}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="trace-card error" Classes.error="{Binding IsError}">
+                <Expander IsExpanded="{Binding IsError}">
+                  <Expander.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding StatusBadge}" FontSize="14"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                        <TextBlock Text="{Binding AgentId}" FontSize="12" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Mode, StringFormat={}[{0}]}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   IsVisible="{Binding Mode, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <TextBlock Text="{Binding ToolCallCount, StringFormat={}🔧 {0}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding RelativeTime}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Margin="8,0,0,0"/>
+                      <TextBlock Grid.Column="3" Text="{Binding DurationText}" FontSize="11" FontWeight="SemiBold" Margin="8,0,0,0"/>
+                    </Grid>
+                  </Expander.Header>
+                  <StackPanel Spacing="2" Margin="0,6,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                      <TextBlock Text="{Binding ConversationId, StringFormat={}conv: {0:N}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                      <TextBlock Text="{Binding StartTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
-                    <TextBlock Grid.Column="2" Text="{Binding StartTime, StringFormat={}{0:HH:mm:ss}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Margin="8,0,0,0"/>
-                    <TextBlock Grid.Column="3" Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="8,0,0,0"/>
-                  </Grid>
-                </Expander.Header>
-                <!-- 展开后：完整事件列表 -->
-                <StackPanel Spacing="2" Margin="0,6,0,0">
-                  <TextBlock Text="{Binding ConversationId, StringFormat={}conv: {0}}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4"/>
-                  <ItemsControl ItemsSource="{Binding Events}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-                          <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                          <TextBlock Text="{Binding Name}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                          <TextBlock Text="{Binding Detail}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
-                                     TextTrimming="CharacterEllipsis" MaxWidth="500"/>
-                        </StackPanel>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </StackPanel>
-              </Expander>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Events}" Margin="0,4,0,0">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                            <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{Binding Name}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{Binding Detail}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Expander>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
     </ScrollViewer>
   </DockPanel>
 </Window>
