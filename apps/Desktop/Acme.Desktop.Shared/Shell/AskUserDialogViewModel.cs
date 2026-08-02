@@ -9,23 +9,30 @@ namespace Acme.Desktop.Shared.Shell;
 /// <summary>表单里单个问题的状态：选项 + 自定义文本 + 当前回答。</summary>
 public partial class QuestionFormItem : ObservableObject
 {
+    public int Index { get; }
     public string Question { get; }
     public IReadOnlyList<string> Options { get; }
     [ObservableProperty] private string? _customText;
     [ObservableProperty] private string? _selectedOption;
 
-    public QuestionFormItem(string question, IReadOnlyList<string> options)
+    /// <summary>Tab 标签：序号 + 问题前几个字。</summary>
+    public string TabLabel => $"{Index + 1}. {(Question.Length > 8 ? Question[..8] + "…" : Question)}";
+
+    /// <summary>是否已回答（选中选项或填了自定义文本）。</summary>
+    public bool IsAnswered => !string.IsNullOrWhiteSpace(SelectedOption) || !string.IsNullOrWhiteSpace(CustomText);
+
+    public string Answer => !string.IsNullOrWhiteSpace(SelectedOption) ? SelectedOption
+        : (!string.IsNullOrWhiteSpace(CustomText) ? CustomText! : "");
+
+    public QuestionFormItem(int index, string question, IReadOnlyList<string> options)
     {
+        Index = index;
         Question = question;
         Options = options ?? Array.Empty<string>();
     }
 
-    /// <summary>该问的回答：选中选项优先，否则自定义文本，再否则空。</summary>
-    public string Answer => !string.IsNullOrWhiteSpace(SelectedOption) ? SelectedOption
-        : (!string.IsNullOrWhiteSpace(CustomText) ? CustomText! : "");
-
-    [RelayCommand]
-    private void SelectOption(string option) => SelectedOption = option;
+    partial void OnSelectedOptionChanged(string? value) => OnPropertyChanged(nameof(IsAnswered));
+    partial void OnCustomTextChanged(string? value) => OnPropertyChanged(nameof(IsAnswered));
 }
 
 /// <summary>提问/确认表单 ViewModel：多个问题一次提交，返回按序回答数组；取消返回 null。</summary>
@@ -36,9 +43,14 @@ public partial class AskUserDialogViewModel : ObservableObject
     public event Action? Finished;
     public string[]? Result { get; private set; }
 
+    /// <summary>已回答的问题数（提交按钮提示用）。</summary>
+    public int AnsweredCount => Questions.Count(q => q.IsAnswered);
+
     public AskUserDialogViewModel(IReadOnlyList<AskUserQuestionInput> questions)
     {
-        Questions = questions.Select(q => new QuestionFormItem(q.Question, q.Options)).ToList();
+        Questions = questions.Select((q, i) => new QuestionFormItem(i, q.Question, q.Options)).ToList();
+        foreach (var q in Questions)
+            q.PropertyChanged += (_, _) => OnPropertyChanged(nameof(AnsweredCount));
     }
 
     [RelayCommand]
