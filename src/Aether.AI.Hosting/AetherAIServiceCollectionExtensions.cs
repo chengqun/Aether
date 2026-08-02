@@ -150,6 +150,9 @@ public static class AetherAIServiceCollectionExtensions
         // 应用内 trace 收集器（ActivityListener 收集最近 50 条 agent.run，供 trace 查看页展示）。
         services.AddSingleton<Aether.AI.Harness.Telemetry.TraceCollector>();
 
+        // 聊天页 LLM 选择器 holder（agent 与 LLM 解耦：ModelId 为空时用此值）
+        services.AddSingleton<Aether.AI.Harness.SelectedLlmHolder>();
+
         return new AetherAIBuilder(services);
     }
 }

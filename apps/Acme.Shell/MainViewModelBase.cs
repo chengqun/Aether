@@ -988,6 +988,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     ? configs.FirstOrDefault(c => c.Id == lid)
                     : null;
                 SelectedLlmItem = saved ?? configs.FirstOrDefault(c => c.IsDefault) ?? configs.FirstOrDefault();
+                // 启动时同步 holder（首次 agent 构建就能用对的 LLM）
+                if (SelectedLlmItem is not null && _serviceProvider.GetService<Aether.AI.Harness.SelectedLlmHolder>() is { } holder)
+                    holder.LlmConfigId = SelectedLlmItem.Id.ToString();
             }
         }
         catch
@@ -1000,7 +1003,16 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         if (_isInitializing) return;
         if (value is not null)
+        {
             _ = _preferences.SetAsync("selectedLlmId", value.Id.ToString());
+            // 更新 LLM holder + invalidate 所有缓存的 agent → 下轮 run 用新 LLM 重建
+            if (_serviceProvider.GetService<Aether.AI.Harness.SelectedLlmHolder>() is { } holder)
+            {
+                holder.LlmConfigId = value.Id.ToString();
+                foreach (var expert in Experts.GetSummonedExperts())
+                    _agentRunner.Invalidate(expert.Id);
+            }
+        }
     }
 
     /// <summary>召唤变化：刷新下拉 + 持久化召唤列表。</summary>

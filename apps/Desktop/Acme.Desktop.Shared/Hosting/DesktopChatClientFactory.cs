@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
+using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Microsoft.Extensions.AI;
 using OpenAI;
@@ -9,27 +10,34 @@ using OpenAI.Chat;
 namespace Acme.Desktop.Shared.Hosting;
 
 /// <summary>
-/// <see cref="IChatClientFactory"/> 的桌面实现：把专家的 ModelId（= LLM 配置 Id）
-/// 解析为对应 provider 的 <see cref="IChatClient"/>。空/未命中 → 返回宿主默认 <see cref="IChatClient"/>。
-/// 命中则用该配置的 ApiKey/Endpoint/ModelName 现建客户端并按 Id 缓存。
+/// <see cref="IChatClientFactory"/> 的桌面实现。agent 的 ModelId 为空时（主流做法：agent 不绑模型），
+/// 用 <see cref="SelectedLlmHolder"/> 持有的聊天页当前选中 LLM；未选则退化为宿主默认。
 /// </summary>
 public sealed class DesktopChatClientFactory : IChatClientFactory
 {
     private readonly IChatClient _defaultClient;
     private readonly ILlmConfigService _llmService;
+    private readonly SelectedLlmHolder _llmHolder;
     private readonly ConcurrentDictionary<string, IChatClient> _clients = new();
     private List<LlmConfigDto>? _configs;
 
-    public DesktopChatClientFactory(IChatClient defaultClient, ILlmConfigService llmService)
+    public DesktopChatClientFactory(IChatClient defaultClient, ILlmConfigService llmService, SelectedLlmHolder llmHolder)
     {
         _defaultClient = defaultClient ?? throw new ArgumentNullException(nameof(defaultClient));
         _llmService = llmService ?? throw new ArgumentNullException(nameof(llmService));
+        _llmHolder = llmHolder ?? throw new ArgumentNullException(nameof(llmHolder));
     }
 
     public IChatClient Create(string? modelId)
     {
+        // agent 不绑模型 → 用聊天页选中的 LLM
         if (string.IsNullOrWhiteSpace(modelId))
+        {
+            var selectedId = _llmHolder.LlmConfigId;
+            if (!string.IsNullOrWhiteSpace(selectedId))
+                return _clients.GetOrAdd(selectedId, id => BuildClient(id));
             return _defaultClient;
+        }
 
         return _clients.GetOrAdd(modelId, id => BuildClient(id));
     }

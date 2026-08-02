@@ -50,18 +50,12 @@
                    Height="400" FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
         </Expander>
 
-        <Expander x:Name="ExpModel" Header="模型与记忆" IsExpanded="False">
+        <Expander x:Name="ExpModel" Header="记忆" IsExpanded="False">
           <StackPanel Spacing="6">
             <StackPanel Spacing="2">
               <TextBlock Text="记忆模式" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
               <ComboBox ItemsSource="{Binding MemoryModeOptions}" SelectedItem="{Binding SelectedMemoryModeOption}">
                 <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
-              </ComboBox>
-            </StackPanel>
-            <StackPanel Spacing="2">
-              <TextBlock Text="模型" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <ComboBox ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedModelOption}">
-                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
               </ComboBox>
             </StackPanel>
             <StackPanel Spacing="2" IsVisible="{Binding IsWindowVisible}">
