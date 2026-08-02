@@ -54,7 +54,12 @@
       </Grid>
     </Border>
 
-    <Grid ColumnDefinitions="200,4,*">
+    <Grid x:Name="TreeGrid">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="200" MinWidth="120" MaxWidth="600"/>
+        <ColumnDefinition Width="4"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
 
       <Border Grid.Column="0" Background="White" BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="0,0,1,0">
@@ -150,7 +155,12 @@
               </Grid>
             </Border>
 
-            <Grid RowDefinitions="*,4,*">
+            <Grid x:Name="SplitGrid">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="4"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
               <!-- 下：源码编辑器 -->
               <edit:TextEditor Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
                        x:Name="CodeEditor" IsVisible="{Binding EditorVisible}"

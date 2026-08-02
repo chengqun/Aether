@@ -8,7 +8,7 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
-  <Grid>
+  <Grid x:Name="RootGrid">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="Auto"/>
       <ColumnDefinition Width="*"/>

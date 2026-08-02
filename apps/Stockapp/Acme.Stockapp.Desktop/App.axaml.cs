@@ -35,6 +35,7 @@ public partial class App : global::Avalonia.Application
     public override void OnFrameworkInitializationCompleted()
     {
         Services = ConfigureServices();
+        DesktopApp.Services = Services;
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

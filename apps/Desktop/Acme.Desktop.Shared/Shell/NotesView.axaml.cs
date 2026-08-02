@@ -19,6 +19,7 @@ using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Search;
 using Acme.Notes.Domain;
 using Acme.Shell;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -53,7 +54,36 @@ public partial class NotesView : UserControl
             RoutingStrategies.Bubble, handledEventsToo: true);
         this.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
+        this.Loaded += (_, _) => RestoreLayout();
     }
+
+    // —— 分隔条位置持久化（目录树宽度 + 上下预览/编辑比例）——
+
+    /// <summary>恢复笔记分隔条位置。JsonPreferencesStore.GetAsync 同步完成，Loaded 期直接读。</summary>
+    private void RestoreLayout()
+    {
+        var store = DesktopApp.Services.GetService<IPreferencesStore>();
+        if (store is null) return;
+        try
+        {
+            if (double.TryParse(store.GetAsync("notes.treeW").GetAwaiter().GetResult(), out var tw)
+                && tw is >= 120 and <= 600)
+                TreeGrid.ColumnDefinitions[0].Width = new GridLength(tw);
+            var ps = double.TryParse(store.GetAsync("notes.previewStar").GetAwaiter().GetResult(), out var p) ? p : 1d;
+            var es = double.TryParse(store.GetAsync("notes.editorStar").GetAwaiter().GetResult(), out var e) ? e : 1d;
+            if (ps <= 0) ps = 1d;
+            if (es <= 0) es = 1d;
+            SplitGrid.RowDefinitions[0].Height = new GridLength(ps, GridUnitType.Star);
+            SplitGrid.RowDefinitions[2].Height = new GridLength(es, GridUnitType.Star);
+        }
+        catch { /* 读取失败用默认分隔 */ }
+    }
+
+    /// <summary>采集当前分隔尺寸，供主窗口关闭时统一持久化（读 GridLength.Value，隐藏页也不丢）。</summary>
+    public (double TreeWidth, double PreviewStar, double EditorStar) CollectLayout()
+        => (TreeGrid.ColumnDefinitions[0].Width.Value,
+            SplitGrid.RowDefinitions[0].Height.Value,
+            SplitGrid.RowDefinitions[2].Height.Value);
 
     protected override void OnDataContextChanged(EventArgs e)
     {

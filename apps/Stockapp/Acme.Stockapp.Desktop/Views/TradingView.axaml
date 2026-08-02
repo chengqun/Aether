@@ -21,7 +21,12 @@
 
   <TabControl Margin="0">
     <TabItem Header="回测">
-      <Grid ColumnDefinitions="380,4,*" Margin="0">
+      <Grid x:Name="TradingSplitGrid" Margin="0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="380" MinWidth="240" MaxWidth="720"/>
+          <ColumnDefinition Width="4"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
         <!-- 左：参数表单 -->
         <Border Grid.Column="0" Classes="card" Margin="12">
