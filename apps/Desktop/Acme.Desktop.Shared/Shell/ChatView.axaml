@@ -348,7 +348,7 @@
                   ScrollChanged="OnMessagesScrollChanged">
       <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}">
         <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel Orientation="Vertical" /></ItemsPanelTemplate>
+          <ItemsPanelTemplate><VirtualizingStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
       </ItemsControl>
     </ScrollViewer>
