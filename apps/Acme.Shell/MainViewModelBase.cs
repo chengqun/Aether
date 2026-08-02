@@ -421,6 +421,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         plan.Todos.Clear();
         foreach (var t in list)
             plan.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+
+        // 同步到浮动计划面板（贴着输入框上方，实时显示最新计划状态）
+        ActiveTodos.Clear();
+        foreach (var t in list)
+            ActiveTodos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+        HasActivePlan = ActiveTodos.Count > 0;
     }
 
     /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
@@ -512,6 +518,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     // —— 聊天消息列表 ——
     public ObservableCollection<ChatTurnItem> Messages { get; } = new();
 
+    // —— 浮动计划面板（贴着输入框上方，实时显示最新计划，可展开/收起）——
+    public ObservableCollection<TodoItemVM> ActiveTodos { get; } = new();
+    [ObservableProperty] private bool _hasActivePlan;
+    [ObservableProperty] private bool _isPlanExpanded = true;
+    public string PlanSummary => HasActivePlan ? $"📋 计划 ({ActiveTodos.Count(t => t.IsComplete)}/{ActiveTodos.Count})" : "";
+    partial void OnHasActivePlanChanged(bool value) => OnPropertyChanged(nameof(PlanSummary));
+    partial void OnIsPlanExpandedChanged(bool value) => OnPropertyChanged(nameof(PlanSummary));
+    [RelayCommand] private void TogglePlanExpanded() => IsPlanExpanded = !IsPlanExpanded;
+
     /// <summary>运行 Trace 查看 VM（桌面端注册；null = 无 trace 查看，如 sample console）。</summary>
     public TraceViewModel? Trace { get; }
 
@@ -567,6 +582,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
+            ActiveTodos.Clear(); HasActivePlan = false;
         _pendingHistoryTurns = null;
         foreach (var c in Conversations) c.IsCurrent = false;
         CurrentPage = "chat";
@@ -593,6 +609,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _isInitializing = false;
 
             Messages.Clear();
+            ActiveTodos.Clear(); HasActivePlan = false;
             _pendingHistoryTurns = null;
             if (conv is not null)
             {
@@ -630,6 +647,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             {
                 _currentConversationId = Guid.Empty;
                 Messages.Clear();
+            ActiveTodos.Clear(); HasActivePlan = false;
             }
         }
         catch (Exception ex)
@@ -1039,6 +1057,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             SelectedAgentItem = null; // 走 workflow 分支
             _currentConversationId = Guid.Empty; // 新会话
             Messages.Clear();
+            ActiveTodos.Clear(); HasActivePlan = false;
             CurrentPage = "chat";
             StatusText = $"已召唤工作流：{item.Name}";
             IsConnected = _deviceChatClient.IsConnected;
