@@ -134,9 +134,11 @@ public partial class NotesViewModel : ObservableObject
     public bool EditorVisible => IsCodeEdit && !(HasRightPane && IsPreviewOnly);
     public bool SplitterVisible => HasRightPane && !IsPreviewOnly;
     public bool RightPaneVisible => HasRightPane;
-    public int EditorSpan => !IsCodeEdit ? 1 : (HasRightPane && !IsPreviewOnly ? 1 : 3);
-    public int RightPaneColumn => IsPreviewOnly ? 0 : 2;
-    public int RightPaneSpan => IsPreviewOnly ? 3 : 1;
+    // 上下布局：预览/表单在上（Row 0），源码编辑器在下（Row 2），中间为可拖分隔条。
+    // 仅预览时编辑器隐藏、右栏跨满；纯代码节点（无右栏）时编辑器跨满。
+    public int EditorRow => (HasRightPane && !IsPreviewOnly) ? 2 : 0;
+    public int EditorRowSpan => !IsCodeEdit ? 1 : (HasRightPane && !IsPreviewOnly ? 1 : 3);
+    public int RightPaneRowSpan => IsPreviewOnly ? 3 : 1;
 
     private void RaiseLayout()
     {
@@ -148,9 +150,9 @@ public partial class NotesViewModel : ObservableObject
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
         OnPropertyChanged(nameof(RightPaneVisible));
-        OnPropertyChanged(nameof(EditorSpan));
-        OnPropertyChanged(nameof(RightPaneColumn));
-        OnPropertyChanged(nameof(RightPaneSpan));
+        OnPropertyChanged(nameof(EditorRow));
+        OnPropertyChanged(nameof(EditorRowSpan));
+        OnPropertyChanged(nameof(RightPaneRowSpan));
     }
 
     /// <summary>语法变化后由视图调用，刷新 markdown 预览栏可见性。</summary>

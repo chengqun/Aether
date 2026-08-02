@@ -133,7 +133,7 @@
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <Button Grid.Column="1" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
-                        Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示右侧 / 左右双栏">
+                        Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示预览 / 上下双栏">
                   <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
                         Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
                         StrokeLineCap="Round" StrokeJoin="Round"
@@ -150,18 +150,19 @@
               </Grid>
             </Border>
 
-            <Grid ColumnDefinitions="*,4,*">
-              <!-- 左：源码编辑器 -->
-              <edit:TextEditor Grid.Column="0" Grid.ColumnSpan="{Binding EditorSpan}"
+            <Grid RowDefinitions="*,4,*">
+              <!-- 下：源码编辑器 -->
+              <edit:TextEditor Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
                        x:Name="CodeEditor" IsVisible="{Binding EditorVisible}"
                        ShowLineNumbers="False" WordWrap="True"
                        FontFamily="Cascadia Code,Consolas,monospace" FontSize="{Binding EditorFontSize}"
                        Background="Transparent" Margin="8,6" />
-              <!-- 中：可拖动分隔条 -->
-              <GridSplitter Grid.Column="1" IsVisible="{Binding SplitterVisible}"
-                            Background="{DynamicResource BorderBrush}" Cursor="SizeWestEast" />
-              <!-- 右栏容器（纯显示模式时移到 Column 0 跨满） -->
-              <Grid Grid.Column="{Binding RightPaneColumn}" Grid.ColumnSpan="{Binding RightPaneSpan}"
+              <!-- 中：可拖动分隔条（上下） -->
+              <GridSplitter Grid.Row="1" IsVisible="{Binding SplitterVisible}" ResizeDirection="Rows"
+                            Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth" />
+              <!-- 上栏容器：预览/表单（仅显示模式时跨满） -->
+              <Grid Grid.Row="0" Grid.RowSpan="{Binding RightPaneRowSpan}"
                     IsVisible="{Binding RightPaneVisible}">
                 <!-- markdown 渲染 -->
                 <ctl:SelectableMarkdownViewer IsVisible="{Binding IsMarkdownNode}"
