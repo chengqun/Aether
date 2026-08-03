@@ -321,6 +321,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await _dispatcher.InvokeAsync(() =>
             {
                 FinalizeSegment(cursor.Current, items);
+                // 每轮一快照：turn 结束若有活动计划，往本轮末尾插一张计划卡（最终态）。
+                // 借已有 kind=plan 持久化脚手架——历史会话恢复后仍能看到每轮的计划。
+                if (HasActivePlan && ActiveTodos.Count > 0)
+                {
+                    var planCard = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName, IsStreaming = false };
+                    foreach (var t in ActiveTodos)
+                        planCard.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+                    items.Add(planCard);
+                }
                 turn.Finish(errored ? TurnStatus.Error : TurnStatus.Done);
                 IsAgentRunning = false;
                 _runCts?.Dispose();
@@ -415,8 +424,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
     }
 
-    /// <summary>todos_* 调用后更新/插入计划卡（在 turn 顶部，items[1]）：本轮已有则刷新其待办，否则新建一张。
-    /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
+    /// <summary>todos_* 调用后更新浮动计划面板（ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。    /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
     private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
     {
         // 计划只显示在浮动面板（输入框上方），不在对话流里重复显示
