@@ -131,25 +131,15 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty] private object? _activeEditVm;
     [ObservableProperty] private bool _isPreviewOnly;
 
-    /// <summary>form 节点（agent/workflow/knowledge）的 Tab：false=表单，true=源码。切节点重置为 false。</summary>
-    [ObservableProperty] private bool _isSourceTab;
-
-    // 布局模式（上下 Grid：Row0=预览/表单，Row1=分隔条，Row2=源码编辑器）：
-    //  - markdown 双栏（IsMarkdownNode && !IsPreviewOnly）：预览上 + 编辑下 + 分隔条
-    //  - markdown 仅预览（IsPreviewOnly）：预览跨满
-    //  - form 表单 Tab（IsFormNode && !IsSourceTab）：表单跨满
-    //  - form 源码 Tab（IsFormNode && IsSourceTab）：编辑器跨满
-    //  - 纯代码节点（非 markdown 非 form）：编辑器跨满
-    private bool IsMarkdownSplit => IsMarkdownNode && !IsPreviewOnly;
-    private bool IsFormSourceView => IsFormNode && IsSourceTab;
-    public bool EditorVisible => IsCodeEdit && (IsMarkdownSplit || IsFormSourceView || (!IsMarkdownNode && !IsFormNode));
-    public bool SplitterVisible => IsMarkdownSplit;
-    public bool RightPaneVisible => IsMarkdownNode || (IsFormNode && !IsSourceTab);
-    public int EditorRow => IsMarkdownSplit ? 2 : 0;
-    public int EditorRowSpan => !IsCodeEdit ? 1 : (IsMarkdownSplit ? 1 : 3);
-    public int RightPaneRowSpan => (IsPreviewOnly || (IsFormNode && !IsSourceTab)) ? 3 : 1;
-
-    partial void OnIsSourceTabChanged(bool value) => RaiseLayout();
+    public bool EditorVisible => IsCodeEdit && !(HasRightPane && IsPreviewOnly);
+    public bool SplitterVisible => HasRightPane && !IsPreviewOnly;
+    public bool RightPaneVisible => HasRightPane;
+    // 上下布局：预览/表单在上（Row 0），源码编辑器在下（Row 2），中间为可拖分隔条。
+    // 仅显示上栏时编辑器隐藏、上栏跨满；纯代码节点（无右栏）时编辑器跨满。
+    // markdown 与 form 节点一致：上=预览/表单，下=源码。
+    public int EditorRow => (HasRightPane && !IsPreviewOnly) ? 2 : 0;
+    public int EditorRowSpan => !IsCodeEdit ? 1 : (HasRightPane && !IsPreviewOnly ? 1 : 3);
+    public int RightPaneRowSpan => IsPreviewOnly ? 3 : 1;
 
     private void RaiseLayout()
     {
@@ -215,7 +205,6 @@ public partial class NotesViewModel : ObservableObject
         }
         _previousSelected = value;
         ActiveEditVm = null; // 切换节点时清空表单 VM（视图层会按需重建）
-        IsSourceTab = false; // 切节点回到表单 Tab
 
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsKnowledgeNode));
