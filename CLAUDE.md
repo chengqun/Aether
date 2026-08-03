@@ -159,7 +159,7 @@ Skills are prompt-based capabilities (Agent Skills spec — same `SKILL.md` form
 
 ### Agent 扩展能力（tools / MCP / skill / 长期记忆）
 
-Agent 有三种扩展机制 + 跨会话长期记忆，全部在专家编辑器统一勾选/配置。选型：**业务层用 tools，外部用 MCP，流程知识用 skill**。Token 视角：tools/MCP 每轮带所有工具 schema（随工具数增长）；skill 每轮只带 name/desc 索引，正文 `load_skill` 时才进上下文（按需付费）。
+Agent 有三种扩展机制 + 跨会话长期记忆，全部在专家编辑器统一勾选/配置。选型：**业务层用 tools，外部用 MCP，流程知识用 skill，结构化参照知识（表 schema / 规则库，需跨流程复用）用 knowledge object**。Token 视角：tools/MCP 每轮带所有工具 schema（随工具数增长）；skill 每轮只带 name/desc 索引，正文 `load_skill` 时才进上下文（按需付费）；knowledge object 同样按需 `read` 才进上下文。
 
 - **Tools**（进程内、强类型）：`ToolRegistry` + 各 `ai/<Context>/Acme.<Context>.AI` adapter 的 `AddXxxTools()` 注册 `AIFunction`，直接调 Application 契约。专家编辑器「内置工具」区按分类平铺勾选 + 权限 ComboBox（Safe/Confirm/Dangerous）。`ask_user` 自动纳入、隐藏在选择器。
 - **MCP**（外部、跨进程/跨语言）：`Aether.AI.Mcp` 项目（alpha 包 `Microsoft.Agents.AI.Mcp` 隔离在此，opt-in）。
@@ -171,6 +171,26 @@ Agent 有三种扩展机制 + 跨会话长期记忆，全部在专家编辑器�
 - **长期记忆**（跨会话）：`AgentDefinition.EnableLongTermMemory` → `MemoryContextProvider`（Hosting，继承 MAF `AIContextProvider`）经 `ProvideAIContextAsync` 召回 `IMemoryStore` 记忆注入 `AIContext.Instructions`，`StoreAIContextAsync` 沉淀本轮 Q&A 为 `TaskHistory` 记忆项。区别于 `Memory`（会话内聊天历史窗口）。`IMemoryStore`（抽象）+ `SqliteMemoryStore`（`memory.db`）+ InMemory；注入靠 `AgentFactory` 的 `Func<AgentDefinition, AIContextProvider?>` 钩子（Harness 不直接引 Memory，保持解耦）。桌面单用户 → userId=null（全局记忆）。
 - **专家编辑器统一 UI**（`ExpertEditView.axaml`）：每个配置块都是 Expander——「内置工具」（`ToolCategories`，按分类平铺 + 权限 ComboBox + 危险标）、「MCP工具」（`McpServerGroups`，按 server 分组卡片 + 权限）、「技能」（`Skills` 平铺勾选）。`GetAvailableTools` 过滤掉 MCP 工具（走 MCP 区）和 `ask_user`（自动纳入）。`ExpertsView.axaml.cs` 打开编辑器前 `await Mcp.EnsureLoadedAsync()` 确保 MCP 连完。
 - MAF 版本：`Microsoft.Agents.AI.Harness 1.16.0`（稳定）；MCP 用 `1.16.0-alpha`（隔离在 `Aether.AI.Mcp`）。
+
+### Knowledge objects (知识对象 / 微型知识图谱)
+
+笔记树里第 4 种 form 节点（`NoteNodeType.Knowledge = 3`，UI 显示「知识对象」，强制 `syntax=yaml`、icon `knowledge`）。**最简通用知识模型**：`KnowledgeObjectDefinition { Kind, Links[], Body }`（`business/Notes/Acme.Notes.Domain/Knowledge/KnowledgeObjectDefinition.cs`），`KnowledgeLink { Role, TargetId?, Target }`。持久化为 YAML front-matter（`kind` + `links`）+ markdown body（`KnowledgeSourceParser`，YamlDotNet，容忍无 front-matter 的老笔记），与 Agent 笔记同构；`name` = 笔记标题（不在内容里）。区别于 Agent（多字段）/ Workflow（JSON）：知识对象只有 3 字段，**typed graph links 是它的定义性特征**——带 role 的图边指向其它笔记，`TargetId` 权威、标题回退（老数据无 id）。
+
+- **AI 消费**（`KnowledgeTool` in `ai/Notes/Acme.Notes.AI/Tools/KnowledgeTool.cs`）：`ListKnowledgeObjects()` 列所有 Knowledge 节点（body preview 80 字符）；`ReadKnowledgeObject(name)` → `FormatAsync` 拼装成一段 `Definition`：`kind:` / `name:` / body + `links:` 段，每个 link 输出 `[role] target:` + 目标笔记的**完整原始 Content**（含其自身 front-matter）逐行缩进 2 格。**只展开一层**——子节点自身的 link 不递归（不会无限套娃，也不回拉入口节点）。读是非破坏的、per-flow 的。
+- **DAG 纪律（重要）**：边**单向**，只留「流程 uses/then → 资产」这类正向依赖边；**不要写反向回指边**（`consumed-by` / `schema-for` / `consumes` 等）——它们是冗余、且会被 `FormatAsync` 当噪音内联进 read 产物。分层：**流程层**（`kind=流程`）带 `uses`/`then` 出边，是消费/编排者；**资产层**（`kind=数据源`/`规则`，`links: []` 或只指向同级资产）是被引用的复用目标。
+- **复用**：一个资产节点可被多个流程 `uses`。改一处 schema/规则，所有引用它的流程下次 `read` 都拿新版——这是单体 system prompt 做不到的。新场景 = 新建一个流程节点 + 勾选要复用的资产 + 可能加一两个专属规则，不用复制粘贴 prompt。
+- **与 Agent 的混合（推荐）**：必须每次遵守的硬契约（输出格式、表范围约束等）留在 agent 节点的 body（system prompt）里确保可靠；重的参照数据（完整字段表、规则库、SQL 模板、示例输出）抽成知识对象按需 `read`。Agent body 里写一句「先用 KnowledgeTool 读『XX流程』」即可。
+- **Gotchas**：
+  - `NoteTool.CreateNote` **没有 nodeType 参数**——AI 工具建不了 Knowledge 节点（只能建 `Note`）。Knowledge 节点只能经 UI 新建、直接写库、或走 agent-catalog 那种 `NoteService.CreateAsync(NodeType=...)` 直调模式。
+  - link 靠标题解析时**标题必须唯一**；在 UI 里打开流程节点并保存一次，`KnowledgeEditViewModel.Build()` 会把标题解析成 `TargetId` 落库，之后改名/同名也按 id 精确命中。
+  - `FormatAsync` 内联子笔记的 front-matter（含其 links），有轻微噪音但无害；清反向边后已最小化。
+- **落地实例：情报分析微型知识图谱**（Qifu `notes.db`，挂「智能体 > 知识对象」下；源文件 `~/Desktop/knowledge-objects/*.yaml`）。5 节点：
+  - `研判流程` [流程] `uses→情报分析表` `uses→单条情报研判规则` `then→内部异常检测规则` `uses→应用安装明细验证表`
+  - `单条情报研判规则` [规则] `applies-to→情报分析表` `produces→内部异常检测规则`
+  - `内部异常检测规则` [规则] `applies-to→应用安装明细验证表`
+  - `情报分析表` [数据源] `links: []`（`ods.prd_fkai_ai_news_category_app` schema + 取数 SQL）
+  - `应用安装明细验证表` [数据源] `links: []`（`dp_data_db.chengqun_app_detail` schema + 回表 SQL）
+  - agent `read('研判流程')` → 把 4 篇 link 内联 → 等价于原来那段单体情报研判 prompt（取数 + 单条研判 + 风险 app 提取 + 回表 + 内部异常检测）。这是知识对象机制的首个落地用例，可作新场景拆解的模板。
 
 ### Chat streaming surface (reasoning / approval / plan / mode / ask_user)
 
