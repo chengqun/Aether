@@ -657,6 +657,23 @@ public partial class NotesViewModel : ObservableObject
         return null;
     }
 
+    /// <summary>按标题查找笔记节点（用于知识对象 link 的标题→Id 解析；重名取第一个）。</summary>
+    public NoteNodeVM? FindNoteByTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        return FindByTitle(Roots, title!);
+        static NoteNodeVM? FindByTitle(IEnumerable<NoteNodeVM> nodes, string title)
+        {
+            foreach (var n in nodes)
+            {
+                if (string.Equals(n.Title, title, StringComparison.OrdinalIgnoreCase)) return n;
+                var c = FindByTitle(n.Children, title);
+                if (c != null) return c;
+            }
+            return null;
+        }
+    }
+
     private static bool RemoveFromTree(ObservableCollection<NoteNodeVM> list, NoteNodeVM node)
     {
         if (list.Remove(node)) return true;

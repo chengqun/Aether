@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text;
+using System;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Knowledge;
@@ -114,7 +115,11 @@ public class KnowledgeTool
             sb.AppendLine().AppendLine("links:");
             foreach (var l in def.Links)
             {
-                var target = all.FirstOrDefault(n => string.Equals(n.Title, l.Target, StringComparison.OrdinalIgnoreCase));
+                // 权威按 TargetId 匹配；旧数据无 id 则回退到标题
+                var target = l.TargetId.HasValue
+                    ? all.FirstOrDefault(n => Guid.TryParse(n.Id, out var nid) && nid == l.TargetId.Value)
+                    : null;
+                target ??= all.FirstOrDefault(n => string.Equals(n.Title, l.Target, StringComparison.OrdinalIgnoreCase));
                 sb.AppendLine($"[{l.Role}] {l.Target}:");
                 if (target is null)
                     sb.AppendLine("  （找不到笔记）");

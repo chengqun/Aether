@@ -1,12 +1,18 @@
 namespace Acme.Notes.Domain.Knowledge;
 
 /// <summary>
-/// 知识对象的一条 typed 引用（图边）。role 自由字符串（property/behavior/verifies/depends-on/…），
-/// target 为目标笔记标题（未来可升级为 {id, title}）。
+/// 知识对象的一条 typed 引用（图边）。role 自由字符串（property/behavior/verifies/depends-on/…）。
+/// <see cref="TargetId"/> 为目标笔记 Id（权威引用）；<see cref="Target"/> 为标题（显示/回退）。
+/// 旧数据只有标题 → TargetId 为 null，读取时回退到标题匹配。
 /// </summary>
 public sealed class KnowledgeLink
 {
     public string Role { get; set; } = string.Empty;
+
+    /// <summary>目标笔记 Id（权威引用）。旧数据/未解析时为 null。</summary>
+    public Guid? TargetId { get; set; }
+
+    /// <summary>目标笔记标题（显示/回退）。编辑时按标题解析出 TargetId。</summary>
     public string Target { get; set; } = string.Empty;
 }
 
