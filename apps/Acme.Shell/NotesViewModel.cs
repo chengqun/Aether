@@ -94,6 +94,10 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private NoteNodeVM? _selectedNode;
 
+    /// <summary>已打开的笔记 tab（最多驻留 <see cref="MaxOpenTabs"/> 个，CherryTree 式 LRU）。</summary>
+    public ObservableCollection<NoteNodeVM> OpenNodes { get; } = new();
+    private const int MaxOpenTabs = 3;
+
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
@@ -205,6 +209,13 @@ public partial class NotesViewModel : ObservableObject
         }
         _previousSelected = value;
         ActiveEditVm = null; // 切换节点时清空表单 VM（视图层会按需重建）
+        // 最多驻留 3 个 tab（CherryTree 式 LRU）：选中节点移到末尾（最近使用），超限淘汰最旧
+        if (value is not null)
+        {
+            OpenNodes.Remove(value);
+            OpenNodes.Add(value);
+            while (OpenNodes.Count > MaxOpenTabs) OpenNodes.RemoveAt(0);
+        }
 
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsKnowledgeNode));
@@ -635,6 +646,7 @@ public partial class NotesViewModel : ObservableObject
                 // 从父级或 Roots 移除被删节点
                 if (node.Parent != null) node.Parent.Children.Remove(node);
                 else Roots.Remove(node);
+                OpenNodes.Remove(node); // 关闭被删节点的 tab
                 SelectedNode = Roots.FirstOrDefault();
             });
             StatusMessage = $"已删除：{title}";
