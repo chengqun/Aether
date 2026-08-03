@@ -321,14 +321,15 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await _dispatcher.InvokeAsync(() =>
             {
                 FinalizeSegment(cursor.Current, items);
-                // 每轮一快照：turn 结束若有活动计划，往本轮末尾插一张计划卡（最终态）。
+                // 每轮一快照：turn 结束若有活动计划，把计划卡插到本轮首（用户消息之后、agent 工作之前），
+                // 内联在对话里、出现在"制定计划"的位置（参考 Claude Code），而非堆在轮末与浮动面板叠底。
                 // 借已有 kind=plan 持久化脚手架——历史会话恢复后仍能看到每轮的计划。
                 if (HasActivePlan && ActiveTodos.Count > 0)
                 {
                     var planCard = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName, IsStreaming = false };
                     foreach (var t in ActiveTodos)
                         planCard.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
-                    items.Add(planCard);
+                    items.Insert(1, planCard); // items[0] = 用户消息
                 }
                 turn.Finish(errored ? TurnStatus.Error : TurnStatus.Done);
                 IsAgentRunning = false;
