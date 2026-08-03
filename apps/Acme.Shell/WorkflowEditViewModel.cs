@@ -110,6 +110,13 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
     [RelayCommand] private void AddHandoff() => Handoffs.Add(new HandoffRow { Agents = Agents.ToList() });
     [RelayCommand] private void RemoveHandoff(HandoffRow row) { if (row is not null) Handoffs.Remove(row); }
 
+    /// <summary>从当前编辑数据构建图模型（供画布渲染）。</summary>
+    public WorkflowGraphModel BuildGraphModel()
+        => WorkflowGraphBuilder.Build(EntryAgentId, Participants, Handoffs);
+
+    /// <summary>从当前编辑数据生成 Mermaid flowchart 字符串。</summary>
+    public string BuildMermaid() => WorkflowGraphBuilder.ToMermaid(BuildGraphModel());
+
     public event Action<WorkflowItem>? SaveRequested;
     public event Action? CancelRequested;
 

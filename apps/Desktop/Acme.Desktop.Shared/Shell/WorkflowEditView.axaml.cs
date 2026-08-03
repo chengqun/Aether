@@ -44,4 +44,23 @@ public partial class WorkflowEditView : UserControl
         if (sender is Button btn && btn.Tag is HandoffRow row && DataContext is WorkflowEditViewModel vm)
             vm.RemoveHandoffCommand.Execute(row);
     }
+
+    private async void OnViewGraphClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not WorkflowEditViewModel vm) return;
+        var model = vm.BuildGraphModel();
+        if (model.Nodes.Count == 0)
+        {
+            return; // 没有参与者，不弹窗
+        }
+        var laid = WorkflowGraphBuilder.Layout(model);
+        var mermaid = vm.BuildMermaid();
+        var owner = TopLevel.GetTopLevel(this) as Window;
+        var win = new WorkflowGraphWindow(laid, mermaid);
+        if (owner is not null)
+            await win.ShowDialog(owner);
+        else
+            win.Show();
+    }
 }
+

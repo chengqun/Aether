@@ -64,7 +64,10 @@
 
         <Expander x:Name="ExpHandoffs" Header="转交边" IsExpanded="False">
           <StackPanel Spacing="6">
-            <Button Content="+ 添加转交" Classes="tool" Click="OnAddHandoffClick" Padding="8,2" FontSize="11" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="+ 添加转交" Classes="tool" Click="OnAddHandoffClick" Padding="8,2" FontSize="11"/>
+              <Button Content="📊 查看转交图" Classes="tool" Click="OnViewGraphClick" Padding="8,2" FontSize="11"/>
+            </StackPanel>
             <ItemsControl ItemsSource="{Binding Handoffs}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
