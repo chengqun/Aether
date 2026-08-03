@@ -582,7 +582,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             ActiveTodos.Clear(); HasActivePlan = false;
         _pendingHistoryTurns = null;
         foreach (var c in Conversations) c.IsCurrent = false;
-        CurrentPage = "chat";
     }
 
     [RelayCommand]
@@ -624,7 +623,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                     foreach (var t in all.Skip(all.Count - HistoryInitialBatch)) Messages.Add(t);
                 }
             }
-            CurrentPage = "chat";
         }
         catch (Exception ex)
         {
@@ -744,9 +742,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private string _currentPage = "notes";
 
-    /// <summary>是否是聊天页（聊天区始终可见，此值控制中间面板显示最近会话列表）</summary>
-    public bool IsChatPage => CurrentPage == "chat";
-
     /// <summary>是否是笔记页</summary>
     public bool IsNotesPage => CurrentPage == "notes";
 
@@ -761,8 +756,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     /// <summary>是否是回测/实盘页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
     public bool IsTradingPage => CurrentPage == "backtest";
-
-    /// <summary>是否是占位页（非聊天/笔记/专家/自动化/期货/回测）</summary>
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
@@ -792,7 +785,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     partial void OnCurrentPageChanged(string? value)
     {
-        OnPropertyChanged(nameof(IsChatPage));
         OnPropertyChanged(nameof(IsNotesPage));
         OnPropertyChanged(nameof(IsExpertsPage));
         OnPropertyChanged(nameof(IsAutomationPage));
@@ -809,15 +801,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             IsSidebarExpanded = true;
             SidebarWidth = 220;
             _sidebarCollapsedForNotes = false;
-        }
-
-        // "chat" = 新聊天
-        if (pageKey == "chat")
-        {
-            NewChat();
-            foreach (var item in NavItems)
-                item.IsCurrent = item.Key == pageKey;
-            return;
         }
 
         // 进入笔记页：自动收起侧边栏给笔记更大空间
@@ -1031,7 +1014,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _currentConversationId = Guid.Empty; // 新会话
             Messages.Clear();
             ActiveTodos.Clear(); HasActivePlan = false;
-            CurrentPage = "chat";
             StatusText = $"已召唤工作流：{item.Name}";
             IsConnected = _deviceChatClient.IsConnected;
         });

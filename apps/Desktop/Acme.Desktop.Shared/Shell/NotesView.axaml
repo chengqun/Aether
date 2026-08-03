@@ -137,7 +137,7 @@
                              Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <Button Grid.Column="1" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
+                <Button Grid.Column="1" Classes="notes-tool" IsVisible="{Binding IsMarkdownNode}"
                         Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示预览 / 上下双栏">
                   <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
                         Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
@@ -153,6 +153,18 @@
                   </StackPanel>
                 </Button>
               </Grid>
+            </Border>
+            <!-- form 节点（agent/workflow/knowledge）：[表单][源码] Tab 栏 -->
+            <Border DockPanel.Dock="Top" IsVisible="{Binding IsFormNode}"
+                    Padding="8,4,8,0" Background="{DynamicResource CardBgBrush}">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <RadioButton GroupName="NoteFormTab" Content="表单"
+                             IsChecked="{Binding !IsSourceTab, Mode=TwoWay}"
+                             Padding="10,4" FontSize="12" />
+                <RadioButton GroupName="NoteFormTab" Content="源码"
+                             IsChecked="{Binding IsSourceTab, Mode=TwoWay}"
+                             Padding="10,4" FontSize="12" />
+              </StackPanel>
             </Border>
 
             <Grid x:Name="SplitGrid">

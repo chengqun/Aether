@@ -27,7 +27,7 @@ public sealed class StockappMainViewModel : MainViewModelBase
         AddNav("automation", NavIcons.Automation, "自动化");
         AddNav("ctp", NavIcons.Futures, "期货");
         AddNav("backtest", NavIcons.Backtest, "回测");
-        NavigateToCommand.Execute("chat");
+        NavigateToCommand.Execute("notes");
     }
 
     public override async Task InitializeAsync()
