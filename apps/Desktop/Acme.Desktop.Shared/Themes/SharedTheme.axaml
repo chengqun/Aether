@@ -246,6 +246,15 @@
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
 
+  <!-- 消息卡（思考/工具/计划/审批 统一底）：淡 tint + 圆角 + 描边 -->
+  <Style Selector="Border.msg-card">
+    <Setter Property="Background" Value="{DynamicResource ToolCallBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ToolCallBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="12,8"/>
+  </Style>
+
   <!-- Markdown.Avalonia 代码块跨平台等宽字体（避免 macOS 无 Consolas 崩溃） -->
   <Style Selector="TextBlock.CodeBlock">
     <Setter Property="FontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"/>

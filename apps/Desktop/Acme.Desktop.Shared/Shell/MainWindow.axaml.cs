@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         RestoreWindowSize(); // 构造期同步恢复，窗口尚未显示 → 不闪烁
+        RootGrid.SizeChanged += (_, _) => ClampChatColumn(); // 窗口缩放时别让 chat 列撑出可视区
     }
 
     private static IPreferencesStore? PreferencesStore => DesktopApp.Services.GetService<IPreferencesStore>();
@@ -70,10 +71,25 @@ public partial class MainWindow : Window
         try
         {
             if (double.TryParse(store.GetAsync("ui.chatW").GetAwaiter().GetResult(), out var cw)
-                && cw is >= 300 and <= 800)
+                && cw >= 300)
                 RootGrid.ColumnDefinitions[2].Width = new GridLength(cw);
+            ClampChatColumn(); // 恢复的宽度可能超出当前窗口可用宽度 → 收一下
         }
         catch { /* 读取失败用默认宽度 */ }
+    }
+
+    /// <summary>把聊天列宽 clamp 到不超过窗口可用宽度（窗口宽 - 侧边栏 - 内容列 MinWidth）。
+    /// chat 列是像素宽，窗口缩小时不会自动收缩，需此 clamp 兜底，避免右缘跑出窗口被裁。
+    /// 拖宽时由内容列 MinWidth=240 自然限位（chat 吃不掉全部空间）。</summary>
+    private void ClampChatColumn()
+    {
+        var sidebarW = (DataContext is MainViewModelBase vm && vm.IsSidebarExpanded) ? 200 : 48;
+        const double contentMin = 240; // 与 XAML 内容列 MinWidth 一致
+        var maxChat = Width - sidebarW - contentMin;
+        if (maxChat < 300) maxChat = 300; // 极端小窗兜底（chat MinWidth）
+        var chat = RootGrid.ColumnDefinitions[2];
+        if (chat.Width.IsAbsolute && chat.Width.Value > maxChat)
+            chat.Width = new GridLength(maxChat);
     }
 
     /// <summary>关闭时持久化窗口尺寸 + 聊天栏宽度 + 笔记分隔位置。
