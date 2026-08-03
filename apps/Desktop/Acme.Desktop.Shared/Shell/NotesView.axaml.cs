@@ -163,7 +163,8 @@ public partial class NotesView : UserControl
                 return;
             }
             var editVm = new KnowledgeEditViewModel(node.Id, node.Title, def,
-                title => _vm?.FindNoteByTitle(title) is { } tn ? (tn.Id, tn.Title) : ((Guid Id, string Title)?)null);
+                title => _vm?.FindNoteByTitle(title) is { } tn ? (tn.Id, tn.Title) : ((Guid Id, string Title)?)null,
+                id => _vm?.FindNoteById(id)?.Title);
             editVm.SaveRequested += async saved =>
             {
                 var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);

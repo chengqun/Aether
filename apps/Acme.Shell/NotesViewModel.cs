@@ -674,6 +674,9 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
+    /// <summary>按 Id 查找笔记节点（用于知识对象 link 加载时按 TargetId 反查当前标题）。</summary>
+    public NoteNodeVM? FindNoteById(Guid id) => FindNode(Roots, id);
+
     private static bool RemoveFromTree(ObservableCollection<NoteNodeVM> list, NoteNodeVM node)
     {
         if (list.Remove(node)) return true;

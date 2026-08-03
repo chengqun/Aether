@@ -22,19 +22,28 @@ public partial class KnowledgeLinkRow : ObservableObject
 public sealed partial class KnowledgeEditViewModel : ObservableObject
 {
     private readonly Func<string?, (Guid Id, string Title)?> _resolveTarget;
+    private readonly Func<Guid, string?> _resolveTitleById;
 
     public Guid Id { get; }
 
     public KnowledgeEditViewModel(Guid id, string name, KnowledgeObjectDefinition def,
-        Func<string?, (Guid Id, string Title)?> resolveTarget)
+        Func<string?, (Guid Id, string Title)?> resolveTarget,
+        Func<Guid, string?> resolveTitleById)
     {
         Id = id;
         Name = name;
         Kind = def.Kind;
         Body = def.Body;
         _resolveTarget = resolveTarget;
+        _resolveTitleById = resolveTitleById;
         foreach (var l in def.Links)
-            Links.Add(new KnowledgeLinkRow { Role = l.Role, Target = l.Target, TargetId = l.TargetId });
+        {
+            // 有 TargetId 时按 id 反查当前标题（目标被改名也能显示最新标题）；查不到回退存储标题
+            var displayTitle = l.TargetId.HasValue
+                ? (_resolveTitleById(l.TargetId.Value) ?? l.Target)
+                : l.Target;
+            Links.Add(new KnowledgeLinkRow { Role = l.Role, Target = displayTitle, TargetId = l.TargetId });
+        }
     }
 
     [ObservableProperty] private string _name = string.Empty;
@@ -64,7 +73,8 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
             return new KnowledgeLink
             {
                 Role = l.Role,
-                TargetId = resolved?.Id,
+                // 标题解析得到→用新 id；解析不到（目标被改名/删除/未改动）→保留原 id（移动/改名都不断链）
+                TargetId = resolved?.Id ?? l.TargetId,
                 Target = resolved?.Title ?? l.Target,
             };
         }).ToList(),
