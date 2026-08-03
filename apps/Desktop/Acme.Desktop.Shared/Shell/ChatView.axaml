@@ -277,6 +277,58 @@
         </Button>
         <TextBlock Grid.Column="2" Text="{Binding TokenInfo}" VerticalAlignment="Center" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,0,0,0" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <!-- 历史会话（Flyout 下拉） -->
+          <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
+            <TextBlock Text="≡" FontSize="14"/>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <Border Width="280" MaxHeight="400">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="历史会话" FontSize="12" FontWeight="SemiBold"
+                               Margin="0,0,0,8" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                      <ItemsControl ItemsSource="{Binding Conversations}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Button Classes="settings-nav" HorizontalAlignment="Stretch" Margin="0,2"
+                                    Command="{Binding ResumeCommand}"
+                                    CommandParameter="{Binding}"
+                                    Click="OnConversationClicked">
+                              <Button.ContextFlyout>
+                                <MenuFlyout>
+                                  <MenuItem Header="删除"
+                                            Command="{Binding DeleteCommand}"
+                                            CommandParameter="{Binding}"/>
+                                </MenuFlyout>
+                              </Button.ContextFlyout>
+                              <StackPanel Spacing="2" HorizontalAlignment="Left">
+                                <DockPanel>
+                                  <TextBlock Text="{Binding DisplayTime}" DockPanel.Dock="Right"
+                                             FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
+                                             VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12"
+                                             TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                </DockPanel>
+                                <TextBlock Text="{Binding Preview}" FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                              </StackPanel>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+                  </DockPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <!-- 新聊天 -->
+          <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
+            <TextBlock Text="✚" FontSize="14"/>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 

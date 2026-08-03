@@ -143,66 +143,8 @@
       </Grid.ColumnDefinitions>
       <Border Grid.Column="0" Background="{DynamicResource BorderBrush}"/>
 
-      <!-- 聊天面板 -->
-      <DockPanel Grid.Column="1">
-        <!-- 聊天头部：历史 + 新聊天 + 收起 -->
-        <Border DockPanel.Dock="Top" Padding="12,8" Background="{DynamicResource CardBgBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <!-- 历史会话（Flyout 下拉） -->
-            <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
-              <TextBlock Text="≡" FontSize="14"/>
-              <Button.Flyout>
-                <Flyout Placement="BottomEdgeAlignedRight">
-                  <Border Width="280" MaxHeight="400">
-                    <DockPanel>
-                      <TextBlock DockPanel.Dock="Top" Text="历史会话" FontSize="12" FontWeight="SemiBold"
-                                 Margin="0,0,0,8" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding Conversations}">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <Button Classes="settings-nav" HorizontalAlignment="Stretch" Margin="0,2"
-                                      Command="{Binding ResumeCommand}"
-                                      CommandParameter="{Binding}"
-                                      Click="OnConversationClicked">
-                                <Button.ContextFlyout>
-                                  <MenuFlyout>
-                                    <MenuItem Header="删除"
-                                              Command="{Binding DeleteCommand}"
-                                              CommandParameter="{Binding}"/>
-                                  </MenuFlyout>
-                                </Button.ContextFlyout>
-                                <StackPanel Spacing="2" HorizontalAlignment="Left">
-                                  <DockPanel>
-                                    <TextBlock Text="{Binding DisplayTime}" DockPanel.Dock="Right"
-                                               FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
-                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12"
-                                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                  </DockPanel>
-                                  <TextBlock Text="{Binding Preview}" FontSize="11"
-                                             Foreground="{DynamicResource TextSecondaryBrush}"
-                                             TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                </StackPanel>
-                              </Button>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </ScrollViewer>
-                    </DockPanel>
-                  </Border>
-                </Flyout>
-              </Button.Flyout>
-            </Button>
-            <!-- 新聊天 -->
-            <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
-              <TextBlock Text="✚" FontSize="14"/>
-            </Button>
-          </StackPanel>
-        </Border>
-        <shell:ChatView DataContext="{Binding}"/>
-      </DockPanel>
+      <!-- 聊天面板（顶栏：连接状态/历史会话/新聊天 统一在 ChatView 头部一行） -->
+      <shell:ChatView Grid.Column="1" DataContext="{Binding}"/>
     </Grid>
 
   </Grid>

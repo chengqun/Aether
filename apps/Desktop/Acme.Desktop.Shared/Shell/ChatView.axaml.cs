@@ -260,4 +260,11 @@ public partial class ChatView : UserControl
         if (settingsDialog == null) return;
         _ = settingsDialog.ShowSettingsAsync();
     }
+
+    /// <summary>点击历史会话行后收起下拉。
+    /// 必须延迟到下一帧再 Hide：Button.OnClick 先 RaiseEvent(Click) 再 Command.Execute，
+    /// 若在 Click 里同步 Hide 会把按钮从视觉树摘掉、打断后续命令执行 → 会话加载不出来。
+    /// Post 到调度器队列，确保 Command 先执行完再关 Flyout。</summary>
+    public void OnConversationClicked(object? sender, RoutedEventArgs e)
+        => Dispatcher.UIThread.Post(() => HistoryFlyoutButton.Flyout?.Hide());
 }
