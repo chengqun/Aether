@@ -4,7 +4,8 @@
              xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
-             Background="{DynamicResource ContentBgBrush}">
+             Background="{DynamicResource ContentBgBrush}"
+             Padding="0,0,12,0">
 
   <UserControl.Resources>
     <conv:DictToStringConverter x:Key="DictToString" />
@@ -437,7 +438,7 @@
 
     <!-- 消息区 + 浮动按钮（Panel 叠加，ScrollViewer 填满剩余空间） -->
     <Panel>
-      <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+      <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12,8,12" Background="{DynamicResource CardBgBrush}"
                     HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                     ScrollChanged="OnMessagesScrollChanged">
         <Panel>

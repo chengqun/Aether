@@ -78,14 +78,18 @@ public partial class MainWindow : Window
         catch { /* 读取失败用默认宽度 */ }
     }
 
-    /// <summary>把聊天列宽 clamp 到不超过窗口可用宽度（窗口宽 - 侧边栏 - 内容列 MinWidth）。
-    /// chat 列是像素宽，窗口缩小时不会自动收缩，需此 clamp 兜底，避免右缘跑出窗口被裁。
-    /// 拖宽时由内容列 MinWidth=240 自然限位（chat 吃不掉全部空间）。</summary>
+    /// <summary>把聊天列宽 clamp 到不超过窗口实际可用宽度。
+    /// 用 RootGrid.Bounds.Width（真实可视布局宽，不含 OS 边框）+ 侧边栏实际宽，
+    /// 而非 Window.Width（含边框，偏大 → chat 会溢出 ~1 字宽被裁）。
+    /// chat 列是像素宽，窗口缩小时不会自动收缩，需此 clamp 兜底。</summary>
     private void ClampChatColumn()
     {
-        var sidebarW = (DataContext is MainViewModelBase vm && vm.IsSidebarExpanded) ? 200 : 48;
-        const double contentMin = 240; // 与 XAML 内容列 MinWidth 一致
-        var maxChat = Width - sidebarW - contentMin;
+        var gridW = RootGrid.Bounds.Width;
+        if (gridW <= 0) gridW = Width; // 未布局时兜底
+        var sidebarW = RootGrid.ColumnDefinitions[0].ActualWidth;
+        if (sidebarW <= 0) sidebarW = (DataContext is MainViewModelBase vm && vm.IsSidebarExpanded) ? 200 : 48;
+        var contentMin = RootGrid.ColumnDefinitions[1].MinWidth; // 240
+        var maxChat = gridW - sidebarW - contentMin;
         if (maxChat < 300) maxChat = 300; // 极端小窗兜底（chat MinWidth）
         var chat = RootGrid.ColumnDefinitions[2];
         if (chat.Width.IsAbsolute && chat.Width.Value > maxChat)
