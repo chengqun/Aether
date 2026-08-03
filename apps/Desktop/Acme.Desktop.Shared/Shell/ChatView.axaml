@@ -435,10 +435,18 @@
 
     <!-- 消息区 + 浮动按钮（Panel 叠加，ScrollViewer 填满剩余空间） -->
     <Panel>
-      <ScrollViewer x:Name="MessagesScrollViewer" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+      <!--
+        ScrollViewer 自身 Padding=0：Avalonia 12.0.4 的 ScrollContentPresenter.MeasureOverride
+        不会把 Padding 从可用宽度中扣减（仅在 Arrange 时缩排），导致内部 TextWrapping/Markdown
+        按完整 viewport 宽度计算换行，视觉上文字会超出右边界 ~Padding 个像素。
+        改用内层 Border.Padding 走常规布局（Measure 时正确扣减）来限制内容宽度。
+        AllowAutoHide=true（默认）时垂直滚动条为覆盖式（16px），需在内容右侧预留空间避让。
+      -->
+      <ScrollViewer x:Name="MessagesScrollViewer" Padding="0" Background="{DynamicResource CardBgBrush}"
                     HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                     ScrollChanged="OnMessagesScrollChanged">
-        <Panel>
+        <Border Padding="20,12">
+          <Panel>
           <!-- 空态引导 -->
           <Border IsVisible="{Binding !Messages.Count}" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center">
             <StackPanel Spacing="12" HorizontalAlignment="Center" MaxWidth="380">
@@ -450,12 +458,13 @@
             </StackPanel>
           </Border>
 
-          <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}">
+          <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}" Margin="0,0,16,0">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate><VirtualizingStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
           </ItemsControl>
         </Panel>
+        </Border>
       </ScrollViewer>
 
       <!-- 滚到底部浮动按钮（叠加在 ScrollViewer 上） -->
