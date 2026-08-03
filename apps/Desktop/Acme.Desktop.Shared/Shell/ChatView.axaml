@@ -306,50 +306,6 @@
       </Grid>
     </Border>
 
-    <!-- 浮动计划面板：贴着输入框上方，可展开/收起 -->
-    <Border DockPanel.Dock="Bottom" Padding="16,0,16,4" Background="{DynamicResource ContentBgBrush}"
-            IsVisible="{Binding HasActivePlan}">
-      <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-              CornerRadius="10" Padding="0" MaxHeight="240">
-        <Grid RowDefinitions="Auto,*">
-          <!-- 头部：点击展开/收起 -->
-          <Button Grid.Row="0" Command="{Binding TogglePlanExpandedCommand}" Background="Transparent" BorderThickness="0"
-                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="14,8" CornerRadius="10">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="{Binding PlanSummary}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-              <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                         IsVisible="{Binding IsPlanExpanded}"/>
-              <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                         IsVisible="{Binding !IsPlanExpanded}"/>
-            </StackPanel>
-          </Button>
-          <!-- 计划列表（展开时显示） -->
-          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                        IsVisible="{Binding IsPlanExpanded}" Padding="14,0,14,8">
-            <ItemsControl ItemsSource="{Binding ActiveTodos}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
-                    <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding !IsComplete}"/>
-                    <TextBlock Text="✓" FontSize="12" Foreground="#16A34A" VerticalAlignment="Center"
-                               IsVisible="{Binding IsComplete}"/>
-                    <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding !IsComplete}"/>
-                    <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               TextDecorations="Strikethrough"
-                               IsVisible="{Binding IsComplete}"/>
-                  </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </Grid>
-      </Border>
-    </Border>
-
     <Border DockPanel.Dock="Bottom" Padding="16,10,16,8" Background="{DynamicResource ContentBgBrush}">
       <StackPanel Spacing="6">
         <!-- plan-accept 条：plan 模式下计划就绪后提示接受→执行 -->
@@ -360,7 +316,48 @@
             <Button Classes="primary" Content="✅ 接受，开始执行" Command="{Binding AcceptPlanCommand}" Padding="14,6" FontSize="12"/>
           </StackPanel>
         </Border>
-        <Border Classes="chat-input-card">
+        <!-- 活动计划面板 + 输入卡：Spacing=0 紧贴，计划贴在输入框上沿 -->
+        <StackPanel Spacing="0">
+          <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                  CornerRadius="10" Padding="0" MaxHeight="240" IsVisible="{Binding HasActivePlan}">
+            <Grid RowDefinitions="Auto,*">
+              <!-- 头部：点击展开/收起 -->
+              <Button Grid.Row="0" Command="{Binding TogglePlanExpandedCommand}" Background="Transparent" BorderThickness="0"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="14,8" CornerRadius="10">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding PlanSummary}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                  <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                             IsVisible="{Binding IsPlanExpanded}"/>
+                  <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                             IsVisible="{Binding !IsPlanExpanded}"/>
+                </StackPanel>
+              </Button>
+              <!-- 计划列表（展开时显示） -->
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                            IsVisible="{Binding IsPlanExpanded}" Padding="14,0,14,8">
+                <ItemsControl ItemsSource="{Binding ActiveTodos}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
+                        <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsComplete}"/>
+                        <TextBlock Text="✓" FontSize="12" Foreground="#16A34A" VerticalAlignment="Center"
+                                   IsVisible="{Binding IsComplete}"/>
+                        <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsComplete}"/>
+                        <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                   TextDecorations="Strikethrough"
+                                   IsVisible="{Binding IsComplete}"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+          <Border Classes="chat-input-card">
           <Grid RowDefinitions="Auto,*">
             <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,8" HorizontalAlignment="Stretch">
               <Border Classes="chip">
@@ -430,6 +427,7 @@
             </Grid>
           </Grid>
         </Border>
+        </StackPanel>
         <TextBlock Text="内容由 AI 生成，请核实重要信息" FontSize="11"
                    Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.7" HorizontalAlignment="Center" />
       </StackPanel>
