@@ -18,6 +18,7 @@ using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Search;
 using Acme.Notes.Domain;
+using Acme.Notes.Domain.Knowledge;
 using Acme.Shell;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -164,7 +165,10 @@ public partial class NotesView : UserControl
             }
             var editVm = new KnowledgeEditViewModel(node.Id, node.Title, def,
                 title => _vm?.FindNoteByTitle(title) is { } tn ? (tn.Id, tn.Title) : ((Guid Id, string Title)?)null,
-                id => _vm?.FindNoteById(id)?.Title);
+                id => _vm?.FindNoteById(id)?.Title,
+                title => _vm?.FindNoteByTitle(title) is { } tn2
+                    ? (tn2.Title, _vm.TryParseKnowledge(tn2.Content ?? "").Def)
+                    : ((string Title, KnowledgeObjectDefinition? Def)?)null);
             editVm.SaveRequested += async saved =>
             {
                 var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);

@@ -1,4 +1,4 @@
-using Acme.Notes.Domain.Agents;
+using Acme.Notes.Domain.Knowledge;
 
 namespace Acme.Shell;
 
@@ -183,4 +183,46 @@ public static class WorkflowGraphBuilder
     }
 
     private static string Escape(string? s) => (s ?? string.Empty).Replace("\"", "'");
+}
+
+/// <summary>知识对象图构建器：从焦点节点出发只跟出边做闭包（不串业务）+ 闭包内所有边。</summary>
+public static class KnowledgeGraphBuilder
+{
+    /// <summary>从焦点知识对象出发，沿出边（typed link）做传递闭包，返回闭包子图。
+    /// 只跟出边、不回溯入边，配合资产叶子（links:[]）天然不跨业务。focus 高亮。</summary>
+    public static WorkflowGraphModel BuildClosure(
+        string focalTitle,
+        KnowledgeObjectDefinition focalDef,
+        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTarget)
+    {
+        if (focalDef is null || string.IsNullOrWhiteSpace(focalTitle)) return WorkflowGraphModel.Empty;
+
+        var nodes = new Dictionary<string, GraphNode>(StringComparer.Ordinal);
+        var edges = new List<GraphEdge>();
+        var queue = new Queue<(string Title, KnowledgeObjectDefinition Def)>();
+
+        nodes[focalTitle] = new GraphNode(Guid.NewGuid(), focalTitle, true);
+        queue.Enqueue((focalTitle, focalDef));
+
+        while (queue.Count > 0)
+        {
+            var (curTitle, curDef) = queue.Dequeue();
+            if (!nodes.TryGetValue(curTitle, out var curNode)) continue;
+            foreach (var l in curDef.Links)
+            {
+                var tgt = l.Target;
+                if (string.IsNullOrWhiteSpace(tgt)) continue;
+                var resolved = resolveTarget(tgt);
+                var nodeTitle = resolved?.Title ?? tgt!;
+                if (!nodes.ContainsKey(nodeTitle))
+                {
+                    nodes[nodeTitle] = new GraphNode(Guid.NewGuid(), nodeTitle, false);
+                    if (resolved?.Def is { } td) queue.Enqueue((nodeTitle, td));
+                    // 解析不到（目标被删/未保存）→ 仍画节点但不跟其出边
+                }
+                edges.Add(new GraphEdge(curNode.Id, nodes[nodeTitle].Id, l.Role));
+            }
+        }
+        return new WorkflowGraphModel(nodes.Values.ToList(), edges);
+    }
 }

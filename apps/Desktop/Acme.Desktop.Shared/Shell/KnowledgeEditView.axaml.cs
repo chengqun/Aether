@@ -1,4 +1,6 @@
+using Acme.Shell;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -6,4 +8,20 @@ namespace Acme.Desktop.Shared.Shell;
 public partial class KnowledgeEditView : UserControl
 {
     public KnowledgeEditView() => InitializeComponent();
+
+    private async void OnViewGraphClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not KnowledgeEditViewModel vm) return;
+        var model = vm.BuildGraphModel();
+        if (model.Nodes.Count == 0) return;
+        var laid = WorkflowGraphBuilder.Layout(model);
+        var mermaid = vm.BuildMermaid();
+        var owner = TopLevel.GetTopLevel(this) as Window;
+        var win = new WorkflowGraphWindow(laid, mermaid,
+            "知识对象图", "节点=知识对象，箭头=typed link（标注=role），高亮=当前对象");
+        if (owner is not null)
+            await win.ShowDialog(owner);
+        else
+            win.Show();
+    }
 }

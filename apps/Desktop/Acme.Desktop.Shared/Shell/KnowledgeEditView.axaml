@@ -39,7 +39,10 @@
 
         <Expander Header="links（typed 引用）" IsExpanded="True">
           <StackPanel Spacing="6">
-            <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" HorizontalAlignment="Left" Padding="12,4"/>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" Padding="12,4"/>
+              <Button Content="📊 查看图" Click="OnViewGraphClick" Classes="tool" Padding="12,4"/>
+            </StackPanel>
             <ItemsControl ItemsSource="{Binding Links}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>

@@ -23,12 +23,14 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 {
     private readonly Func<string?, (Guid Id, string Title)?> _resolveTarget;
     private readonly Func<Guid, string?> _resolveTitleById;
+    private readonly Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> _resolveTargetDef;
 
     public Guid Id { get; }
 
     public KnowledgeEditViewModel(Guid id, string name, KnowledgeObjectDefinition def,
         Func<string?, (Guid Id, string Title)?> resolveTarget,
-        Func<Guid, string?> resolveTitleById)
+        Func<Guid, string?> resolveTitleById,
+        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef)
     {
         Id = id;
         Name = name;
@@ -36,6 +38,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
         Body = def.Body;
         _resolveTarget = resolveTarget;
         _resolveTitleById = resolveTitleById;
+        _resolveTargetDef = resolveTargetDef;
         foreach (var l in def.Links)
         {
             // 有 TargetId 时按 id 反查当前标题（目标被改名也能显示最新标题）；查不到回退存储标题
@@ -91,4 +94,11 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     [RelayCommand] private void AddLink() => Links.Add(new KnowledgeLinkRow());
     [RelayCommand] private void RemoveLink(KnowledgeLinkRow row) => Links.Remove(row);
+
+    /// <summary>从当前知识对象出发构建出边闭包子图（焦点高亮，不串业务）。</summary>
+    public WorkflowGraphModel BuildGraphModel()
+        => KnowledgeGraphBuilder.BuildClosure(Name, Build(), _resolveTargetDef);
+
+    /// <summary>从当前知识对象出发生成 Mermaid flowchart 字符串。</summary>
+    public string BuildMermaid() => WorkflowGraphBuilder.ToMermaid(BuildGraphModel());
 }

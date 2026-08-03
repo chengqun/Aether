@@ -17,19 +17,27 @@ public partial class WorkflowGraphWindow : Window
 {
     private readonly LaidOutGraph _graph;
     private readonly string _mermaid;
+    private readonly string _windowTitle;
+    private readonly string _hint;
 
-    public WorkflowGraphWindow() { _graph = LaidOutGraph.Empty; _mermaid = string.Empty; InitializeComponent(); } // 设计器
+    public WorkflowGraphWindow() { _graph = LaidOutGraph.Empty; _mermaid = string.Empty; _windowTitle = "图"; _hint = ""; InitializeComponent(); } // 设计器
 
-    public WorkflowGraphWindow(LaidOutGraph graph, string mermaid)
+    public WorkflowGraphWindow(LaidOutGraph graph, string mermaid,
+        string windowTitle = "工作流转交图",
+        string hint = "节点=参与者，箭头=转交边（标注=原因），高亮=入口")
     {
         _graph = graph;
         _mermaid = mermaid;
+        _windowTitle = windowTitle;
+        _hint = hint;
         InitializeComponent();
         Render();
     }
 
     private void Render()
     {
+        Title = _windowTitle;
+        if (HintText is not null) HintText.Text = _hint;
         var canvas = GraphCanvas;
         canvas.Children.Clear();
         canvas.Width = Math.Max(_graph.Width, 200);
