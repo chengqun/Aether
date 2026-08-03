@@ -49,6 +49,8 @@
       <Setter Property="CornerRadius" Value="6"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="Width" Value="150"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     </Style>
     <Style Selector="ListBox.note-tabs > ListBoxItem:selected">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
@@ -162,7 +164,8 @@
                   <ListBox.ItemTemplate>
                     <DataTemplate>
                       <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                                 HorizontalAlignment="Stretch" TextAlignment="Left"
+                                 TextTrimming="CharacterEllipsis"/>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
