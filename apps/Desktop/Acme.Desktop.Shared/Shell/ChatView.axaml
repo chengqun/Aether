@@ -451,7 +451,7 @@
               <Button Classes="send-btn" Command="{Binding StopGenerationCommand}"
                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"
                       IsVisible="{Binding IsAgentRunning}" Background="#FF5252" BorderThickness="0">
-                <TextBlock Text="⏹" FontSize="14" Foreground="White"/>
+                <Rectangle Width="11" Height="11" Fill="White"/>
               </Button>
             </Grid>
           </Grid>
