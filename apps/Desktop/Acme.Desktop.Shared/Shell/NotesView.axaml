@@ -37,23 +37,6 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="12,8" Background="White"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Path Data="{x:Static nav:NavIcons.Notes}" Stretch="Uniform" Width="18" Height="18"
-                StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                Stroke="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-          <TextBlock Text="笔记" FontSize="15" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-          <TextBlock Text="右键菜单操作" FontSize="12"
-                     Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
-                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-      </Grid>
-    </Border>
-
     <Grid x:Name="TreeGrid">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="200" MinWidth="120" MaxWidth="600"/>
@@ -126,7 +109,7 @@
         <Grid>
           <DockPanel IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
             <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <Grid ColumnDefinitions="*,Auto,Auto">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
                         Fill="{Binding SelectedNode.IconColor}" IsVisible="{Binding SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
@@ -137,14 +120,17 @@
                              Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <Button Grid.Column="1" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11"
+                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
+                <Button Grid.Column="2" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
                         Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示上栏 / 上下双栏">
                   <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
                         Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
                         StrokeLineCap="Round" StrokeJoin="Round"
                         Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                 </Button>
-                <Button Grid.Column="2" Classes="notes-primary" Command="{Binding SaveNoteCommand}">
+                <Button Grid.Column="3" Classes="notes-primary" Command="{Binding SaveNoteCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="4">
                     <Path Data="{x:Static nav:NavIcons.Save}" Stretch="Uniform" Width="14" Height="14"
                           StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
