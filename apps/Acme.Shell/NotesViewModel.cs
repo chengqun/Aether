@@ -209,11 +209,15 @@ public partial class NotesViewModel : ObservableObject
         }
         _previousSelected = value;
         ActiveEditVm = null; // 切换节点时清空表单 VM（视图层会按需重建）
-        // 最多驻留 3 个 tab（CherryTree 式 LRU）：选中节点移到末尾（最近使用），超限淘汰最旧
+        // 最多驻留 3 个 tab（CherryTree 式 LRU）：选中节点移到末尾（最近使用），超限淘汰最旧。
+        // 用 Move 而非 Remove+Add——移除选中项会让 ListBox 把 SelectedItem 置空、绑回 SelectedNode=null 导致界面空白。
         if (value is not null)
         {
-            OpenNodes.Remove(value);
-            OpenNodes.Add(value);
+            var idx = OpenNodes.IndexOf(value);
+            if (idx < 0)
+                OpenNodes.Add(value);
+            else if (idx != OpenNodes.Count - 1)
+                OpenNodes.Move(idx, OpenNodes.Count - 1);
             while (OpenNodes.Count > MaxOpenTabs) OpenNodes.RemoveAt(0);
         }
 
