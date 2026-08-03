@@ -30,11 +30,11 @@ public sealed record LaidOutEdge(
 /// <summary>从编辑器定义数据构建图模型 + 分层布局 + Mermaid 生成。</summary>
 public static class WorkflowGraphBuilder
 {
-    private const double HSpacing = 210;
-    private const double VSpacing = 140;
-    private const double NodeW = 168;
-    private const double NodeH = 48;
-    private const double Margin = 40;
+    private const double HSpacing = 250;
+    private const double VSpacing = 170;
+    private const double NodeW = 184;
+    private const double NodeH = 50;
+    private const double Margin = 44;
 
     /// <summary>从入口/参与者/转交边构建图模型。</summary>
     public static WorkflowGraphModel Build(
@@ -123,17 +123,22 @@ public static class WorkflowGraphBuilder
         {
             var f = laidNodes.First(n => n.Id == e.FromId);
             var t = laidNodes.First(n => n.Id == e.ToId);
-            double fx, fy, tx, ty, c1x, c1y, c2x, c2y;
+            double fx, fy, tx, ty, c1x, c1y, c2x, c2y, lx, ly;
             var sameLevel = Math.Abs(f.Y - t.Y) < 1;
             if (sameLevel)
             {
-                // 同层：右中 → 左中
-                var (fromN, toN, dir) = f.X < t.X ? (f, t, 1.0) : (t, f, -1.0);
-                fx = fromN.X + fromN.W; fy = fromN.Y + fromN.H / 2;
-                tx = toN.X; ty = toN.Y + toN.H / 2;
-                c1x = fx + 40 * dir; c1y = fy;
-                c2x = tx - 40 * dir; c2y = ty;
-                if (f.X >= t.X) { (fx, tx) = (tx, fx); (fy, ty) = (ty, fy); (c1x, c2x) = (c2x, c1x); (c1y, c2y) = (c2y, c1y); }
+                // 同层：弧线向下凸出（避开节点文字），标注置于节点行下方
+                var fLeft = f.X <= t.X;
+                var dir = fLeft ? 1.0 : -1.0;
+                fx = fLeft ? f.X + f.W : f.X;
+                fy = f.Y + f.H / 2;
+                tx = fLeft ? t.X : t.X + t.W;
+                ty = t.Y + t.H / 2;
+                var bow = 58.0;
+                c1x = fx + 32 * dir; c1y = fy + bow;
+                c2x = tx - 32 * dir; c2y = ty + bow;
+                lx = (fx + tx) / 2;
+                ly = f.Y + f.H + 16;   // 标注放节点行下方，不压文字
             }
             else
             {
@@ -142,10 +147,9 @@ public static class WorkflowGraphBuilder
                 tx = t.X + t.W / 2; ty = t.Y;
                 c1x = fx; c1y = fy + VSpacing * 0.4;
                 c2x = tx; c2y = ty - VSpacing * 0.4;
+                lx = 0.125 * fx + 0.375 * c1x + 0.375 * c2x + 0.125 * tx;
+                ly = 0.125 * fy + 0.375 * c1y + 0.375 * c2y + 0.125 * ty;
             }
-            // 贝塞尔 t=0.5 点
-            var lx = 0.125 * fx + 0.375 * c1x + 0.375 * c2x + 0.125 * tx;
-            var ly = 0.125 * fy + 0.375 * c1y + 0.375 * c2y + 0.125 * ty;
             return new LaidOutEdge(e.FromId, e.ToId, e.Label, fx, fy, tx, ty, c1x, c1y, c2x, c2y, lx, ly);
         }).ToList();
 
