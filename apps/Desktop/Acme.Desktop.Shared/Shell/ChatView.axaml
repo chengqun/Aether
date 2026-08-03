@@ -130,8 +130,8 @@
                              IsVisible="{Binding IsResultText}" />
                   <Border Background="{DynamicResource CardBgBrush}" CornerRadius="4" Padding="8,6"
                           IsVisible="{Binding IsResultCode}">
-                    <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                      <TextBlock Text="{Binding ResultText}" FontSize="11" TextWrapping="NoWrap"
+                    <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                      <TextBlock Text="{Binding ResultText}" FontSize="11" TextWrapping="Wrap"
                                  FontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
                                  Foreground="{DynamicResource TextPrimaryBrush}" />
                     </ScrollViewer>
