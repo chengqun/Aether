@@ -62,14 +62,19 @@ public class KnowledgeTool
         public string? Error { get; set; }
     }
 
-    [Description("列出所有知识对象（KnowledgeObject）。返回名称、kind、正文预览。")]
-    public async Task<ListKnowledgeOutput> ListKnowledgeObjects(CancellationToken cancellationToken = default)
+    [Description("列出知识对象（KnowledgeObject）。返回名称、kind、正文预览。可选 parentId 只列指定 folder 下的 KO，不传则列全部。")]
+    public async Task<ListKnowledgeOutput> ListKnowledgeObjects(
+        [Description("父节点 id（可选，只列该 folder 下的知识对象；不传列全部）")] string? parentId = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var all = await _notes.GetAllAsync(cancellationToken);
+            var query = all.Where(n => n.NodeType == NoteNodeType.Knowledge);
+            if (!string.IsNullOrWhiteSpace(parentId))
+                query = query.Where(n => string.Equals(n.ParentId, parentId, StringComparison.OrdinalIgnoreCase));
             var result = new List<KnowledgeSummary>();
-            foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Knowledge))
+            foreach (var note in query)
             {
                 if (!_parser.TryParse(note.Content, out var def, out _)) continue;
                 result.Add(new KnowledgeSummary
