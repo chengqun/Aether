@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Threading;
 using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -41,6 +44,10 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     private readonly Func<Guid, string?> _resolveTitleById;
     private readonly Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> _resolveTargetDef;
 
+    private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
+    private Timer? _saveTimer;
+    private bool _loading = true;
+
     public Guid Id { get; }
 
     /// <summary>可 link 的目标节点（所有笔记节点，排除自身），供 target 下拉选择。</summary>
@@ -57,6 +64,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
         Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef)
     {
         Id = id;
+        _saveTimer = new Timer(_ => FlushSave(), null, Timeout.Infinite, Timeout.Infinite);
         Name = name;
         Kind = def.Kind;
         Body = def.Body;
@@ -75,8 +83,11 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
             // 回填下拉选中项：优先按 TargetId 匹配可选列表，回退按标题（老数据 targetId 为空）
             row.SelectedTarget = AvailableTargets.FirstOrDefault(t => t.Id == l.TargetId)
                 ?? AvailableTargets.FirstOrDefault(t => string.Equals(t.Title, displayTitle, StringComparison.OrdinalIgnoreCase));
+            row.PropertyChanged += OnLinkRowChanged;
             Links.Add(row);
         }
+        Links.CollectionChanged += OnLinksCollectionChanged;
+        _loading = false;
     }
 
     [ObservableProperty] private string _name = string.Empty;
@@ -85,7 +96,9 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     public ObservableCollection<KnowledgeLinkRow> Links { get; } = new();
 
-    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(CanSave));
+    partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanSave)); ScheduleSave(); }
+    partial void OnKindChanged(string value) => ScheduleSave();
+    partial void OnBodyChanged(string value) => ScheduleSave();
 
     [ObservableProperty] private string? _error;
     public bool HasError => !string.IsNullOrEmpty(Error);
@@ -127,6 +140,29 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     [RelayCommand] private void AddLink() => Links.Add(new KnowledgeLinkRow());
     [RelayCommand] private void RemoveLink(KnowledgeLinkRow row) => Links.Remove(row);
+
+    /// <summary>字段/links 变更后延迟自动保存（1500ms debounce，与普通笔记一致）。</summary>
+    private void ScheduleSave()
+    {
+        if (_loading) return;
+        _saveTimer?.Change(1500, Timeout.Infinite);
+    }
+
+    /// <summary>debounce 到期：回 UI 线程触发 SaveRequested（订阅方校验当前节点 id 后写库）。</summary>
+    private void FlushSave()
+    {
+        if (!CanSave) return;
+        _syncContext?.Post(_ => SaveRequested?.Invoke(Build()), null);
+    }
+
+    private void OnLinksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null) foreach (KnowledgeLinkRow r in e.NewItems) r.PropertyChanged += OnLinkRowChanged;
+        if (e.OldItems is not null) foreach (KnowledgeLinkRow r in e.OldItems) r.PropertyChanged -= OnLinkRowChanged;
+        ScheduleSave();
+    }
+
+    private void OnLinkRowChanged(object? sender, PropertyChangedEventArgs e) => ScheduleSave();
 
     /// <summary>从当前知识对象出发构建出边闭包子图（焦点高亮，不串业务）。</summary>
     public WorkflowGraphModel BuildGraphModel()

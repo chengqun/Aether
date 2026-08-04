@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Threading;
 using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -70,6 +73,12 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
 
         SelectedEntry = Agents.FirstOrDefault(a => a.Id == EntryAgentId)
             ?? Agents.FirstOrDefault();
+
+        // 订阅集合与行变更 → debounce 自动保存
+        Participants.CollectionChanged += OnParticipantsChanged;
+        Handoffs.CollectionChanged += OnHandoffsChanged;
+        foreach (var p in Participants) p.PropertyChanged += OnParticipantChanged;
+        foreach (var h in Handoffs) h.PropertyChanged += OnHandoffRowChanged;
     }
 
     public Guid Id { get; }
@@ -83,6 +92,9 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
     [ObservableProperty] private Guid _entryAgentId;
     [ObservableProperty] private string? _handoffInstructions;
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _autoSaveStatus;
+
+    private CancellationTokenSource? _autoSaveCts;
 
     public ObservableCollection<ParticipantOption> Participants { get; } = new();
     public ObservableCollection<HandoffRow> Handoffs { get; } = new();
@@ -103,7 +115,11 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
         }
     }
 
-    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(CanSave));
+    partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanSave)); ScheduleAutoSave(); }
+    partial void OnDescriptionChanged(string value) => ScheduleAutoSave();
+    partial void OnCategoryChanged(string value) => ScheduleAutoSave();
+    partial void OnEntryAgentIdChanged(Guid value) => ScheduleAutoSave();
+    partial void OnHandoffInstructionsChanged(string? value) => ScheduleAutoSave();
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool CanSave => !string.IsNullOrWhiteSpace(Name) && EntryAgentId != Guid.Empty;
 
@@ -118,12 +134,22 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
     public string BuildMermaid() => WorkflowGraphBuilder.ToMermaid(BuildGraphModel());
 
     public event Action<WorkflowItem>? SaveRequested;
+    public event Action<WorkflowItem>? AutoSaveRequested;
     public event Action? CancelRequested;
 
     [RelayCommand]
     private void Save()
     {
         if (!CanSave) { Error = "名称与入口 agent 不能为空"; return; }
+        Error = null;
+        var item = BuildWorkflowItem();
+        if (item is not null) SaveRequested?.Invoke(item);
+    }
+
+    /// <summary>从当前编辑字段构建 WorkflowItem（Save 与自动保存共用）。</summary>
+    private WorkflowItem? BuildWorkflowItem()
+    {
+        if (!CanSave) return null;
         var item = new WorkflowItem
         {
             Id = Id,
@@ -138,8 +164,48 @@ public sealed partial class WorkflowEditViewModel : ObservableObject
         };
         if (!item.Participants.Contains(item.EntryAgentId))
             item.Participants.Add(item.EntryAgentId);
-        SaveRequested?.Invoke(item);
+        return item;
     }
+
+    /// <summary>字段/集合变更后延迟自动保存（500ms debounce，仅编辑现有时；新建需先手动保存一次）。</summary>
+    private void ScheduleAutoSave()
+    {
+        if (!IsEditing || !CanSave) return;
+        _autoSaveCts?.Cancel();
+        _autoSaveCts = new CancellationTokenSource();
+        var ct = _autoSaveCts.Token;
+        _ = Task.Delay(500, ct).ContinueWith(_ =>
+        {
+            if (ct.IsCancellationRequested) return;
+            DoAutoSave();
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void DoAutoSave()
+    {
+        var item = BuildWorkflowItem();
+        if (item is null) return;
+        AutoSaveRequested?.Invoke(item);
+        AutoSaveStatus = "✓ 已自动保存";
+        _ = Task.Delay(1500).ContinueWith(_ => AutoSaveStatus = null, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void OnParticipantsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null) foreach (ParticipantOption p in e.NewItems) p.PropertyChanged += OnParticipantChanged;
+        if (e.OldItems is not null) foreach (ParticipantOption p in e.OldItems) p.PropertyChanged -= OnParticipantChanged;
+        ScheduleAutoSave();
+    }
+
+    private void OnHandoffsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null) foreach (HandoffRow r in e.NewItems) r.PropertyChanged += OnHandoffRowChanged;
+        if (e.OldItems is not null) foreach (HandoffRow r in e.OldItems) r.PropertyChanged -= OnHandoffRowChanged;
+        ScheduleAutoSave();
+    }
+
+    private void OnParticipantChanged(object? sender, PropertyChangedEventArgs e) => ScheduleAutoSave();
+    private void OnHandoffRowChanged(object? sender, PropertyChangedEventArgs e) => ScheduleAutoSave();
 
     [RelayCommand] private void Cancel() => CancelRequested?.Invoke();
 }

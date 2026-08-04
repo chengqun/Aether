@@ -173,6 +173,8 @@ public partial class NotesView : UserControl
                     : ((string Title, KnowledgeObjectDefinition? Def)?)null);
             editVm.SaveRequested += async saved =>
             {
+                // debounce 自动保存可能跨越节点切换：仅当当前选中节点仍是本对象时才写库
+                if (_vm?.SelectedNode?.Id != editVm.Id) return;
                 var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);
                 if (ok) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = err;

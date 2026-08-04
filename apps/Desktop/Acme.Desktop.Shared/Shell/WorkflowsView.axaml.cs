@@ -46,6 +46,12 @@ public partial class WorkflowsView : UserControl
                 if (result.Success) window.Close();
                 else vm.Error = result.Error;
             };
+            vm.AutoSaveRequested += async saved =>
+            {
+                // 自动保存不关弹窗；失败回写错误
+                var result = await VM.SaveAsync(saved);
+                if (!result.Success) vm.Error = result.Error;
+            };
             vm.CancelRequested += () => window.Close();
 
             if (owner != null) await window.ShowDialog(owner);
