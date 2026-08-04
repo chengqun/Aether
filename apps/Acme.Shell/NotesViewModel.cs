@@ -677,23 +677,41 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>按 Id 查找笔记节点（用于知识对象 link 加载时按 TargetId 反查当前标题）。</summary>
     public NoteNodeVM? FindNoteById(Guid id) => FindNode(Roots, id);
 
-    /// <summary>收集所有可 link 的目标 Knowledge 节点（排除 <paramref name="excludeId"/> 自身），
-    /// 供知识对象编辑器 target 下拉选择。</summary>
-    public IReadOnlyList<TargetOption> GetKnowledgeTargets(Guid excludeId)
+    /// <summary>收集所有可 link 的目标笔记节点（排除 <paramref name="excludeId"/> 自身），
+    /// 供知识对象编辑器 target 下拉选择。不限 Knowledge——link 可指向任意笔记（普通 Note/Agent/Workflow/Knowledge），
+    /// read 时原样内联目标 content，非 KO 目标在图上画成叶子节点。</summary>
+    public IReadOnlyList<TargetOption> GetLinkTargets(Guid excludeId)
     {
         var result = new List<TargetOption>();
-        CollectKnowledgeTargets(Roots, excludeId, result);
+        CollectLinkTargets(Roots, excludeId, result);
         return result;
     }
 
-    private static void CollectKnowledgeTargets(IEnumerable<NoteNodeVM> nodes, Guid excludeId, List<TargetOption> result)
+    private static void CollectLinkTargets(IEnumerable<NoteNodeVM> nodes, Guid excludeId, List<TargetOption> result)
     {
         foreach (var n in nodes)
         {
-            if (n.NodeType == NoteNodeType.Knowledge && n.Id != excludeId)
+            if (n.Id != excludeId)
                 result.Add(new TargetOption(n.Id, n.Title));
-            CollectKnowledgeTargets(n.Children, excludeId, result);
+            CollectLinkTargets(n.Children, excludeId, result);
         }
+    }
+
+    /// <summary>构建可 link 的目标节点树（排除 <paramref name="excludeId"/> 自身，保留父级与兄弟结构），
+    /// 供知识对象编辑器 target 树形选择窗口按层级展开。</summary>
+    public IReadOnlyList<TargetTreeNode> GetLinkTargetTree(Guid excludeId)
+        => BuildTargetTree(Roots, excludeId);
+
+    private static List<TargetTreeNode> BuildTargetTree(IEnumerable<NoteNodeVM> nodes, Guid excludeId)
+    {
+        var result = new List<TargetTreeNode>();
+        foreach (var n in nodes)
+        {
+            if (n.Id == excludeId) continue;
+            var children = BuildTargetTree(n.Children, excludeId);
+            result.Add(new TargetTreeNode(n.Id, n.Title, children));
+        }
+        return result;
     }
 
     private static bool RemoveFromTree(ObservableCollection<NoteNodeVM> list, NoteNodeVM node)

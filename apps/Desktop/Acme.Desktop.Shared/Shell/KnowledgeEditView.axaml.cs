@@ -9,6 +9,17 @@ public partial class KnowledgeEditView : UserControl
 {
     public KnowledgeEditView() => InitializeComponent();
 
+    private async void OnPickTarget(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is KnowledgeLinkRow row
+            && DataContext is KnowledgeEditViewModel vm
+            && TopLevel.GetTopLevel(this) is Window owner)
+        {
+            var picked = await TreePickerWindow.PickAsync(owner, vm.AvailableTargetTree, "选择目标笔记");
+            if (picked is not null) row.SelectedTarget = picked;
+        }
+    }
+
     private async void OnViewGraphClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not KnowledgeEditViewModel vm) return;

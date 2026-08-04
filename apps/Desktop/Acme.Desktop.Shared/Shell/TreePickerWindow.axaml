@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.TreePickerWindow"
+        Title="选择目标笔记" Width="420" Height="520" CanResize="True"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="取消" Classes="tool" Click="OnCancel" Padding="16,6"/>
+        <Button x:Name="ConfirmBtn" Content="确定" Classes="primary" Click="OnConfirm" Padding="16,6" IsEnabled="False"/>
+      </StackPanel>
+    </Border>
+    <TreeView x:Name="Tree" SelectionChanged="OnSelectionChanged" Margin="8">
+      <TreeView.ItemTemplate>
+        <TreeDataTemplate ItemsSource="{Binding Children}">
+          <TextBlock Text="{Binding Title}"/>
+        </TreeDataTemplate>
+      </TreeView.ItemTemplate>
+    </TreeView>
+  </DockPanel>
+</Window>

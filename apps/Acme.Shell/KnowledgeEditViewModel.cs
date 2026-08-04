@@ -5,8 +5,11 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Shell;
 
-/// <summary>可选目标节点（真实 Knowledge 笔记，下拉选择用）。</summary>
+/// <summary>可选目标节点（任意笔记，下拉选择用）。</summary>
 public sealed record TargetOption(Guid Id, string Title);
+
+/// <summary>可选目标节点的树形结构（供 TreeView 递归绑定，按层级展开选择）。</summary>
+public sealed record TargetTreeNode(Guid Id, string Title, IReadOnlyList<TargetTreeNode> Children);
 
 /// <summary>知识对象 link 行（UI 可编辑：role + target 节点选择）。</summary>
 public partial class KnowledgeLinkRow : ObservableObject
@@ -40,11 +43,15 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     public Guid Id { get; }
 
-    /// <summary>可 link 的目标节点（所有 Knowledge 节点，排除自身），供 target 下拉选择。</summary>
+    /// <summary>可 link 的目标节点（所有笔记节点，排除自身），供 target 下拉选择。</summary>
     public IReadOnlyList<TargetOption> AvailableTargets { get; }
+
+    /// <summary>可 link 的目标节点树（按层级展开，供树形选择窗口）。</summary>
+    public IReadOnlyList<TargetTreeNode> AvailableTargetTree { get; }
 
     public KnowledgeEditViewModel(Guid id, string name, KnowledgeObjectDefinition def,
         IReadOnlyList<TargetOption> availableTargets,
+        IReadOnlyList<TargetTreeNode> availableTargetTree,
         Func<string?, (Guid Id, string Title)?> resolveTarget,
         Func<Guid, string?> resolveTitleById,
         Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef)
@@ -54,6 +61,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
         Kind = def.Kind;
         Body = def.Body;
         AvailableTargets = availableTargets;
+        AvailableTargetTree = availableTargetTree;
         _resolveTarget = resolveTarget;
         _resolveTitleById = resolveTitleById;
         _resolveTargetDef = resolveTargetDef;

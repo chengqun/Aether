@@ -164,7 +164,8 @@ public partial class NotesView : UserControl
                 return;
             }
             var editVm = new KnowledgeEditViewModel(node.Id, node.Title, def,
-                _vm?.GetKnowledgeTargets(node.Id) ?? Array.Empty<TargetOption>(),
+                _vm?.GetLinkTargets(node.Id) ?? Array.Empty<TargetOption>(),
+                _vm?.GetLinkTargetTree(node.Id) ?? Array.Empty<TargetTreeNode>(),
                 title => _vm?.FindNoteByTitle(title) is { } tn ? (tn.Id, tn.Title) : ((Guid Id, string Title)?)null,
                 id => _vm?.FindNoteById(id)?.Title,
                 title => _vm?.FindNoteByTitle(title) is { } tn2
