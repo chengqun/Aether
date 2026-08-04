@@ -3,6 +3,7 @@ using Acme.Shell;
 using Acme.Trading.Application;
 using Acme.Trading.Domain;
 using Acme.Trading.Runtime.Domain;
+using Acme.Trading.Scripting;
 using Avalonia;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -20,16 +21,20 @@ public partial class TradingViewModel : ObservableObject
 {
     private readonly IBacktestApplicationService _backtest;
     private readonly ILiveTradingApplicationService _live;
+    private readonly IStrategyScriptingService _scripting;
     public CtpConnectorViewModel Connector { get; }
 
-    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector)
+    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector, IStrategyScriptingService scripting)
     {
         _backtest = backtest;
         _live = live;
         Connector = connector;
+        _scripting = scripting;
 
         _live.StatusChanged += OnLiveStatusChanged;
         _live.LogReceived += OnLiveLogReceived;
+        // 策略脚本加载完成（启动 + NotesChanged 重加载后）→ 刷新策略选择器，无需重启即可看到新策略
+        _scripting.StrategiesLoaded += () => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(StrategyOptions)));
     }
 
     // ═══ 回测 ═══

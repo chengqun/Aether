@@ -20,6 +20,8 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
     private int _loading; // 防并发重入
     private CancellationTokenSource? _debounceCts;
 
+    public event Action? StrategiesLoaded;
+
     public IReadOnlyDictionary<string, string> LoadErrors
     {
         get { lock (_lock) return new Dictionary<string, string>(_loadErrors); }
@@ -76,6 +78,7 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                     _logger.LogWarning("策略脚本编译失败 {Name}：{Err}", note.Title, err);
                 }
             }
+            StrategiesLoaded?.Invoke();
         }
         finally
         {

@@ -12,4 +12,7 @@ public interface IStrategyScriptingService
 
     /// <summary>编译失败的策略名→错误（供 UI/log 查看；成功的策略不在内）。</summary>
     IReadOnlyDictionary<string, string> LoadErrors { get; }
+
+    /// <summary>策略脚本加载完成（StrategyRegistry 已更新）时触发，供 UI 刷新策略选择器。</summary>
+    event Action? StrategiesLoaded;
 }
