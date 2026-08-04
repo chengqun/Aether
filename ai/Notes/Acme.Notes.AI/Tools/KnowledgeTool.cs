@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.Text;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Knowledge;
@@ -41,6 +44,14 @@ public class KnowledgeTool
         public string? Kind { get; set; }
         /// <summary>组装后的完整知识（kind + 正文 + 各 link 指向的子笔记内容）。</summary>
         public string? Definition { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public class CreateKnowledgeOutput
+    {
+        public bool Success { get; set; }
+        public string? Id { get; set; }
+        public string? Name { get; set; }
         public string? Error { get; set; }
     }
 
@@ -99,6 +110,68 @@ public class KnowledgeTool
         {
             return new ReadKnowledgeOutput { Error = ex.Message };
         }
+    }
+
+    [Description("创建一个知识对象（Knowledge 笔记节点）。用于沉淀可复用的流程/数据源/规则等资产。创建后可用 ReadKnowledgeObject 读取。")]
+    public async Task<CreateKnowledgeOutput> CreateKnowledgeObject(
+        [Description("知识对象名称（笔记标题，需唯一）")] string name,
+        [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
+        [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
+        [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"target\":\"情报分析表\"}]，target 为目标笔记标题（按标题解析为 id）")] string? linksJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return new CreateKnowledgeOutput { Error = "名称不能为空" };
+
+            var all = await _notes.GetAllAsync(cancellationToken);
+            var links = ParseLinks(linksJson, all);
+            var def = new KnowledgeObjectDefinition
+            {
+                Kind = kind ?? string.Empty,
+                Body = body ?? string.Empty,
+                Links = links,
+            };
+            var source = _parser.Serialize(def);
+            var dto = await _notes.CreateAsync(new CreateNoteRequest
+            {
+                Title = name.Trim(),
+                Content = source,
+                NodeType = NoteNodeType.Knowledge,
+            }, cancellationToken);
+            return new CreateKnowledgeOutput { Success = true, Id = dto.Id, Name = dto.Title };
+        }
+        catch (Exception ex)
+        {
+            return new CreateKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    /// <summary>解析 links JSON（[{role,target}]），按 target 标题查笔记 id。解析失败返回空列表（容错）。</summary>
+    private static List<KnowledgeLink> ParseLinks(string? linksJson, IReadOnlyList<NoteDto> all)
+    {
+        var result = new List<KnowledgeLink>();
+        if (string.IsNullOrWhiteSpace(linksJson)) return result;
+        try
+        {
+            using var doc = JsonDocument.Parse(linksJson);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var role = el.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "";
+                var target = el.TryGetProperty("target", out var t) ? t.GetString() ?? "" : "";
+                if (string.IsNullOrWhiteSpace(target)) continue;
+                var node = all.FirstOrDefault(n => string.Equals(n.Title, target, StringComparison.OrdinalIgnoreCase));
+                result.Add(new KnowledgeLink
+                {
+                    Role = role,
+                    Target = target,
+                    TargetId = node is not null && Guid.TryParse(node.Id, out var nid) ? nid : null,
+                });
+            }
+        }
+        catch { /* 容错：links JSON 非法 → 返回空 links，仍创建知识对象 */ }
+        return result;
     }
 
     /// <summary>组装：kind + name + 正文 + 各 link 指向子笔记的内容。</summary>

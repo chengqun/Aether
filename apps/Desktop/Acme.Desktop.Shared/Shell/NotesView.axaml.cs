@@ -175,6 +175,12 @@ public partial class NotesView : UserControl
             {
                 // debounce 自动保存可能跨越节点切换：仅当当前选中节点仍是本对象时才写库
                 if (_vm?.SelectedNode?.Id != editVm.Id) return;
+                // 下栏源码可能改了 body：从当前节点 content 重新解析 body，避免表单保存覆盖下栏改动
+                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
+                {
+                    var (redef, _) = _vm.TryParseKnowledge(c);
+                    if (redef is not null) saved.Body = redef.Body;
+                }
                 var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);
                 if (ok) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = err;
