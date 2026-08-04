@@ -118,6 +118,7 @@ public class KnowledgeTool
         [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
         [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
         [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"target\":\"情报分析表\"}]，target 为目标笔记标题（按标题解析为 id）")] string? linksJson = null,
+        [Description("父节点 id（可选，不传则建到根节点下）。要建到指定 folder 下时，先用 ListNotes 查目标 folder 的 id 再传入")] string? parentId = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -139,6 +140,7 @@ public class KnowledgeTool
                 Title = name.Trim(),
                 Content = source,
                 NodeType = NoteNodeType.Knowledge,
+                ParentId = parentId,
             }, cancellationToken);
             return new CreateKnowledgeOutput { Success = true, Id = dto.Id, Name = dto.Title };
         }
