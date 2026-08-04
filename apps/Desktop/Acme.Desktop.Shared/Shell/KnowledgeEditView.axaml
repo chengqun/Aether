@@ -47,7 +47,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Grid ColumnDefinitions="*,2*,Auto" Margin="0,0,0,4">
-                    <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（property/behavior/verifies/depends-on…）" Margin="0,0,4,0"/>
+                    <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（uses/then/applies-to/produces…）" Margin="0,0,4,0"/>
                     <ComboBox Grid.Column="1" Margin="0,0,4,0"
                               ItemsSource="{Binding $parent[ItemsControl].DataContext.AvailableTargets}"
                               SelectedItem="{Binding SelectedTarget}"

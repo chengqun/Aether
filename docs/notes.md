@@ -137,8 +137,3 @@ User → Microsoft Agent Framework → HarnessRuntime / AgentFactory
 - **表**：`note_node`（见节点模型字段）。Guid 存 TEXT，时间戳存 ISO-8601 TEXT，`node_type` 存 `(int)NoteNodeType`。WAL + busy_timeout=5000。
 - **迁移**：`EnsureAsync` 建表 + `ALTER TABLE ADD COLUMN` 幂等吞异常（目前仅 `icon` 列）。
 - **挂载结构**：根节点下挂「智能体」（含 `agent` / `workflow` / `知识对象` 三个 folder）、「风控笔记」等业务分类。
-
-## 未实现
-
-- **Data Semantic Layer**：Knowledge 无数据绑定字段（只有 Kind/Links/Body），字段含义靠 body 文本说明，AI 无法自动翻译「业务概念 → 表.字段」。
-- **知识对象图上编辑**：图查看已有（`WorkflowGraphWindow`，Canvas 原生绘制），但不能在图上直接拖拽增删 link，链接只能在编辑器表单里改。

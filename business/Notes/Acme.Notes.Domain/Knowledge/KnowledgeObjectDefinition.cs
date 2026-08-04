@@ -1,7 +1,7 @@
 namespace Acme.Notes.Domain.Knowledge;
 
 /// <summary>
-/// 知识对象的一条 typed 引用（图边）。role 自由字符串（property/behavior/verifies/depends-on/…）。
+/// 知识对象的一条 typed 引用（图边）。role 自由字符串（uses/then/applies-to/produces/depends-on…，只写正向依赖边，不写反向回指边）。
 /// <see cref="TargetId"/> 为目标笔记 Id（权威引用）；<see cref="Target"/> 为标题（显示/回退）。
 /// 旧数据只有标题 → TargetId 为 null，读取时回退到标题匹配。
 /// </summary>
