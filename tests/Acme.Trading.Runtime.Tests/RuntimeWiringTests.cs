@@ -10,12 +10,13 @@ namespace Acme.Trading.Runtime.Tests;
 /// <summary>
 /// Verifies the DI wiring of the backtest path (no Lean engine run, no CTP/Quotes needed —
 /// LeanBacktestRunner's IAnalysisManager is optional). Confirms AddTradingRuntimeLean registers
-/// the runtime port + seeds StrategyRegistry, and AddTradingApplication wires the orchestration service.
+/// the runtime port, and AddTradingApplication wires the orchestration service.
+/// 策略不再内置注册——由 Acme.Trading.Scripting 从笔记动态加载。
 /// </summary>
 public class RuntimeWiringTests
 {
     [Fact]
-    public void AddTradingRuntimeLean_registers_backtest_runtime_and_strategies()
+    public void AddTradingRuntimeLean_registers_backtest_runtime()
     {
         var services = new ServiceCollection();
         services.AddTradingRuntimeLean();
@@ -23,10 +24,6 @@ public class RuntimeWiringTests
 
         var runtime = sp.GetService<IBacktestRuntime>();
         Assert.NotNull(runtime);
-
-        // AddTradingRuntimeLean seeds the built-in strategies into the static registry.
-        Assert.NotNull(StrategyRegistry.Create("SmaCross", new StrategyParameters(null)));
-        Assert.NotNull(StrategyRegistry.Create("Test", new StrategyParameters(null)));
     }
 
     [Fact]
@@ -48,7 +45,7 @@ public class RuntimeWiringTests
         var req = new BacktestRuntimeRequest
         {
             Symbol = "ag2610",
-            StrategyName = "SmaCross",
+            StrategyName = "MyStrategy",
             StartDate = new DateTime(2024, 1, 1),
             EndDate = new DateTime(2024, 12, 31),
             InitialCash = 100_000m,

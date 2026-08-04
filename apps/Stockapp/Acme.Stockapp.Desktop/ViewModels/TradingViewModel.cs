@@ -43,7 +43,7 @@ public partial class TradingViewModel : ObservableObject
     public string[] ResolutionOptions { get; } = new[] { "Daily", "Hour", "Minute" };
 
     [ObservableProperty] private string _symbol = "ag2610";
-    [ObservableProperty] private string _strategyName = "SmaCross";
+    [ObservableProperty] private string _strategyName = "";
     [ObservableProperty] private DateTime? _startDate = DateTime.Today.AddDays(-365);
     [ObservableProperty] private DateTime? _endDate = DateTime.Today;
     [ObservableProperty] private decimal _initialCash = 100_000m;

@@ -1,6 +1,5 @@
 using Acme.Quotes.Domain;
 using Acme.Trading.Domain;
-using Acme.Trading.Domain.Strategies;
 using Acme.Trading.Runtime.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,10 +22,7 @@ public static class TradingRuntimeLeanExtensions
         this IServiceCollection services,
         string? defaultDataFolder = null)
     {
-        // 内置策略注册（StrategyRegistry 是静态表，Lean 在 DI 外创建 algorithm，host 据此解析）
-        StrategyRegistry.Register("SmaCross", () => new SmaCrossStrategy());
-        StrategyRegistry.Register("Test", () => new TestStrategy());
-
+        // 策略由 Acme.Trading.Scripting 从笔记动态加载注册到 StrategyRegistry（静态表，Lean 在 DI 外创建 algorithm，host 据此解析）
         services.AddSingleton<IBacktestRuntime>(sp => new LeanBacktestRunner(
             analysisManager: sp.GetService<IAnalysisManager>(),
             logger: sp.GetService<ILogger<LeanBacktestRunner>>(),
