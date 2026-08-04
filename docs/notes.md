@@ -73,9 +73,40 @@ KnowledgeObjectDefinition
 
 ### 落地状态
 
-代码已实现（`KnowledgeSourceParser` + `KnowledgeTool`）。**但 notes.db 当前无 Knowledge 节点**——Qifu 库「智能体 > 知识对象」folder 为空（`node_type=3` = 0）。源文件 `~/Desktop/knowledge-objects/*.yaml`（情报分析 5 节点：研判流程/单条情报研判规则/内部异常检测规则/情报分析表/应用安装明细验证表）设计完整，但无导入机制，需手写或直写库才能被 `read`。
+代码已实现：`KnowledgeSourceParser`（解析）+ `KnowledgeTool`（`ListKnowledgeObjects` / `ReadKnowledgeObject` / `CreateKnowledgeObject` / `UpdateKnowledgeObject`）。AI 现在能在对话里创建、读取、更新知识对象，无需手拼 YAML。notes.db 当前无 KO 数据——可通过对话让 AI 创建，或手写/直写库导入 `~/Desktop/knowledge-objects/*.yaml`。
 
-> `NoteTool.CreateNote` 没有 nodeType 参数，AI 工具建不了 Knowledge 节点（只能建 Note）。Knowledge 节点只能经 UI 新建、`NoteService.CreateAsync(NodeType=Knowledge)` 直调、或直接写库。
+### 迭代闭环（与编程类比）
+
+知识对象的创建-读取-执行-调整构成一个闭环，结构与 edit-compile-run 同构：
+
+```
+对话描述业务
+    ↓  CreateKnowledgeObject(name, kind, body, links, parentId)
+写入知识对象（笔记树）
+    ↓  ReadKnowledgeObject(name)
+读取 + 按 typed links 内联展开子笔记
+    ↓  agent 按知识对象推理执行
+执行结果
+    ↓  不符合预期？
+    ├─ 是 → UpdateKnowledgeObject(name, kind?, body?, links?) → 回到读取
+    └─ 否 → 完成
+```
+
+与编程的类比：
+
+| 编程 | 知识对象 |
+|---|---|
+| 源代码文件 | 知识对象节点（front-matter + body）|
+| 编写代码 | `CreateKnowledgeObject` |
+| 加载/编译源码 | `ReadKnowledgeObject`（内联 links 进上下文）|
+| 运行程序 | agent 按知识对象推理执行 |
+| 修代码重新跑 | `UpdateKnowledgeObject` |
+| 代码库 | notes.db 的知识对象集合 |
+| 模块依赖（import）| typed links（uses/then/applies-to）|
+
+关键区别：这里"运行"是 LLM 按自然语言文本推理，不是确定性执行——同一知识对象每次执行可能略有偏差。所以是"用自然语言编程给 LLM 跑"，不是真程序。
+
+当前闭环里"验证"环节靠人看执行结果判断；要全自动闭环，还需 agent 执行后自动校验结果、反馈调整知识对象。
 
 ## 运行时
 
@@ -115,7 +146,7 @@ User → Microsoft Agent Framework → HarnessRuntime / AgentFactory
 
 | 上下文 | 适配器 | 工具 |
 |---|---|---|
-| 笔记仓库 | `Acme.Notes.AI` | `NoteTool`（List/Read/Search/Create/Update/Append/Delete）、`KnowledgeTool`（List/ReadKnowledgeObject） |
+| 笔记仓库 | `Acme.Notes.AI` | `NoteTool`（List/Read/Search/Create/Update/Append/Delete）、`KnowledgeTool`（List/Read/Create/UpdateKnowledgeObject） |
 | 毓数平台 | `Acme.Qifu.AI` | `YushuSqlQueryTool`（异步 SQL + 轮询/下载）、`CloudDocsUploadTool`、`TeamsMessageTool` |
 | 系统工具 | `Acme.SystemTools.AI` | `FileRead/Write/Edit/LineEdit/Delete`、`Glob`、`Grep`、`FileDiff`、`DirectoryExplorer`、`CommandExecutor`、`ShellCommand`、`WebFetch` |
 | CTP 期货 | `Acme.Ctp.AI` | `CtpLogin`、`OrderAction/Insert`、`QueryAccount/MarketData/Position` |
@@ -127,7 +158,7 @@ User → Microsoft Agent Framework → HarnessRuntime / AgentFactory
 ### AI 消费流程
 
 1. **读笔记**：`ListNotes / ReadNote / SearchNotes`
-2. **读知识对象**：`ListKnowledgeObjects / ReadKnowledgeObject`（按 typed links 内联展开一层）
+2. **知识对象 CRUD**：`ListKnowledgeObjects` / `ReadKnowledgeObject`（按 typed links 内联展开一层）/ `CreateKnowledgeObject`（可指定父节点）/ `UpdateKnowledgeObject`（迭代调整 kind/body/links）
 3. **执行**：`YushuSqlQueryTool` 查数据、`ShellCommandTool` 跑脚本、`CloudDocsUploadTool` 产文档、`TeamsMessageTool` 通知
 4. **沉淀**：结论写回笔记
 
