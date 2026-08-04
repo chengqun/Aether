@@ -55,6 +55,13 @@ public class KnowledgeTool
         public string? Error { get; set; }
     }
 
+    public class UpdateKnowledgeOutput
+    {
+        public bool Success { get; set; }
+        public string? Name { get; set; }
+        public string? Error { get; set; }
+    }
+
     [Description("列出所有知识对象（KnowledgeObject）。返回名称、kind、正文预览。")]
     public async Task<ListKnowledgeOutput> ListKnowledgeObjects(CancellationToken cancellationToken = default)
     {
@@ -147,6 +154,49 @@ public class KnowledgeTool
         catch (Exception ex)
         {
             return new CreateKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    [Description("更新一个知识对象的 kind/body/links。按名称定位；传哪个参数就更新哪个，不传的保留原值。用于迭代调整知识对象。")]
+    public async Task<UpdateKnowledgeOutput> UpdateKnowledgeObject(
+        [Description("知识对象名称（笔记标题）")] string name,
+        [Description("新 kind（可选，不传保留原值）")] string? kind = null,
+        [Description("新 markdown 正文（可选，不传保留原值）")] string? body = null,
+        [Description("新 links（可选，JSON 数组，全量替换原 links；不传保留原 links）")] string? linksJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return new UpdateKnowledgeOutput { Error = "名称不能为空" };
+
+            var all = await _notes.GetAllAsync(cancellationToken);
+            var note = all.FirstOrDefault(n => n.NodeType == NoteNodeType.Knowledge
+                && string.Equals(n.Title, name, StringComparison.OrdinalIgnoreCase));
+            if (note is null)
+                return new UpdateKnowledgeOutput { Error = $"找不到知识对象: {name}" };
+
+            if (!_parser.TryParse(note.Content ?? "", out var def, out var err) || def is null)
+                return new UpdateKnowledgeOutput { Error = $"解析失败: {err}" };
+
+            // 按提供的参数部分更新（不传的保留原值）
+            if (kind is not null) def.Kind = kind;
+            if (body is not null) def.Body = body;
+            if (linksJson is not null) def.Links = ParseLinks(linksJson, all);
+
+            var source = _parser.Serialize(def);
+            await _notes.UpdateAsync(new UpdateNoteRequest
+            {
+                Id = note.Id,
+                Title = note.Title,       // 标题不变
+                Content = source,
+                NodeType = NoteNodeType.Knowledge,
+            }, cancellationToken);
+            return new UpdateKnowledgeOutput { Success = true, Name = note.Title };
+        }
+        catch (Exception ex)
+        {
+            return new UpdateKnowledgeOutput { Error = ex.Message };
         }
     }
 

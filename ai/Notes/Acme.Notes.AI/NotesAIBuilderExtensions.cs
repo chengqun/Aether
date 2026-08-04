@@ -47,6 +47,8 @@ public static class NotesAIBuilderExtensions
                 sp => CreateTool<KnowledgeTool>(sp, "ReadKnowledgeObject"));
             reg.Register("CreateKnowledgeObject", "创建知识对象", kCat,
                 sp => CreateTool<KnowledgeTool>(sp, "CreateKnowledgeObject"), ToolApprovalLevel.Confirm);
+            reg.Register("UpdateKnowledgeObject", "更新知识对象", kCat,
+                sp => CreateTool<KnowledgeTool>(sp, "UpdateKnowledgeObject"), ToolApprovalLevel.Confirm);
         });
         return builder;
     }
