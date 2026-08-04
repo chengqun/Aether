@@ -126,6 +126,58 @@ graph LR
 8. **知识对象**存编程规格（自适应参数）
 9. **安全审批**（执行器限幅）
 
+## 落地实例：交易策略动态加载
+
+交易策略场景是上述控制工程思维的完整落地——双传感器（编译器 + 回测）+ AI 自迭代闭环。
+
+### 机制
+
+策略源码存为笔记（`tags=strategy`、`syntax=csharp`、content 是 `IStrategy` 实现类 C# 源码）：
+
+```
+策略笔记（tags=strategy）
+  → StrategyScriptingService.LoadAsync（启动 + NotesChanged 500ms 防抖）
+  → Roslyn 动态编译（引用 AppDomain 已加载的 Acme.Trading.Domain.dll）
+  → 反射找 IStrategy 实现 → StrategyRegistry.Register(笔记标题, factory)
+  → StrategiesLoaded 事件 → TradingViewModel 刷新策略选择器（不重启即见）
+  → 回测/实盘按 name 从 StrategyRegistry.Create 取
+```
+
+### AI 闭环
+
+```
+AI 调 CreateStrategy(name, source, parentId)
+  → 创建策略笔记 + 即时编译验证（Compiled/CompileError 反馈，前馈传感器）
+  → NotesChanged → ScriptingService 自动编译注册
+  → AI 调 RunBacktest（回测，反馈传感器：收益/回撤/信号）
+  → 结果差 → AI 改策略源码（NoteTool.UpdateNote）
+  → NotesChanged → 重编译注册 → 再回测
+```
+
+### 控制工程对应
+
+| 控制工程要素 | 交易策略闭环的落地 |
+|---|---|
+| 传感器（信噪比）| **编译器**（Roslyn，确定性编译错误）+ **回测**（Lean，确定性收益/回撤）——双传感器都精确 |
+| 前馈 | 编译期拦截（源码写错即挡，不进回测）|
+| 反馈 | 回测结果驱动 AI 调策略 |
+| 控制器 | AI（读回测误差 → 改策略源码）|
+| 控制量 | `NoteTool.UpdateNote` 改源码 |
+| 自适应 | AI 迭代调策略源码（控制器参数自演化）|
+| 小步快改 | 改源码 → 重编译 → 回测，单策略迭代 |
+| 可观测 | `LoadErrors`（编译失败）+ 回测统计 + 日志 |
+
+### 关键文件
+
+- `business/Trading.Runtime/Acme.Trading.Scripting/` —— `StrategyScriptCompiler`（Roslyn 编译）、`StrategyScriptingService`（扫描/注册/NotesChanged 重加载/StrategiesLoaded 事件）
+- `ai/Trading/Acme.Trading.AI/Tools/CreateStrategyTool.cs` —— AI 创建策略 tool（创建笔记 + 即时编译验证）
+- `business/Trading/Acme.Trading.Domain/StrategyRegistry.cs` —— 策略注册表（Register/Unregister/Create/GetRegisteredNames）
+- `apps/Stockapp/Acme.Stockapp.Desktop/App.axaml.cs` —— `AddTradingScripting` + 启动 `LoadAsync`
+
+### 与业务闭环的对比
+
+业务闭环（知识对象）缺自动传感器（靠人校验），所以难稳。交易策略闭环有幸站在编译器 + 回测两个确定性传感器之上，**传感器质量高 → 闭环带宽高 → 收敛快且稳**——正是"传感器质量 > 控制器智能"的实证。AI 写策略 → 编译错就改 → 编译过跑回测 → 回测差就调，全程对话完成，不需重启不需人手编译。
+
 ## 一句话
 
 AI 编程之所以相对稳，是它幸运地站在编译器/测试这个完美传感器之上。扩展到新场景时，先问"这个场景的传感器是什么"——答不上来就先造传感器，别让 AI 闭环空转。投入顺序：传感器 > 前馈 > 稳定性判据 > LLM 能力。控制器再强，也受限于传感器和稳定性裕度。
