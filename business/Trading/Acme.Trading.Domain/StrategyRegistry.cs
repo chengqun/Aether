@@ -12,6 +12,10 @@ public static class StrategyRegistry
     public static void Register(string name, Func<IStrategy> factory)
         => _factories[name] = factory;
 
+    /// <summary>注销一个已注册策略（动态脚本策略重加载前清理旧的，避免选择器残留失效策略）。</summary>
+    public static bool Unregister(string name)
+        => _factories.Remove(name);
+
     public static IStrategy? Create(string name, StrategyParameters parameters)
     {
         if (!_factories.TryGetValue(name, out var factory)) return null;

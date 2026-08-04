@@ -15,6 +15,7 @@ using Acme.Stockapp.Desktop.ViewModels;
 using Acme.Trading.AI;
 using Acme.Trading.Application.DependencyInjection;
 using Acme.Trading.Runtime.Lean.DependencyInjection;
+using Acme.Trading.Scripting;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -49,6 +50,8 @@ public partial class App : global::Avalonia.Application
             };
             // 窗口打开后异步初始化登录态（检查已缓存 token，刷新账户显示），不阻塞 UI
             _ = vm.InitializeAsync();
+            // 启动加载策略脚本笔记 → 编译 → StrategyRegistry（NotesChanged 时自动重加载）
+            _ = Services.GetRequiredService<IStrategyScriptingService>().LoadAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -75,6 +78,7 @@ public partial class App : global::Avalonia.Application
         // 公共组合（AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement + 公共 AI 工具）
         var aether = services.AddDesktopCommon("stockapp", tenantDir);
         aether.AddQuotesTools().AddCtpTools().AddTradingTools();   // stockapp 租户专属 AI 工具
+        services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
 
         // CTP 连接器（Stockapp 专属；注入 ExpertsViewModel 的 Connector tab）
         services.AddSingleton<IConnectorViewModel, CtpConnectorViewModel>();

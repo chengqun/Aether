@@ -114,6 +114,7 @@
   <Folder Name="/business/Trading.Runtime/">
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Domain/Acme.Trading.Runtime.Domain.csproj" />
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Lean/Acme.Trading.Runtime.Lean.csproj" />
+    <Project Path="business/Trading.Runtime/Acme.Trading.Scripting/Acme.Trading.Scripting.csproj" />
   </Folder>
   <Folder Name="/externals/">
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
