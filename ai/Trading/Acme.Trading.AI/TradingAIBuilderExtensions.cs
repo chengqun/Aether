@@ -1,32 +1,36 @@
 using System.Reflection;
 using Acme.Trading.AI.Tools;
 using Aether.AI.Hosting;
+using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Trading.AI;
 
 /// <summary>
-/// DI entry point for the Trading AI adapter. Registers the backtest tool only — no agent.
+/// DI entry point for the Trading AI adapter. Registers the backtest + create-strategy tools — no agent.
 /// Agents are built dynamically by the host/page from the tool pool.
 /// </summary>
 public static class TradingAIBuilderExtensions
 {
-    /// <summary>The Trading tool names. MEAI AIFunctionFactory.Create keeps the method name as-is (RunBacktest).</summary>
-    public static readonly string[] ToolNames = { "RunBacktest" };
+    /// <summary>The Trading tool names. MEAI AIFunctionFactory.Create keeps the method name as-is.</summary>
+    public static readonly string[] ToolNames = { "RunBacktest", "CreateStrategy" };
 
-    /// <summary>Registers the backtest tool only (no agent). Business layer
+    /// <summary>Registers the backtest + create-strategy tools (no agent). Business layer
     /// (<c>AddTradingApplication</c>) is wired by the host.</summary>
     public static AetherAIBuilder AddTradingTools(this AetherAIBuilder builder)
     {
         var services = builder.Services;
         services.AddTransient<BacktestTool>();
+        services.AddTransient<CreateStrategyTool>();
 
         const string cat = "量化回测";
         builder.ConfigureToolRegistry(reg =>
         {
             reg.Register("RunBacktest", "运行策略历史回测", cat,
                 sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
+            reg.Register("CreateStrategy", "创建交易策略（C# 源码笔记）", cat,
+                sp => CreateTool<CreateStrategyTool>(sp, nameof(CreateStrategyTool.CreateStrategy)), ToolApprovalLevel.Confirm);
         });
         return builder;
     }

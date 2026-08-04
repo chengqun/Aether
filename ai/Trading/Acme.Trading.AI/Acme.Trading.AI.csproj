@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\business\Trading\Acme.Trading.Application\Acme.Trading.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Scripting\Acme.Trading.Scripting.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
