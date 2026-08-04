@@ -99,12 +99,12 @@ KnowledgeObjectDefinition
 | 源代码文件 | 知识对象节点（front-matter + body）|
 | 编写代码 | `CreateKnowledgeObject` |
 | 加载/编译源码 | `ReadKnowledgeObject`（内联 links 进上下文）|
-| 运行程序 | agent 按知识对象推理执行 |
+| 运行程序（解释器调度库调用）| agent 按知识对象调度 tools/skills 执行 |
 | 修代码重新跑 | `UpdateKnowledgeObject` |
 | 代码库 | notes.db 的知识对象集合 |
 | 模块依赖（import）| typed links（uses/then/applies-to）|
 
-关键区别：这里"运行"是 LLM 按自然语言文本推理，不是确定性执行——同一知识对象每次执行可能略有偏差。所以是"用自然语言编程给 LLM 跑"，不是真程序。
+运行机制：知识对象（规格）经 `ReadKnowledgeObject` 加载进上下文后，agent 按其**编排调度 tools 和 skills** 完成执行——`tools`（SQL 查询/shell/文件/云文档等）和 `skills`（prompt + Python 脚本）做实际动作，返回真实数据与结果。确定性在 tool/skill 执行本身（SQL 查什么得什么、脚本跑什么得什么），不确定性在 LLM 的调度决策（按规格选哪个 tool、填什么参数）。所以不是"纯提示词空转"——是**自然语言规格驱动的 tool 编排**，类比解释型语言：知识对象=程序规格+调度逻辑，tools/skills=标准库/系统调用，LLM=解释器。
 
 当前闭环里"验证"环节靠人看执行结果判断；要全自动闭环，还需 agent 执行后自动校验结果、反馈调整知识对象。
 
