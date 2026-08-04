@@ -23,6 +23,7 @@ public static class SecurityInfrastructureExtensions
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aether", "security.db");
         services.AddSingleton<ISecurityRepository>(_ => SqliteSecurityRepository.ForFile(dbPath));
         services.AddSingleton<ISyncMetadataStore>(_ => SqliteSyncMetadataStore.ForFile(dbPath));
+        services.AddSingleton<ISyncLogger, SyncLogger>();
         return services;
     }
 }

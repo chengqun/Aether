@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Acme.AppAuth.Domain;
 using Acme.Securities.Domain;
-using Microsoft.Extensions.Logging;
 
 namespace Acme.Securities.Application;
 
@@ -15,13 +14,13 @@ public class SecurityClientSyncService : ISecurityClientSyncService
     private readonly ISecurityRepository _securityRepository;
     private readonly IAppServerHttpClient _httpClientService;
     private readonly ISyncMetadataStore _syncMetadataStore;
-    private readonly ILogger<SecurityClientSyncService> _logger;
+    private readonly ISyncLogger _logger;
 
     public SecurityClientSyncService(
         ISecurityRepository securityRepository,
         IAppServerHttpClient httpClientService,
         ISyncMetadataStore syncMetadataStore,
-        ILogger<SecurityClientSyncService> logger)
+        ISyncLogger logger)
     {
         _securityRepository = securityRepository;
         _httpClientService = httpClientService;
