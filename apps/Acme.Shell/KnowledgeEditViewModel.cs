@@ -5,13 +5,26 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Shell;
 
-/// <summary>知识对象 link 行（UI 可编辑：role + target 标题；TargetId 由标题解析得出）。</summary>
+/// <summary>可选目标节点（真实 Knowledge 笔记，下拉选择用）。</summary>
+public sealed record TargetOption(Guid Id, string Title);
+
+/// <summary>知识对象 link 行（UI 可编辑：role + target 节点选择）。</summary>
 public partial class KnowledgeLinkRow : ObservableObject
 {
     [ObservableProperty] private string _role = string.Empty;
     [ObservableProperty] private string _target = string.Empty;
-    /// <summary>目标笔记 Id（加载时回填；Build 时按标题重新解析）。</summary>
+    /// <summary>目标笔记 Id（加载时回填；Build 时优先取 SelectedTarget.Id）。</summary>
     public Guid? TargetId { get; set; }
+
+    /// <summary>下拉选中的目标节点。选中即同步 Target 标题与 TargetId（不再依赖标题解析）。</summary>
+    [ObservableProperty] private TargetOption? _selectedTarget;
+    partial void OnSelectedTargetChanged(TargetOption? value)
+    {
+        // null 时保留原 Target/TargetId（目标可能已被删除，不清空已存的引用）
+        if (value is null) return;
+        Target = value.Title;
+        TargetId = value.Id;
+    }
 }
 
 /// <summary>
@@ -27,7 +40,11 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     public Guid Id { get; }
 
+    /// <summary>可 link 的目标节点（所有 Knowledge 节点，排除自身），供 target 下拉选择。</summary>
+    public IReadOnlyList<TargetOption> AvailableTargets { get; }
+
     public KnowledgeEditViewModel(Guid id, string name, KnowledgeObjectDefinition def,
+        IReadOnlyList<TargetOption> availableTargets,
         Func<string?, (Guid Id, string Title)?> resolveTarget,
         Func<Guid, string?> resolveTitleById,
         Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef)
@@ -36,6 +53,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
         Name = name;
         Kind = def.Kind;
         Body = def.Body;
+        AvailableTargets = availableTargets;
         _resolveTarget = resolveTarget;
         _resolveTitleById = resolveTitleById;
         _resolveTargetDef = resolveTargetDef;
@@ -45,7 +63,11 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
             var displayTitle = l.TargetId.HasValue
                 ? (_resolveTitleById(l.TargetId.Value) ?? l.Target)
                 : l.Target;
-            Links.Add(new KnowledgeLinkRow { Role = l.Role, Target = displayTitle, TargetId = l.TargetId });
+            var row = new KnowledgeLinkRow { Role = l.Role, Target = displayTitle, TargetId = l.TargetId };
+            // 回填下拉选中项：优先按 TargetId 匹配可选列表，回退按标题（老数据 targetId 为空）
+            row.SelectedTarget = AvailableTargets.FirstOrDefault(t => t.Id == l.TargetId)
+                ?? AvailableTargets.FirstOrDefault(t => string.Equals(t.Title, displayTitle, StringComparison.OrdinalIgnoreCase));
+            Links.Add(row);
         }
     }
 
@@ -65,18 +87,21 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     public event Action? CancelRequested;
 
     /// <summary>把可编辑字段投影回 Domain 模型（name 不在 def 内，由调用方用于笔记标题）。
-    /// link 按当前标题重新解析 TargetId（标题改了就换 id；解析不到则 TargetId=null，读取时回退标题）。</summary>
+    /// link 优先取 SelectedTarget（下拉选的真实节点）；为 null 时回退标题解析（手打/老数据）。</summary>
     public KnowledgeObjectDefinition Build() => new()
     {
         Kind = Kind ?? string.Empty,
         Body = Body ?? string.Empty,
         Links = Links.Select(l =>
         {
+            // 优先用下拉选中的真实节点（id 权威，不会因标题改名断链）
+            if (l.SelectedTarget is { } opt)
+                return new KnowledgeLink { Role = l.Role, TargetId = opt.Id, Target = opt.Title };
+            // 回退：标题解析（SelectedTarget 为 null 但 Target 有值时）
             var resolved = _resolveTarget(l.Target);
             return new KnowledgeLink
             {
                 Role = l.Role,
-                // 标题解析得到→用新 id；解析不到（目标被改名/删除/未改动）→保留原 id（移动/改名都不断链）
                 TargetId = resolved?.Id ?? l.TargetId,
                 Target = resolved?.Title ?? l.Target,
             };

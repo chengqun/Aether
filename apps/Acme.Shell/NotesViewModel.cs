@@ -677,6 +677,25 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>按 Id 查找笔记节点（用于知识对象 link 加载时按 TargetId 反查当前标题）。</summary>
     public NoteNodeVM? FindNoteById(Guid id) => FindNode(Roots, id);
 
+    /// <summary>收集所有可 link 的目标 Knowledge 节点（排除 <paramref name="excludeId"/> 自身），
+    /// 供知识对象编辑器 target 下拉选择。</summary>
+    public IReadOnlyList<TargetOption> GetKnowledgeTargets(Guid excludeId)
+    {
+        var result = new List<TargetOption>();
+        CollectKnowledgeTargets(Roots, excludeId, result);
+        return result;
+    }
+
+    private static void CollectKnowledgeTargets(IEnumerable<NoteNodeVM> nodes, Guid excludeId, List<TargetOption> result)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.NodeType == NoteNodeType.Knowledge && n.Id != excludeId)
+                result.Add(new TargetOption(n.Id, n.Title));
+            CollectKnowledgeTargets(n.Children, excludeId, result);
+        }
+    }
+
     private static bool RemoveFromTree(ObservableCollection<NoteNodeVM> list, NoteNodeVM node)
     {
         if (list.Remove(node)) return true;

@@ -48,7 +48,16 @@
                 <DataTemplate>
                   <Grid ColumnDefinitions="*,2*,Auto" Margin="0,0,0,4">
                     <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（property/behavior/verifies/depends-on…）" Margin="0,0,4,0"/>
-                    <TextBox Grid.Column="1" Text="{Binding Target}" PlaceholderText="target（子笔记标题）" Margin="0,0,4,0"/>
+                    <ComboBox Grid.Column="1" Margin="0,0,4,0"
+                              ItemsSource="{Binding $parent[ItemsControl].DataContext.AvailableTargets}"
+                              SelectedItem="{Binding SelectedTarget}"
+                              PlaceholderText="选择目标知识对象">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Title}"/>
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
                     <Button Grid.Column="2" Content="✕" Command="{Binding $parent[ItemsControl].DataContext.RemoveLinkCommand}"
                             CommandParameter="{Binding}" Padding="8,4"/>
                   </Grid>
