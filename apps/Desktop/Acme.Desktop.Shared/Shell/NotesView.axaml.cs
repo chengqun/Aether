@@ -341,6 +341,12 @@ public partial class NotesView : UserControl
         if (_vm?.SelectedNode is { } node)
             node.Content = CodeEditor.Text ?? "";
         _vm?.MarkDirty(); // 启动延迟自动保存
+        // 知识对象：下栏源码改了 body → 实时 reparse 同步到编辑器 VM，刷新 markdown 渲染
+        if (_vm?.IsKnowledgeNode == true && _vm.ActiveEditVm is KnowledgeEditViewModel kevm)
+        {
+            var (redef, _) = _vm.TryParseKnowledge(CodeEditor.Text ?? "");
+            if (redef is not null) kevm.SyncBody(redef.Body);
+        }
         UpdateFoldings();
     }
 

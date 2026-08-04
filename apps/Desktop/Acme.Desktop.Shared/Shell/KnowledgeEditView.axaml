@@ -59,10 +59,8 @@
           </StackPanel>
         </Expander>
 
-        <Expander Header="正文（markdown 渲染）" IsExpanded="True">
-          <ctl:SelectableMarkdownViewer Markdown="{Binding Body}" MarkdownStyleName="GithubLike"
-                                        MinHeight="200"/>
-        </Expander>
+        <ctl:SelectableMarkdownViewer Markdown="{Binding Body}" MarkdownStyleName="GithubLike"
+                                      MinHeight="200" Margin="0,2"/>
 
       </StackPanel>
     </ScrollViewer>

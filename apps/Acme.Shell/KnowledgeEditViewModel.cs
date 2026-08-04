@@ -47,6 +47,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
     private Timer? _saveTimer;
     private bool _loading = true;
+    private bool _syncing;
 
     public Guid Id { get; }
 
@@ -98,7 +99,15 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanSave)); ScheduleSave(); }
     partial void OnKindChanged(string value) => ScheduleSave();
-    partial void OnBodyChanged(string value) => ScheduleSave();
+    partial void OnBodyChanged(string value) { if (!_syncing) ScheduleSave(); }
+
+    /// <summary>从下栏源码同步 body 到本 VM（渲染实时刷新）；_syncing 期间不触发自动保存（下栏已自行存库）。</summary>
+    public void SyncBody(string body)
+    {
+        _syncing = true;
+        try { Body = body; }
+        finally { _syncing = false; }
+    }
 
     [ObservableProperty] private string? _error;
     public bool HasError => !string.IsNullOrEmpty(Error);
