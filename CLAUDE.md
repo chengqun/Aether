@@ -184,13 +184,13 @@ Agent 有三种扩展机制 + 跨会话长期记忆，全部在专家编辑器�
   - `NoteTool.CreateNote` **没有 nodeType 参数**——AI 工具建不了 Knowledge 节点（只能建 `Note`）。Knowledge 节点只能经 UI 新建、直接写库、或走 agent-catalog 那种 `NoteService.CreateAsync(NodeType=...)` 直调模式。
   - link 靠标题解析时**标题必须唯一**；在 UI 里打开流程节点并保存一次，`KnowledgeEditViewModel.Build()` 会把标题解析成 `TargetId` 落库，之后改名/同名也按 id 精确命中。
   - `FormatAsync` 内联子笔记的 front-matter（含其 links），有轻微噪音但无害；清反向边后已最小化。
-- **落地实例：情报分析微型知识图谱**（Qifu `notes.db`，挂「智能体 > 知识对象」下；源文件 `~/Desktop/knowledge-objects/*.yaml`）。5 节点：
+- **落地实例：情报分析微型知识图谱**（源文件 `~/Desktop/knowledge-objects/*.yaml`，5 节点设计）。**注意：源文件设计完整但尚未导入 notes.db**——Qifu 库内「智能体 > 知识对象」folder 当前为空（`node_type=3` 节点数 = 0）；`KnowledgeTool`/`KnowledgeSourceParser` 代码已实现，但无 KO 数据可读，需先把 5 个 yaml 写成 Knowledge 节点（`NoteService.CreateAsync(NodeType=Knowledge)` 或直接写库）才能被 `read`。5 节点设计：
   - `研判流程` [流程] `uses→情报分析表` `uses→单条情报研判规则` `then→内部异常检测规则` `uses→应用安装明细验证表`
   - `单条情报研判规则` [规则] `applies-to→情报分析表` `produces→内部异常检测规则`
   - `内部异常检测规则` [规则] `applies-to→应用安装明细验证表`
   - `情报分析表` [数据源] `links: []`（`ods.prd_fkai_ai_news_category_app` schema + 取数 SQL）
   - `应用安装明细验证表` [数据源] `links: []`（`dp_data_db.chengqun_app_detail` schema + 回表 SQL）
-  - agent `read('研判流程')` → 把 4 篇 link 内联 → 等价于原来那段单体情报研判 prompt（取数 + 单条研判 + 风险 app 提取 + 回表 + 内部异常检测）。这是知识对象机制的首个落地用例，可作新场景拆解的模板。
+  - 导入后 agent `read('研判流程')` → 把 4 篇 link 内联 → 等价于原来那段单体情报研判 prompt（取数 + 单条研判 + 风险 app 提取 + 回表 + 内部异常检测）。可作新场景拆解的模板。
 
 ### Chat streaming surface (reasoning / approval / plan / mode / ask_user)
 
