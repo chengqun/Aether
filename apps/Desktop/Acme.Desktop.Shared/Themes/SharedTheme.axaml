@@ -267,4 +267,32 @@
     <Setter Property="MonospaceFontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Courier New,monospace"/>
   </Style>
 
+  <!-- Markdown.Avalonia (GithubLike 主题) 视觉增强：统一 #00A2ED 品牌色。
+       代码块圆角 + 品牌色左竖条，引用块品牌色竖线 + 浅底，链接/行内代码品牌色。
+       selector 取自 MarkdownStyleGithubLike 主题（Border.CodeBlock/Border.Blockquote/cb|CCode/cb|CHyperlink 等），
+       应用级样式覆盖控件级主题（同 TextBlock.CodeBlock 字体 fallback 机制）。 -->
+  <Style Selector="Border.CodeBlock">
+    <Setter Property="Background" Value="#F6F8FA"/>
+    <Setter Property="BorderBrush" Value="#00A2ED"/>
+    <Setter Property="BorderThickness" Value="4,0,0,0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="16,10"/>
+  </Style>
+  <Style Selector="TextBlock.CodeBlock">
+    <Setter Property="Foreground" Value="#1F2328"/>
+  </Style>
+  <Style Selector="cb|CCode">
+    <Setter Property="Foreground" Value="#0B6FB8"/>
+    <Setter Property="Background" Value="#E5F4FC"/>
+  </Style>
+  <Style Selector="Border.Blockquote">
+    <Setter Property="BorderBrush" Value="#00A2ED"/>
+    <Setter Property="BorderThickness" Value="4,0,0,0"/>
+    <Setter Property="Background" Value="#F6F8FA"/>
+    <Setter Property="CornerRadius" Value="0,6,6,0"/>
+  </Style>
+  <Style Selector="cb|CHyperlink">
+    <Setter Property="Foreground" Value="#00A2ED"/>
+  </Style>
+
 </Styles>
