@@ -75,7 +75,7 @@ KnowledgeObjectDefinition
 
 代码已实现：`KnowledgeSourceParser`（解析）+ `KnowledgeTool`（`ListKnowledgeObjects` / `ReadKnowledgeObject` / `CreateKnowledgeObject` / `UpdateKnowledgeObject`）。AI 现在能在对话里创建、读取、更新知识对象，无需手拼 YAML。notes.db 当前无 KO 数据——可通过对话让 AI 创建，或手写/直写库导入 `~/Desktop/knowledge-objects/*.yaml`。
 
-### 迭代闭环（与编程类比）
+### 迭代闭环（与控制工程 / AI 编程同构）
 
 知识对象的创建-读取-执行-调整构成一个闭环，结构与 edit-compile-run 同构：
 
@@ -92,21 +92,38 @@ KnowledgeObjectDefinition
     └─ 否 → 完成
 ```
 
-与编程的类比：
+三者同构——都是自适应反馈控制系统：
 
-| 编程 | 知识对象 |
-|---|---|
-| 源代码文件 | 知识对象节点（front-matter + body）|
-| 编写代码 | `CreateKnowledgeObject` |
-| 加载/编译源码 | `ReadKnowledgeObject`（内联 links 进上下文）|
-| 运行程序（解释器调度库调用）| agent 按知识对象调度 tools/skills 执行 |
-| 修代码重新跑 | `UpdateKnowledgeObject` |
-| 代码库 | notes.db 的知识对象集合 |
-| 模块依赖（import）| typed links（uses/then/applies-to）|
+| 控制工程 | AI 编程 | 知识对象闭环 |
+|---|---|---|
+| 设定值 r(t) | 用户意图（需求/bug）| 知识对象声明的期望（输出格式/规则）|
+| 被控对象 | 代码 + 编译/测试/运行 | agent + tools/skills 执行业务 |
+| 传感器 | 编译器 / 测试 / lint | 业务结果校验（当前缺，靠人当）|
+| 输出 y(t) | 程序行为 / 测试结果 | 业务执行结果 |
+| 误差 e=r−y | 编译错 / 测试失败 / 行为偏差 | 结果 vs 期望偏差 |
+| 控制器 | AI（读误差改代码）| AI（读误差改 KO）|
+| 控制量 | 代码修改 | `UpdateKnowledgeObject` |
+| 前馈补偿 | 类型系统 / lint 规则 | KO body 硬约束（禁止查其它表等）|
+| 自适应 | AI 调整改码策略 | AI 调 KO（控制器参数自演化）|
+| 模块依赖 | import | typed links（uses/then/applies-to）|
 
-运行机制：知识对象（规格）经 `ReadKnowledgeObject` 加载进上下文后，agent 按其**编排调度 tools 和 skills** 完成执行——`tools`（SQL 查询/shell/文件/云文档等）和 `skills`（prompt + Python 脚本）做实际动作，返回真实数据与结果。确定性在 tool/skill 执行本身（SQL 查什么得什么、脚本跑什么得什么），不确定性在 LLM 的调度决策（按规格选哪个 tool、填什么参数）。所以不是"纯提示词空转"——是**自然语言规格驱动的 tool 编排**，类比解释型语言：知识对象=程序规格+调度逻辑，tools/skills=标准库/系统调用，LLM=解释器。
+控制框图：
 
-当前闭环里"验证"环节靠人看执行结果判断；要全自动闭环，还需 agent 执行后自动校验结果、反馈调整知识对象。
+```
+设定值(期望) ──→ ⊕ ──→ [AI 控制器] ──→ [改KO/改代码] ──→ [执行] ─┬─→ 输出
+                ↑(-)                                                 │
+                └────────── [传感器/校验] ←─────────────────────────┘
+```
+
+关键洞察——**传感器质量决定闭环稳定性**：
+- AI 编程闭环稳，是因为传感器（编译器/测试）**确定性、自动、精确**，误差信号干净。
+- 知识对象闭环当前难稳，是因为传感器（业务结果校验）**不自动、不精确**——靠人看，或 AI 自评（自评=控制器自当传感器，正反馈易发散）。
+- 控制工程警示同样适用：AI 闭环会震荡（两个错误间反复改）、不收敛（越改越乱）、过冲（一次改太猛）。需收敛判据（连续 N 次无改进则停/回退）+ 步长限制 + 版本回退。
+- 所以补"自动校验"= 给业务闭环装一个像编译器/测试那样的**业务传感器**——在 KO 里声明输出契约/校验规则，执行后自动比对，不符即误差反馈调 KO。这是把业务闭环推向 AI 编程级可靠性的关键。
+
+运行机制：知识对象（规格）经 `ReadKnowledgeObject` 加载进上下文后，agent 按其**编排调度 tools 和 skills** 完成执行——tools（SQL 查询/shell/文件/云文档等）和 skills（prompt + Python 脚本）做实际动作，返回真实数据与结果。确定性在 tool/skill 执行本身，不确定性在 LLM 的调度决策。所以不是"纯提示词空转"——是**自然语言规格驱动的 tool 编排**，类比解释型语言：知识对象=程序规格+调度逻辑，tools/skills=标准库/系统调用，LLM=解释器。
+
+当前闭环"验证"环节靠人当传感器；要全自动闭环，需在 KO 里声明输出契约 + 执行后自动校验，形成自动反馈控制。
 
 ## 运行时
 
