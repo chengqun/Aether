@@ -23,9 +23,13 @@ public class CtpBar : BaseData
 
     public override DateTime EndTime { get; set; }
 
-    /// <summary>回测：返回预取的本地 CSV 路径（LeanBacktestRunner 按 symbol 写入 LEAN Config）。实盘不调用。</summary>
+    /// <summary>回测：返回预取的本地 CSV 路径。实盘：返回 Streaming medium，让 Lean ShouldStreamSubscription=true
+    /// → 走 data-queue-handler.Subscribe（CtpBrokerage），而非 DataProvider 读文件。</summary>
     public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
     {
+        if (isLiveMode)
+            return new SubscriptionDataSource(string.Empty, SubscriptionTransportMedium.Streaming);
+
         var key = $"local-data-file:{config.Symbol.Value}";
         var path = Config.Get(key);
         if (string.IsNullOrWhiteSpace(path))

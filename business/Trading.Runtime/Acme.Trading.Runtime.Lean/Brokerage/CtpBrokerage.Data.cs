@@ -59,8 +59,8 @@ public partial class CtpBrokerage
     private void OnTickReceived(object? sender, CtpTick tick)
     {
         if (_aggregator == null) return;
-        if (!_symbolByInstrument.TryGetValue(tick.InstrumentId, out var symbol)) return;   // 未订阅的合约（CtpView 全主力里非本算法订阅的）
-        LogTickSample(tick);   // 只记已订阅合约的 tick，避免全量行情日志噪音
+        LogTickSample(tick);   // 先记所有 tick（过滤前），证明 CtpBrokerage 收到 CTP 数据
+        if (!_symbolByInstrument.TryGetValue(tick.InstrumentId, out var symbol)) return;   // 未订阅的合约过滤掉
         if (!_barBuilders.TryGetValue(symbol, out var builder)) return;
         try
         {
