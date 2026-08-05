@@ -80,7 +80,8 @@ public class TradingHostAlgorithm : QCAlgorithm
         if (LiveMode && TradingGateway.StopRequested) { Quit("用户停止"); return; }
 
         var bars = slice.Get<CtpBar>();
-        TradingGateway.Log($"[OnData] Bars count: {bars.Count}, IsWarmingUp: {IsWarmingUp}, Strategies count: {_strategies.Count}");
+        var verbose = TradingGateway.VerboseLog;
+        if (verbose) TradingGateway.Log($"[OnData] Bars count: {bars.Count}, IsWarmingUp: {IsWarmingUp}, Strategies count: {_strategies.Count}");
 
         if (IsWarmingUp) return;
 
@@ -88,39 +89,39 @@ public class TradingHostAlgorithm : QCAlgorithm
         {
             if (!bars.TryGetValue(symbol, out var bar))
             {
-                TradingGateway.Log($"[OnData] Warning: No bar found for symbol {symbol.Value}");
+                if (verbose) TradingGateway.Log($"[OnData] Warning: No bar found for symbol {symbol.Value}");
                 continue;
             }
 
             var n = ++_barSeen;
-            if (n <= 5 || n % 200 == 0)
+            if (verbose && (n <= 5 || n % 200 == 0))
                 TradingGateway.Log($"[Bar] {symbol.Value} o={bar.Open} h={bar.High} l={bar.Low} c={bar.Close} v={bar.Volume} {bar.Time:yyyy-MM-dd HH:mm} (#{n})");
 
             var marketBar = MarketBarMapper.FromCtpBar(bar);
             var signal = strategy.EvaluateSignal(marketBar);
 
-            TradingGateway.Log($"[Signal] {symbol.Value} Signal={signal}, CurrentInvested={_invested[symbol]}, BarCount={n}");
+            if (verbose) TradingGateway.Log($"[Signal] {symbol.Value} Signal={signal}, CurrentInvested={_invested[symbol]}, BarCount={n}");
 
             switch (signal)
             {
                 case SignalDirection.Long when !_invested[symbol]:
                     SetHoldings(symbol, _targetPercent);
                     _invested[symbol] = true;
-                    TradingGateway.Log($"[Signal] {symbol.Value} 做多 @ {bar.Close} ({bar.Time:yyyy-MM-dd HH:mm})");
+                    TradingGateway.Log($"[交易] {symbol.Value} 做多 @ {bar.Close} ({bar.Time:yyyy-MM-dd HH:mm})");
                     break;
                 case SignalDirection.Flat when _invested[symbol]:
                     Liquidate(symbol);
                     _invested[symbol] = false;
-                    TradingGateway.Log($"[Signal] {symbol.Value} 平仓 @ {bar.Close} ({bar.Time:yyyy-MM-dd HH:mm})");
+                    TradingGateway.Log($"[交易] {symbol.Value} 平仓 @ {bar.Close} ({bar.Time:yyyy-MM-dd HH:mm})");
                     break;
                 case SignalDirection.Long when _invested[symbol]:
-                    TradingGateway.Log($"[Signal] {symbol.Value} 已持仓，忽略做多信号");
+                    if (verbose) TradingGateway.Log($"[Signal] {symbol.Value} 已持仓，忽略做多信号");
                     break;
                 case SignalDirection.Flat when !_invested[symbol]:
-                    TradingGateway.Log($"[Signal] {symbol.Value} 未持仓，忽略平仓信号");
+                    if (verbose) TradingGateway.Log($"[Signal] {symbol.Value} 未持仓，忽略平仓信号");
                     break;
                 case SignalDirection.Hold:
-                    TradingGateway.Log($"[Signal] {symbol.Value} 持有不动");
+                    if (verbose) TradingGateway.Log($"[Signal] {symbol.Value} 持有不动");
                     break;
             }
         }

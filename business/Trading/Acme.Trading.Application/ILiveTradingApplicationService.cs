@@ -15,6 +15,9 @@ public sealed class LiveTradingRunInput
     public int SlowPeriod { get; set; } = 30;
     public BarResolution Resolution { get; set; } = BarResolution.Minute;
     public MarketDataConnectInput? MarketDataConnect { get; set; }
+
+    /// <summary>详细日志（true=输出 OnData/Bar/Hold 等调试日志；false=只输出交易信号）。默认 false 减少开销。</summary>
+    public bool VerboseLog { get; set; }
 }
 
 /// <summary>

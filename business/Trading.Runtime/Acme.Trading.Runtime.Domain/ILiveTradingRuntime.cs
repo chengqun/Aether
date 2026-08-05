@@ -41,6 +41,9 @@ public sealed class LiveTradingRuntimeRequest
 
     /// <summary>CTP 行情前置连接参数（独立于交易登录）。</summary>
     public MarketDataConnectInput? MarketDataConnect { get; set; }
+
+    /// <summary>详细日志（true=输出 OnData/Bar/Hold 等调试日志；false=只输出交易信号）。默认 false。</summary>
+    public bool VerboseLog { get; set; }
 }
 
 /// <summary>

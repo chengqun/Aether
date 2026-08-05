@@ -182,7 +182,7 @@
                            VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
               </DockPanel>
 
-              <Grid ColumnDefinitions="Auto,*,Auto,140,Auto,140" RowDefinitions="Auto" Margin="0,2,0,0">
+              <Grid ColumnDefinitions="Auto,*,Auto,140,Auto,140,Auto" RowDefinitions="Auto" Margin="0,2,0,0">
                 <TextBlock Grid.Column="0" Text="合约(逗号分隔)" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" />
                 <TextBox Grid.Column="1" Text="{Binding LiveInstruments}" Margin="0,0,12,0" />
@@ -192,6 +192,7 @@
                 <TextBlock Grid.Column="4" Text="策略" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}" Margin="12,0,8,0" />
                 <ComboBox Grid.Column="5" ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding LiveStrategy}" HorizontalAlignment="Stretch" />
+                <CheckBox Grid.Column="6" Content="详细日志" IsChecked="{Binding VerboseLog}" VerticalAlignment="Center" FontSize="11" Margin="12,0,0,0" />
               </Grid>
             </StackPanel>
           </Border>

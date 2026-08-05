@@ -12,6 +12,7 @@ public static class TradingGateway
 
     /// <summary>停止标志——实盘算法 OnData 检测后调 Quit() 退出引擎。回测不检查（LiveMode=false）。</summary>
     public static volatile bool StopRequested;
+    public static volatile bool VerboseLog;
 
     public static void Log(string message)
     {
@@ -23,5 +24,6 @@ public static class TradingGateway
     {
         LogSink = null;
         StopRequested = false;
+        VerboseLog = false;
     }
 }

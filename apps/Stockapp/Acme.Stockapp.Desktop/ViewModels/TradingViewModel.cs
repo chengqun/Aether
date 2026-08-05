@@ -162,6 +162,7 @@ public partial class TradingViewModel : ObservableObject
 
     [ObservableProperty] private string _liveInstruments = "ag2610";
     [ObservableProperty] private string _liveResolution = "Minute";
+    [ObservableProperty] private bool _verboseLog;
     [ObservableProperty] private string _liveStrategy = "";
     [ObservableProperty] private string _liveStatusText = "未启动";
     [ObservableProperty] private bool _isLiveRunning;
@@ -226,6 +227,7 @@ public partial class TradingViewModel : ObservableObject
             FastPeriod = 10,
             SlowPeriod = 30,
             Resolution = ParseResolution(LiveResolution),
+            VerboseLog = VerboseLog,
             MarketDataConnect = new MarketDataConnectInput
             {
                 MdFrontAddress = Connector.MdFrontAddress,

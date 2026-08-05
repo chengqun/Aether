@@ -66,6 +66,7 @@ public sealed class LiveTradingApplicationService : ILiveTradingApplicationServi
             SlowPeriod = input.SlowPeriod,
             Resolution = input.Resolution,
             MarketDataConnect = input.MarketDataConnect,
+            VerboseLog = input.VerboseLog,
         };
         return _runtime.StartAsync(request, ct);
     }
