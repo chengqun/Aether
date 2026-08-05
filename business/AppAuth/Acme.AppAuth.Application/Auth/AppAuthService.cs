@@ -30,6 +30,14 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     }
 
     /// <inheritdoc/>
+    public void ConfigureBaseUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        _options.BaseUrl = url;
+        _http.BaseAddress = new Uri(url);
+    }
+
+    /// <inheritdoc/>
     public async Task<LoginResult> LoginAsync(string username, string password, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))

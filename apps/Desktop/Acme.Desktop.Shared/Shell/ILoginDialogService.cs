@@ -12,8 +12,13 @@ namespace Acme.Desktop.Shared.Shell;
 public sealed class LoginDialogService : ILoginDialogService
 {
     private readonly IAppAuthService _auth;
+    private readonly IPreferencesStore _preferences;
 
-    public LoginDialogService(IAppAuthService auth) => _auth = auth;
+    public LoginDialogService(IAppAuthService auth, IPreferencesStore preferences)
+    {
+        _auth = auth;
+        _preferences = preferences;
+    }
 
     public async Task<bool> ShowLoginAsync()
     {
@@ -23,7 +28,7 @@ public sealed class LoginDialogService : ILoginDialogService
             return false;
         }
 
-        var vm = new LoginViewModel(_auth);
+        var vm = new LoginViewModel(_auth, _preferences);
         var window = new LoginWindow { DataContext = vm };
         vm.LoggedIn += window.Close;
         await window.ShowDialog(desktop.MainWindow);

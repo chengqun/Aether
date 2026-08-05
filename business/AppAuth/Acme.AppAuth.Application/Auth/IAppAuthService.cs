@@ -20,4 +20,7 @@ public interface IAppAuthService
     Task<bool> RefreshAsync(CancellationToken ct = default);
     Task LogoutAsync(CancellationToken ct = default);
     Task<bool> IsLoggedInAsync(CancellationToken ct = default);
+
+    /// <summary>运行时设置服务器地址（登录窗口配置，设置 HttpClient.BaseAddress + AppServerOptions.BaseUrl）。</summary>
+    void ConfigureBaseUrl(string url);
 }

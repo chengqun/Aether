@@ -77,7 +77,9 @@ public static class DesktopCompositionExtensions
         // —— 公共业务上下文（两租户共用）——
         services.AddAppAuthInfrastructure(o =>
         {
-            o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL") ?? string.Empty;
+            // 优先级：env APP_BASEURL → preferences.json app.serverUrl → 空（登录窗口让用户填）
+            o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL")
+                ?? ReadSavedServerUrl(tenantDir);
             o.ClientId = Environment.GetEnvironmentVariable("APP_CLIENT_ID") ?? "alphaagent_chat";
             o.ClientSecret = Environment.GetEnvironmentVariable("APP_CLIENT_SECRET") ?? "chat_secret";
             o.Scope = "Abp alphaagent_chat";   // 必须带 Abp 受众，否则签发的 token 无 API 受众 → invalid_token
@@ -156,6 +158,20 @@ public static class DesktopCompositionExtensions
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
+    }
+
+    /// <summary>从 preferences.json 读 app.serverUrl（DI 未构建，不能注 IPreferencesStore）。</summary>
+    private static string? ReadSavedServerUrl(string tenantDir)
+    {
+        try
+        {
+            var prefsFile = Path.Combine(tenantDir, "preferences.json");
+            if (!File.Exists(prefsFile)) return null;
+            var json = File.ReadAllText(prefsFile);
+            var match = System.Text.RegularExpressions.Regex.Match(json, @"""app\.serverUrl""\s*:\s*""([^""]+)""");
+            return match.Success ? match.Groups[1].Value : null;
+        }
+        catch { return null; }
     }
 }
 
