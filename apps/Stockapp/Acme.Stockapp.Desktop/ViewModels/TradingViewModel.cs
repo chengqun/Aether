@@ -22,20 +22,32 @@ public partial class TradingViewModel : ObservableObject
     private readonly IBacktestApplicationService _backtest;
     private readonly ILiveTradingApplicationService _live;
     private readonly IStrategyScriptingService _scripting;
+    private readonly IPreferencesStore _preferences;
     public CtpConnectorViewModel Connector { get; }
 
-    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector, IStrategyScriptingService scripting)
+    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector, IStrategyScriptingService scripting, IPreferencesStore preferences)
     {
         _backtest = backtest;
         _live = live;
         Connector = connector;
         _scripting = scripting;
+        _preferences = preferences;
 
         _live.StatusChanged += OnLiveStatusChanged;
         _live.LogReceived += OnLiveLogReceived;
         // 策略脚本加载完成（启动 + NotesChanged 重加载后）→ 刷新策略选择器，无需重启即可看到新策略
         _scripting.StrategiesLoaded += () => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(StrategyOptions)));
+
+        // 恢复上次选中的策略（JsonPreferencesStore.GetAsync 同步完成，GetAwaiter().GetResult() 不死锁）
+        _strategyName = _preferences.GetAsync("trading.backtestStrategy").GetAwaiter().GetResult() ?? "";
+        _liveStrategy = _preferences.GetAsync("trading.liveStrategy").GetAwaiter().GetResult() ?? "";
     }
+
+    partial void OnStrategyNameChanged(string value)
+        => _preferences.SetAsync("trading.backtestStrategy", value).SafeFireAndForget();
+
+    partial void OnLiveStrategyChanged(string value)
+        => _preferences.SetAsync("trading.liveStrategy", value).SafeFireAndForget();
 
     // ═══ 回测 ═══
 
@@ -150,7 +162,7 @@ public partial class TradingViewModel : ObservableObject
 
     [ObservableProperty] private string _liveInstruments = "ag2610";
     [ObservableProperty] private string _liveResolution = "Minute";
-    [ObservableProperty] private string _liveStrategy = "SmaCross";
+    [ObservableProperty] private string _liveStrategy = "";
     [ObservableProperty] private string _liveStatusText = "未启动";
     [ObservableProperty] private bool _isLiveRunning;
     [ObservableProperty] private string _liveLog = "";
