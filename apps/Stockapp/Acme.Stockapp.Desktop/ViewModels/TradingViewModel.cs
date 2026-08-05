@@ -36,8 +36,12 @@ public partial class TradingViewModel : ObservableObject
 
         _live.StatusChanged += OnLiveStatusChanged;
         _live.LogReceived += OnLiveLogReceived;
-        // 策略脚本加载完成（启动 + NotesChanged 重加载后）→ 刷新策略选择器，无需重启即可看到新策略
-        _scripting.StrategiesLoaded += () => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(StrategyOptions)));
+        // 策略脚本加载完成（启动 + NotesChanged 重加载后）→ 刷新策略选择器 + 重新加载参数
+        _scripting.StrategiesLoaded += () => Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(StrategyOptions));
+            LoadStrategyParameters(IsLiveMode ? LiveStrategy : StrategyName);
+        });
 
         // 恢复上次选中的策略（JsonPreferencesStore.GetAsync 同步完成，GetAwaiter().GetResult() 不死锁）
         _strategyName = _preferences.GetAsync("trading.backtestStrategy").GetAwaiter().GetResult() ?? "";
