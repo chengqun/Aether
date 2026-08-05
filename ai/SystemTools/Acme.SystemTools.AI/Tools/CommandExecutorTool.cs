@@ -19,7 +19,7 @@ public class CommandExecutorTool
         public string? Error { get; set; }
     }
 
-    [Description("执行命令行命令")]
+    [Description("执行程序（直接进程，无 shell；适合单条命令，不支持管道/重定向。需管道用 ExecuteShellCommand）")]
     public async Task<Output> ExecuteCommand([Description("要执行的命令")] string command, [Description("命令参数")] string? arguments = null, [Description("工作目录")] string? workingDirectory = null, [Description("超时时间（毫秒）")] int? timeoutMs = null, CancellationToken cancellationToken = default)
     {
         try

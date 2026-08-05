@@ -49,6 +49,7 @@ Every **tool adapter** is the same shape (mirror `ai/Ctp`):
 - `AddXxxTools(this AetherAIBuilder)` registers tools ONLY — there is **no** `AddXxx(modelId)` agent method. Agents are built dynamically by the host/page from the shared tool pool. `ToolNames[]` + `CreateTool<T>` helper using `AIFunctionFactory.Create`.
 - Tool classes live in `Tools/`, namespace `Acme.<Context>.AI.Tools`. Tools call Application contracts, never Domain/Infrastructure.
 - `AddXxxTools` registers TOOLS ONLY — the host composition root wires business layers.
+- **例外：`ai/Quotes/Acme.Quotes.AI`** 是跨上下文工具适配器——引 `Securities.Application`（`SecurityQueryTool` 用 `ISecurityService` 查证券）+ 在 `AddQuotesTools` 注册 `ISecurityLookup` ACL 适配器（`SecurityLookupAdapter` 桥接 `ISecurityManager`→`ISecurityLookup`，让 Quotes 不直接依赖 Securities）。因 Quotes 工具需 Securities 数据，ACL 桥接是设计决策。`ai/Trading/Acme.Trading.AI` 引 `Trading.Scripting`（`CreateStrategyTool` 用 `StrategyScriptCompiler` 即时编译验证）——同理例外。
 
 The **bridge adapter** `ai/Agents/Acme.Agents.AI` is a different shape:
 - References `Aether.AI.Hosting` + `Acme.Notes.Application` (custom agents persisted as Notes) + `Acme.AppAuth.Application` (for `IAppServerHttpClient`, marketplace client).

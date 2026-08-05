@@ -135,7 +135,7 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
     {
         try
         {
-            var acc = _session.QueryAccountAsync().GetAwaiter().GetResult();
+            var acc = Task.Run(() => _session.QueryAccountAsync()).GetAwaiter().GetResult();
             // P1: CNY 金额按 USD 标签上报（见 AccountBaseCurrency 注释），避免换汇路径缺失
             return new List<CashAmount> { new((decimal)acc.Balance, "USD") };
         }
@@ -156,7 +156,7 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
         var connect = CtpLeanGateway.MarketDataConnect
             ?? throw new InvalidOperationException("行情前置连接参数未注入（CtpLeanGateway.MarketDataConnect 为空）");
         var instruments = CtpLeanGateway.Instruments;
-        _session.SubscribeMarketDataAsync(connect, instruments).GetAwaiter().GetResult();
+        Task.Run(() => _session.SubscribeMarketDataAsync(connect, instruments)).GetAwaiter().GetResult();
         _ctpMdSubscribed = true;
         CtpLeanGateway.Log($"[Brokerage] 已订阅 CTP 行情: {string.Join(",", instruments)}");
     }

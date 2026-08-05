@@ -574,7 +574,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         OnPropertyChanged(nameof(IsRecentEmptyVisible));
         OnPropertyChanged(nameof(RecentCaret));
-        _ = _preferences.SetAsync("recentExpanded", value ? "1" : "0");
+        _preferences.SetAsync("recentExpanded", value ? "1" : "0").SafeFireAndForget();
+
     }
 
     partial void OnHasConversationsChanged(bool value) => OnPropertyChanged(nameof(IsRecentEmptyVisible));
@@ -902,7 +903,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 if (_serviceProvider.GetService<IMcpManagementService>() is { } mgmt)
                 {
                     await mgmt.EnsureStartedAsync();
-                    _ = mgmt.StartHealthMonitoringAsync(TimeSpan.FromMinutes(2)); // 每 2 分钟探活，掉线自动重连
+                    mgmt.StartHealthMonitoringAsync(TimeSpan.FromMinutes(2)).SafeFireAndForget(); // 每 2 分钟探活，掉线自动重连
                 }
             }
             catch { /* MCP 启动失败不阻断主流程 */ }
@@ -987,7 +988,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         if (_isInitializing) return;
         if (value is not null)
         {
-            _ = _preferences.SetAsync("selectedLlmId", value.Id.ToString());
+            _preferences.SetAsync("selectedLlmId", value.Id.ToString()).SafeFireAndForget();
+
             // 更新 LLM holder + invalidate 所有缓存的 agent → 下轮 run 用新 LLM 重建
             if (_serviceProvider.GetService<Aether.AI.Harness.SelectedLlmHolder>() is { } holder)
             {
@@ -1040,9 +1042,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         if (_isInitializing) return;
         if (value is ExpertItem expert)
         {
-            _ = _preferences.SetAsync("selectedAgentId", expert.Id.ToString());
+            _preferences.SetAsync("selectedAgentId", expert.Id.ToString()).SafeFireAndForget();
+
         }
-        _ = RefreshModeAsync();
+        RefreshModeAsync().SafeFireAndForget();
+
     }
 
     partial void OnSelectedModeChanged(string? value)
@@ -1052,7 +1056,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         if (_syncingMode || _isInitializing || value is null || !HasModeSupport) return;
         // 已存在会话：立即 SetMode；新会话：不改，由 run delegate 的 desiredMode 在首轮应用。
         if (_currentConversationId != Guid.Empty)
-            _ = SetModeOnSessionAsync(value);
+            SetModeOnSessionAsync(value).SafeFireAndForget();
+
     }
 
     /// <summary>是否在规划模式（ToggleButton 绑定用）。设值切换 plan/execute。</summary>
@@ -1218,7 +1223,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await PersistTurnAsync(content, runItems, fullText.ToString());
             await RefreshModeAsync();
             if (justCreated)
-                _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
+                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
+
             return;
         }
 
@@ -1270,7 +1276,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
-                _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
+                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
+
             return;
         }
 
