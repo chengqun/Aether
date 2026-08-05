@@ -12,6 +12,10 @@ public class CapturingBacktestResultHandler : BacktestingResultHandler
     /// <summary>最近一次运行时/错误消息（RuntimeError 优先，其次 ErrorMessage）。</summary>
     public string? LastError { get; private set; }
 
+    /// <summary>跳过 ResultsAnalyzer（它硬编码 SPY benchmark，本地无 SPY 数据会 .First() on empty 崩）。
+    /// equity curve 仍从 Charts 取（MapEquityCurve），统计仍从 GenerateStatisticsResults 取，不受影响。</summary>
+    public void DisableResultsAnalysis() => RunResultsAnalysis = false;
+
     public override void RuntimeError(string message, string stacktrace = "")
     {
         LastError = message;

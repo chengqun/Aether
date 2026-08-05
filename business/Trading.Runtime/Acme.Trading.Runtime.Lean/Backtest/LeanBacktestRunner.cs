@@ -103,6 +103,9 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
         systemHandlers.LeanManager.Initialize(systemHandlers, algorithmHandlers, job, algorithmManager);
 
         var resultHandler = algorithmHandlers.Results as CapturingBacktestResultHandler;
+        // 跳过 ResultsAnalyzer：它硬编码 SPY benchmark，本地 data-folder 的 SPY 数据不覆盖回测日期
+        // → History(SPY) 空 → benchmarkSeries.First() on empty 崩。跳过后 equity curve 仍从 Charts 取。
+        resultHandler?.DisableResultsAnalysis();
         string? error = null;
         AlgorithmStatus status = AlgorithmStatus.RuntimeError;
         try
