@@ -220,6 +220,10 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
 
         Config.Set("environment", "backtesting");
         Config.Set("live-mode", "false");   // 覆盖实盘残留的 live-mode=true，否则 JobQueue 产 LiveNodePacket 而非 BacktestNodePacket
+        // 清除实盘残留的 live 专属 Config（同进程全局静态 Config 共享，实盘跑后残留）
+        Config.Set("live-mode-brokerage", "");
+        Config.Set("data-queue-handler", "");
+        Config.Set("data-feed-handler", "QuantConnect.Lean.Engine.DataFeeds.FileSystemDataFeed");
         // object-store-root 必须设绝对可写路径：LEAN 默认 "./storage" 按进程 cwd 解析，双击启动 cwd="/" 会解析成只读 /storage 崩。
         Config.Set("object-store-root", Path.Combine(resultsDir, "storage"));
         // 通用宿主：algorithm-type-name 恒为 TradingHostAlgorithm（回测/实盘共用，常量无跨 run 泄漏）。
