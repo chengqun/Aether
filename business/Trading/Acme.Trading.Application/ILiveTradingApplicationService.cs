@@ -13,6 +13,8 @@ public sealed class LiveTradingRunInput
     public decimal InitialCash { get; set; } = 1_000_000m;
     public int FastPeriod { get; set; } = 10;
     public int SlowPeriod { get; set; } = 30;
+    /// <summary>策略参数（键值对，透传给策略 Initialize）。优先于 FastPeriod/SlowPeriod。</summary>
+    public Dictionary<string, string>? StrategyParameters { get; set; }
     public BarResolution Resolution { get; set; } = BarResolution.Minute;
     public MarketDataConnectInput? MarketDataConnect { get; set; }
 

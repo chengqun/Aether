@@ -23,19 +23,7 @@ public partial class TradingView : UserControl
 
     private void OnLoaded(object? sender, EventArgs e)
     {
-        // 回测配置已改为弹窗，不再需要布局持久化
-    }
-
-    /// <summary>弹出回测配置窗口，配置 + 运行回测。</summary>
-    private async void OnBacktestConfigClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is not TradingViewModel vm) return;
-        var owner = TopLevel.GetTopLevel(this) as Window;
-        var win = new BacktestConfigWindow(vm);
-        if (owner is not null)
-            await win.ShowDialog(owner);
-        else
-            win.Show();
+        // 回测配置在 TabControl 第一个 tab，不再需要弹窗/布局持久化
     }
 
     private static IPreferencesStore? Store => DesktopApp.Services.GetService<IPreferencesStore>();

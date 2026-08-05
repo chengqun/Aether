@@ -271,6 +271,11 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
             ["fast"] = request.FastPeriod.ToString(),
             ["slow"] = request.SlowPeriod.ToString(),
         };
+        // StrategyParameters（策略参数元数据）优先覆盖 fast/slow
+        if (request.StrategyParameters != null)
+            foreach (var kv in request.StrategyParameters)
+                parameters[kv.Key] = kv.Value;
+        Config.Set("parameters", JObject.FromObject(parameters));
         Config.Set("parameters", JObject.FromObject(parameters));
     }
 

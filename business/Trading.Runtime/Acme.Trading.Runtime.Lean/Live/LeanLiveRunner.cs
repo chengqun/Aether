@@ -122,6 +122,10 @@ internal sealed class LeanLiveRunner
             ["slow"] = request.SlowPeriod.ToString(),
             ["resolution"] = ResolutionToLeanString(request.Resolution),
         };
+        // StrategyParameters（策略参数元数据）优先覆盖 fast/slow
+        if (request.StrategyParameters != null)
+            foreach (var kv in request.StrategyParameters)
+                parameters[kv.Key] = kv.Value;
         Config.Set("parameters", JObject.FromObject(parameters));
     }
 

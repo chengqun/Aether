@@ -23,6 +23,9 @@ public readonly record struct MarketBar(
     decimal Close,
     decimal Volume);
 
+/// <summary>策略参数定义（UI 据此动态渲染输入框）。Key=参数键，Label=显示名，DefaultValue=默认值。</summary>
+public sealed record StrategyParameterDef(string Key, string Label, string DefaultValue);
+
 /// <summary>
 /// 策略参数（字符串键值，策略自行按需读取/类型转换）。从运行输入透传。
 /// 用字符串而非强类型，让新策略可不改契约加参数；策略在 Initialize 里解析。
@@ -59,4 +62,7 @@ public interface IStrategy
 
     /// <summary>评估当前 bar 的信号。每根 bar（含预热期）调一次，策略内部更新指标状态。</summary>
     SignalDirection EvaluateSignal(MarketBar bar);
+
+    /// <summary>策略参数定义（UI 据此动态渲染输入框）。默认空（无参数策略）。策略可选覆盖。</summary>
+    IReadOnlyList<StrategyParameterDef> ParameterDefinitions => Array.Empty<StrategyParameterDef>();
 }

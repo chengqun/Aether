@@ -28,6 +28,7 @@ public sealed class BacktestApplicationService : IBacktestApplicationService
             EndDate = input.EndDate,
             InitialCash = input.InitialCash,
             FastPeriod = input.FastPeriod,
+            StrategyParameters = input.StrategyParameters,
             SlowPeriod = input.SlowPeriod,
             Resolution = input.Resolution,
         };
@@ -63,6 +64,7 @@ public sealed class LiveTradingApplicationService : ILiveTradingApplicationServi
             StrategyName = input.StrategyName,
             InitialCash = input.InitialCash,
             FastPeriod = input.FastPeriod,
+            StrategyParameters = input.StrategyParameters,
             SlowPeriod = input.SlowPeriod,
             Resolution = input.Resolution,
             MarketDataConnect = input.MarketDataConnect,

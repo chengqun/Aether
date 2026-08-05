@@ -33,7 +33,8 @@ public sealed class LiveTradingRuntimeRequest
     /// <summary>初始资金（CNY）。实盘账户真实资金由 brokerage.GetCashBalance 查询覆盖。</summary>
     public decimal InitialCash { get; set; } = 1_000_000m;
 
-    public int FastPeriod { get; set; } = 10;
+    public int FastPeriod { get; set; } = 10; /// 保留兼容（StrategyParameters 优先）
+    public Dictionary<string, string>? StrategyParameters { get; set; }
     public int SlowPeriod { get; set; } = 30;
 
     /// <summary>K 线分辨率，默认 Minute（tick 聚合）。</summary>

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text;
 using Acme.Shell;
 using Acme.Trading.Application;
@@ -41,13 +42,44 @@ public partial class TradingViewModel : ObservableObject
         // 恢复上次选中的策略（JsonPreferencesStore.GetAsync 同步完成，GetAwaiter().GetResult() 不死锁）
         _strategyName = _preferences.GetAsync("trading.backtestStrategy").GetAwaiter().GetResult() ?? "";
         _liveStrategy = _preferences.GetAsync("trading.liveStrategy").GetAwaiter().GetResult() ?? "";
+        // 启动时加载当前策略的参数（构造函数设字段不触发 OnStrategyNameChanged，需显式调）
+        LoadStrategyParameters(IsLiveMode ? _liveStrategy : _strategyName);
     }
 
     partial void OnStrategyNameChanged(string value)
-        => _preferences.SetAsync("trading.backtestStrategy", value).SafeFireAndForget();
+    {
+        _preferences.SetAsync("trading.backtestStrategy", value).SafeFireAndForget();
+        if (!IsLiveMode) LoadStrategyParameters(value);
+    }
 
     partial void OnLiveStrategyChanged(string value)
-        => _preferences.SetAsync("trading.liveStrategy", value).SafeFireAndForget();
+    {
+        _preferences.SetAsync("trading.liveStrategy", value).SafeFireAndForget();
+        if (IsLiveMode) LoadStrategyParameters(value);
+    }
+
+    partial void OnIsLiveModeChanged(bool value)
+        => LoadStrategyParameters(value ? LiveStrategy : StrategyName);
+
+    /// <summary>从 StrategyRegistry 加载策略参数定义 → 填充 StrategyParameterRows。</summary>
+    private void LoadStrategyParameters(string? strategyName)
+    {
+        StrategyParameterRows.Clear();
+        if (string.IsNullOrWhiteSpace(strategyName)) { CurrentStrategyDescription = ""; return; }
+        CurrentStrategyDescription = $"当前策略：{strategyName}";
+        foreach (var def in StrategyRegistry.GetParameterDefinitions(strategyName))
+            StrategyParameterRows.Add(new StrategyParameterRow { Key = def.Key, Label = def.Label, Value = def.DefaultValue });
+    }
+
+    /// <summary>从 StrategyParameterRows 构建 Dictionary（传给 RunInput.StrategyParameters）。</summary>
+    private Dictionary<string, string> BuildStrategyParameters()
+    {
+        var dict = new Dictionary<string, string>();
+        foreach (var row in StrategyParameterRows)
+            if (!string.IsNullOrWhiteSpace(row.Key))
+                dict[row.Key] = row.Value ?? "";
+        return dict;
+    }
 
     // ═══ 回测 ═══
 
@@ -59,9 +91,12 @@ public partial class TradingViewModel : ObservableObject
     [ObservableProperty] private DateTime? _startDate = DateTime.Today.AddDays(-365);
     [ObservableProperty] private DateTime? _endDate = DateTime.Today;
     [ObservableProperty] private decimal _initialCash = 100_000m;
-    [ObservableProperty] private int _fastPeriod = 10;
-    [ObservableProperty] private int _slowPeriod = 30;
     [ObservableProperty] private string _resolution = "Daily";
+
+    /// <summary>当前策略的参数行（UI 动态渲染）。切策略时从 StrategyRegistry.GetParameterDefinitions 重建。</summary>
+    public ObservableCollection<StrategyParameterRow> StrategyParameterRows { get; } = new();
+    /// <summary>当前策略描述（策略 tab 显示）。</summary>
+    [ObservableProperty] private string _currentStrategyDescription = "";
 
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _statusMessage = string.Empty;
@@ -102,8 +137,9 @@ public partial class TradingViewModel : ObservableObject
                 StartDate = (StartDate ?? DateTime.Today.AddDays(-365)).Date,
                 EndDate = (EndDate ?? DateTime.Today).Date,
                 InitialCash = InitialCash,
-                FastPeriod = FastPeriod,
-                SlowPeriod = SlowPeriod,
+                FastPeriod = 10,
+                SlowPeriod = 30,
+                StrategyParameters = BuildStrategyParameters(),
                 Resolution = ParseResolution(Resolution),
             };
             var result = await Task.Run(() => _backtest.RunAsync(input, CancellationToken.None));
@@ -163,6 +199,7 @@ public partial class TradingViewModel : ObservableObject
     [ObservableProperty] private string _liveInstruments = "ag2610";
     [ObservableProperty] private string _liveResolution = "Minute";
     [ObservableProperty] private bool _verboseLog;
+    [ObservableProperty] private bool _isLiveMode;   // false=回测模式, true=实盘模式
     [ObservableProperty] private string _liveStrategy = "";
     [ObservableProperty] private string _liveStatusText = "未启动";
     [ObservableProperty] private bool _isLiveRunning;
@@ -226,6 +263,7 @@ public partial class TradingViewModel : ObservableObject
             InitialCash = 1_000_000m,
             FastPeriod = 10,
             SlowPeriod = 30,
+            StrategyParameters = BuildStrategyParameters(),
             Resolution = ParseResolution(LiveResolution),
             VerboseLog = VerboseLog,
             MarketDataConnect = new MarketDataConnectInput
@@ -256,4 +294,12 @@ public partial class TradingViewModel : ObservableObject
         "Tick" => BarResolution.Tick,
         _ => BarResolution.Daily,
     };
+}
+
+/// <summary>策略参数行（UI 动态渲染：Label + TextBox）。</summary>
+public partial class StrategyParameterRow : ObservableObject
+{
+    public string Key { get; set; } = "";
+    [ObservableProperty] private string _label = "";
+    [ObservableProperty] private string _value = "";
 }

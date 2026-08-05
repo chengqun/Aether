@@ -19,138 +19,214 @@
     </Style>
   </UserControl.Styles>
 
-  <TabControl Margin="0">
-    <TabItem Header="回测">
-      <Grid Margin="0" RowDefinitions="Auto,*">
-        <!-- 顶部：配置按钮 + 状态 -->
-        <DockPanel Grid.Row="0" LastChildFill="True" Margin="12,8,12,4">
-          <Button DockPanel.Dock="Right" Content="⚙ 回测配置" Click="OnBacktestConfigClick"
-                  Classes="tool" Padding="16,6" FontSize="12" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
-                     VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="Wrap" />
-        </DockPanel>
+  <TabControl Margin="8">
 
-        <!-- 结果区全宽 -->
-        <ScrollViewer Grid.Row="1" Padding="0" Margin="12,0,12,12">
-          <StackPanel Spacing="12">
+    <!-- 配置 -->
+    <TabItem Header="⚙ 配置">
+      <ScrollViewer Padding="16">
+        <StackPanel Spacing="10" MaxWidth="520">
 
-            <!-- 错误 -->
-            <Border Classes="card" IsVisible="{Binding HasError}">
-              <StackPanel Spacing="6">
-                <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="#C62828" />
-                <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
-              </StackPanel>
-            </Border>
-
-            <!-- 统计 -->
-            <Border Classes="card" IsVisible="{Binding HasResult}">
-              <StackPanel Spacing="8">
-                <TextBlock Text="📈 统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                  <TextBlock Grid.Row="0" Grid.Column="0" Text="总收益" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Statistics.TotalReturn}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="0" Grid.Column="2" Text="年化" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                  <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding Statistics.Cagr}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="1" Grid.Column="0" Text="夏普" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Statistics.SharpeRatio}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="1" Grid.Column="2" Text="最大回撤" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                  <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Statistics.MaxDrawdown}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="2" Grid.Column="0" Text="胜率" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Statistics.WinRate}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="2" Grid.Column="2" Text="交易次数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                  <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding Statistics.TotalTrades}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="3" Grid.Column="0" Text="净利" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                  <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Statistics.NetProfit}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  <TextBlock Grid.Row="3" Grid.Column="2" Text="权益点数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                  <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding EquityPointCount}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                </Grid>
-              </StackPanel>
-            </Border>
-
-            <!-- 权益曲线 -->
-            <Border Classes="card" IsVisible="{Binding HasResult}">
-              <StackPanel Spacing="8">
-                <TextBlock Text="权益曲线" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                <Viewbox Stretch="Fill" Width="800" Height="240">
-                  <Canvas Width="1000" Height="300">
-                    <Polyline Points="{Binding EquityPoints}" Stroke="#3B82F6" StrokeThickness="3" />
-                  </Canvas>
-                </Viewbox>
-              </StackPanel>
-            </Border>
-
-            <!-- 日志 -->
-            <Border Classes="card" IsVisible="{Binding HasResult}">
-              <StackPanel Spacing="6">
-                <DockPanel>
-                  <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="11" />
-                  <TextBlock Text="运行日志" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                </DockPanel>
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8">
-                  <ScrollViewer Height="180">
-                    <SelectableTextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
-                  </ScrollViewer>
-                </Border>
-              </StackPanel>
-            </Border>
-
-            <!-- 空状态 -->
-            <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
-              <StackPanel Spacing="8" HorizontalAlignment="Center">
-                <TextBlock Text="📊" FontSize="40" HorizontalAlignment="Center" />
-                <TextBlock Text="点右上角「回测配置」设置参数并开始回测" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-              </StackPanel>
-            </Border>
-
+          <!-- 模式切换 -->
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <RadioButton Content="回测" IsChecked="{Binding !IsLiveMode}" FontSize="13" />
+            <RadioButton Content="实盘" IsChecked="{Binding IsLiveMode}" FontSize="13" />
           </StackPanel>
-        </ScrollViewer>
-      </Grid>
+
+          <!-- ── 回测配置 ── -->
+          <StackPanel Spacing="10" IsVisible="{Binding !IsLiveMode}">
+            <TextBlock Text="📊 策略回测" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <StackPanel Spacing="4">
+              <TextBlock Text="合约代码" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <TextBox Text="{Binding Symbol}" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <TextBlock Text="开始日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <CalendarDatePicker SelectedDate="{Binding StartDate}" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <TextBlock Text="结束日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <CalendarDatePicker SelectedDate="{Binding EndDate}" />
+            </StackPanel>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+              <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="初始资金" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                <TextBox Text="{Binding InitialCash}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock Text="分辨率" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}" HorizontalAlignment="Stretch" />
+              </StackPanel>
+            </Grid>
+            <Button Content="开始回测" Classes="primary" Command="{Binding RunCommand}" Padding="0,8" HorizontalAlignment="Stretch" />
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <!-- ── 实盘配置 ── -->
+          <StackPanel Spacing="10" IsVisible="{Binding IsLiveMode}">
+            <TextBlock Text="📡 实盘策略引擎（Lean 实时 · P1 仅信号不下单）" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Text="先在「期货」页登录 CTP，再填合约点「启动」。P1 不下单，仅验证行情/信号链路。"
+                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Content="启动" Command="{Binding StartLiveCommand}" Padding="14,6" />
+                <Button Content="停止" Command="{Binding StopLiveCommand}" Padding="14,6" />
+              </StackPanel>
+              <TextBlock Text="{Binding LiveStatusText}" FontSize="13" FontWeight="SemiBold"
+                         VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+            </DockPanel>
+
+            <StackPanel Spacing="4">
+              <TextBlock Text="合约(逗号分隔)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <TextBox Text="{Binding LiveInstruments}" />
+            </StackPanel>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+              <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="分辨率" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                <ComboBox ItemsSource="{Binding LiveResolutionOptions}" SelectedItem="{Binding LiveResolution}" HorizontalAlignment="Stretch" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" />
+            </Grid>
+            <CheckBox Content="详细日志" IsChecked="{Binding VerboseLog}" FontSize="12" />
+          </StackPanel>
+
+        </StackPanel>
+      </ScrollViewer>
     </TabItem>
 
-    <TabItem Header="实盘">
-      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="20" Spacing="14">
+    <!-- 策略参数 -->
+    <TabItem Header="🎯 策略">
+      <ScrollViewer Padding="16">
+        <StackPanel Spacing="10" MaxWidth="480">
+          <TextBlock Text="策略选择与参数" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
 
-          <Border Classes="card">
-            <StackPanel Spacing="10">
-              <TextBlock Text="实盘策略引擎（Lean 实时 · P1 仅信号不下单）" FontSize="13" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap">
-                先在「期货」页登录 CTP，再填合约点「启动」。日志出现 [Signal] 即 tick→bar→信号链路打通。
-                P1 不下单（brokerage.PlaceOrder 被拦截），仅验证行情/信号。底层运行时为 Lean，经 IBacktestRuntime/ILiveTradingRuntime 抽象，未来可换。
-              </TextBlock>
+          <!-- 策略选择（回测/实盘共用，按模式绑不同属性） -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding StrategyName}" HorizontalAlignment="Stretch"
+                      IsVisible="{Binding !IsLiveMode}" />
+            <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding LiveStrategy}" HorizontalAlignment="Stretch"
+                      IsVisible="{Binding IsLiveMode}" />
+          </StackPanel>
 
-              <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                  <Button Content="启动" Command="{Binding StartLiveCommand}" Padding="14,6" />
-                  <Button Content="停止" Command="{Binding StopLiveCommand}" Padding="14,6" />
+          <TextBlock Text="{Binding CurrentStrategyDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+
+          <!-- 策略参数（动态渲染） -->
+          <ItemsControl ItemsSource="{Binding StrategyParameterRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Spacing="4" Margin="0,4">
+                  <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBox Text="{Binding Value}" />
                 </StackPanel>
-                <TextBlock Text="{Binding LiveStatusText}" FontSize="13" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
-              </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="该策略无参数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                     IsVisible="{Binding !StrategyParameterRows.Count}" Margin="0,8" />
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
 
-              <Grid ColumnDefinitions="Auto,*,Auto,140,Auto,140,Auto" RowDefinitions="Auto" Margin="0,2,0,0">
-                <TextBlock Grid.Column="0" Text="合约(逗号分隔)" FontSize="11" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" />
-                <TextBox Grid.Column="1" Text="{Binding LiveInstruments}" Margin="0,0,12,0" />
-                <TextBlock Grid.Column="2" Text="分辨率" FontSize="11" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" />
-                <ComboBox Grid.Column="3" ItemsSource="{Binding LiveResolutionOptions}" SelectedItem="{Binding LiveResolution}" HorizontalAlignment="Stretch" />
-                <TextBlock Grid.Column="4" Text="策略" FontSize="11" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="12,0,8,0" />
-                <ComboBox Grid.Column="5" ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding LiveStrategy}" HorizontalAlignment="Stretch" />
-                <CheckBox Grid.Column="6" Content="详细日志" IsChecked="{Binding VerboseLog}" VerticalAlignment="Center" FontSize="11" Margin="12,0,0,0" />
+    <!-- 统计（回测） -->
+    <TabItem Header="📈 统计">
+      <ScrollViewer Padding="16">
+        <StackPanel Spacing="12">
+          <Border Classes="card" IsVisible="{Binding HasError}">
+            <StackPanel Spacing="6">
+              <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="#C62828" />
+              <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding HasResult}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="📈 统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="总收益" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Statistics.TotalReturn}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="年化" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding Statistics.Cagr}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="夏普" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Statistics.SharpeRatio}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="最大回撤" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Statistics.MaxDrawdown}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="胜率" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Statistics.WinRate}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="交易次数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding Statistics.TotalTrades}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="净利" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Statistics.NetProfit}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Text="权益点数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding EquityPointCount}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
               </Grid>
             </StackPanel>
           </Border>
 
-          <Border Classes="card">
+          <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+              <TextBlock Text="📈" FontSize="40" HorizontalAlignment="Center" />
+              <TextBlock Text="回测后显示统计指标" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+    <!-- 曲线（回测） -->
+    <TabItem Header="📊 曲线">
+      <ScrollViewer Padding="16">
+        <StackPanel Spacing="12">
+          <Border Classes="card" IsVisible="{Binding HasResult}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="权益曲线" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <Viewbox Stretch="Fill" Width="800" Height="240">
+                <Canvas Width="1000" Height="300">
+                  <Polyline Points="{Binding EquityPoints}" Stroke="#3B82F6" StrokeThickness="3" />
+                </Canvas>
+              </Viewbox>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+              <TextBlock Text="📊" FontSize="40" HorizontalAlignment="Center" />
+              <TextBlock Text="回测后显示权益曲线" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+    <!-- 日志（回测+实盘共用，按模式切换） -->
+    <TabItem Header="📋 日志">
+      <ScrollViewer Padding="16">
+        <StackPanel Spacing="12">
+
+          <!-- 回测日志 -->
+          <Border Classes="card" IsVisible="{Binding !IsLiveMode}">
+            <StackPanel Spacing="6">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="11" />
+                <TextBlock Text="回测运行日志" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+              </DockPanel>
+              <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8">
+                <ScrollViewer Height="400">
+                  <SelectableTextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
+                </ScrollViewer>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- 实盘日志 -->
+          <Border Classes="card" IsVisible="{Binding IsLiveMode}">
             <StackPanel Spacing="6">
               <DockPanel>
                 <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLiveLogCommand}" Padding="10,2" FontSize="11" />
-                <TextBlock Text="运行日志" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="实盘运行日志" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
               </DockPanel>
-              <TextBox x:Name="LiveLogBox" Text="{Binding LiveLog}" FontSize="11" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="360"
+              <TextBox x:Name="LiveLogBox" Text="{Binding LiveLog}" FontSize="11" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="400"
                        FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
             </StackPanel>
           </Border>
@@ -158,5 +234,6 @@
         </StackPanel>
       </ScrollViewer>
     </TabItem>
+
   </TabControl>
 </UserControl>

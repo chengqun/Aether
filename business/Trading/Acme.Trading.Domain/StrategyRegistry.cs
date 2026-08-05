@@ -26,4 +26,11 @@ public static class StrategyRegistry
 
     /// <summary>已注册策略名（供 UI 下拉动态取值；新注册的策略自动出现）。</summary>
     public static IReadOnlyList<string> GetRegisteredNames() => _factories.Keys.ToArray();
+
+    /// <summary>获取策略的参数定义（UI 据此动态渲染参数输入框）。策略不存在或无参数返回空列表。</summary>
+    public static IReadOnlyList<StrategyParameterDef> GetParameterDefinitions(string name)
+    {
+        if (!_factories.TryGetValue(name, out var factory)) return Array.Empty<StrategyParameterDef>();
+        return factory().ParameterDefinitions;
+    }
 }
