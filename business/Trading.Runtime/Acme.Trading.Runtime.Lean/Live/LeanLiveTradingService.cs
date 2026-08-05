@@ -50,9 +50,9 @@ public sealed class LeanLiveTradingService : ILiveTradingRuntime
         CtpLeanGateway.Session = _session;
         CtpLeanGateway.MarketDataConnect = mdConnect;
         CtpLeanGateway.Instruments = request.Instruments;
-        TradingGateway.VerboseLog = request.VerboseLog;
         CtpLeanGateway.LogSink = msg => LogReceived?.Invoke(this, msg);
         TradingGateway.Reset();
+        TradingGateway.VerboseLog = request.VerboseLog;
         TradingGateway.LogSink = msg => LogReceived?.Invoke(this, msg);
 
         SetStatus(LiveTradingRuntimeStatus.Starting);
