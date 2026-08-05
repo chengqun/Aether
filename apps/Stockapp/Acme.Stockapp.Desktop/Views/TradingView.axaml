@@ -198,8 +198,11 @@
 
           <Border Classes="card">
             <StackPanel Spacing="6">
-              <TextBlock Text="运行日志" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBox Text="{Binding LiveLog}" FontSize="11" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="360"
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLiveLogCommand}" Padding="10,2" FontSize="11" />
+                <TextBlock Text="运行日志" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox x:Name="LiveLogBox" Text="{Binding LiveLog}" FontSize="11" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="360"
                        FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
             </StackPanel>
           </Border>

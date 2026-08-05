@@ -152,7 +152,7 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
     /// <summary>首次订阅时连 CTP 行情前置 + 订阅全部合约（CTP 行情一次性订阅全量列表）。</summary>
     private void EnsureCtpMdSubscribed()
     {
-        if (_ctpMdSubscribed || _session.IsMdSubscribed) { _ctpMdSubscribed = true; return; }
+        if (_ctpMdSubscribed) return;
         var connect = CtpLeanGateway.MarketDataConnect
             ?? throw new InvalidOperationException("行情前置连接参数未注入（CtpLeanGateway.MarketDataConnect 为空）");
         var instruments = CtpLeanGateway.Instruments;

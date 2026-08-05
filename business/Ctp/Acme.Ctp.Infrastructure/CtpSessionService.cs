@@ -197,30 +197,55 @@ public class CtpSessionService : ICtpSession, IDisposable
 
     public async Task SubscribeMarketDataAsync(string mdFrontAddress, string brokerId, string userId, string password, IReadOnlyList<string> symbols)
     {
+        List<string> toSubscribe;
+        bool needRebuild;
         lock (_lock)
         {
-            if (_md != null)
+            var creds = new MdCreds(mdFrontAddress, brokerId, userId, password);
+            // 已连接且同一账户：增量订阅新 symbols（不重建连接，避免覆盖已有订阅——如期货页全量 + 实盘 ag2610 累加）
+            if (_md != null && _mdSocketAlive && _cachedMdCreds == creds)
             {
-                _md.FrontConnected -= OnMdFrontConnected;
-                _md.FrontDisconnected -= OnMdFrontDisconnected;
-                _md.Dispose();
+                toSubscribe = symbols.Where(s => !_cachedSymbols.Contains(s)).ToList();
+                _cachedSymbols.AddRange(toSubscribe);
+                needRebuild = false;
             }
+            else
+            {
+                // 未连接或账户变：重建连接 + 订阅
+                if (_md != null)
+                {
+                    _md.FrontConnected -= OnMdFrontConnected;
+                    _md.FrontDisconnected -= OnMdFrontDisconnected;
+                    _md.Dispose();
+                }
 
-            var flow = Path.Combine(Path.GetTempPath(), "ctp_md_flow", Guid.NewGuid().ToString("N")[..8]);
-            Directory.CreateDirectory(flow);
-            _md = new CtpMarketData(flow);
-            _md.TickReceived += OnTickReceived;
-            _md.FrontConnected += OnMdFrontConnected;
-            _md.FrontDisconnected += OnMdFrontDisconnected;
-            _cachedMdCreds = new MdCreds(mdFrontAddress, brokerId, userId, password);
-            _cachedSymbols.Clear();
-            _cachedSymbols.AddRange(symbols);
+                var flow = Path.Combine(Path.GetTempPath(), "ctp_md_flow", Guid.NewGuid().ToString("N")[..8]);
+                Directory.CreateDirectory(flow);
+                _md = new CtpMarketData(flow);
+                _md.TickReceived += OnTickReceived;
+                _md.FrontConnected += OnMdFrontConnected;
+                _md.FrontDisconnected += OnMdFrontDisconnected;
+                _cachedMdCreds = creds;
+                _cachedSymbols.Clear();
+                _cachedSymbols.AddRange(symbols);
+                toSubscribe = symbols.ToList();
+                needRebuild = true;
+            }
         }
 
-        await _md!.LoginAsync(mdFrontAddress, brokerId, userId, password);
-        await _md.SubscribeMarketDataAsync(symbols);
-        _mdSocketAlive = true;
-        _mdHadSubscribed = true;   // 首次订阅完成——之后 FrontConnected 才视作重连，触发重订阅
+        if (needRebuild)
+        {
+            await _md!.LoginAsync(mdFrontAddress, brokerId, userId, password);
+            await _md.SubscribeMarketDataAsync(toSubscribe);
+            _mdSocketAlive = true;
+            _mdHadSubscribed = true;   // 首次订阅完成——之后 FrontConnected 才视作重连，触发重订阅
+        }
+        else if (toSubscribe.Count > 0)
+        {
+            // 增量订阅（连接已建立，只订阅新 symbols，不覆盖已有订阅）
+            await _md!.SubscribeMarketDataAsync(toSubscribe);
+        }
+        // else: 所有 symbols 已订阅，无操作
     }
 
     public void UnsubscribeMarketData()

@@ -124,6 +124,13 @@ public partial class TradingViewModel : ObservableObject
     [RelayCommand]
     private void ClearLog() => LogText = string.Empty;
 
+    [RelayCommand]
+    private void ClearLiveLog()
+    {
+        _liveLogBuf.Clear();
+        LiveLog = "";
+    }
+
     /// <summary>把权益曲线归一化到 1000×300 画布坐标（Polyline 用）。永返回非 null（空曲线返回空列表）。</summary>
     private static IList<Point> BuildEquityPoints(IReadOnlyList<EquityPoint> curve)
     {

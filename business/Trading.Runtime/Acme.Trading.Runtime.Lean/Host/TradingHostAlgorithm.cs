@@ -54,6 +54,9 @@ public class TradingHostAlgorithm : QCAlgorithm
 
         _targetPercent = _strategies.Count > 0 ? 1.0m / _strategies.Count : 1.0m;
 
+        // benchmark 设为首个订阅标的，避免 Lean 默认订阅 SPY（CTP 无 SPY 数据）
+        if (_strategies.Count > 0) SetBenchmark(_strategies.Keys.First());
+
         if (!LiveMode)
         {
             var warmup = _strategies.Values.Select(s => s.WarmUpBars).DefaultIfEmpty(0).Max();
