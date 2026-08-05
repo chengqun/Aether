@@ -142,9 +142,8 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
             };
         }
 
-        // 结果分析（StatisticsResults 会重跑 ResultsAnalyzer，含 equity curve 解析）可能与自定义数据
-        // 回测的稀疏权益曲线冲突抛 "Sequence contains no elements"。它是引擎完成后的后处理，不应让整次
-        // 回测失败——引擎已跑完、STATISTICS 已由 Lean 打印。包一层，分析失败时仍返回成功 + 日志 + 备注。
+        // 分开 try/catch：StatisticsResults 可能因 equity curve 稀疏崩（ReadEquityCurve.First() on empty），
+        // 但不影响从 Charts 取权益曲线。两者独立，一个崩不影响另一个。
         BacktestStatistics? stats = null;
         IReadOnlyList<EquityPoint> equity = System.Array.Empty<EquityPoint>();
         string? analysisError = null;
@@ -152,12 +151,19 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
         {
             var sr = resultHandler.StatisticsResults();
             stats = BacktestResultMapper.MapStatistics(sr);
-            equity = BacktestResultMapper.MapEquityCurve(resultHandler);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "LEAN 回测结果分析失败（equity curve 等），引擎已完成的统计仍返回");
-            analysisError = $"结果分析部分失败: {ex.Message}";
+            _logger?.LogError(ex, "LEAN 统计分析失败（equity curve 稀疏），统计可能缺失");
+            analysisError = $"统计分析部分失败: {ex.Message}";
+        }
+        try
+        {
+            equity = BacktestResultMapper.MapEquityCurve(resultHandler);
+        }
+        catch
+        {
+            // equity curve 取失败，曲线空（不影响统计）
         }
 
         return new BacktestResult
