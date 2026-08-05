@@ -91,7 +91,7 @@ public sealed class LeanLiveTradingService : ILiveTradingRuntime
         EmitLog("停止请求已发出，等待引擎退出…");
         if (_runTask != null)
         {
-            try { await _runTask.WaitAsync(TimeSpan.FromSeconds(30), ct); }
+            try { await _runTask.WaitAsync(TimeSpan.FromSeconds(30), ct); EmitLog("引擎已正常退出，实盘已停止"); }
             catch (TimeoutException) { EmitLog("引擎 30s 内未退出，可能仍在处理"); }
             catch (OperationCanceledException) { }
         }

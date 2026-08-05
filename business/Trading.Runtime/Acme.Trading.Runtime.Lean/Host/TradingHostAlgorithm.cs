@@ -63,6 +63,15 @@ public class TradingHostAlgorithm : QCAlgorithm
             if (warmup > 0) SetWarmUp(warmup);
         }
         if (_strategies.Count == 0) TradingGateway.Log("[Algo] 警告：未订阅任何合约（instruments/symbol 参数为空）");
+
+        // 实盘：定期检查停止请求（不只依赖 OnData——无 tick 时 OnData 不调，需 Schedule 兜底）
+        if (LiveMode)
+        {
+            Schedule.On(DateRules.EveryDay(), TimeRules.Every(TimeSpan.FromSeconds(2)), () =>
+            {
+                if (TradingGateway.StopRequested) Quit("用户停止");
+            });
+        }
     }
 
     public override void OnData(Slice slice)
