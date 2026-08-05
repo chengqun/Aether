@@ -75,6 +75,8 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
         }
 
         ConfigureLean(request, resultsDir);
+        // 实盘后回测：Globals.LiveMode 可能残留 true（实盘 Globals.Reset 拾取的），需重置拾取 live-mode=false
+        Globals.Reset();
 
         lock (_initLock)
         {
@@ -217,6 +219,7 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
         var (leanRes, _) = ResolutionToLean(request.Resolution);
 
         Config.Set("environment", "backtesting");
+        Config.Set("live-mode", "false");   // 覆盖实盘残留的 live-mode=true，否则 JobQueue 产 LiveNodePacket 而非 BacktestNodePacket
         // object-store-root 必须设绝对可写路径：LEAN 默认 "./storage" 按进程 cwd 解析，双击启动 cwd="/" 会解析成只读 /storage 崩。
         Config.Set("object-store-root", Path.Combine(resultsDir, "storage"));
         // 通用宿主：algorithm-type-name 恒为 TradingHostAlgorithm（回测/实盘共用，常量无跨 run 泄漏）。
