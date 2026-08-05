@@ -65,7 +65,9 @@ public sealed class LeanLiveTradingService : ILiveTradingRuntime
             {
                 var (status, error) = _runner.Run(request);
                 EmitLog($"实盘引擎退出：{status}{(error != null ? " / " + error : "")}");
-                SetStatus(status == AlgorithmStatus.Completed ? LiveTradingRuntimeStatus.Stopped : LiveTradingRuntimeStatus.Error);
+                SetStatus(status == AlgorithmStatus.Completed || status == AlgorithmStatus.Stopped
+                    ? LiveTradingRuntimeStatus.Stopped
+                    : LiveTradingRuntimeStatus.Error);
             }
             catch (Exception ex)
             {

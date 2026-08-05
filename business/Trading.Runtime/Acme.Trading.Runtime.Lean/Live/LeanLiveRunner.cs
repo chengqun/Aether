@@ -72,7 +72,7 @@ internal sealed class LeanLiveRunner
         }
         finally
         {
-            if (status != AlgorithmStatus.Completed && error == null)
+            if (status != AlgorithmStatus.Completed && status != AlgorithmStatus.Stopped && error == null)
                 error = "实盘引擎已退出";
             systemHandlers.DisposeSafely();
             algorithmHandlers.DisposeSafely();
