@@ -3,16 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Acme.Notes.Application;
 using Acme.Trading.Domain;
+using Acme.Trading.Runtime.Domain;
 using Microsoft.Extensions.Logging;
 
 namespace Acme.Trading.Scripting;
 
-/// <summary>策略脚本加载服务实现。启动时与 NotesChanged 时扫描策略笔记 → 编译 → Register。</summary>
+/// <summary>策略脚本加载服务实现。扫描策略笔记 → 编译 → Register。
+/// 通过 IStrategyNoteSource 端口读笔记（不直接依赖 Notes.Application）；host 订阅 NotesChanged 后调 Reload()。</summary>
 public sealed class StrategyScriptingService : IStrategyScriptingService
 {
-    private readonly INoteService _notes;
+    private readonly IStrategyNoteSource _source;
     private readonly ILogger<StrategyScriptingService> _logger;
     private readonly Dictionary<string, string> _loadErrors = new();
     private readonly HashSet<string> _registeredNames = new(); // 本服务动态注册的策略名，重加载时 unregister
@@ -27,16 +28,15 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
         get { lock (_lock) return new Dictionary<string, string>(_loadErrors); }
     }
 
-    public StrategyScriptingService(INoteService notes, ILogger<StrategyScriptingService> logger)
+    public StrategyScriptingService(IStrategyNoteSource source, ILogger<StrategyScriptingService> logger)
     {
-        _notes = notes;
+        _source = source;
         _logger = logger;
-        _notes.NotesChanged += OnNotesChanged;
     }
 
-    private void OnNotesChanged()
+    /// <summary>host 订阅 NotesChanged 后调用此方法触发防抖重加载（500ms）。</summary>
+    public void Reload()
     {
-        // 防抖 500ms（NotesChanged 可能连续触发）
         _debounceCts?.Cancel();
         _debounceCts = new CancellationTokenSource();
         var ct = _debounceCts.Token;
@@ -49,7 +49,7 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
         if (Interlocked.CompareExchange(ref _loading, 1, 0) != 0) return;
         try
         {
-            var all = await _notes.GetAllAsync(cancellationToken);
+            var all = await _source.GetAllAsync(cancellationToken);
             var strategyNotes = all.Where(IsStrategyNote).ToList();
 
             // 先 unregister 上次动态注册的（清理已删除/改名的策略，避免选择器残留失效策略）
@@ -87,7 +87,7 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
     }
 
     /// <summary>判断是否策略笔记：Tags 含 "strategy"（逗号分隔，忽略大小写）。</summary>
-    private static bool IsStrategyNote(NoteDto n)
+    private static bool IsStrategyNote(StrategyNote n)
     {
         if (string.IsNullOrEmpty(n.Tags)) return false;
         var tags = n.Tags!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

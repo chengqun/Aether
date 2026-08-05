@@ -23,7 +23,7 @@ public sealed class LlmConfigModelSource : IModelSource
         if (_cache is not null) return _cache;
 
         List<LlmConfigDto>? configs = null;
-        try { configs = _llmService.GetCachedAsync().GetAwaiter().GetResult(); }
+        try { configs = Task.Run(() => _llmService.GetCachedAsync()).GetAwaiter().GetResult(); }
         catch { /* 未登录/未同步时退化为仅默认 */ }
 
         var list = new List<CustomModelOption> { new(string.Empty, "默认（宿主配置）") };

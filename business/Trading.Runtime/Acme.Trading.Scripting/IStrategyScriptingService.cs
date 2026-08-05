@@ -10,6 +10,9 @@ public interface IStrategyScriptingService
     /// <summary>扫描策略笔记并编译注册。策略笔记约定：Tags 含 "strategy"，Content 为 IStrategy 实现类 C# 源码。</summary>
     Task LoadAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>触发防抖重加载（500ms）。host 订阅 NotesChanged 后调用。</summary>
+    void Reload();
+
     /// <summary>编译失败的策略名→错误（供 UI/log 查看；成功的策略不在内）。</summary>
     IReadOnlyDictionary<string, string> LoadErrors { get; }
 

@@ -77,7 +77,7 @@ public static class DesktopCompositionExtensions
         // —— 公共业务上下文（两租户共用）——
         services.AddAppAuthInfrastructure(o =>
         {
-            o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL") ?? "https://117.72.186.128/";
+            o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL") ?? string.Empty;
             o.ClientId = Environment.GetEnvironmentVariable("APP_CLIENT_ID") ?? "alphaagent_chat";
             o.ClientSecret = Environment.GetEnvironmentVariable("APP_CLIENT_SECRET") ?? "chat_secret";
             o.Scope = "Abp alphaagent_chat";   // 必须带 Abp 受众，否则签发的 token 无 API 受众 → invalid_token

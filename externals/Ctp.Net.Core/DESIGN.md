@@ -196,9 +196,7 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet -
 ### 3.2 macOS ✅ 已验证
 
 **脚本**：`scripts/build-stockapp-macos.sh`（GitHub 同步，固定打 Stockapp 租户）。
-另有一个本地脚本 `scripts/build-desktop-macos.sh`（已加入 `.gitignore`，不推 GitHub），
-可同时打 Qifu + Stockapp（`./scripts/build-desktop-macos.sh [stockapp|qifu|all]`）；
-CTP 现场编译 + framework 随包逻辑与 stockapp 脚本一致，仅 Stockapp 走（Qifu 无 CTP）。
+CTP 现场编译 + framework 随包逻辑与 stockapp 脚本一致，
 **前置**：.NET 10 SDK + CMake + clang（Xcode Command Line Tools：`xcode-select --install`）
 
 ```bash

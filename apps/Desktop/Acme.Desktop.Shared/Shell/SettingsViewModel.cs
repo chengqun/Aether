@@ -246,12 +246,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void EditLlmConfig(LlmConfigDto config)
+    private async Task EditLlmConfig(LlmConfigDto config)
     {
-        ShowLlmEditModal(config);
+        try { await ShowLlmEditModal(config); }
+        catch { /* 模态异常忽略，不崩进程 */ }
     }
 
-    private async void ShowLlmEditModal(LlmConfigDto? config)
+    private async Task ShowLlmEditModal(LlmConfigDto? config)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
             || desktop.MainWindow is null)

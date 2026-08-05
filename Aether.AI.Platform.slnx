@@ -25,7 +25,6 @@
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>
   <Folder Name="/apps/">
-    <Project Path="apps/Aether.AI.Sample.Console/Aether.AI.Sample.Console.csproj" />
   </Folder>
   <Folder Name="/apps/Desktop/">
     <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />

@@ -16,9 +16,6 @@ dotnet test  Aether.AI.Platform.slnx          # run all test projects
 # Single project build/test (dotnet build/test accept ONLY ONE project in this env)
 dotnet test tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj --filter "FullyQualifiedName~Memory"
 
-# Run the sample console (composes all contexts). Without an LLM API key it runs an offline smoke check.
-dotnet run --project apps/Aether.AI.Sample.Console
-
 # Run the desktop app (Avalonia; Stockapp tenant with CTP/Quotes/Trading; Qifu tenant with Yushu/CloudDocs)
 dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 dotnet run --project apps/Qifu/Acme.Qifu.Desktop
@@ -34,7 +31,7 @@ A multi-context DDD platform built on **Microsoft Agent Framework** (`Microsoft.
 - `business/` — **pure DDD bounded contexts**, each `Acme.<Context>.{Domain,Application,Infrastructure}`. AI-free.
 - `ai/` — **business AI adapters** bridging Aether and each context. Peers of `business/`, kept separate so business stays AI-free. 7 tool adapters (`Ctp/Quotes/Qifu/Notes/Trading/ApkParser/SystemTools`) + 1 agent bridge (`Agents`). Not every context has an AI adapter — e.g. Automation has none (its business port `IAgentExecutor` is implemented host-side; see [business-port pattern](#business-domain-port--host-implementation) below). The **agent bridge** `ai/Agents/Acme.Agents.AI` is NOT a tool adapter — it registers `ICustomAgentCatalog`/`ICustomAgentRunner` (CRUD + run-time for custom agents), not tools. It is the only adapter that doesn't follow the "register tools only" convention, by design.
 - `externals/` — third-party engines: `Ctp.Net.Core` (native CTP wrapper) and `Lean` (QuantConnect Lean, git submodule).
-- `apps/` — consumers/hosts: `Aether.AI.Sample.Console` (CLI), `Acme.Shell` (UI-agnostic shell VM library), `Desktop/Acme.Desktop.Shared` (Avalonia views + composition root), `Qifu/Acme.Qifu.Desktop` + `Stockapp/Acme.Stockapp.Desktop` (tenant host apps).
+- `apps/` — consumers/hosts: `Acme.Shell` (UI-agnostic shell VM library), `Desktop/Acme.Desktop.Shared` (Avalonia views + composition root), `Qifu/Acme.Qifu.Desktop` + `Stockapp/Acme.Stockapp.Desktop` (tenant host apps). (Qifu 不在 slnx 注册——Stockapp 同步 GitHub 时 Qifu 隐藏。)
 - `tests/` — all test projects live here, never interleaved with source.
 
 ### DDD layering rules (enforced; verify before changing csprojs)
@@ -56,8 +53,8 @@ Every **tool adapter** is the same shape (mirror `ai/Ctp`):
 The **bridge adapter** `ai/Agents/Acme.Agents.AI` is a different shape:
 - References `Aether.AI.Hosting` + `Acme.Notes.Application` (custom agents persisted as Notes) + `Acme.AppAuth.Application` (for `IAppServerHttpClient`, marketplace client).
 - `AddCustomAgents(this AetherAIBuilder)` registers `ICustomAgentCatalog` (CRUD over Notes-backed agents via `AgentSourceParser`), `ICustomAgentRunner` (maps `CustomAgentDefinition` → `AgentDefinition` → `HarnessRuntime`), `IAgentMarketplaceService` (cloud agent catalog client).
-- `AddCustomWorkflows(this AetherAIBuilder)` registers `ICustomWorkflowCatalog` (CRUD over Notes-backed workflows via `WorkflowSourceParser` — JSON, not YAML) + `ICustomWorkflowRunner` (builds participants via `AgentFactory`, wraps as MAF Handoff workflow via `WorkflowFactory.BuildAsAIAgent`, runs through `HarnessRuntime.RunStreamingAsync(AIAgent,…)` — reuses the same `RunStreamingCoreAsync` extraction loop as agents). Workflow persistence: `WorkflowSourceParser` (JSON content, `NoteNodeType.Workflow`) in `business/Notes/Acme.Notes.Application/AgentSource/`. Fields: name/description/category/entry_agent_id/participants/handoffs/handoff_instructions.
-- Custom agent persistence: `AgentSourceParser` (YAML front-matter + Markdown prompt) in `business/Notes/Acme.Notes.Application/AgentSource/`. Fields: name/description/category/tools/skills/memory/max_history/model/top_p/max_output_tokens/response_format/enable_web_search/enable_todo_provider/enable_agent_mode_provider/enable_file_memory/enable_agent_skills/enable_open_telemetry/source/marketplace_id/marketplace_synced_at/display_name. `Serialize(AgentSourceFields)` takes a field object (not positional params); `CustomAgentDefinition.ToSourceFields()` projects to it. Business layer defines its own `AgentMemoryMode`/`AgentResponseFormat` enums (parallel to Core's) — adapter maps them, so `Aether.AI.*` never leaks into Notes.
+- `AddCustomWorkflows(this AetherAIBuilder)` registers `ICustomWorkflowCatalog` (CRUD over Notes-backed workflows via `WorkflowSourceParser` — JSON, not YAML) + `ICustomWorkflowRunner` (builds participants via `AgentFactory`, wraps as MAF Handoff workflow via `WorkflowFactory.BuildAsAIAgent`, runs through `HarnessRuntime.RunStreamingAsync(AIAgent,…)` — reuses the same `RunStreamingCoreAsync` extraction loop as agents). Workflow persistence: `WorkflowSourceParser` (JSON content, `NoteNodeType.Workflow`) in `business/Notes/Acme.Notes.Infrastructure/Agents/`. Fields: name/description/category/entry_agent_id/participants/handoffs/handoff_instructions.
+- Custom agent persistence: `AgentSourceParser` (YAML front-matter + Markdown prompt) in `business/Notes/Acme.Notes.Infrastructure/Agents/`. Fields: name/description/category/tools/skills/memory/max_history/model/top_p/max_output_tokens/response_format/enable_web_search/enable_todo_provider/enable_agent_mode_provider/enable_file_memory/enable_agent_skills/enable_open_telemetry/source/marketplace_id/marketplace_synced_at/display_name. `Serialize(CustomAgentDefinition)` takes the definition directly. Business layer defines its own `AgentMemoryMode`/`AgentResponseFormat` enums (parallel to Core's) — adapter maps them, so `Aether.AI.*` never leaks into Notes.
 
 ### Business Domain port → host implementation
 
@@ -92,10 +89,11 @@ Trading.Runtime.Lean  (LeanBacktestRunner / LeanLiveTradingService / CtpBrokerag
 Trading.Domain  (IStrategy / MarketBar / SignalDirection / BacktestResult / BacktestStatistics / EquityPoint / StrategyRegistry)   ← pure, shared by Application + Lean
 ```
 
-- **`business/Trading/Acme.Trading.Domain`** — pure: `IStrategy` (`WarmUpBars`/`Initialize`/`EvaluateSignal→SignalDirection`), `MarketBar`, `BacktestResult` (`Statistics`/`EquityCurve`/`Logs`), `StrategyRegistry` (static; `AddTradingRuntimeLean` registers `SmaCross`/`Test`; `GetRegisteredNames()` feeds the UI strategy picker).
+- **`business/Trading/Acme.Trading.Domain`** — pure: `IStrategy` (`WarmUpBars`/`Initialize`/`EvaluateSignal→SignalDirection`), `MarketBar`, `BacktestResult` (`Statistics`/`EquityCurve`/`Logs`), `StrategyRegistry` (static; `Register`/`Unregister`/`Create`/`GetRegisteredNames()` feeds the UI strategy picker). 内置策略已删——全部走动态加载。
 - **`business/Trading/Acme.Trading.Application`** — `IBacktestApplicationService.RunAsync(BacktestRunInput)→BacktestResult` and `ILiveTradingApplicationService` (`StartAsync(LiveTradingRunInput)→(bool,string?)`, `StopAsync`, `Status`/`IsRunning`, `StatusChanged`/`LogReceived` events). Thin mappers to the runtime ports. `AddTradingApplication()` registers both.
 - **`business/Trading.Runtime/Acme.Trading.Runtime.Domain`** — the runtime **ports** (`IBacktestRuntime`, `ILiveTradingRuntime`) + shared enums/DTOs. No Lean.
-- **`business/Trading.Runtime/Acme.Trading.Runtime.Lean`** — the **only** project referencing `externals/Lean`. `LeanBacktestRunner` (full backtest: reads K-line via `IAnalysisManager` → CSV → LEAN engine → `BacktestResult`). `LeanLiveTradingService` (LEAN live engine + `CtpBrokerage`). `AddTradingRuntimeLean()` registers the strategies + both runtime impls; it **consumes** (does not register) `ICtpSession` (from `AddCtpInfrastructure`) and `IAnalysisManager` (from `AddQuotesApplication`).
+- **`business/Trading.Runtime/Acme.Trading.Runtime.Lean`** — the **only** project referencing `externals/Lean`. `LeanBacktestRunner` (full backtest: reads K-line via `IAnalysisManager` → CSV → LEAN engine → `BacktestResult`). `LeanLiveTradingService` (LEAN live engine + `CtpBrokerage`). `AddTradingRuntimeLean()` registers both runtime impls (不再注册内置策略——策略由 Scripting 动态加载); it **consumes** (does not register) `ICtpSession` (from `AddCtpInfrastructure`) and `IAnalysisManager` (from `AddQuotesApplication`).
+- **`business/Trading.Runtime/Acme.Trading.Scripting`** — 策略动态加载：扫描策略笔记（`Tags` 含 "strategy"、`Syntax`=csharp、content 是 `IStrategy` 实现类源码）→ Roslyn 动态编译 → `StrategyRegistry.Register`。`IStrategyScriptingService.LoadAsync()`/`Reload()` + `StrategiesLoaded` 事件（UI 刷新选择器）。通过 `IStrategyNoteSource` 端口（`Trading.Runtime.Domain`）读笔记，host（Stockapp `StrategyNoteSource`）桥接 `INoteService`，不直接依赖 `Notes.Application`。订阅 `NotesChanged` → `Reload()` 自动重编译。`Trading.AI` 引用此项目（`CreateStrategyTool` 用 `StrategyScriptCompiler` 即时编译验证）——AI 适配器引非 Application business 项目的例外，因编译验证需要。
 - **Desktop 回测/实盘页** (`apps/Stockapp/.../ViewModels/TradingViewModel.cs` + `Views/TradingView.axaml`, the `backtest` nav): two tabs (回测 + 实盘). The VM depends on `Trading.Application` + `Trading.Runtime.Domain` enums + `Trading.Domain` only — **never** on `Trading.Runtime.Lean`. Wired via the tenant-specific ContentControl+DataTemplate pattern (Stockapp-only; Qifu has no `backtest` nav).
 - **AI** (`ai/Trading/Acme.Trading.AI`): `AddTradingTools()` exposes only `RunBacktest` (no live-trading tool to the agent).
 
@@ -176,21 +174,14 @@ Agent 有三种扩展机制 + 跨会话长期记忆，全部在专家编辑器�
 
 笔记树里第 4 种 form 节点（`NoteNodeType.Knowledge = 3`，UI 显示「知识对象」，强制 `syntax=yaml`、icon `knowledge`）。**最简通用知识模型**：`KnowledgeObjectDefinition { Kind, Links[], Body }`（`business/Notes/Acme.Notes.Domain/Knowledge/KnowledgeObjectDefinition.cs`），`KnowledgeLink { Role, TargetId?, Target }`。持久化为 YAML front-matter（`kind` + `links`）+ markdown body（`KnowledgeSourceParser`，YamlDotNet，容忍无 front-matter 的老笔记），与 Agent 笔记同构；`name` = 笔记标题（不在内容里）。区别于 Agent（多字段）/ Workflow（JSON）：知识对象只有 3 字段，**typed graph links 是它的定义性特征**——带 role 的图边指向其它笔记，`TargetId` 权威、标题回退（老数据无 id）。
 
-- **AI 消费**（`KnowledgeTool` in `ai/Notes/Acme.Notes.AI/Tools/KnowledgeTool.cs`）：`ListKnowledgeObjects()` 列所有 Knowledge 节点（body preview 80 字符）；`ReadKnowledgeObject(name)` → `FormatAsync` 拼装成一段 `Definition`：`kind:` / `name:` / body + `links:` 段，每个 link 输出 `[role] target:` + 目标笔记的**完整原始 Content**（含其自身 front-matter）逐行缩进 2 格。**只展开一层**——子节点自身的 link 不递归（不会无限套娃，也不回拉入口节点）。读是非破坏的、per-flow 的。
+- **AI 消费**（`KnowledgeTool` in `ai/Notes/Acme.Notes.AI/Tools/KnowledgeTool.cs`）：`ListKnowledgeObjects(parentId?)` 列所有/指定 folder 下 Knowledge 节点（body preview 80 字符）；`ReadKnowledgeObject(name)` → `FormatAsync` 拼装成一段 `Definition`：`kind:` / `name:` / body + `links:` 段，每个 link 输出 `[role] target:` + 目标笔记的**完整原始 Content**（含其自身 front-matter）逐行缩进 2 格。**只展开一层**——子节点自身的 link 不递归（不会无限套娃，也不回拉入口节点）。读是非破坏的、per-flow 的。`CreateKnowledgeObject(name,kind,body,linksJson?,parentId?)` 创建 KO 笔记（`Confirm` 级）；`UpdateKnowledgeObject(name,kind?,body?,linksJson?)` 部分更新（`Confirm` 级）——AI 现在能 CRUD 知识对象，闭环自迭代。
 - **DAG 纪律（重要）**：边**单向**，只留「流程 uses/then → 资产」这类正向依赖边；**不要写反向回指边**（`consumed-by` / `schema-for` / `consumes` 等）——它们是冗余、且会被 `FormatAsync` 当噪音内联进 read 产物。分层：**流程层**（`kind=流程`）带 `uses`/`then` 出边，是消费/编排者；**资产层**（`kind=数据源`/`规则`，`links: []` 或只指向同级资产）是被引用的复用目标。
 - **复用**：一个资产节点可被多个流程 `uses`。改一处 schema/规则，所有引用它的流程下次 `read` 都拿新版——这是单体 system prompt 做不到的。新场景 = 新建一个流程节点 + 勾选要复用的资产 + 可能加一两个专属规则，不用复制粘贴 prompt。
 - **与 Agent 的混合（推荐）**：必须每次遵守的硬契约（输出格式、表范围约束等）留在 agent 节点的 body（system prompt）里确保可靠；重的参照数据（完整字段表、规则库、SQL 模板、示例输出）抽成知识对象按需 `read`。Agent body 里写一句「先用 KnowledgeTool 读『XX流程』」即可。
 - **Gotchas**：
-  - `NoteTool.CreateNote` **没有 nodeType 参数**——AI 工具建不了 Knowledge 节点（只能建 `Note`）。Knowledge 节点只能经 UI 新建、直接写库、或走 agent-catalog 那种 `NoteService.CreateAsync(NodeType=...)` 直调模式。
+  - `NoteTool.CreateNote` 没有 nodeType 参数（只能建 `Note`），但 `KnowledgeTool.CreateKnowledgeObject` 专门建 Knowledge 节点（设 tags/syntax/content）。Knowledge 节点也可经 UI 新建或 `NoteService.CreateAsync(NodeType=...)` 直调。
   - link 靠标题解析时**标题必须唯一**；在 UI 里打开流程节点并保存一次，`KnowledgeEditViewModel.Build()` 会把标题解析成 `TargetId` 落库，之后改名/同名也按 id 精确命中。
   - `FormatAsync` 内联子笔记的 front-matter（含其 links），有轻微噪音但无害；清反向边后已最小化。
-- **落地实例：情报分析微型知识图谱**（源文件 `~/Desktop/knowledge-objects/*.yaml`，5 节点设计）。**注意：源文件设计完整但尚未导入 notes.db**——Qifu 库内「智能体 > 知识对象」folder 当前为空（`node_type=3` 节点数 = 0）；`KnowledgeTool`/`KnowledgeSourceParser` 代码已实现，但无 KO 数据可读，需先把 5 个 yaml 写成 Knowledge 节点（`NoteService.CreateAsync(NodeType=Knowledge)` 或直接写库）才能被 `read`。5 节点设计：
-  - `研判流程` [流程] `uses→情报分析表` `uses→单条情报研判规则` `then→内部异常检测规则` `uses→应用安装明细验证表`
-  - `单条情报研判规则` [规则] `applies-to→情报分析表` `produces→内部异常检测规则`
-  - `内部异常检测规则` [规则] `applies-to→应用安装明细验证表`
-  - `情报分析表` [数据源] `links: []`（`ods.prd_fkai_ai_news_category_app` schema + 取数 SQL）
-  - `应用安装明细验证表` [数据源] `links: []`（`dp_data_db.chengqun_app_detail` schema + 回表 SQL）
-  - 导入后 agent `read('研判流程')` → 把 4 篇 link 内联 → 等价于原来那段单体情报研判 prompt（取数 + 单条研判 + 风险 app 提取 + 回表 + 内部异常检测）。可作新场景拆解的模板。
 
 ### Chat streaming surface (reasoning / approval / plan / mode / ask_user)
 
@@ -216,7 +207,6 @@ The chat page adapts to HarnessAgent's **full** streaming output. `RunStreamingC
 
 ### Host composition
 
-- **Sample console** (`apps/Aether.AI.Sample.Console/Program.cs`): `ComposeContexts` registers all contexts' Infra+App; `RegisterAgents` chains `AddXxxTools()` + builds one aggregate `assistant` agent.
 - **Desktop** (`AddDesktopCommon` in `DesktopCompositionExtensions`): registers shared contexts (AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement) + shared AI tools (`AddSystemTools().AddApkParserTools().AddNotesTools()`) + skills (`ConfigureSkillRegistry(reg => reg.LoadFromDirectory(<tenantDir>/skills))`) + `AddCustomAgents()` + `AddCustomWorkflows()`. Sets `AetherAIOptions.FileMemoryRoot`/`SkillsDirectory`/`PythonExecutable` to tenant-data subdirs. Automation has no AI adapter; instead `AddDesktopCommon` registers `IAgentExecutor→ConversationBackedAgentExecutor` (host impl of the business port). Each tenant host appends its own contexts + tools. Key desktop-specific registrations: `IChatClientFactory→DesktopChatClientFactory`, `IModelSource→LlmConfigModelSource`, `IConversationStore→SqliteConversationStore`, `IPreferencesStore→JsonPreferencesStore`, `IUiDispatcher→AvaloniaDispatcher`, `IConnectorViewModel→CtpConnectorViewModel`/`QifuConnectorViewModel`. Both tenant `App.axaml` set `RequestedThemeVariant="Light"` (SharedTheme is light-only).
 - **LLM config refresh**: settings-page LLM changes (add/edit/delete/set-default) call `MainViewModelBase.RefreshLlmConfigsAsync()` so the chat LLM picker updates without restart.
 

@@ -64,7 +64,7 @@ public sealed class DesktopChatClientFactory : IChatClientFactory
 
     private List<LlmConfigDto> TryLoadConfigs()
     {
-        try { return _llmService.GetCachedAsync().GetAwaiter().GetResult() ?? new(); }
+        try { return Task.Run(() => _llmService.GetCachedAsync()).GetAwaiter().GetResult() ?? new(); }
         catch { return new(); }
     }
 }
