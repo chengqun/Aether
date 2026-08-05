@@ -111,6 +111,26 @@ public static class NoteIcons
         new("SQL",        "lang_sql",      NavIcons.LangSqlite,     "#003B57", true),
         new("PowerShell", "lang_ps",       NavIcons.LangBash,       "#4EAA25", true),
         new("YAML",       "lang_yaml",     NavIcons.LangYaml,       "#CB171E", true),
+        // —— 头像/角色图标 ——
+        new("猫",     "cat",     NavIcons.AvatarCat,      "#D97706"),
+        new("狗",     "dog",     NavIcons.AvatarDog,      "#8B5E3C"),
+        new("鸟",     "bird",    NavIcons.AvatarBird,     "#3D40B5"),
+        new("狐狸",   "fox",     NavIcons.AvatarFox,      "#D97706"),
+        new("兔子",   "rabbit",  NavIcons.AvatarRabbit,    "#EAB308"),
+        new("熊猫",   "panda",   NavIcons.AvatarPanda,    "#1A1A1F"),
+        new("猫头鹰", "owl",     NavIcons.AvatarOwl,      "#5B5FC7"),
+        new("机器人", "robot",   NavIcons.AvatarRobot,     "#0891B2"),
+        new("幽灵",   "ghost",   NavIcons.AvatarGhost,     "#6B6B70"),
+        new("雪花",   "snow",    NavIcons.AvatarSnowflake, "#0E9488"),
+        new("闪电",   "zap",     NavIcons.AvatarZap,      "#EAB308"),
+        new("星球",   "planet",  NavIcons.AvatarPlanet,    "#3D40B5"),
+        new("蘑菇",   "mushroom",NavIcons.AvatarMushroom,  "#EF4444"),
+        new("花朵",   "flower",  NavIcons.AvatarFlower,    "#EF4444"),
+        new("月亮",   "moon",    NavIcons.AvatarMoon,      "#5B5FC7"),
+        new("太阳",   "sun",     NavIcons.AvatarSun,      "#D97706"),
+        new("钻石",   "gem",     NavIcons.AvatarGem,       "#0E9488"),
+        new("火焰",   "flame",   NavIcons.AvatarFlame,     "#EF4444"),
+        new("海豚",   "dolphin", NavIcons.AvatarDolphin,   "#0891B2"),
     };
 
     /// <summary>语法 key → 对应图标 key（用于选语法时自动设节点图标）。</summary>
