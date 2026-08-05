@@ -140,7 +140,7 @@
                   </DockPanel>
                   <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8">
                     <ScrollViewer Height="180">
-                      <TextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
+                      <SelectableTextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
                     </ScrollViewer>
                   </Border>
                 </StackPanel>
