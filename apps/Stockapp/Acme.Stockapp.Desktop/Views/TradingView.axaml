@@ -21,142 +21,89 @@
 
   <TabControl Margin="0">
     <TabItem Header="回测">
-      <Grid x:Name="TradingSplitGrid" Margin="0">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="380" MinWidth="240" MaxWidth="720"/>
-          <ColumnDefinition Width="4"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+      <Grid Margin="0" RowDefinitions="Auto,*">
+        <!-- 顶部：配置按钮 + 状态 -->
+        <DockPanel Grid.Row="0" LastChildFill="True" Margin="12,8,12,4">
+          <Button DockPanel.Dock="Right" Content="⚙ 回测配置" Click="OnBacktestConfigClick"
+                  Classes="tool" Padding="16,6" FontSize="12" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                     VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="Wrap" />
+        </DockPanel>
 
-        <!-- 左：参数表单 -->
-        <Border Grid.Column="0" Classes="card" Margin="12">
-          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="10">
-              <TextBlock Text="📊 策略回测" FontSize="15" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Text="LEAN 引擎 + IAnalysisManager 行情数据。填参数后点「开始回测」。"
-                         FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+        <!-- 结果区全宽 -->
+        <ScrollViewer Grid.Row="1" Padding="0" Margin="12,0,12,12">
+          <StackPanel Spacing="12">
 
-              <StackPanel Spacing="4">
-                <TextBlock Text="合约代码" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox Text="{Binding Symbol}" />
+            <!-- 错误 -->
+            <Border Classes="card" IsVisible="{Binding HasError}">
+              <StackPanel Spacing="6">
+                <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="#C62828" />
+                <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
               </StackPanel>
-              <StackPanel Spacing="4">
-                <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding StrategyName}" HorizontalAlignment="Stretch" />
+            </Border>
+
+            <!-- 统计 -->
+            <Border Classes="card" IsVisible="{Binding HasResult}">
+              <StackPanel Spacing="8">
+                <TextBlock Text="📈 统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="总收益" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Statistics.TotalReturn}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="0" Grid.Column="2" Text="年化" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                  <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding Statistics.Cagr}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="夏普" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Statistics.SharpeRatio}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="1" Grid.Column="2" Text="最大回撤" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                  <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Statistics.MaxDrawdown}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="2" Grid.Column="0" Text="胜率" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Statistics.WinRate}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="2" Grid.Column="2" Text="交易次数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                  <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding Statistics.TotalTrades}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="3" Grid.Column="0" Text="净利" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
+                  <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Statistics.NetProfit}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                  <TextBlock Grid.Row="3" Grid.Column="2" Text="权益点数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
+                  <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding EquityPointCount}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                </Grid>
               </StackPanel>
-              <StackPanel Spacing="4">
-                <TextBlock Text="开始日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <CalendarDatePicker SelectedDate="{Binding StartDate}" />
+            </Border>
+
+            <!-- 权益曲线 -->
+            <Border Classes="card" IsVisible="{Binding HasResult}">
+              <StackPanel Spacing="8">
+                <TextBlock Text="权益曲线" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                <Viewbox Stretch="Fill" Width="800" Height="240">
+                  <Canvas Width="1000" Height="300">
+                    <Polyline Points="{Binding EquityPoints}" Stroke="#3B82F6" StrokeThickness="3" />
+                  </Canvas>
+                </Viewbox>
               </StackPanel>
-              <StackPanel Spacing="4">
-                <TextBlock Text="结束日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <CalendarDatePicker SelectedDate="{Binding EndDate}" />
+            </Border>
+
+            <!-- 日志 -->
+            <Border Classes="card" IsVisible="{Binding HasResult}">
+              <StackPanel Spacing="6">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="11" />
+                  <TextBlock Text="运行日志" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                </DockPanel>
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8">
+                  <ScrollViewer Height="180">
+                    <SelectableTextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
+                  </ScrollViewer>
+                </Border>
               </StackPanel>
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                <StackPanel Grid.Column="0" Spacing="4">
-                  <TextBlock Text="初始资金" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                  <TextBox Text="{Binding InitialCash}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="4">
-                  <TextBlock Text="分辨率" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                  <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}" HorizontalAlignment="Stretch" />
-                </StackPanel>
-              </Grid>
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                <StackPanel Grid.Column="0" Spacing="4">
-                  <TextBlock Text="快线周期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                  <TextBox Text="{Binding FastPeriod}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="4">
-                  <TextBlock Text="慢线周期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                  <TextBox Text="{Binding SlowPeriod}" />
-                </StackPanel>
-              </Grid>
-              <Button Content="开始回测" Classes="primary" Command="{Binding RunCommand}" Padding="0,8" HorizontalAlignment="Stretch" />
-              <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
-            </StackPanel>
-          </ScrollViewer>
-        </Border>
+            </Border>
 
-        <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}" />
+            <!-- 空状态 -->
+            <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="📊" FontSize="40" HorizontalAlignment="Center" />
+                <TextBlock Text="点右上角「回测配置」设置参数并开始回测" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Border>
 
-        <!-- 右：结果 -->
-        <Border Grid.Column="2" Margin="0,0,12,12">
-          <ScrollViewer Padding="0">
-            <StackPanel Spacing="12">
-
-              <!-- 错误 -->
-              <Border Classes="card" IsVisible="{Binding HasError}">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="#C62828" />
-                  <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                </StackPanel>
-              </Border>
-
-              <!-- 统计 -->
-              <Border Classes="card" IsVisible="{Binding HasResult}">
-                <StackPanel Spacing="8">
-                  <TextBlock Text="📈 统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                  <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="总收益" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Statistics.TotalReturn}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="年化" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding Statistics.Cagr}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="夏普" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Statistics.SharpeRatio}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="1" Grid.Column="2" Text="最大回撤" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Statistics.MaxDrawdown}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="胜率" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Statistics.WinRate}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="2" Grid.Column="2" Text="交易次数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding Statistics.TotalTrades}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="净利" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Statistics.NetProfit}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                    <TextBlock Grid.Row="3" Grid.Column="2" Text="权益点数" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,2,0,2" />
-                    <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding EquityPointCount}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
-                  </Grid>
-                </StackPanel>
-              </Border>
-
-              <!-- 权益曲线 -->
-              <Border Classes="card" IsVisible="{Binding HasResult}">
-                <StackPanel Spacing="8">
-                  <TextBlock Text="权益曲线" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
-                  <Viewbox Stretch="Fill" Width="800" Height="240">
-                    <Canvas Width="1000" Height="300">
-                      <Polyline Points="{Binding EquityPoints}" Stroke="#3B82F6" StrokeThickness="3" />
-                    </Canvas>
-                  </Viewbox>
-                </StackPanel>
-              </Border>
-
-              <!-- 日志 -->
-              <Border Classes="card" IsVisible="{Binding HasResult}">
-                <StackPanel Spacing="6">
-                  <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="11" />
-                    <TextBlock Text="运行日志" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                  </DockPanel>
-                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8">
-                    <ScrollViewer Height="180">
-                      <SelectableTextBlock Text="{Binding LogText}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap" />
-                    </ScrollViewer>
-                  </Border>
-                </StackPanel>
-              </Border>
-
-              <!-- 空状态 -->
-              <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
-                <StackPanel Spacing="8" HorizontalAlignment="Center">
-                  <TextBlock Text="📊" FontSize="40" HorizontalAlignment="Center" />
-                  <TextBlock Text="填写左侧参数后点「开始回测」" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-                </StackPanel>
-              </Border>
-
-            </StackPanel>
-          </ScrollViewer>
-        </Border>
+          </StackPanel>
+        </ScrollViewer>
       </Grid>
     </TabItem>
 

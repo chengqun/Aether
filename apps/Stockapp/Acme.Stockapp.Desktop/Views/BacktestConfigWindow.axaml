@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Stockapp.Desktop.Views.BacktestConfigWindow"
+        Title="回测配置"
+        Width="460" Height="560"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid Margin="20">
+    <StackPanel Spacing="10">
+      <TextBlock Text="📊 策略回测" FontSize="15" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+      <TextBlock Text="LEAN 引擎 + IAnalysisManager 行情数据。填参数后点「开始回测」。"
+                 FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="合约代码" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <TextBox Text="{Binding Symbol}" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding StrategyName}" HorizontalAlignment="Stretch" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Text="开始日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <CalendarDatePicker SelectedDate="{Binding StartDate}" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Text="结束日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+        <CalendarDatePicker SelectedDate="{Binding EndDate}" />
+      </StackPanel>
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="初始资金" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Text="{Binding InitialCash}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock Text="分辨率" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Grid>
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="快线周期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Text="{Binding FastPeriod}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock Text="慢线周期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBox Text="{Binding SlowPeriod}" />
+        </StackPanel>
+      </Grid>
+      <Button Content="开始回测" Classes="primary" Command="{Binding RunCommand}" Padding="0,8" HorizontalAlignment="Stretch" />
+      <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+    </StackPanel>
+  </Grid>
+</Window>
