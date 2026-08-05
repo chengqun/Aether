@@ -21,13 +21,9 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0" Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="#16A34A"
-                   VerticalAlignment="Center" Margin="0,0,12,0"
-                   IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-        <Button Grid.Column="1" Content="完成" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}"
-                Classes="primary" HorizontalAlignment="Right" Padding="24,8"/>
-      </Grid>
+      <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="#16A34A"
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </Border>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

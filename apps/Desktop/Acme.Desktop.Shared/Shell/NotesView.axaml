@@ -109,7 +109,7 @@
         <Grid>
           <DockPanel IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
             <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <Grid ColumnDefinitions="*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
                         Fill="{Binding SelectedNode.IconColor}" IsVisible="{Binding SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
@@ -129,14 +129,6 @@
                         Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
                         StrokeLineCap="Round" StrokeJoin="Round"
                         Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                </Button>
-                <Button Grid.Column="3" Classes="notes-primary" Command="{Binding SaveNoteCommand}">
-                  <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Path Data="{x:Static nav:NavIcons.Save}" Stretch="Uniform" Width="14" Height="14"
-                          StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                          Stroke="White"/>
-                    <TextBlock Text="保存" VerticalAlignment="Center"/>
-                  </StackPanel>
                 </Button>
               </Grid>
             </Border>
