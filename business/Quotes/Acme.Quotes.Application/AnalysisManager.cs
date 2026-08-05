@@ -147,7 +147,12 @@ public class AnalysisManager : IAnalysisManager, IAnalysisService
             return true;
         }
 
-        // 检查最后一条数据的更新时间是否大于关盘时间
+        // 收盘后 + 已有当日数据 → 不需更新（数据已定，用缓存，保证回测确定性）
+        if (now.TimeOfDay > afternoonEnd)
+        {
+            return false;
+        }
+        // 盘中：检查最后一条数据的更新时间是否大于关盘时间
         return todayQuote.UpdatedAt.TimeOfDay <= afternoonEnd;
     }
 }
