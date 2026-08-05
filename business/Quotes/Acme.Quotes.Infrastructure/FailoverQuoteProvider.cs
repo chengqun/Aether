@@ -41,10 +41,12 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
             return new List<Quote>();
         }
 
-        // 固定顺序（不随机）——保证同一输入多次取数据结果一致（回测确定性）
+        var random = new Random();
+        var shuffledProviders = supportedProviders.OrderBy(_ => random.Next()).ToList();
+
         var skippedProviders = new List<string>();
 
-        foreach (var provider in supportedProviders)
+        foreach (var provider in shuffledProviders)
         {
             var providerName = provider.GetType().Name;
 
