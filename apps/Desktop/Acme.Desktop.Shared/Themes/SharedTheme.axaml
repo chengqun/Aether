@@ -124,27 +124,33 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
-  <!-- 展开态账户芯片（头像+用户名，左对齐，底部留白） -->
+  <!-- 展开态账户芯片（头像+用户名，左对齐，hover 背景） -->
   <Style Selector="Button.account-chip">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="10"/>
-    <Setter Property="Padding" Value="10,8"/>
+    <Setter Property="Padding" Value="8,8"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    <Setter Property="Margin" Value="10,2,10,12"/>
+    <Setter Property="Margin" Value="8,2,8,8"/>
+  </Style>
+  <Style Selector="Button.account-chip:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
   </Style>
 
-  <!-- 收起态账户芯片（仅头像，居中，底部留白） -->
+  <!-- 收起态账户芯片（仅头像，居中，hover 背景） -->
   <Style Selector="Button.account-rail">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="10"/>
-    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Padding" Value="4"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    <Setter Property="Margin" Value="0,0,0,12"/>
+    <Setter Property="Margin" Value="0,0,0,8"/>
+  </Style>
+  <Style Selector="Button.account-rail:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
   </Style>
 
   <!-- 一级 Tab 按钮 -->

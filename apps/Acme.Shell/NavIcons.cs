@@ -332,4 +332,100 @@ public static class NavIcons
     /// <summary>清单（剪贴板列表）</summary>
     public const string ClipboardList =
         "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M9 2h6a1 1 0 0 1 1 1v1H8V3a1 1 0 0 1 1-1z M12 11h4 M12 16h4 M8 11h.01 M8 16h.01";
+
+    // ── 登录/账户菜单图标 ──
+
+    /// <summary>登录（log-in）</summary>
+    public const string LogIn =
+        "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4 M10 17l5-5-5-5 M15 12H3";
+
+    /// <summary>退出登录（log-out）</summary>
+    public const string LogOut =
+        "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9";
+
+    /// <summary>设置/齿轮（settings）</summary>
+    public const string SettingsGear =
+        "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.34a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z";
+
+    /// <summary>调试/追踪（bug）</summary>
+    public const string Bug =
+        "M8 2l1.88 1.88 M14.12 3.88 16 2 M9 7.13v-1a3.003 3.003 0 1 1 6 0v1 M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6 M12 20v-9 M6.53 9C4.6 8.8 3 8.2 3 7 M6.53 12C4.6 11.8 3 11.2 3 10 M17.47 9c1.93-.2 3.53-.8 3.53-2 M17.47 12c1.93-.2 3.53-.8 3.53-2";
+
+    // ── 头像图标（登录后用户头像，非人物也行）──
+
+    /// <summary>猫（cat）</summary>
+    public const string AvatarCat =
+        "M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 6-.42 6 .57 1.07 1 2.24.87 3.48 0 1.87-.97 3.67-2.59 4.74-.01.85-.18 1.56-.59 2.1-.27.37-.76.69-1.45.69-.77 0-1.26-.42-1.51-.86-.14-.24-.22-.53-.28-.83-.25-.07-.51-.13-.78-.17-.51-.08-1.03-.12-1.45-.12s-.94.04-1.45.12c-.27.04-.53.1-.78.17-.06.3-.14.59-.28.83-.25.44-.74.86-1.51.86-.69 0-1.18-.32-1.45-.69-.41-.54-.58-1.25-.59-2.1-1.62-1.07-2.59-2.87-2.59-4.74-.13-1.24.3-2.41.87-3.48 0 0-1.82-5.42-.42-6 1.39-.58 4.64.26 6.42 2.26.65-.17 1.33-.26 2-.26z";
+
+    /// <summary>狗（dog）</summary>
+    public const string AvatarDog =
+        "M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.5-5 2.5-5 5 0 1.5.5 2.5 1 3l1.5 2 M21.5 15c.5-1.5.5-3.5-.5-5.5-2-4-7-4-9-2-1.5 1.5-2 5-2 7s1 5 5 5c2 0 4-1 5-2 M5 14c0 2.5 2 4.5 4 4.5s4-2 4-4.5 M7 8c0 .5.5 1 1 1 M15 8c0 .5-.5 1-1 1 M19.5 10c1.5-1 4-1 4 2 0 1.5-1 3-3 3 M4.5 10c-1.5-1-4-1-4 2 0 1.5 1 3 3 3";
+
+    /// <summary>鸟（bird）</summary>
+    public const string AvatarBird =
+        "M16 7h.01 M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20 M20.7 11a2.5 2.5 0 0 1-4.6 1.6l-2.2-3.3 M9 14c0 2.5 2 4.5 4 4.5";
+
+    /// <summary>狐狸（fox）</summary>
+    public const string AvatarFox =
+        "M13 2 3 14h9l-1 8 10-12h-9l1-8z";
+
+    /// <summary>兔子（rabbit）</summary>
+    public const string AvatarRabbit =
+        "M13 16a3 3 0 0 0-2.74 5 M18 16a3 3 0 0 1 2.74 5 M12 8a4 4 0 0 0-4 4v0a4 4 0 0 0 4 4h0a4 4 0 0 0 4-4v0a4 4 0 0 0-4-4z M9 11a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M14 11a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0 M12 12a2 2 0 0 0-2 2v0a2 2 0 0 0 4 0v0a2 2 0 0 0-2-2z";
+
+    /// <summary>熊猫（panda）</summary>
+    public const string AvatarPanda =
+        "M10 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 M14 2a3 3 0 0 1 3 3v1a3 3 0 0 1-3 3 M6 10a6 6 0 0 0 6 6 6 6 0 0 0 6-6 M9 14h.01 M15 14h.01 M11 17h2";
+
+    /// <summary>猫头鹰（owl）</summary>
+    public const string AvatarOwl =
+        "M12 2a5 5 0 0 0-5 5v3a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z M12 6a2 2 0 0 0-2 2v0a2 2 0 0 0 4 0v0a2 2 0 0 0-2-2z M7 14a5 5 0 0 0 10 0 M5 18a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3";
+
+    /// <summary>机器人头像（robot）</summary>
+    public const string AvatarRobot =
+        "M12 8V4H8 M9 18h6 M3 11h18 M5 11V9a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z M9 13h.01 M15 13h.01";
+
+    /// <summary>幽灵（ghost）</summary>
+    public const string AvatarGhost =
+        "M9 10h.01 M15 10h.01 M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2L12 19l2.5 2 2.5-3 3 3V10a8 8 0 0 0-8-8z";
+
+    /// <summary>雪花（snowflake）</summary>
+    public const string AvatarSnowflake =
+        "M2 12h20 M12 2v20 m4.93-4.93-9.86-9.86 m0 9.86 9.86-9.86";
+
+    /// <summary>闪电（zap）</summary>
+    public const string AvatarZap =
+        "M13 2 3 14h9l-1 8 10-12h-9l1-8z";
+
+    /// <summary>星球（planet）</summary>
+    public const string AvatarPlanet =
+        "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M2.5 8.5c4 1.5 12.5 1.5 17 0 M2.5 15.5c4-1.5 12.5-1.5 17 0";
+
+    /// <summary>蘑菇（mushroom）</summary>
+    public const string AvatarMushroom =
+        "M12 2a10 10 0 0 0-10 10c0 2 1 3 3 3h14c2 0 3-1 3-3a10 10 0 0 0-10-10z M5 15v3a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-3 M9 12h.01 M15 12h.01";
+
+    /// <summary>花朵（flower）</summary>
+    public const string AvatarFlower =
+        "M12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 0 1-4.5-4.5z M12 7.5A4.5 4.5 0 1 0 7.5 12 4.5 4.5 0 0 0 12 7.5z M16.5 12a4.5 4.5 0 1 1-4.5 4.5 4.5 4.5 0 0 1 4.5-4.5z M7.5 12a4.5 4.5 0 1 0 4.5-4.5 4.5 4.5 0 0 0-4.5 4.5z";
+
+    /// <summary>月亮（moon）</summary>
+    public const string AvatarMoon =
+        "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z";
+
+    /// <summary>太阳（sun）</summary>
+    public const string AvatarSun =
+        "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z M12 1v2 M12 21v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M1 12h2 M21 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42-1.42";
+
+    /// <summary>钻石（gem）</summary>
+    public const string AvatarGem =
+        "M6 3h12l4 6-10 13L2 9z M11 3 8 9l4 13 4-13-3-6 M2 9h20";
+
+    /// <summary>火焰（flame）</summary>
+    public const string AvatarFlame =
+        "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38.5-2 1-3-1.5 0-3 .5-3.5 1.5-1.5 0-2 .5-2 2 0 1.5.5 2.5 1 3 1 0 1.5-.5 3-1 3 M12 2c1 3 4 5 4 8a4 4 0 0 1-8 0c0-1 .5-2 1-2.5";
+
+    /// <summary>海豚（dolphin）</summary>
+    public const string AvatarDolphin =
+        "M20 10c0 4-3 7-7 7-1 0-2-.2-3-.5L7 19l.5-3.5C5.5 14 4 12 4 10c0-4 3-7 7-7s7 3 7 7z M8 9h.01 M12 9h.01";
 }

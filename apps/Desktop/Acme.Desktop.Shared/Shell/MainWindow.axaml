@@ -23,11 +23,11 @@
         <Button DockPanel.Dock="Bottom" Classes="account-chip" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
-              <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
-              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
-              <MenuItem Header="运行 Trace" Click="OnOpenTrace"/>
-              <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
-              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
+              <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
+              <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
+              <MenuItem Header="━" IsEnabled="False"/>
+              <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
+              <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
           </Button.Flyout>
           <StackPanel Orientation="Horizontal" Spacing="10">
@@ -35,9 +35,9 @@
               <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <StackPanel Orientation="Vertical" Spacing="2">
-              <TextBlock Text="{Binding UserName}" FontSize="13" VerticalAlignment="Center"/>
-              <TextBlock Text="{Binding Tenant}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <StackPanel Orientation="Vertical" Spacing="1">
+              <TextBlock Text="{Binding UserName}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding Tenant}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
             </StackPanel>
           </StackPanel>
         </Button>
@@ -102,11 +102,11 @@
         <Button Grid.Row="2" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
-              <MenuItem Header="{Binding UserName}" IsEnabled="False"/>
-              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}"/>
-              <MenuItem Header="运行 Trace" Click="OnOpenTrace"/>
-              <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
-              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
+              <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
+              <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
+              <MenuItem Header="━" IsEnabled="False"/>
+              <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
+              <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
           </Button.Flyout>
           <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentBrush}">
