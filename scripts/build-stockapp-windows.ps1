@@ -258,7 +258,10 @@ function Build-One {
   }
 
   Write-Host "==> [$Variant] dotnet publish ($Runtime, self-contained)" -ForegroundColor Cyan
-  & dotnet publish $projFull -c $Config -r $Runtime --self-contained true -o $pubDir
+  # Stockapp 多目标 net10.0-windows;net10.0 —— publish 必须指定 -f（NETSDK1129）。
+  # Windows 取 net10.0-windows：这样才引得到 StockTrading.Infrastructure（FlaUI 同花顺下单，Windows-only），
+  # 股票交易功能在产物里可用。net10.0 框架只在 mac/linux 打包时用（FlaUI 不引，走桩页提示）。
+  & dotnet publish $projFull -c $Config -f net10.0-windows -r $Runtime --self-contained true -o $pubDir
   if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败: $Variant" }
 
   # 双保险：确保 build/native 里的 ctp_native.dll 进 publish 目录（Content glob 正常会带上）

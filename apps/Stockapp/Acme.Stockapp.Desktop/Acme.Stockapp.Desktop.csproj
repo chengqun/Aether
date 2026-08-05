@@ -2,10 +2,16 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- 多目标：net10.0-windows 才引 StockTrading.Infrastructure（FlaUI/WPF，Windows-only）；
+         net10.0 保留 macOS/Linux 跨平台构建（CTP/回测等其它上下文不受影响）。 -->
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,10 +31,15 @@
     <ProjectReference Include="..\..\..\business\Quotes\Acme.Quotes.Infrastructure\Acme.Quotes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Trading\Acme.Trading.Application\Acme.Trading.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Lean\Acme.Trading.Runtime.Lean.csproj" />
+    <!-- 股票交易 Application（跨平台契约，所有 TFM 都引） -->
+    <ProjectReference Include="..\..\..\business\StockTrading\Acme.StockTrading.Application\Acme.StockTrading.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\StockTrading\Acme.StockTrading.Infrastructure\Acme.StockTrading.Infrastructure.csproj"
+                      Condition="'$(TargetFramework)' == 'net10.0-windows'" />
     <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Scripting\Acme.Trading.Scripting.csproj" />
     <ProjectReference Include="..\..\..\ai\Quotes\Acme.Quotes.AI\Acme.Quotes.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Trading\Acme.Trading.AI\Acme.Trading.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\StockTrading\Acme.StockTrading.AI\Acme.StockTrading.AI.csproj" />
   </ItemGroup>
 
 </Project>

@@ -13,9 +13,15 @@ using Acme.Securities.Application.DependencyInjection;
 using Acme.Securities.Infrastructure.DependencyInjection;
 using Acme.Stockapp.Desktop.ViewModels;
 using Acme.Trading.AI;
+using Acme.StockTrading.AI;
 using Acme.Trading.Application.DependencyInjection;
 using Acme.Trading.Runtime.Lean.DependencyInjection;
 using Acme.Trading.Scripting;
+using Acme.StockTrading.Application.DependencyInjection;
+using Acme.StockTrading.Domain;
+#if WINDOWS
+using Acme.StockTrading.Infrastructure.DependencyInjection;
+#endif
 using Acme.Stockapp.Desktop.Hosting;
 using Acme.Notes.Application;
 using Acme.Trading.Runtime.Domain;
@@ -80,10 +86,19 @@ public partial class App : global::Avalonia.Application
         services.AddQuotesApplication();
         services.AddTradingApplication();
         services.AddTradingRuntimeLean();
+        // 股票交易（FlaUI 操控同花顺下单客户端，Windows-only）
+        services.AddStockTradingApplication();
+#if WINDOWS
+        services.AddStockTradingFlaUi();
+#else
+        // 非 Windows：注册一个「未连接」桩实现，让页面能解析、能打开，但操作提示不支持。
+        services.AddSingleton<IStockBrokerage>(new UnsupportedStockBrokerage(
+            "股票交易（FlaUI 同花顺）仅支持 Windows。当前操作系统不支持自动下单。"));
+#endif
 
         // 公共组合（AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement + 公共 AI 工具）
         var aether = services.AddDesktopCommon("stockapp", tenantDir);
-        aether.AddQuotesTools().AddCtpTools().AddTradingTools();   // stockapp 租户专属 AI 工具
+        aether.AddQuotesTools().AddCtpTools().AddTradingTools().AddStockTradingTools();   // stockapp 租户专属 AI 工具
         services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
 
@@ -94,6 +109,8 @@ public partial class App : global::Avalonia.Application
         services.AddSingleton<CtpViewModel>();
         // 回测/实盘页 ViewModel
         services.AddSingleton<TradingViewModel>();
+        // 股票交易页 ViewModel
+        services.AddSingleton<StockTradingViewModel>();
 
         // shell 主 ViewModel
         services.AddSingleton<StockappMainViewModel>();
@@ -102,3 +119,25 @@ public partial class App : global::Avalonia.Application
         return services.BuildServiceProvider();
     }
 }
+
+#if !WINDOWS
+/// <summary>非 Windows 平台的占位实现：所有操作返回「不支持」，让页面能解析、能打开但不可用。</summary>
+file sealed class UnsupportedStockBrokerage : IStockBrokerage
+{
+    private readonly string _reason;
+    public UnsupportedStockBrokerage(string reason) => _reason = reason;
+    public bool IsConnected => false;
+    public event EventHandler<string>? LogReceived;
+    public Task<(bool Success, string? Error)> ConnectAsync(CancellationToken ct = default)
+        => Task.FromResult((false, _reason));
+    public Task DisconnectAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<(bool Success, string? Error)> LaunchClientAsync(CancellationToken ct = default)
+        => Task.FromResult((false, _reason));
+    public Task<(bool Success, string? Error)> PlaceOrderAsync(StockOrderRequest request, CancellationToken ct = default)
+        => Task.FromResult((false, _reason));
+    public Task<(bool Success, string? Error)> CancelOrderAsync(string orderNo, CancellationToken ct = default)
+        => Task.FromResult((false, _reason));
+    public Task<IReadOnlyList<StockPosition>> QueryPositionsAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<StockPosition>>(Array.Empty<StockPosition>());
+}
+#endif

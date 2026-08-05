@@ -15,18 +15,20 @@ public sealed class StockappMainViewModel : MainViewModelBase
 {
     private readonly CtpViewModel _ctpVm;
 
-    public StockappMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, CtpViewModel ctpVm, TradingViewModel tradingVm)
+    public StockappMainViewModel(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, CtpViewModel ctpVm, TradingViewModel tradingVm, StockTradingViewModel stockTradingVm)
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService, "stockapp")
     {
         _ctpVm = ctpVm;
         Futures = ctpVm;   // 期货页 VM（共享 shell 经 ContentControl + App.axaml DataTemplate 解析为 FuturesView）
         Trading = tradingVm;   // 回测/实盘页 VM（DataTemplate 解析为 TradingView）
+        StockTrade = stockTradingVm;   // 股票交易页 VM（FlaUI 同花顺，DataTemplate 解析为 StockTradingView）
 
         AddNav("notes", NavIcons.Notes, "笔记");
         AddNav("experts", NavIcons.Experts, "专家");
         AddNav("automation", NavIcons.Automation, "自动化");
         AddNav("ctp", NavIcons.Futures, "期货");
         AddNav("backtest", NavIcons.Backtest, "回测");
+        AddNav("stocktrade", NavIcons.Activity, "股票");
         NavigateToCommand.Execute("notes");
     }
 

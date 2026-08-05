@@ -1,0 +1,159 @@
+using System.Collections.ObjectModel;
+using Acme.Shell;
+using Acme.StockTrading.Application;
+using Acme.StockTrading.Domain;
+using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace Acme.Stockapp.Desktop.ViewModels;
+
+/// <summary>
+/// 股票交易页 ViewModel：经 <see cref="IStockTradingApplicationService"/> 操控同花顺下单客户端
+/// （FlaUI 实现，Windows-only）。UI/AI 都走 Application 契约，不直接依赖 Infrastructure。
+/// 区别于 TradingViewModel（Lean 期货回测/实盘）——这是 A 股 GUI 自动化下单。
+/// </summary>
+public partial class StockTradingViewModel : ObservableObject
+{
+    private readonly IStockTradingApplicationService _service;
+    private readonly Dispatcher _dispatcher;
+
+    public StockTradingViewModel(IStockTradingApplicationService service)
+    {
+        _service = service;
+        _dispatcher = Dispatcher.UIThread;
+        _service.LogReceived += OnLogReceived;
+    }
+
+    // —— 连接态 ——
+    [ObservableProperty] private bool _isConnected;
+    [ObservableProperty] private string _statusMessage = "未连接";
+
+    // —— 下单表单 ——
+    [ObservableProperty] private string _symbol = "600000";
+    [ObservableProperty] private string _name = "";
+    [ObservableProperty] private int _directionIndex; // 0=买 1=卖
+    [ObservableProperty] private decimal _limitPrice = 10.00m;
+    [ObservableProperty] private int _quantity = 100;
+    [ObservableProperty] private bool _isBusy;
+
+    // —— 撤单 ——
+    [ObservableProperty] private string _cancelOrderNo = "";
+
+    // —— 持仓 ——
+    [ObservableProperty]
+    private ObservableCollection<StockPosition> _positions = new();
+
+    // —— 日志 ——
+    [ObservableProperty]
+    private ObservableCollection<string> _logs = new();
+
+    public StockDirection Direction => DirectionIndex == 0 ? StockDirection.Buy : StockDirection.Sell;
+
+    private void OnLogReceived(object? sender, string msg)
+    {
+        // FlaUI/STA 后台线程触发的事件，切回 UI 线程刷新集合。
+        _dispatcher.Post(() =>
+        {
+            const int max = 500;
+            Logs.Add(msg);
+            while (Logs.Count > max) Logs.RemoveAt(0);
+        });
+    }
+
+    private void RefreshState()
+    {
+        IsConnected = _service.IsConnected;
+        StatusMessage = IsConnected ? "已连接" : "未连接";
+    }
+
+    [RelayCommand]
+    private async Task LaunchAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var (ok, err) = await _service.LaunchClientAsync();
+            StatusMessage = ok ? "客户端已启动，请手动登录后点击连接" : $"启动失败: {err}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task ConnectAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var (ok, err) = await _service.ConnectAsync();
+            RefreshState();
+            if (!ok) StatusMessage = $"连接失败: {err}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task DisconnectAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            await _service.DisconnectAsync();
+            RefreshState();
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPlace))]
+    private async Task PlaceOrderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Symbol)) return;
+        IsBusy = true;
+        try
+        {
+            var req = new StockOrderRequest
+            {
+                Symbol = Symbol.Trim(),
+                Name = string.IsNullOrWhiteSpace(Name) ? null : Name.Trim(),
+                Direction = Direction,
+                LimitPrice = LimitPrice,
+                Quantity = Quantity,
+            };
+            var (ok, err) = await _service.PlaceOrderAsync(req);
+            StatusMessage = ok ? $"已下单 {req.Symbol} {req.Direction} {req.Quantity}@{req.LimitPrice}" : $"下单失败: {err}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    private bool CanPlace => IsConnected && !IsBusy;
+
+    [RelayCommand]
+    private async Task CancelAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CancelOrderNo)) return;
+        IsBusy = true;
+        try
+        {
+            var (ok, err) = await _service.CancelOrderAsync(CancelOrderNo.Trim());
+            StatusMessage = ok ? $"已撤单 {CancelOrderNo}" : $"撤单失败: {err}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task QueryPositionsAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var list = await _service.QueryPositionsAsync();
+            Positions.Clear();
+            foreach (var p in list) Positions.Add(p);
+            StatusMessage = $"已刷新持仓 ({list.Count} 条)";
+        }
+        finally { IsBusy = false; }
+    }
+
+    partial void OnIsConnectedChanged(bool value) => PlaceOrderCommand.NotifyCanExecuteChanged();
+    partial void OnIsBusyChanged(bool value) => PlaceOrderCommand.NotifyCanExecuteChanged();
+}

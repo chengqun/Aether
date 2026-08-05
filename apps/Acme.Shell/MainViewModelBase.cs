@@ -767,6 +767,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>是否是回测/实盘页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
     public bool IsTradingPage => CurrentPage == "backtest";
 
+    /// <summary>是否是股票交易页（Stockapp 租户专属；Qifu 无此导航，恒 false）。
+    /// FlaUI 操控同花顺下单客户端（区别于 backtest 的 Lean 引擎）。</summary>
+    public bool IsStockTradePage => CurrentPage == "stocktrade";
+
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
 
@@ -787,6 +791,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// 类型为 object 以免共享层依赖 Trading。视图经 App.axaml DataTemplate 解析。</summary>
     public object? Trading { get; protected set; }
 
+    /// <summary>股票交易页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
+    /// 类型为 object 以免共享层依赖 StockTrading。视图经 App.axaml DataTemplate 解析。</summary>
+    public object? StockTrade { get; protected set; }
+
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
 
@@ -800,6 +808,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         OnPropertyChanged(nameof(IsAutomationPage));
         OnPropertyChanged(nameof(IsFuturesPage));
         OnPropertyChanged(nameof(IsTradingPage));
+        OnPropertyChanged(nameof(IsStockTradePage));
     }
 
     [RelayCommand]

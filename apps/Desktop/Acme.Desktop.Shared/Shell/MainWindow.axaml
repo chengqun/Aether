@@ -129,6 +129,8 @@
           IsVisible="{Binding IsFuturesPage}" />
       <ContentControl Content="{Binding Trading}"
           IsVisible="{Binding IsTradingPage}" />
+      <ContentControl Content="{Binding StockTrade}"
+          IsVisible="{Binding IsStockTradePage}" />
     </Grid>
 
     <!-- ═══ 分隔条（拖动调整聊天宽度） ═══ -->

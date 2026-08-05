@@ -21,6 +21,9 @@
         <DataTemplate DataType="vm:TradingViewModel">
             <views:TradingView />
         </DataTemplate>
+        <DataTemplate DataType="vm:StockTradingViewModel">
+            <views:StockTradingView />
+        </DataTemplate>
     </Application.DataTemplates>
 
 </Application>

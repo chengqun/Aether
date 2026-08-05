@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Windows-only：FlaUI 依赖 Windows UIAutomation。端口在 Domain（net10.0），上层看不见 windows TFM。 -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.StockTrading.Infrastructure</RootNamespace>
+    <!-- 同花顺持仓表自绘网格，靠 Ctrl+A/Ctrl+C 复制剪贴板；System.Windows.Clipboard.GetText() 需 WPF 栈（STA）。 -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Acme.StockTrading.Domain\Acme.StockTrading.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 与参考项目 AiTrade.csproj 一致：FlaUI.UIA3 5.0.0。5.0 版本 STA/UIA3 行为与 4.0 不同，勿降级。 -->
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
+  <!-- 把 FlaUI 及其传递依赖 dll 输出到本 bin，供 Stockapp 宿主运行时反射加载时一并拷贝。
+       lib 项目默认不把 NuGet managed 依赖写进 bin，故显式收集 ReferencePath 中的 FlaUI 程序集复制。 -->
+  <Target Name="CopyFlaUiDependenciesToOutput" AfterTargets="Build">
+    <ItemGroup>
+      <FlaUiRuntimeFiles Include="@(ReferencePath)"
+                        Condition="'%(ReferencePath.NuGetPackageId)' == 'FlaUI.UIA3'
+                                Or '%(ReferencePath.NuGetPackageId)' == 'FlaUI.Core'
+                                Or '%(ReferencePath.NuGetPackageId)' == 'Interop.UIAutomationClient'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FlaUiRuntimeFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
