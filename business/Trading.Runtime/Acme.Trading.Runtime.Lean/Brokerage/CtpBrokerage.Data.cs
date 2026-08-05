@@ -60,7 +60,6 @@ public partial class CtpBrokerage
     {
         if (_aggregator == null) return;
         if (!_symbolByInstrument.TryGetValue(tick.InstrumentId, out var symbol)) return;   // 未订阅的合约过滤掉
-        LogTickSample(tick);   // 只记实盘订阅合约的 tick
         if (!_barBuilders.TryGetValue(symbol, out var builder)) return;
         try
         {
