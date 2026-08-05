@@ -49,8 +49,9 @@ internal static class BacktestResultMapper
             return series.Values
                 .Select(p =>
                 {
-                    // ISeriesPoint.Time 为 DateTime；ChartPoint.Y 为权益值（decimal?）
-                    var value = (p as ChartPoint)?.Y ?? 0m;
+                    // equity series 是 CandlestickSeries，Values 是 Candlestick（不是 ChartPoint）
+                    // Candlestick.Close = portfolio value；回退 ChartPoint.Y 兼容旧版
+                    var value = (p as Candlestick)?.Close ?? (p as ChartPoint)?.Y ?? 0m;
                     return new EquityPoint { Time = p.Time, Value = value };
                 })
                 .ToList();

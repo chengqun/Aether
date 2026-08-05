@@ -160,18 +160,43 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
             _logger?.LogError(ex, "LEAN 统计分析失败（equity curve 稀疏），统计可能缺失");
             analysisError = $"统计分析部分失败: {ex.Message}";
         }
+        logs.Add($"[诊断] stats: {(stats != null ? "有" : "null")}, analysisError: {analysisError ?? "无"}");
         try
         {
             equity = BacktestResultMapper.MapEquityCurve(resultHandler);
+            // 诊断：总是输出 Charts 状态
+            if (resultHandler == null)
+            {
+                logs.Add("[诊断] resultHandler is null (Cast 失败)");
+            }
+            else
+            {
+                logs.Add($"[诊断] equity points: {equity.Count}, Charts: {string.Join(",", resultHandler.Charts.Keys)}");
+                if (equity.Count > 0)
+                {
+                    var min = equity.Min(p => p.Value);
+                    var max = equity.Max(p => p.Value);
+                    logs.Add($"[诊断] equity min: {min}, max: {max}, first: {equity[0].Value}, last: {equity[^1].Value}");
+                }
+                if (resultHandler.Charts.TryGetValue("Strategy Equity", out var chart))
+                {
+                    logs.Add($"[诊断] Strategy Equity series: {string.Join(",", chart.Series.Keys)}");
+                    if (chart.Series.TryGetValue("Equity", out var series))
+                        logs.Add($"[诊断] Equity series points: {series.Values.Count}");
+                }
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // equity curve 取失败，曲线空（不影响统计）
+            logs.Add($"[诊断] MapEquityCurve 异常: {ex.Message}");
         }
+
+        var isSuccess = status == AlgorithmStatus.Completed && error == null;
+        logs.Add($"[诊断] IsSuccess: {isSuccess}, status: {status}, error: {error ?? "无"}, analysisError: {analysisError ?? "无"}");
 
         return new BacktestResult
         {
-            IsSuccess = status == AlgorithmStatus.Completed && error == null,
+            IsSuccess = isSuccess,
             Error = error ?? analysisError,
             AlgorithmStatus = status.ToString(),
             Statistics = stats,
