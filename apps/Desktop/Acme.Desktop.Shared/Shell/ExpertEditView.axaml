@@ -46,9 +46,11 @@
           </StackPanel>
         </Expander>
 
-        <Expander x:Name="ExpPrompt" Header="系统提示词" IsExpanded="False">
-          <TextBox Text="{Binding SystemPrompt}" AcceptsReturn="True" TextWrapping="Wrap"
-                   Height="400" FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
+        <Expander x:Name="ExpPrompt" Header="系统提示词" IsExpanded="True">
+          <StackPanel Spacing="4">
+            <TextBox Text="{Binding SystemPrompt}" AcceptsReturn="True" TextWrapping="Wrap"
+                     Height="400" FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
+          </StackPanel>
         </Expander>
 
         <Expander x:Name="ExpModel" Header="记忆" IsExpanded="False">

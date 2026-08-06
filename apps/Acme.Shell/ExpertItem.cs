@@ -1,3 +1,4 @@
+using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -11,6 +12,12 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string _category = "普通对话";
     [ObservableProperty] private string _systemPrompt = string.Empty;
+
+    /// <summary>大脑引擎："Llm"（默认）|"Rule"（确定性规则，笔记 body 为规则程序 YAML）。空=Llm。</summary>
+    [ObservableProperty] private string _engine = string.Empty;
+
+    /// <summary>笔记节点类型：Agent（普通 agent）|Rule（规则 agent）。目录/规则 tab 按此过滤；默认 Agent。</summary>
+    [ObservableProperty] private NoteNodeType _nodeType = NoteNodeType.Agent;
     [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private string _modelName = string.Empty;
     [ObservableProperty] private List<string> _tools = new();
@@ -50,7 +57,7 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
 
-    public string DisplayIcon => "🤖";
+    public string DisplayIcon => NodeType == NoteNodeType.Rule ? "⚙️" : "🤖";
     /// <summary>来源徽章：本地 / 市场。</summary>
     public string SourceBadge => string.Equals(Source, "Marketplace", StringComparison.OrdinalIgnoreCase) ? "市场" : "本地";
     /// <summary>是否市场召唤的 agent。</summary>

@@ -58,6 +58,10 @@ public static class NavIcons
     public const string Knowledge =
         "M21.42 10.922a1 1 0 0 0-.019-.839l-.919-2.066a1 1 0 0 0-.604-.548l-7.83-2.82a1 1 0 0 0-.68 0l-7.83 2.82a1 1 0 0 0-.604.548l-.919 2.066a1 1 0 0 0-.019.839 1 1 0 0 0 .019.078L2 12.5v4.5a1 1 0 0 0 1 1h0a1 1 0 0 0 1-1v-3.5l1.5.5v4.5a1 1 0 0 0 .5.866l5 3a1 1 0 0 0 1 0l5-3a1 1 0 0 0 .5-.866v-4.5L21 13.5V17a1 1 0 0 0 1 1h0a1 1 0 0 0 1-1v-4.5l-1.419-.578a1 1 0 0 0 .019-.078Z";
 
+    /// <summary>规则 agent（scroll-text，规则/条令）</summary>
+    public const string Rule =
+        "M15 12h-5 M15 8h-5 M19 17V5a2 2 0 0 0-2-2H4 M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-2-2h2";
+
     /// <summary>便签</summary>
     public const string StickyNote =
         "M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z M15 3v6h6";

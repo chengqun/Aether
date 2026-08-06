@@ -7,5 +7,13 @@
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
-  <shell:ExpertEditView/>
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8"/>
+        <Button Content="保存" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Classes="primary" Padding="20,8"/>
+      </StackPanel>
+    </Border>
+    <shell:ExpertEditView/>
+  </DockPanel>
 </Window>

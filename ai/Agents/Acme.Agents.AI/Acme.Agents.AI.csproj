@@ -7,10 +7,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Acme.Agents.AI.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Workflows\Aether.AI.Workflows.csproj" />
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- YAML 规则程序解析（仅此桥接适配器引 YamlDotNet；src/ 平台层不引）。
+         规则 agent 的 body 是 YAML 程序，这里解析成 RuleProgram（Core DTO），再序列化 JSON 串喂平台 seam。 -->
+    <PackageReference Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        x:Class="Acme.Desktop.Shared.Shell.RuleEditWindow"
+        Title="规则配置"
+        Width="640" Height="860"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8"/>
+        <Button Content="保存" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" Classes="primary" Padding="20,8"/>
+      </StackPanel>
+    </Border>
+
+    <!-- 上下两栏：上=元数据表单（RuleEditView），下=规则程序 YAML 源码（与笔记页两栏一致）。
+         程序 YAML 不再塞进表单 Expander，而是独立源码区，Autosave 经 SystemPrompt 双向绑定即时合并落库。 -->
+    <Grid RowDefinitions="*,4,*">
+      <shell:RuleEditView Grid.Row="0"/>
+
+      <GridSplitter Grid.Row="1" ResizeDirection="Rows" Background="{DynamicResource BorderBrush}"
+                    HorizontalAlignment="Stretch"/>
+
+      <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+        <TextBox Text="{Binding SystemPrompt}" AcceptsReturn="True" TextWrapping="NoWrap"
+                 FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"
+                 Margin="10,6" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

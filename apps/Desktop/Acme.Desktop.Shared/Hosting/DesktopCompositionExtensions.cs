@@ -3,6 +3,7 @@ using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Shell;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Harness.Tools;
 using Aether.AI.Hosting;
 using Aether.AI.Mcp;
 using Aether.AI.Memory;
@@ -122,6 +123,17 @@ public static class DesktopCompositionExtensions
             "ask_user", "向用户提问/确认并阻塞等待回答（返回用户选择或自由文本）。需要用户拍板/澄清时用此工具而非纯文本提问。", "交互",
             sp => AIFunctionFactory.Create(
                 typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>())));
+
+        // 规则程序注册表 + run_rule 工具：规则 agent（Engine=Rule）的程序同时可被 LLM agent 经
+        // run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。RuleRegistry 由
+        // CustomAgentCatalog 在 ListAsync 时把每个 Engine=="Rule" 的 agent 按名注册其规则程序；run_rule 按名查表。标 Safe（规则是作者显式写的确定性流程）。
+        services.AddSingleton<RuleRegistry>();
+        aether.ConfigureToolRegistry(reg => reg.Register(
+            RuleTool.ToolName, "运行一个已注册的规则程序（确定性，无 LLM，适合机械的数据查询/工具编排）。参数 name=规则名,input=查询。", "规则",
+            sp => RuleTool.Create(
+                sp.GetRequiredService<RuleRegistry>(),
+                name => sp.GetRequiredService<ToolRegistry>().ResolveAll(new[] { name }).FirstOrDefault()),
+            ToolApprovalLevel.Safe));
         // —— 公共 AI skill（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）——
         var skillsDir = Path.Combine(tenantDir, "skills");
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));

@@ -122,7 +122,8 @@ public partial class NotesViewModel : ObservableObject
     public bool IsAgentNode => SelectedNode?.NodeType == NoteNodeType.Agent;
     public bool IsWorkflowNode => SelectedNode?.NodeType == NoteNodeType.Workflow;
     public bool IsKnowledgeNode => SelectedNode?.NodeType == NoteNodeType.Knowledge;
-    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode;
+    public bool IsRuleNode => SelectedNode?.NodeType == NoteNodeType.Rule;
+    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode || IsRuleNode;
     public bool HasRightPane => IsMarkdownNode || IsFormNode;
 
     public bool IsCodeEdit => SelectedNode is not null;
@@ -146,6 +147,7 @@ public partial class NotesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsMarkdownNode));
         OnPropertyChanged(nameof(IsWorkflowNode));
         OnPropertyChanged(nameof(IsKnowledgeNode));
+        OnPropertyChanged(nameof(IsRuleNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
@@ -208,6 +210,7 @@ public partial class NotesViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsAgentNode));
         OnPropertyChanged(nameof(IsKnowledgeNode));
+        OnPropertyChanged(nameof(IsRuleNode));
         OnPropertyChanged(nameof(IsCodeEdit));
         RaiseLayout();
     }

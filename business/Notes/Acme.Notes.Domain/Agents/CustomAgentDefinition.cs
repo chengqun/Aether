@@ -19,6 +19,12 @@ public sealed class CustomAgentDefinition
     /// <summary>系统提示词。</summary>
     public string SystemPrompt { get; set; } = string.Empty;
 
+    /// <summary>大脑引擎："Llm"（默认，LLM 驱动）|"Rule"（确定性规则驱动，笔记 body 为规则程序 YAML，由 ai/Agents 适配器解析为 <c>RuleProgram</c>）。空/未设=Llm。</summary>
+    public string Engine { get; set; } = string.Empty;
+
+    /// <summary>笔记节点类型：<see cref="NoteNodeType.Agent"/>（普通 agent）|<see cref="NoteNodeType.Rule"/>（规则 agent）。目录按此过滤/保存；默认 Agent。</summary>
+    public NoteNodeType NodeType { get; set; } = NoteNodeType.Agent;
+
     /// <summary>
     /// 模型标识（opaque）：桌面端存 LLM 配置的 Id；空表示用宿主默认模型。
     /// 由 <c>IChatClientFactory</c> 解析为具体的 <c>IChatClient</c>。

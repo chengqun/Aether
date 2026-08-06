@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Acme.Agents.AI;
+using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -194,11 +195,11 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Name = string.Empty;
             Description = string.Empty;
             Category = "普通对话";
-            SystemPrompt = string.Empty;
             ModelId = string.Empty;
             Memory = AgentMemoryMode.SlidingWindow;
             MaxHistory = 20;
             ResponseFormat = AgentResponseFormat.Default;
+            SystemPrompt = string.Empty;
             IsEditing = false;
         }
 
@@ -215,6 +216,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private string _description = string.Empty;
     [ObservableProperty] private string _category = "普通对话";
     [ObservableProperty] private string _systemPrompt = string.Empty;
+
     [ObservableProperty] private string _modelId = string.Empty;
     [ObservableProperty] private AgentMemoryMode _memory = AgentMemoryMode.SlidingWindow;
     [ObservableProperty] private int _maxHistory = 20;
@@ -407,6 +409,8 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             EnableFileMemory = EnableFileMemory,
             EnableOpenTelemetry = EnableOpenTelemetry,
             EnableLongTermMemory = EnableLongTermMemory,
+            Engine = string.Empty,
+            NodeType = NoteNodeType.Agent,
         };
     }
 

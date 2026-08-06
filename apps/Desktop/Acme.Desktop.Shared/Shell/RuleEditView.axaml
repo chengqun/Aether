@@ -1,0 +1,181 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.RuleEditView">
+
+  <UserControl.Styles>
+    <Style Selector="Expander">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="NumericUpDown">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="#16A34A"
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </Border>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="2" Margin="10,6">
+
+        <Expander Header="基本信息" IsExpanded="True">
+          <StackPanel Spacing="6">
+            <StackPanel Spacing="2">
+              <TextBlock Text="名称" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Name}" PlaceholderText="规则名称"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+              <TextBlock Text="类别" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Category}" PlaceholderText="如 规则/查询"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+              <TextBlock Text="描述" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Description}"/>
+            </StackPanel>
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="记忆" IsExpanded="False">
+          <StackPanel Spacing="6">
+            <StackPanel Spacing="2">
+              <TextBlock Text="记忆模式" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <ComboBox ItemsSource="{Binding MemoryModeOptions}" SelectedItem="{Binding SelectedMemoryModeOption}">
+                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel Spacing="2" IsVisible="{Binding IsWindowVisible}">
+              <TextBlock Text="窗口大小" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <NumericUpDown Value="{Binding MaxHistory}" Minimum="1" Maximum="200" FormatString="0"/>
+            </StackPanel>
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="工具审批" IsExpanded="False">
+          <CheckBox Content="启用工具调用前审批（Dangerous 工具弹审批框）" IsChecked="{Binding RequireToolApproval}" Margin="0,4"/>
+        </Expander>
+
+        <Expander Header="内置工具" IsExpanded="False">
+          <ItemsControl ItemsSource="{Binding ToolCategories}" Margin="0,6,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,4">
+                  <!-- 分类小标题 + 全选 -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,2">
+                    <CheckBox IsChecked="{Binding IsAllSelected}" Padding="0"/>
+                    <TextBlock Text="{Binding Category}" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                  </StackPanel>
+                  <!-- 该类工具平铺 -->
+                  <ItemsControl ItemsSource="{Binding Tools}" Margin="20,0,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <CheckBox IsChecked="{Binding IsSelected}" Margin="0,1">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Description}" FontSize="10"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                            <ComboBox ItemsSource="{x:Static vm:ToolOption.ApprovalLevelOptions}"
+                                      SelectedValue="{Binding ApprovalLevel}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      FontSize="9" MinWidth="54" Padding="4,1">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding Label}" FontSize="10" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                              <ComboBox.SelectionBoxItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding Label}" FontSize="10" />
+                                </DataTemplate>
+                              </ComboBox.SelectionBoxItemTemplate>
+                            </ComboBox>
+                            <Border Background="#FFB3B3" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
+                              <TextBlock Text="危险" FontSize="9" Foreground="White"/>
+                            </Border>
+                          </StackPanel>
+                        </CheckBox>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Expander>
+
+        <!-- MCP 工具区：按 server 分组，勾选实际要用的 MCP 工具 -->
+        <Expander Header="MCP 工具" IsExpanded="False" IsVisible="{Binding HasMcpServers}">
+          <StackPanel Spacing="6" Margin="0,6,0,0">
+            <ItemsControl ItemsSource="{Binding McpServerGroups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,2">
+                    <StackPanel Spacing="4">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
+                        <TextBlock Text="{Binding StatusText}" FontSize="10"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                      </StackPanel>
+                      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="10"
+                                 TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                      <ItemsControl ItemsSource="{Binding Tools}" Margin="16,2,0,0" IsVisible="{Binding HasTools}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected}" Margin="0,1">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="🔧" FontSize="11"/>
+                                <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Description}" FontSize="10"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                                <ComboBox ItemsSource="{x:Static vm:ToolOption.ApprovalLevelOptions}"
+                                          SelectedValue="{Binding ApprovalLevel}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          FontSize="9" MinWidth="54" Padding="4,1">
+                                  <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                      <TextBlock Text="{Binding Label}" FontSize="10" />
+                                    </DataTemplate>
+                                  </ComboBox.ItemTemplate>
+                                  <ComboBox.SelectionBoxItemTemplate>
+                                    <DataTemplate>
+                                      <TextBlock Text="{Binding Label}" FontSize="10" />
+                                    </DataTemplate>
+                                  </ComboBox.SelectionBoxItemTemplate>
+                                </ComboBox>
+                                <Border Background="#FFB3B3" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
+                                  <TextBlock Text="危险" FontSize="9" Foreground="White"/>
+                                </Border>
+                              </StackPanel>
+                            </CheckBox>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Text="（未连接或无工具）" FontSize="10" Margin="16,2,0,0"
+                                 Foreground="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !HasTools}"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Expander>
+
+        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="11" IsVisible="{Binding HasError}"/>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

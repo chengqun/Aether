@@ -140,6 +140,21 @@ public partial class NotesView : UserControl
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
         }
+        else if (node.NodeType == NoteNodeType.Rule)
+        {
+            var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == node.Id);
+            if (rule is null) return;
+            var editVm = main.Rules.CreateEditViewModel(rule);
+            if (editVm is null) return;
+            editVm.SaveRequested += async saved =>
+            {
+                var result = await main.Rules.SaveAsync(saved);
+                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
+                else editVm.Error = result.Error;
+            };
+            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
+            _vm.ActiveEditVm = editVm;
+        }
         else if (node.NodeType == NoteNodeType.Workflow)
         {
             var wf = main.Workflows.Workflows.FirstOrDefault(w => w.Id == node.Id);

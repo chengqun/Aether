@@ -103,9 +103,70 @@ public sealed class AgentFactory
 
         var historyProvider = _historyProviderFactory?.Invoke(definition) ?? BuildHistoryProvider(definition);
 
+        // 规则大脑：确定性规则驱动工具调用，不委托 LLM。接缝是 IChatClient——RuleChatClient 产 AIContent，
+        // 工具执行/回填/循环仍归 MAF HarnessAgent（与 LLM 路径同源）。规则不消费注入式 NL 上下文
+        //（todo/mode/skill/memory-recall），BuildRuleAgent 内关掉这些 provider（1.0 已验证 TodoProvider
+        // 会注入第二条 user 消息污染 LatestUser）。
+        if (definition.Engine == EngineKind.Rule)
+        {
+            // 规则 agent 复用编辑器勾选的工具（definition.Tools + ask_user），与 LLM agent 一致——
+            // 规则只调程序里点名的工具，但工具池由作者在编辑器显式选定。
+            // 不经审批（规则定义 RequireToolApproval=false；规则是 Safe 确定性流程）。
+            return BuildRuleAgent(definition, tools, historyProvider);
+        }
+
         return UseChatClientAgent
             ? BuildChatClientAgent(definition, tools, historyProvider)
             : BuildHarnessAgent(definition, tools, historyProvider);
+    }
+
+    /// <summary>
+    /// 构建规则大脑 agent：用 <see cref="RuleChatClient"/>（IChatClient）代替 LLM 客户端接入 HarnessAgent。
+    /// 规则程序从 <see cref="AgentDefinition.Rules"/>（JSON）反序列化；空/失败退空程序（NoMatch 兜底）。
+    /// 关掉所有注入式 NL 上下文 provider——规则不消费它们，且 TodoProvider 会污染 LatestUser。
+    /// 工具执行、结果回填、循环仍由 MAF 框架负责（与 LLM 路径同源）。
+    /// </summary>
+    private AIAgent BuildRuleAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
+    {
+        var program = DeserializeRules(definition.Rules);
+        var brain = new RuleProgramBrain(program);
+        var client = new RuleChatClient(brain, _loggerFactory?.CreateLogger<RuleChatClient>());
+
+        var options = new HarnessAgentOptions
+        {
+            Id = definition.Id,
+            Name = definition.Name,
+            Description = $"Aether.AI rule agent '{definition.Id}'.",
+            // 规则不消费注入式 NL 上下文——全关。TodoProvider 默认开，会注入「### Current todo list」
+            // user 消息污染 RuleChatClient 的 LatestUser 检测（1.0 实测）。
+            DisableWebSearch = true,
+            DisableTodoProvider = true,
+            DisableAgentModeProvider = true,
+            DisableFileMemory = true,
+            DisableOpenTelemetry = true,
+            DisableAgentSkillsProvider = true, // skill 指令需 LLM 解析；规则大脑不读
+            ChatOptions = new ChatOptions { Instructions = definition.Instructions, Tools = tools },
+            ChatHistoryProvider = historyProvider,
+        };
+
+        return client.AsHarnessAgent(options, _loggerFactory);
+    }
+
+    /// <summary>反序列化规则程序 JSON；空/非法退空程序（NoMatch 兜底，不崩）。</summary>
+    private static RuleProgram DeserializeRules(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new RuleProgram();
+        }
+        try
+        {
+            return JsonSerializer.Deserialize<RuleProgram>(json) ?? new RuleProgram();
+        }
+        catch (JsonException)
+        {
+            return new RuleProgram();
+        }
     }
 
     private AIAgent BuildHarnessAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)

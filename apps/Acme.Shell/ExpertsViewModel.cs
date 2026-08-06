@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Acme.Agents.AI;
 using Acme.AppAuth.Application.Auth;
+using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,7 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Shell;
 
 /// <summary>专家页 tab。</summary>
-public enum ExpertsTab { Agent, Workflow, Connector, Market, Mcp }
+public enum ExpertsTab { Agent, Rule, Workflow, Connector, Market, Mcp }
 
 /// <summary>专家页面 ViewModel：从自定义 Agent 目录加载，展示为专家卡片。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject
@@ -21,7 +22,9 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly IAgentSourceParser _agentParser;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows, IAgentSourceParser agentParser,
+        IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows,
+        RulesViewModel rules,
+        IAgentSourceParser agentParser,
         McpViewModel mcp, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -30,6 +33,7 @@ public partial class ExpertsViewModel : ObservableObject
         _marketplace = marketplace ?? throw new ArgumentNullException(nameof(marketplace));
         _auth = auth ?? throw new ArgumentNullException(nameof(auth));
         Workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+        Rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
         Connector = connector;
@@ -62,10 +66,14 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>工作流 VM（专家团 tab）。</summary>
     public WorkflowsViewModel Workflows { get; }
 
+    /// <summary>规则 VM（规则 tab）。</summary>
+    public RulesViewModel Rules { get; }
+
     /// <summary>MCP 工具服务器 VM（MCP tab）。</summary>
     public McpViewModel Mcp { get; }
 
     public bool IsAgentTab => CurrentTab == ExpertsTab.Agent;
+    public bool IsRuleTab => CurrentTab == ExpertsTab.Rule;
 
     public bool IsWorkflowTab => CurrentTab == ExpertsTab.Workflow;
     public bool IsConnectorTab => CurrentTab == ExpertsTab.Connector;
@@ -76,10 +84,13 @@ public partial class ExpertsViewModel : ObservableObject
     partial void OnCurrentTabChanged(ExpertsTab value)
     {
         OnPropertyChanged(nameof(IsAgentTab));
+        OnPropertyChanged(nameof(IsRuleTab));
         OnPropertyChanged(nameof(IsWorkflowTab));
         OnPropertyChanged(nameof(IsConnectorTab));
         OnPropertyChanged(nameof(IsMarketTab));
         OnPropertyChanged(nameof(IsMcpTab));
+        if (value == ExpertsTab.Rule)
+            _ = Rules.LoadAsync();
         if (value == ExpertsTab.Connector && Connector is not null)
             _ = Connector.RefreshAsync();
         if (value == ExpertsTab.Market)
@@ -92,6 +103,7 @@ public partial class ExpertsViewModel : ObservableObject
     }
 
     [RelayCommand] private void ShowAgentTab() => CurrentTab = ExpertsTab.Agent;
+    [RelayCommand] private void ShowRuleTab() => CurrentTab = ExpertsTab.Rule;
     [RelayCommand] private void ShowWorkflowTab() => CurrentTab = ExpertsTab.Workflow;
     [RelayCommand] private void ShowConnectorTab() { if (HasConnector) CurrentTab = ExpertsTab.Connector; }
     [RelayCommand] private void ShowMarketTab() => CurrentTab = ExpertsTab.Market;
@@ -115,6 +127,8 @@ public partial class ExpertsViewModel : ObservableObject
 
                 foreach (var def in all)
                 {
+                    // 专家 tab 只列普通 agent（NodeType==Agent）；规则 agent 在「规则」tab 独立展示。
+                    if (def.NodeType != NoteNodeType.Agent) continue;
                     var item = new ExpertItem
                     {
                         Id = def.Id,
@@ -122,6 +136,8 @@ public partial class ExpertsViewModel : ObservableObject
                         Description = def.Description,
                         Category = string.IsNullOrWhiteSpace(def.Category) ? "普通对话" : def.Category,
                         SystemPrompt = def.SystemPrompt,
+                        Engine = def.Engine,
+                        NodeType = def.NodeType,
                         ModelId = def.ModelId,
                         ModelName = modelNames.TryGetValue(def.ModelId ?? string.Empty, out var mn) ? mn : string.Empty,
                         Tools = def.Tools.ToList(),
@@ -208,6 +224,8 @@ public partial class ExpertsViewModel : ObservableObject
                 Description = item.Description,
                 Category = string.IsNullOrWhiteSpace(item.Category) ? "普通对话" : item.Category,
                 SystemPrompt = item.SystemPrompt,
+                Engine = item.Engine,
+                NodeType = item.NodeType,
                 ModelId = item.ModelId ?? string.Empty,
                 Tools = item.Tools,
                 ToolApprovals = item.ToolApprovals ?? new Dictionary<string, string>(),
@@ -237,6 +255,8 @@ public partial class ExpertsViewModel : ObservableObject
                 existing.Description = item.Description;
                 existing.Category = string.IsNullOrWhiteSpace(item.Category) ? "普通对话" : item.Category;
                 existing.SystemPrompt = item.SystemPrompt;
+                existing.Engine = item.Engine;
+                existing.NodeType = item.NodeType;
                 existing.ModelId = item.ModelId;
                 existing.Tools = item.Tools;
                 existing.ToolApprovals = item.ToolApprovals;

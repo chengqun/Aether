@@ -75,11 +75,18 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
     }
 
     internal static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
-        => new()
+    {
+        // 规则 agent：body(SystemPrompt) 是 YAML 规则程序，由适配器解析成 RuleProgram→JSON 串喂平台 Rules seam；
+        // 规则不消费 system prompt（Instructions 置空）。LLM agent：body 是 system prompt，Rules=null（现行）。
+        var isRule = Enum.TryParse<EngineKind>(def.Engine, true, out var engine) && engine == EngineKind.Rule;
+        var rules = isRule && RuleProgramYaml.TrySerializeToJson(def.SystemPrompt, out var json) ? json : null;
+        return new AgentDefinition
         {
             Id = id,
             Name = def.Name,
-            Instructions = def.SystemPrompt,
+            Instructions = isRule ? string.Empty : def.SystemPrompt,
+            Rules = rules,
+            Engine = engine,
             Tools = def.Tools,
             ToolApprovals = def.ToolApprovals,
             Skills = def.Skills,
@@ -97,6 +104,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             EnableOpenTelemetry = def.EnableOpenTelemetry,
             EnableLongTermMemory = def.EnableLongTermMemory,
         };
+    }
 
     /// <summary>Notes 层 AgentResponseFormat → 平台 Core AgentResponseFormat（同名不同程序集，显式映射）。</summary>
     private static Aether.AI.Core.Agents.AgentResponseFormat MapResponseFormat(NotesAgentResponseFormat format)

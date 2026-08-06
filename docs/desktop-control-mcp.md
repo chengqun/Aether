@@ -95,6 +95,30 @@
 > 「固定过程」本质是把操作某 app 的 UI 流程**固化成代码**——今天固化「操作同花顺下单」，未来可固化
 > 「操作 app Y 做 Z」。它是一个独立、可复用的 business context，不属于 StockTrading。
 
+### 4.1 ⚠️ 易踩坑：两条路径共用 MCP server，但上层客户端 seam 是分开的
+
+两条路径在 **server 端**（FlaUI-MCP / Mac-MCP）共用同一组工具，但在 **Aether 上层**走的是**两套独立、互不相连**的客户端 seam。这是设计有意为之，但容易误以为「配个 `desktop.json` 就两条都通了」——**不是**。
+
+| | ② LLM 直连路径 | ① 固定过程路径 |
+|---|---|---|
+| Aether 侧 seam | `McpServerRegistry`（`Aether.AI.Mcp`） | `IMcpToolInvoker`（`AppAutomation.Domain`） |
+| 怎么拿工具 | `StartAsync()` 连 server → `GetTools()` 返回 `AIFunction[]` → 进 `ToolRegistry` → agent | `CallToolAsync(toolName, args)` 按固定名字直调 |
+| 谁触发调用 | LLM 运行时自决 | C# 代码（`ThsPlaceOrderProcedure` 等） |
+| 配 `mcp-servers/desktop.json` 就能用？ | **能**——agent 自动获得 click/type 工具（既有行为，与 AppAutomation 无关） | **不能**——`IMcpToolInvoker` 与 `McpServerRegistry` 没接 |
+| 现状 | 真实可用 | 桩，fail-fast（见下） |
+
+**关键事实**：`AppAutomation` **不引用** `Aether.AI.Mcp`（grep 确认零引用），`IMcpToolInvoker` 是 AppAutomation 自己的端口，目前**唯一实现是 `NotConnectedMcpToolInvoker` 桩**。代码链：
+
+- `AddAppAutomation()` **故意不注册** `IMcpToolInvoker`（[AppAutomationServiceCollectionExtensions.cs:10-11](../business/AppAutomation/Acme.AppAutomation.Infrastructure/AppAutomationServiceCollectionExtensions.cs#L10-L11)）——它要包 `McpClient`（alpha 包，隔离在 `Aether.AI.Mcp`），由宿主给。
+- 宿主给的是桩：[App.axaml.cs:112](../apps/Stockapp/Acme.Stockapp.Desktop/App.axaml.cs#L112) `services.AddSingleton<IMcpToolInvoker, NotConnectedMcpToolInvoker>()`；桩 `IsConnected => false`、`CallToolAsync => "{}"`（[NotConnectedMcpToolInvoker.cs:13-15](../business/AppAutomation/Acme.AppAutomation.Infrastructure/NotConnectedMcpToolInvoker.cs#L13-L15)）。
+- 桩让 `McpDesktopAutomation.IsConnected` 恒 false（[McpDesktopAutomation.cs:23](../business/AppAutomation/Acme.AppAutomation.Infrastructure/McpDesktopAutomation.cs#L23)），`ProcedureRunner` 守卫直接返回 `Fail("桌面控制后端未连接（MCP server 未就绪）")`（[ProcedureRunner.cs:35-36](../business/AppAutomation/Acme.AppAutomation.Application/ProcedureRunner.cs#L35-L36)），过程体根本不执行。
+
+**因此**：Mac 上股票页切到 MCP、点下单 → 优雅失败「桌面控制后端未连接」，**不崩但什么都做不了**。这是有意为之（Mac 无 FlaUI、无 MCP server），不是 bug。而且**就算现在往 `mcp-servers/` 放个 desktop server 配置**，也只让②LLM 路径活（agent 多了桌面工具），**救不了①固定过程路径**——后者缺的是真实 `IMcpToolInvoker`，不是 server 配置。
+
+> Windows 期要写的「真 `IMcpToolInvoker`」有两种实现法（见 §10 开放问题）：
+> (a) **独立连**：自己 new `McpClient` 连 desktop server，与 `McpServerRegistry` 各连各的。简单自包含，但同进程连两次同一 server。
+> (b) **复用** `McpServerRegistry` 已连的 `McpClient`（`Entry.Client`，[McpServerRegistry.cs:205](../src/Aether.AI.Mcp/McpServerRegistry.cs#L205)）——但 `IMcpServerRegistry` 现只暴露 `GetTools()`（`AIFunction`，给 agent 用），**没有 `CallToolAsync`**；复用需扩接口或让 `IMcpToolInvoker` 按 name 直接调那个 `AIFunction`。
+
 ## 5. 桌面控制原语（`IDesktopAutomation` / MCP 工具）
 
 三种边界（进程内 / IPC / MCP）共用同一套原语；走 MCP 时就是 MCP server 暴露的工具列表：
@@ -209,9 +233,10 @@ apps/Stockapp/Acme.Stockapp.Desktop/
 
 - **MCP SDK 选型**：`ModelContextProtocol`（官方 C# SDK）vs 既有 `Microsoft.Agents.AI.Mcp` 客户端原语。
   Windows 期接入 FlaUI-MCP 时定，看哪个与 Aether 既有 MCP client 复用更顺。
-- **固定过程是否复用 Aether 既有 MCP client（`McpServerRegistry`/`ToolRegistry`）**，还是
-  `McpDesktopAutomation` 自带独立 MCP 客户端。前者复用 plumbing 但 ToolRegistry 偏 agent 调用形态；
-  后者更直接但多一条连接。Windows 期决定。
+- **真实 `IMcpToolInvoker` 怎么连**（见 §4.1）：(a) 自带独立 `McpClient` 连 desktop server，还是
+  (b) 复用 `McpServerRegistry` 已连的 `McpClient`（`Entry.Client`）。(a) 简单自包含但同进程连两次同一 server；
+  (b) 复用连接，但 `IMcpServerRegistry` 现只暴露 `GetTools()`（`AIFunction` 给 agent 用）、**无 `CallToolAsync`**，
+  复用需扩接口或让 invoker 按 name 直调那个 `AIFunction`。Windows 期接入 FlaUI-MCP 时定。
 - **过程定义的载体**：代码里硬编码序列 vs 数据化（YAML/JSON 描述过程步骤）。初期代码硬编码最直接；
   过程多了再数据化（甚至让 AI 生成过程定义）。
 - **`IStockTradingOptions` 演进**：MCP 路线下不再需要 `ClientExecutablePath`，改为 MCP server 命令/端点。

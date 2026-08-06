@@ -360,6 +360,14 @@
           <Border Classes="chat-input-card">
           <Grid RowDefinitions="Auto,*">
             <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,8" HorizontalAlignment="Stretch">
+              <!-- 当前召唤目标（规则/专家团）：非空时显示，与 agent 选择器并列 -->
+              <Border Classes="chip" IsVisible="{Binding HasActiveTarget}"
+                      ToolTip.Tip="当前对话目标：召唤的规则/专家团（在专家页取消召唤可切回）">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding ActiveTargetIcon}" FontSize="11" VerticalAlignment="Center"/>
+                  <TextBlock Text="{Binding ActiveTargetName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Border>
               <Border Classes="chip">
                 <ComboBox Classes="compact" ItemsSource="{Binding AgentSelectItems}" SelectedItem="{Binding SelectedAgentItem}" PlaceholderText="选择专家">
                   <ComboBox.SelectionBoxItemTemplate>

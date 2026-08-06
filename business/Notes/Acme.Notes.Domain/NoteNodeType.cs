@@ -6,4 +6,5 @@ public enum NoteNodeType
     Agent = 1,
     Workflow = 2,
     Knowledge = 3,
+    Rule = 4,
 }

@@ -89,11 +89,19 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _dispatcher);
         Workflows.SummonRequested += OnWorkflowSummonRequested;
         Workflows.WorkflowsChanged += async () => await Notes.LoadAsync();
-        // Notes 的增删改会影响同源的 Experts（agent 笔记）与 Workflows（workflow 笔记），需双向刷新。
+        Rules = new RulesViewModel(
+            serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
+            _agentRunner,
+            _dispatcher,
+            serviceProvider.GetRequiredService<McpViewModel>());
+        Rules.SummonChanged += OnRuleSummonChanged;
+        Rules.RulesChanged += async () => await Notes.LoadAsync();
+        // Notes 的增删改会影响同源的 Experts（agent 笔记）、Workflows（workflow 笔记）与 Rules（规则笔记），需双向刷新。
         Notes.NotesChanged += async () =>
         {
             await Experts.LoadAsync();
             await Workflows.LoadAsync();
+            await Rules.LoadAsync();
         };
 
         Experts = new ExpertsViewModel(
@@ -103,6 +111,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<IAgentMarketplaceService>(),
             _auth,
             Workflows,
+            Rules,
             serviceProvider.GetRequiredService<IAgentSourceParser>(),
             serviceProvider.GetRequiredService<McpViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
@@ -605,12 +614,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
 
             _isInitializing = true;
-            // 恢复时按绑定 id 判断是 workflow 还是 agent，切到对应目标（抑制变更回调）
+            // 恢复时按绑定 id 判断是规则 / workflow / agent，切到对应目标（抑制变更回调）
             if (Guid.TryParse(item.AgentId, out var aid))
             {
-                var wf = Workflows.Workflows.FirstOrDefault(w => w.Id == aid);
-                if (wf is not null) { SelectedWorkflow = wf; SelectedAgentItem = null; }
-                else { SelectedWorkflow = null; SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid); }
+                var rl = Rules.Rules.FirstOrDefault(r => r.Id == aid);
+                if (rl is not null) { SelectedRule = rl; SelectedWorkflow = null; SelectedAgentItem = null; }
+                else
+                {
+                    var wf = Workflows.Workflows.FirstOrDefault(w => w.Id == aid);
+                    if (wf is not null) { SelectedWorkflow = wf; SelectedAgentItem = null; SelectedRule = null; }
+                    else { SelectedWorkflow = null; SelectedRule = null; SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid); }
+                }
             }
             _isInitializing = false;
 
@@ -780,8 +794,33 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     /// <summary>工作流页 ViewModel</summary>
     public WorkflowsViewModel Workflows { get; }
 
+    /// <summary>规则页 ViewModel</summary>
+    public RulesViewModel Rules { get; }
+
     /// <summary>当前召唤到聊天的 workflow（非空时聊天跑 workflow；为空时跑选中的 agent）。</summary>
     [ObservableProperty] private WorkflowItem? _selectedWorkflow;
+
+    /// <summary>当前召唤到聊天的规则（非空时聊天跑规则 agent；与 workflow/agent 互斥）。</summary>
+    [ObservableProperty] private ExpertItem? _selectedRule;
+
+    /// <summary>聊天头当前目标指示：召唤了规则或工作流时为 true（agent 走选择器，不在此列）。</summary>
+    public bool HasActiveTarget => SelectedRule is not null || SelectedWorkflow is not null;
+
+    /// <summary>当前召唤目标的显示名（规则优先于工作流）。</summary>
+    public string? ActiveTargetName => SelectedRule?.Name ?? SelectedWorkflow?.Name;
+
+    /// <summary>当前召唤目标的图标 emoji（规则=⚙️ / 工作流=🔀）。</summary>
+    public string? ActiveTargetIcon => SelectedRule is not null ? "⚙️" : SelectedWorkflow is not null ? "🔀" : null;
+
+    /// <summary>刷新聊天头「当前目标」指示（规则/工作流召唤或取消时调）。</summary>
+    private void RaiseActiveTarget()
+    {
+        OnPropertyChanged(nameof(HasActiveTarget));
+        OnPropertyChanged(nameof(ActiveTargetName));
+        OnPropertyChanged(nameof(ActiveTargetIcon));
+    }
+
+    partial void OnSelectedWorkflowChanged(WorkflowItem? value) => RaiseActiveTarget();
 
     /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
     /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
@@ -894,6 +933,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             await Experts.LoadAsync();
             await Automation.LoadAsync();
             await Workflows.LoadAsync();
+            await Rules.LoadAsync();
             await RestoreSummonedAndSelectedAsync();
             await RefreshConversationsAsync();
         }
@@ -1031,10 +1071,33 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         {
             SelectedWorkflow = item;
             SelectedAgentItem = null; // 走 workflow 分支
+            SelectedRule = null; // 与规则互斥
             _currentConversationId = Guid.Empty; // 新会话
             Messages.Clear();
             ActiveTodos.Clear(); HasActivePlan = false;
             StatusText = $"已召唤工作流：{item.Name}";
+            IsConnected = _deviceChatClient.IsConnected;
+        });
+    }
+
+    /// <summary>规则召唤变化：单选，取唯一已召唤规则为当前目标、开新会话；取消召唤则清空。</summary>
+    private void OnRuleSummonChanged()
+    {
+        _dispatcher.Post(() =>
+        {
+            var summoned = Rules.GetSummonedRules().FirstOrDefault();
+            if (summoned is null)
+            {
+                SelectedRule = null;
+                return;
+            }
+            SelectedRule = summoned;
+            SelectedWorkflow = null; // 与 workflow/agent 互斥
+            SelectedAgentItem = null;
+            _currentConversationId = Guid.Empty; // 新会话
+            Messages.Clear();
+            ActiveTodos.Clear(); HasActivePlan = false;
+            StatusText = $"已召唤规则：{summoned.Name}";
             IsConnected = _deviceChatClient.IsConnected;
         });
     }
@@ -1048,6 +1111,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         SelectedMode = HasModeSupport ? "plan" : null;
         _syncingMode = false;
 
+        // 选中 agent 时与规则互斥
+        if (value is not null) SelectedRule = null;
+        RaiseActiveTarget();
+
         if (_isInitializing) return;
         if (value is ExpertItem expert)
         {
@@ -1056,6 +1123,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         RefreshModeAsync().SafeFireAndForget();
 
+    }
+
+    /// <summary>选中规则变化时：规则是确定性大脑，不支持 plan/execute；与 workflow/agent 互斥。</summary>
+    partial void OnSelectedRuleChanged(ExpertItem? value)
+    {
+        HasModeSupport = false;
+        _syncingMode = true;
+        SelectedMode = null;
+        _syncingMode = false;
+        if (value is not null)
+        {
+            SelectedWorkflow = null;
+            SelectedAgentItem = null;
+        }
+        RaiseActiveTarget();
     }
 
     partial void OnSelectedModeChanged(string? value)
@@ -1141,6 +1223,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private async Task SetModeOnSessionAsync(string mode)
     {
         if (_currentConversationId == Guid.Empty) return;
+        if (SelectedRule is not null) return; // 规则不支持 mode
         if (SelectedWorkflow is not null)
             await _workflowRunner.SetModeAsync(_currentConversationId, mode);
         else
@@ -1193,6 +1276,48 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Content = content
         });
         Messages.Add(turn);
+
+        // 召唤了规则时，本地流式运行规则 agent（确定性大脑，无 LLM）
+        if (SelectedRule is ExpertItem rl)
+        {
+            var justCreated = false;
+            if (_currentConversationId == Guid.Empty)
+            {
+                justCreated = true;
+                _currentConversationId = Guid.NewGuid();
+                var conv = new Conversation
+                {
+                    ConversationId = _currentConversationId,
+                    AgentId = rl.Id.ToString(),
+                    AgentName = rl.Name,
+                    Title = content.Length > 20 ? content[..20] + "…" : content,
+                };
+                conv.Append(Aether.AI.Core.Messages.Message.User(content));
+                await _conversationStore.SaveAsync(conv);
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    Conversations.Insert(0, new ConversationItem
+                    {
+                        Id = conv.ConversationId, Title = conv.Title, Preview = content,
+                        DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
+                        ResumeCommand = ResumeConversationCommand,
+                        DeleteCommand = DeleteConversationCommand,
+                    });
+                    foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
+                });
+            }
+
+            var fullText = new System.Text.StringBuilder();
+            // 规则无 mode（desiredMode 传 null）；规则不经审批（Safe 确定性流程）。
+            var runItems = await RunSegmentedStreamAsync(turn, rl.Name,
+                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, rl.Id, content, handlers, approvalResponse, null, ct),
+                fullText, _runCts?.Token ?? default);
+            await PersistTurnAsync(content, runItems, fullText.ToString());
+            if (justCreated)
+                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
+
+            return;
+        }
 
         // 召唤了 workflow 时，本地流式运行 workflow（多 agent 转交）
         if (SelectedWorkflow is WorkflowItem wf)

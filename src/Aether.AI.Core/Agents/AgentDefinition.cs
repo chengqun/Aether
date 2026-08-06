@@ -14,6 +14,19 @@ public sealed class AgentDefinition
     /// <summary>Display name shown to users.</summary>
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 大脑引擎：默认 <see cref="EngineKind.Llm"/>（LLM 当大脑）。
+    /// <see cref="EngineKind.Rule"/> 时 Harness 走 <c>BuildRuleAgent</c>——规则大脑（<c>RuleChatClient</c>）
+    /// 代替 LLM，确定性驱动工具调用，复用同一套 agent 生态（工具/流式/持久化）。
+    /// </summary>
+    public EngineKind Engine { get; init; } = EngineKind.Llm;
+
+    /// <summary>
+    /// 规则程序 JSON（<see cref="RuleProgram"/> 序列化）。仅 <see cref="Engine"/>==<see cref="EngineKind.Rule"/>
+    /// 时使用；Harness 反序列化后交给 <c>RuleProgramBrain</c>。LLM 引擎忽略此字段。
+    /// </summary>
+    public string? Rules { get; init; }
+
     /// <summary>The system prompt / instructions that shape agent behavior.</summary>
     public string Instructions { get; init; } = string.Empty;
 

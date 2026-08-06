@@ -18,6 +18,7 @@ public static class NotesInfrastructureExtensions
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aether", "notes.db");
         services.AddSingleton<INoteRepository>(_ => SqliteNoteRepository.ForFile(dbPath));
         services.AddSingleton<IAgentSourceParser, AgentSourceParser>();
+        services.AddSingleton<IRuleSourceParser, RuleSourceParser>();
         services.AddSingleton<IWorkflowSourceParser, WorkflowSourceParser>();
         services.AddSingleton<IKnowledgeSourceParser, KnowledgeSourceParser>();
         return services;

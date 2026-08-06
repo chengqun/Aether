@@ -160,6 +160,10 @@
                 <Border IsVisible="{Binding IsAgentNode}">
                   <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>
                 </Border>
+                <!-- 规则表单（独立 RuleEditView，单 YAML 文档） -->
+                <Border IsVisible="{Binding IsRuleNode}">
+                  <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+                </Border>
                 <!-- Workflow 表单 -->
                 <Border IsVisible="{Binding IsWorkflowNode}">
                   <shell:WorkflowEditView DataContext="{Binding ActiveEditVm}"/>
