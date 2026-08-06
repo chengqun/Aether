@@ -4,11 +4,11 @@
              x:Class="Acme.Stockapp.Desktop.Views.ConnectorView"
              Background="Transparent">
 
-  <StackPanel Spacing="12" HorizontalAlignment="Left" VerticalAlignment="Top">
+  <WrapPanel HorizontalAlignment="Left" VerticalAlignment="Top">
 
     <!-- CTP 期货交易 卡片 -->
     <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-            CornerRadius="16" Padding="20">
+            CornerRadius="16" Padding="20" Width="360" Margin="0,0,12,12">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Grid.Column="0" Spacing="10" DataContext="{Binding Ctp}">
           <StackPanel Orientation="Horizontal" Spacing="10">
@@ -48,7 +48,7 @@
 
     <!-- 同花顺股票交易 卡片 -->
     <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-            CornerRadius="16" Padding="20">
+            CornerRadius="16" Padding="20" Width="360" Margin="0,0,12,12">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Grid.Column="0" Spacing="10" DataContext="{Binding Ths}">
           <StackPanel Orientation="Horizontal" Spacing="10">
@@ -86,5 +86,5 @@
       </Grid>
     </Border>
 
-  </StackPanel>
+  </WrapPanel>
 </UserControl>
