@@ -146,7 +146,12 @@ public sealed class AgentFactory
             DisableOpenTelemetry = true,
             DisableAgentSkillsProvider = true, // skill 指令需 LLM 解析；规则大脑不读
             ChatOptions = new ChatOptions { Instructions = definition.Instructions, Tools = tools },
-            ChatHistoryProvider = historyProvider,
+            // 规则大脑靠 history 重建轮内状态（最新 user 消息 + 本轮工具调用计数），必须保留轮内 history。
+            // NoMemoryChatHistoryProvider（Memory=Off）连轮内 history 也清掉 → 工具调用后 MAF re-invoke 时
+            // 只传 [tool:result]，user 消息丢失 → LatestUser=null → 误报「无匹配规则」。故规则 agent 遇
+            // NoMemory 退回框架默认（InMemory，保留轮内 history）；规则大脑只读「最后一条 user + 其后工具调用」，
+            // 跨轮累积的历史被忽略，无害。SlidingWindow/Full 本就保留轮内 history，原样放行。
+            ChatHistoryProvider = historyProvider is NoMemoryChatHistoryProvider ? null : historyProvider,
         };
 
         return client.AsHarnessAgent(options, _loggerFactory);
