@@ -18,20 +18,14 @@ public static class AppAutomationServiceCollectionExtensions
         services.AddSingleton<IProcedureRunner, ProcedureRunner>();
         services.AddSingleton<IDesktopAutomation, McpDesktopAutomation>();
 
-        // 固定过程登记（同花顺）。未来加「操作 app Y」= 在此注册其 Procedure。
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsConnectProcedure()));
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsLaunchProcedure()));
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsPlaceOrderProcedure()));
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsCancelProcedure()));
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsQueryPositionsProcedure()));
-        services.AddSingleton<Procedure>(sp => Register(sp, new ThsDisconnectProcedure()));
+        // 固定过程登记（同花顺）。注册为 Singleton<Procedure>，由 ProcedureRunner 构造时经
+        // IEnumerable<Procedure> 统一解析并登记进 ProcedureCatalog。未来加「操作 app Y」= 在此注册其 Procedure。
+        services.AddSingleton<Procedure>(_ => new ThsConnectProcedure());
+        services.AddSingleton<Procedure>(_ => new ThsLaunchProcedure());
+        services.AddSingleton<Procedure>(_ => new ThsPlaceOrderProcedure());
+        services.AddSingleton<Procedure>(_ => new ThsCancelProcedure());
+        services.AddSingleton<Procedure>(_ => new ThsQueryPositionsProcedure());
+        services.AddSingleton<Procedure>(_ => new ThsDisconnectProcedure());
         return services;
-    }
-
-    /// <summary>把过程登记进目录并返回它（供 DI 单例持有）。</summary>
-    private static Procedure Register(IServiceProvider sp, Procedure procedure)
-    {
-        sp.GetRequiredService<ProcedureCatalog>().Register(procedure);
-        return procedure;
     }
 }

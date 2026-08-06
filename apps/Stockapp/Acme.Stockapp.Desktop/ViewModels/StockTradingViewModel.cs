@@ -29,8 +29,9 @@ public partial class StockTradingViewModel : ObservableObject
         _service.LogReceived += OnLogReceived;
         _useMcp = router.Method == OrderMethod.Mcp;   // 启动期读持久化的下单方式
         RefreshState();   // 启动期读一次连接态（连接由连接器 tab 负责）
-        // 启动即是 MCP 模式且 MCP 后端未连接 → 自动确认一次（同 OnUseMcpChanged 切换逻辑）。
-        if (_useMcp && !_router.IsConnectedByMethod(OrderMethod.Mcp))
+        // 启动期若当前后端未连接，自动确认一次（确认同花顺窗口在不在）——免得用户第一次开股票页
+        // 看到「未连接」、还得手动切到连接器 tab 触发重连。连接器 tab 的 RefreshAsync 也会在切过去时兜底。
+        if (!_router.IsConnectedByMethod(router.Method))
             _ = ConnectCurrentAsync();
     }
 
