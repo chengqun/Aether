@@ -27,8 +27,9 @@ public partial class WorkflowsViewModel : ObservableObject
 
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    /// <summary>用户点"召唤到聊天"时触发（MainViewModelBase 订阅，创建 workflow 会话）。</summary>
-    public event Action<WorkflowItem>? SummonRequested;
+    /// <summary>召唤状态变化（toggle 入池/出池）时触发。MainViewModelBase 订阅刷新统一下拉池。
+    /// 与 Experts/Rules 的 SummonChanged 同形（无参）——召唤只入池，下拉选中才激活。</summary>
+    public event Action? SummonChanged;
 
     /// <summary>工作流增删改时触发（通知 Notes 等同源列表刷新）。</summary>
     public event Action? WorkflowsChanged;
@@ -71,6 +72,7 @@ public partial class WorkflowsViewModel : ObservableObject
             await LoadAsync();
             StatusMessage = "已保存";
             WorkflowsChanged?.Invoke();
+            SummonChanged?.Invoke(); // LoadAsync 重建列表重置 IsSummoned=false → 通知下拉移除可能已不在的项
             return (true, string.Empty);
         }
         catch (Exception ex) { return (false, $"保存失败：{ex.Message}"); }
@@ -87,17 +89,23 @@ public partial class WorkflowsViewModel : ObservableObject
             await LoadAsync();
             StatusMessage = $"已删除：{item.Name}";
             WorkflowsChanged?.Invoke();
+            SummonChanged?.Invoke(); // 删除后选中项可能消失 → 通知下拉回退
         }
         catch (Exception ex) { StatusMessage = $"删除失败：{ex.Message}"; }
     }
 
+    /// <summary>召唤/取消召唤（多选入池，与 agent/规则同模型）。召唤只入池，下拉选中才激活。</summary>
     [RelayCommand]
-    private void Summon(WorkflowItem item)
+    private void ToggleSummon(WorkflowItem item)
     {
         if (item == null) return;
-        item.IsSummoned = true;
-        SummonRequested?.Invoke(item);
+        item.IsSummoned = !item.IsSummoned;
+        StatusMessage = item.IsSummoned ? $"已召唤：{item.Name}" : $"已取消召唤：{item.Name}";
+        SummonChanged?.Invoke();
     }
+
+    /// <summary>当前已召唤（入池）的工作流列表。</summary>
+    public List<WorkflowItem> GetSummonedWorkflows() => Workflows.Where(w => w.IsSummoned).ToList();
 
     private static WorkflowItem ToItem(CustomWorkflowDefinition d) => new()
     {

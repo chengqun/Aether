@@ -25,10 +25,10 @@ public partial class WorkflowsView : UserControl
             VM.DeleteCommand.Execute(item);
     }
 
-    private void OnSummonClick(object? sender, RoutedEventArgs e)
+    private void OnToggleSummonClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is WorkflowItem item && VM != null)
-            VM.SummonCommand.Execute(item);
+            VM.ToggleSummonCommand.Execute(item);
     }
 
     private async Task EditAsync(WorkflowItem? existing)

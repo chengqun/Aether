@@ -8,6 +8,7 @@ using Acme.Automation.Domain.Interfaces;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
+using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
@@ -87,14 +88,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _workflowRunner,
             _dispatcher);
-        Workflows.SummonRequested += OnWorkflowSummonRequested;
+        Workflows.SummonChanged += OnChatTargetsChanged;
         Workflows.WorkflowsChanged += async () => await Notes.LoadAsync();
         Rules = new RulesViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             _agentRunner,
             _dispatcher,
             serviceProvider.GetRequiredService<McpViewModel>());
-        Rules.SummonChanged += OnRuleSummonChanged;
+        Rules.SummonChanged += OnChatTargetsChanged;
         Rules.RulesChanged += async () => await Notes.LoadAsync();
         // Notes 的增删改会影响同源的 Experts（agent 笔记）、Workflows（workflow 笔记）与 Rules（规则笔记），需双向刷新。
         Notes.NotesChanged += async () =>
@@ -115,7 +116,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             serviceProvider.GetRequiredService<IAgentSourceParser>(),
             serviceProvider.GetRequiredService<McpViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
-        Experts.SummonChanged += OnSummonChanged;
+        Experts.SummonChanged += OnChatTargetsChanged;
         Experts.SummonChanged += async () => await Notes.LoadAsync();
 
         // 定时任务执行完成（成功/失败）后刷新「最近会话」——因为 executor 把运行落库进了会话存储。
@@ -486,17 +487,26 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             Messages.Add(remoteTurn);
         });
 
-        // 选中已召唤的自定义专家时，用该专家流式回复
-        if (SelectedAgentItem is ExpertItem expert)
+        // 选中对话目标时，用该目标流式回复（agent/规则走 _agentRunner、工作流走 _workflowRunner）
+        var remoteKind = KindOf(SelectedChatTarget);
+        if (remoteKind != ChatTargetKind.None)
         {
+            var (targetId, targetName) = SelectedChatTarget switch
+            {
+                ExpertItem ei => (ei.Id, ei.Name),
+                WorkflowItem wi => (wi.Id, wi.Name),
+                _ => (Guid.Empty, "目标"),
+            };
             var fullText = new System.Text.StringBuilder();
             var desiredMode = HasModeSupport ? SelectedMode : null;
-            await RunSegmentedStreamAsync(remoteTurn, expert.Name,
-                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(msg.ConversationId, expert.Id, msg.Content, handlers, approvalResponse, desiredMode, ct),
+            await RunSegmentedStreamAsync(remoteTurn, targetName,
+                (handlers, approvalResponse, ct) => remoteKind == ChatTargetKind.Workflow
+                    ? _workflowRunner.RunStreamingAsync(msg.ConversationId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
+                    : _agentRunner.RunStreamingAsync(msg.ConversationId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
                 fullText);
-            await RefreshModeAsync(msg.ConversationId);
+            if (remoteKind != ChatTargetKind.Rule) await RefreshModeAsync(msg.ConversationId);
 
-            // 远程消息触发运行：把专家回复通过 SignalR 发回远程发送方（否则对方收不到 agent 结果）。
+            // 远程消息触发运行：把回复通过 SignalR 发回远程发送方（否则对方收不到结果）。
             // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
             var replyText = fullText.ToString();
             if (!string.IsNullOrWhiteSpace(replyText) && _deviceChatClient.IsConnected)
@@ -614,17 +624,18 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
 
             _isInitializing = true;
-            // 恢复时按绑定 id 判断是规则 / workflow / agent，切到对应目标（抑制变更回调）
+            // 恢复时按绑定 id 在三类列表里找目标（规则/agent 都是 ExpertItem，按所在列表区分）。
+            // 会话目标可能已取消召唤 → 自动入池，保证下拉可见且选中（抑制 OnSelectedChatTargetChanged 重置副作用）。
             if (Guid.TryParse(item.AgentId, out var aid))
             {
-                var rl = Rules.Rules.FirstOrDefault(r => r.Id == aid);
-                if (rl is not null) { SelectedRule = rl; SelectedWorkflow = null; SelectedAgentItem = null; }
-                else
-                {
-                    var wf = Workflows.Workflows.FirstOrDefault(w => w.Id == aid);
-                    if (wf is not null) { SelectedWorkflow = wf; SelectedAgentItem = null; SelectedRule = null; }
-                    else { SelectedWorkflow = null; SelectedRule = null; SelectedAgentItem = AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid); }
-                }
+                ExpertItem? ei = Rules.Rules.FirstOrDefault(r => r.Id == aid)
+                              ?? Experts.Experts.FirstOrDefault(e => e.Id == aid);
+                WorkflowItem? wi = ei is null ? Workflows.Workflows.FirstOrDefault(w => w.Id == aid) : null;
+                object? target = (object?)ei ?? wi;
+                if (target is ExpertItem e2 && !e2.IsSummoned) e2.IsSummoned = true;
+                else if (target is WorkflowItem w2 && !w2.IsSummoned) w2.IsSummoned = true;
+                if (target is not null && !ChatTargetItems.Contains(target)) ChatTargetItems.Add(target);
+                SelectedChatTarget = target;
             }
             _isInitializing = false;
 
@@ -736,11 +747,23 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private string _tokenInfo = string.Empty;
 
-    public ObservableCollection<object> AgentSelectItems { get; } = new();
+    /// <summary>聊天头统一下拉池：已召唤的 agent/规则/工作流（混合 object，含 ExpertItem + WorkflowItem）。</summary>
+    public ObservableCollection<object> ChatTargetItems { get; } = new();
     public ObservableCollection<LlmConfigDto> LlmSelectItems { get; } = new();
 
+    /// <summary>当前激活的对话目标（下拉选中）。agent/规则是 ExpertItem、工作流是 WorkflowItem。</summary>
     [ObservableProperty]
-    private object? _selectedAgentItem;
+    private object? _selectedChatTarget;
+
+    /// <summary>对话目标类型判别（集中所有分支点的类型歧视）。</summary>
+    private enum ChatTargetKind { None, Agent, Rule, Workflow }
+    private static ChatTargetKind KindOf(object? t) => t switch
+    {
+        WorkflowItem => ChatTargetKind.Workflow,
+        ExpertItem e when e.NodeType == NoteNodeType.Rule => ChatTargetKind.Rule,
+        ExpertItem => ChatTargetKind.Agent,
+        _ => ChatTargetKind.None,
+    };
 
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
@@ -796,31 +819,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     /// <summary>规则页 ViewModel</summary>
     public RulesViewModel Rules { get; }
-
-    /// <summary>当前召唤到聊天的 workflow（非空时聊天跑 workflow；为空时跑选中的 agent）。</summary>
-    [ObservableProperty] private WorkflowItem? _selectedWorkflow;
-
-    /// <summary>当前召唤到聊天的规则（非空时聊天跑规则 agent；与 workflow/agent 互斥）。</summary>
-    [ObservableProperty] private ExpertItem? _selectedRule;
-
-    /// <summary>聊天头当前目标指示：召唤了规则或工作流时为 true（agent 走选择器，不在此列）。</summary>
-    public bool HasActiveTarget => SelectedRule is not null || SelectedWorkflow is not null;
-
-    /// <summary>当前召唤目标的显示名（规则优先于工作流）。</summary>
-    public string? ActiveTargetName => SelectedRule?.Name ?? SelectedWorkflow?.Name;
-
-    /// <summary>当前召唤目标的图标 emoji（规则=⚙️ / 工作流=🔀）。</summary>
-    public string? ActiveTargetIcon => SelectedRule is not null ? "⚙️" : SelectedWorkflow is not null ? "🔀" : null;
-
-    /// <summary>刷新聊天头「当前目标」指示（规则/工作流召唤或取消时调）。</summary>
-    private void RaiseActiveTarget()
-    {
-        OnPropertyChanged(nameof(HasActiveTarget));
-        OnPropertyChanged(nameof(ActiveTargetName));
-        OnPropertyChanged(nameof(ActiveTargetIcon));
-    }
-
-    partial void OnSelectedWorkflowChanged(WorkflowItem? value) => RaiseActiveTarget();
 
     /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
     /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
@@ -961,40 +959,77 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         await TryAutoConnectDeviceAsync();
     }
 
-    /// <summary>从偏好恢复召唤状态与选中专家（跨重启保留），并保证启动时有一个默认选中。</summary>
+    /// <summary>从偏好恢复三类目标的召唤状态与选中目标（跨重启保留），并保证启动时有一个默认选中。</summary>
     private async Task RestoreSummonedAndSelectedAsync()
     {
         try
         {
-            // 召唤列表
-            var summonedJson = await _preferences.GetAsync("summonedAgentIds");
-            if (!string.IsNullOrWhiteSpace(summonedJson))
+            // 读结构化偏好 chatTargets；缺失时迁移旧键（仅 agent）
+            var json = await _preferences.GetAsync("chatTargets");
+            ChatTargetPrefs? prefs = null;
+            if (!string.IsNullOrWhiteSpace(json))
             {
-                var ids = System.Text.Json.JsonSerializer.Deserialize<string[]>(summonedJson) ?? Array.Empty<string>();
-                var set = new HashSet<string>(ids);
-                foreach (var e in Experts.Experts)
-                    e.IsSummoned = set.Contains(e.Id.ToString());
+                prefs = System.Text.Json.JsonSerializer.Deserialize<ChatTargetPrefs>(json, _prefsJson);
+            }
+            else
+            {
+                var legacySummoned = await _preferences.GetAsync("summonedAgentIds");
+                var legacySelected = await _preferences.GetAsync("selectedAgentId");
+                if (!string.IsNullOrWhiteSpace(legacySummoned))
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<string[]>(legacySummoned) ?? Array.Empty<string>();
+                    prefs = new ChatTargetPrefs
+                    {
+                        Summoned = new() { Agent = ids.ToList() },
+                        Selected = !string.IsNullOrWhiteSpace(legacySelected)
+                            ? new ChatTargetSelected { Kind = "Agent", Id = legacySelected } : null,
+                    };
+                }
             }
 
-            // 无任何召唤专家时，自动召唤第一个，保证下拉非空、有默认 agent
-            if (Experts.GetSummonedExperts().Count == 0 && Experts.Experts.Count > 0)
+            // 按已保存 id 集合恢复三类 IsSummoned
+            if (prefs is not null)
+            {
+                var ag = prefs.Summoned?.Agent is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Agent) : null;
+                var rg = prefs.Summoned?.Rule is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Rule) : null;
+                var wg = prefs.Summoned?.Workflow is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Workflow) : null;
+                foreach (var e in Experts.Experts) e.IsSummoned = ag?.Contains(e.Id.ToString()) ?? false;
+                foreach (var r in Rules.Rules) r.IsSummoned = rg?.Contains(r.Id.ToString()) ?? false;
+                foreach (var w in Workflows.Workflows) w.IsSummoned = wg?.Contains(w.Id.ToString()) ?? false;
+            }
+
+            // 三类全空时自动召唤首个 agent，保证下拉非空、有默认目标
+            if (Experts.GetSummonedExperts().Count == 0
+                && Rules.GetSummonedRules().Count == 0
+                && Workflows.GetSummonedWorkflows().Count == 0
+                && Experts.Experts.Count > 0)
             {
                 Experts.Experts[0].IsSummoned = true;
-                var ids = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToArray();
-                await _preferences.SetAsync("summonedAgentIds", System.Text.Json.JsonSerializer.Serialize(ids));
+                await PersistSummonedTargetsAsync();
             }
 
-            // 同步填充下拉（此时已在 UI 线程；不依赖后续的 RefreshAgentSelectItems）
-            AgentSelectItems.Clear();
-            foreach (var e in Experts.GetSummonedExperts())
-                AgentSelectItems.Add(e);
+            // 同步填充下拉（此时已在 UI 线程；不依赖后续的 RefreshChatTargetItems）
+            ChatTargetItems.Clear();
+            foreach (var e in Experts.GetSummonedExperts()) ChatTargetItems.Add(e);
+            foreach (var r in Rules.GetSummonedRules()) ChatTargetItems.Add(r);
+            foreach (var w in Workflows.GetSummonedWorkflows()) ChatTargetItems.Add(w);
 
-            // 选中：已保存的 → 回退到第一个召唤的专家
-            var selectedId = await _preferences.GetAsync("selectedAgentId");
-            var saved = Guid.TryParse(selectedId, out var aid)
-                ? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault(e => e.Id == aid)
-                : null;
-            SelectedAgentItem = saved ?? AgentSelectItems.OfType<ExpertItem>().FirstOrDefault();
+            // 选中：已保存的 → 回退到池中首项
+            object? saved = null;
+            if (prefs?.Selected is { } sel && Guid.TryParse(sel.Id, out var sid))
+            {
+                saved = sel.Kind switch
+                {
+                    "Rule" => Rules.Rules.FirstOrDefault(r => r.Id == sid),
+                    "Agent" => Experts.Experts.FirstOrDefault(e => e.Id == sid),
+                    "Workflow" => (object?)Workflows.Workflows.FirstOrDefault(w => w.Id == sid),
+                    _ => null,
+                };
+                // 保存的目标可能已取消召唤 → 自动入池，保证下拉可见且选中
+                if (saved is ExpertItem e2 && !e2.IsSummoned) { e2.IsSummoned = true; ChatTargetItems.Add(e2); }
+                else if (saved is WorkflowItem w2 && !w2.IsSummoned) { w2.IsSummoned = true; ChatTargetItems.Add(w2); }
+            }
+            SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
 
             // 恢复最近会话展开状态
             var expanded = await _preferences.GetAsync("recentExpanded");
@@ -1002,6 +1037,61 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
         catch { /* 偏好恢复失败不阻塞 */ }
     }
+
+    /// <summary>持久化三类目标的召唤列表（toggle 入池/出池时调）。</summary>
+    private async Task PersistSummonedTargetsAsync()
+    {
+        try
+        {
+            var prefs = new ChatTargetPrefs
+            {
+                Summoned = new()
+                {
+                    Agent = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToList(),
+                    Rule = Rules.GetSummonedRules().Select(r => r.Id.ToString()).ToList(),
+                    Workflow = Workflows.GetSummonedWorkflows().Select(w => w.Id.ToString()).ToList(),
+                },
+                Selected = CurrentSelectedPrefs(),
+            };
+            await _preferences.SetAsync("chatTargets", System.Text.Json.JsonSerializer.Serialize(prefs, _prefsJson));
+        }
+        catch { /* 偏好持久化失败不阻塞 */ }
+    }
+
+    /// <summary>持久化当前选中目标（下拉切换时调）：读现有 prefs 只更 Selected 再写回。</summary>
+    private async Task PersistSelectedTargetAsync()
+    {
+        try
+        {
+            var json = await _preferences.GetAsync("chatTargets");
+            var prefs = string.IsNullOrWhiteSpace(json)
+                ? new ChatTargetPrefs()
+                : (System.Text.Json.JsonSerializer.Deserialize<ChatTargetPrefs>(json, _prefsJson) ?? new ChatTargetPrefs());
+            prefs.Selected = CurrentSelectedPrefs();
+            await _preferences.SetAsync("chatTargets", System.Text.Json.JsonSerializer.Serialize(prefs, _prefsJson));
+        }
+        catch { /* 偏好持久化失败不阻塞 */ }
+    }
+
+    private ChatTargetSelected? CurrentSelectedPrefs()
+    {
+        var kind = KindOf(SelectedChatTarget);
+        if (kind == ChatTargetKind.None) return null;
+        var id = SelectedChatTarget switch
+        {
+            ExpertItem ei => ei.Id.ToString(),
+            WorkflowItem wi => wi.Id.ToString(),
+            _ => null,
+        };
+        return id is null ? null : new ChatTargetSelected { Kind = kind.ToString(), Id = id };
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions _prefsJson = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
 
     /// <summary>加载 LLM 配置列表到下拉框，并恢复上次选中的 LLM（跨重启保留）。</summary>
     private async Task LoadLlmConfigsAsync()
@@ -1049,95 +1139,35 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         }
     }
 
-    /// <summary>召唤变化：刷新下拉 + 持久化召唤列表。</summary>
-    private async void OnSummonChanged()
+    /// <summary>三类目标的召唤状态变化（toggle 入池/出池）：刷新统一下拉池 + 持久化召唤列表。
+    /// 召唤只入池，不自动激活——激活是下拉选择的独立动作（与 agent 模型一致）。</summary>
+    private async void OnChatTargetsChanged()
     {
-        RefreshAgentSelectItems();
-        // 编辑后 EnableAgentModeProvider 可能变了，重新评估模式选择器显隐
-        if (SelectedAgentItem is ExpertItem ei)
-            HasModeSupport = ei.EnableAgentModeProvider;
-        try
-        {
-            var ids = Experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToArray();
-            await _preferences.SetAsync("summonedAgentIds", System.Text.Json.JsonSerializer.Serialize(ids));
-        }
-        catch { /* 偏好持久化失败不阻塞 */ }
+        RefreshChatTargetItems();
+        await PersistSummonedTargetsAsync();
     }
 
-    /// <summary>召唤 workflow 到聊天：设为当前目标、开新会话、切到聊天页。</summary>
-    private void OnWorkflowSummonRequested(WorkflowItem item)
+    /// <summary>下拉选中目标变化：更新模式支持；非启动期统一开新会话（三类一致）+ 持久化选中。</summary>
+    partial void OnSelectedChatTargetChanged(object? value)
     {
-        _dispatcher.Post(() =>
-        {
-            SelectedWorkflow = item;
-            SelectedAgentItem = null; // 走 workflow 分支
-            SelectedRule = null; // 与规则互斥
-            _currentConversationId = Guid.Empty; // 新会话
-            Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false;
-            StatusText = $"已召唤工作流：{item.Name}";
-            IsConnected = _deviceChatClient.IsConnected;
-        });
-    }
-
-    /// <summary>规则召唤变化：单选，取唯一已召唤规则为当前目标、开新会话；取消召唤则清空。</summary>
-    private void OnRuleSummonChanged()
-    {
-        _dispatcher.Post(() =>
-        {
-            var summoned = Rules.GetSummonedRules().FirstOrDefault();
-            if (summoned is null)
-            {
-                SelectedRule = null;
-                return;
-            }
-            SelectedRule = summoned;
-            SelectedWorkflow = null; // 与 workflow/agent 互斥
-            SelectedAgentItem = null;
-            _currentConversationId = Guid.Empty; // 新会话
-            Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false;
-            StatusText = $"已召唤规则：{summoned.Name}";
-            IsConnected = _deviceChatClient.IsConnected;
-        });
-    }
-
-    /// <summary>选中专家变化时：始终更新模式支持/选择器（UI 态）；启动期 _isInitializing 仅抑制持久化与 SetMode 副作用。</summary>
-    partial void OnSelectedAgentItemChanged(object? value)
-    {
-        // 模式支持随选中 agent 变化（始终更新，否则启动期恢复选中时选择器/plan-accept 不显示）。
-        HasModeSupport = value is ExpertItem e && e.EnableAgentModeProvider;
+        var kind = KindOf(value);
+        // 模式支持：工作流支持；agent 看 EnableAgentModeProvider；规则无 mode。始终更新（启动期恢复选中也要显选择器）。
+        HasModeSupport = kind == ChatTargetKind.Workflow
+                      || (kind == ChatTargetKind.Agent && value is ExpertItem e && e.EnableAgentModeProvider);
         _syncingMode = true;
         SelectedMode = HasModeSupport ? "plan" : null;
         _syncingMode = false;
 
-        // 选中 agent 时与规则互斥
-        if (value is not null) SelectedRule = null;
-        RaiseActiveTarget();
-
         if (_isInitializing) return;
-        if (value is ExpertItem expert)
-        {
-            _preferences.SetAsync("selectedAgentId", expert.Id.ToString()).SafeFireAndForget();
 
-        }
+        // 统一行为变更：切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
+        _currentConversationId = Guid.Empty;
+        Messages.Clear();
+        ActiveTodos.Clear(); HasActivePlan = false;
+        _pendingHistoryTurns = null;
+
+        PersistSelectedTargetAsync().SafeFireAndForget();
         RefreshModeAsync().SafeFireAndForget();
-
-    }
-
-    /// <summary>选中规则变化时：规则是确定性大脑，不支持 plan/execute；与 workflow/agent 互斥。</summary>
-    partial void OnSelectedRuleChanged(ExpertItem? value)
-    {
-        HasModeSupport = false;
-        _syncingMode = true;
-        SelectedMode = null;
-        _syncingMode = false;
-        if (value is not null)
-        {
-            SelectedWorkflow = null;
-            SelectedAgentItem = null;
-        }
-        RaiseActiveTarget();
     }
 
     partial void OnSelectedModeChanged(string? value)
@@ -1164,20 +1194,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     partial void OnIsAgentRunningChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
-    /// <summary>刷新聊天页 Agent 下拉框（已召唤的专家），保留当前选中。</summary>
-    private void RefreshAgentSelectItems()
+    /// <summary>刷新聊天头统一下拉池（已召唤的 agent/规则/工作流），保留当前选中。</summary>
+    private void RefreshChatTargetItems()
     {
         _dispatcher.Post(() =>
         {
-            var current = SelectedAgentItem as ExpertItem;
-            AgentSelectItems.Clear();
-            foreach (var e in Experts.GetSummonedExperts())
-                AgentSelectItems.Add(e);
+            var current = SelectedChatTarget;
+            ChatTargetItems.Clear();
+            foreach (var e in Experts.GetSummonedExperts()) ChatTargetItems.Add(e);
+            foreach (var r in Rules.GetSummonedRules()) ChatTargetItems.Add(r);
+            foreach (var w in Workflows.GetSummonedWorkflows()) ChatTargetItems.Add(w);
 
-            // 当前仍在召唤列表 → 保持选中；否则回退第一个（避免清空导致选中丢失）
-            SelectedAgentItem = (current is not null && AgentSelectItems.Contains(current))
+            // 当前仍在池中 → 保持选中；否则回退第一个（避免清空导致选中丢失）
+            SelectedChatTarget = (current is not null && ChatTargetItems.Contains(current))
                 ? current
-                : AgentSelectItems.OfType<ExpertItem>().FirstOrDefault();
+                : ChatTargetItems.FirstOrDefault();
         });
     }
 
@@ -1223,8 +1254,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private async Task SetModeOnSessionAsync(string mode)
     {
         if (_currentConversationId == Guid.Empty) return;
-        if (SelectedRule is not null) return; // 规则不支持 mode
-        if (SelectedWorkflow is not null)
+        var kind = KindOf(SelectedChatTarget);
+        if (kind == ChatTargetKind.Rule) return; // 规则不支持 mode
+        if (kind == ChatTargetKind.Workflow)
             await _workflowRunner.SetModeAsync(_currentConversationId, mode);
         else
             await _agentRunner.SetModeAsync(_currentConversationId, mode);
@@ -1235,7 +1267,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     {
         var convId = conversationId ?? _currentConversationId;
         if (convId == Guid.Empty || !HasModeSupport) return;
-        string? m = SelectedWorkflow is not null
+        string? m = KindOf(SelectedChatTarget) == ChatTargetKind.Workflow
             ? await _workflowRunner.GetModeAsync(convId).ConfigureAwait(false)
             : await _agentRunner.GetModeAsync(convId).ConfigureAwait(false);
         if (m is not null)
@@ -1277,94 +1309,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         });
         Messages.Add(turn);
 
-        // 召唤了规则时，本地流式运行规则 agent（确定性大脑，无 LLM）
-        if (SelectedRule is ExpertItem rl)
+        // 选中对话目标时，本地流式运行（agent/规则走 _agentRunner、工作流走 _workflowRunner）
+        var kind = KindOf(SelectedChatTarget);
+        if (kind != ChatTargetKind.None)
         {
-            var justCreated = false;
-            if (_currentConversationId == Guid.Empty)
+            var (targetId, targetName) = SelectedChatTarget switch
             {
-                justCreated = true;
-                _currentConversationId = Guid.NewGuid();
-                var conv = new Conversation
-                {
-                    ConversationId = _currentConversationId,
-                    AgentId = rl.Id.ToString(),
-                    AgentName = rl.Name,
-                    Title = content.Length > 20 ? content[..20] + "…" : content,
-                };
-                conv.Append(Aether.AI.Core.Messages.Message.User(content));
-                await _conversationStore.SaveAsync(conv);
-                await _dispatcher.InvokeAsync(() =>
-                {
-                    Conversations.Insert(0, new ConversationItem
-                    {
-                        Id = conv.ConversationId, Title = conv.Title, Preview = content,
-                        DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
-                        ResumeCommand = ResumeConversationCommand,
-                        DeleteCommand = DeleteConversationCommand,
-                    });
-                    foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
-                });
-            }
+                ExpertItem ei => (ei.Id, ei.Name),
+                WorkflowItem wi => (wi.Id, wi.Name),
+                _ => (Guid.Empty, "目标"),
+            };
 
-            var fullText = new System.Text.StringBuilder();
-            // 规则无 mode（desiredMode 传 null）；规则不经审批（Safe 确定性流程）。
-            var runItems = await RunSegmentedStreamAsync(turn, rl.Name,
-                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, rl.Id, content, handlers, approvalResponse, null, ct),
-                fullText, _runCts?.Token ?? default);
-            await PersistTurnAsync(content, runItems, fullText.ToString());
-            if (justCreated)
-                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
-
-            return;
-        }
-
-        // 召唤了 workflow 时，本地流式运行 workflow（多 agent 转交）
-        if (SelectedWorkflow is WorkflowItem wf)
-        {
-            var justCreated = false;
-            if (_currentConversationId == Guid.Empty)
-            {
-                justCreated = true;
-                _currentConversationId = Guid.NewGuid();
-                var conv = new Conversation
-                {
-                    ConversationId = _currentConversationId,
-                    AgentId = wf.Id.ToString(),
-                    AgentName = wf.Name,
-                    Title = content.Length > 20 ? content[..20] + "…" : content,
-                };
-                conv.Append(Aether.AI.Core.Messages.Message.User(content));
-                await _conversationStore.SaveAsync(conv);
-                await _dispatcher.InvokeAsync(() =>
-                {
-                    Conversations.Insert(0, new ConversationItem
-                    {
-                        Id = conv.ConversationId, Title = conv.Title, Preview = content,
-                        DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
-                        ResumeCommand = ResumeConversationCommand,
-                        DeleteCommand = DeleteConversationCommand,
-                    });
-                    foreach (var c in Conversations) c.IsCurrent = c.Id == _currentConversationId;
-                });
-            }
-
-            var fullText = new System.Text.StringBuilder();
-            var desiredMode = HasModeSupport ? SelectedMode : null;
-            var runItems = await RunSegmentedStreamAsync(turn, wf.Name,
-                (handlers, approvalResponse, ct) => _workflowRunner.RunStreamingAsync(_currentConversationId, wf.Id, content, handlers, approvalResponse, desiredMode, ct),
-                fullText, _runCts?.Token ?? default);
-            await PersistTurnAsync(content, runItems, fullText.ToString());
-            await RefreshModeAsync();
-            if (justCreated)
-                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
-
-            return;
-        }
-
-        // 选中已召唤的自定义专家时，本地流式运行（不走 SignalR）
-        if (SelectedAgentItem is ExpertItem expert)
-        {
             var justCreated = false;
             // 待新聊天 → 首次发送才落库创建会话
             if (_currentConversationId == Guid.Empty)
@@ -1374,8 +1329,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 var conv = new Conversation
                 {
                     ConversationId = _currentConversationId,
-                    AgentId = expert.Id.ToString(),
-                    AgentName = expert.Name,
+                    AgentId = targetId.ToString(),
+                    AgentName = targetName,
                     Title = content.Length > 20 ? content[..20] + "…" : content,
                 };
                 conv.Append(Aether.AI.Core.Messages.Message.User(content));
@@ -1384,13 +1339,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
                 {
                     Conversations.Insert(0, new ConversationItem
                     {
-                        Id = conv.ConversationId,
-                        Title = conv.Title,
-                        Preview = content,
-                        DisplayTime = FormatTime(conv.UpdatedAt),
-                        AgentId = conv.AgentId,
-                        AgentName = conv.AgentName,
-                        IsCurrent = true,
+                        Id = conv.ConversationId, Title = conv.Title, Preview = content,
+                        DisplayTime = FormatTime(conv.UpdatedAt), AgentId = conv.AgentId, AgentName = conv.AgentName, IsCurrent = true,
                         ResumeCommand = ResumeConversationCommand,
                         DeleteCommand = DeleteConversationCommand,
                     });
@@ -1399,14 +1349,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             }
 
             var fullText = new System.Text.StringBuilder();
-            var desiredMode = HasModeSupport ? SelectedMode : null;
-            var runItems = await RunSegmentedStreamAsync(turn, expert.Name,
-                (handlers, approvalResponse, ct) => _agentRunner.RunStreamingAsync(_currentConversationId, expert.Id, content, handlers, approvalResponse, desiredMode, ct),
+            // 规则无 mode（desiredMode 传 null）；agent/工作流传 HasModeSupport?SelectedMode:null。
+            var desiredMode = kind == ChatTargetKind.Rule ? null : (HasModeSupport ? SelectedMode : null);
+            var runItems = await RunSegmentedStreamAsync(turn, targetName,
+                (handlers, approvalResponse, ct) => kind == ChatTargetKind.Workflow
+                    ? _workflowRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct)
+                    : _agentRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct),
                 fullText, _runCts?.Token ?? default);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
             await PersistTurnAsync(content, runItems, fullText.ToString());
-            await RefreshModeAsync();
+            if (kind != ChatTargetKind.Rule) await RefreshModeAsync();
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
@@ -1658,4 +1611,24 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
 
     private static string? MetaVal(Aether.AI.Core.Messages.Message m, string key)
         => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) ? v : null;
+}
+
+/// <summary>聊天目标偏好（chatTargets 键）：三类召唤 id 集合 + 当前选中目标。camelCase JSON 持久化。</summary>
+sealed record ChatTargetPrefs
+{
+    public ChatTargetSummoned? Summoned { get; set; }
+    public ChatTargetSelected? Selected { get; set; }
+}
+
+sealed record ChatTargetSummoned
+{
+    public List<string> Agent { get; set; } = new();
+    public List<string> Rule { get; set; } = new();
+    public List<string> Workflow { get; set; } = new();
+}
+
+sealed record ChatTargetSelected
+{
+    public string? Kind { get; set; } // "Agent" | "Rule" | "Workflow"
+    public string? Id { get; set; }
 }

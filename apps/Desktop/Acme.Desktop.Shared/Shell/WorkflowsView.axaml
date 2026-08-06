@@ -63,7 +63,10 @@
                   <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap"
                              Foreground="{DynamicResource TextSecondaryBrush}" />
                   <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
-                    <Button Content="召唤到聊天" Classes="primary tool" Click="OnSummonClick" Tag="{Binding}" />
+                    <Button Content="召唤" Classes="primary tool" Click="OnToggleSummonClick" Tag="{Binding}"
+                            IsVisible="{Binding !IsSummoned}" />
+                    <Button Content="取消召唤" Classes="tool" Click="OnToggleSummonClick" Tag="{Binding}"
+                            IsVisible="{Binding IsSummoned}" />
                     <Button Content="编辑" Classes="tool" Click="OnEditClick" Tag="{Binding}" />
                     <Button Content="删除" Classes="tool" Click="OnDeleteClick" Tag="{Binding}" />
                   </StackPanel>

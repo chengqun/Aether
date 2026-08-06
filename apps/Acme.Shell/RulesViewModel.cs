@@ -178,22 +178,13 @@ public partial class RulesViewModel : ObservableObject
         }
     }
 
+    /// <summary>召唤/取消召唤（多选入池，与 agent/工作流同模型）。召唤只入池，下拉选中才激活。</summary>
     [RelayCommand]
     private void ToggleSummon(ExpertItem item)
     {
         if (item == null) return;
-        if (!item.IsSummoned)
-        {
-            // 规则单选召唤：召唤新规则前清除其它已召唤的（与 agent 多选不同，规则互斥）。
-            foreach (var r in Rules) r.IsSummoned = false;
-            item.IsSummoned = true;
-            StatusMessage = $"已召唤：{item.Name}";
-        }
-        else
-        {
-            item.IsSummoned = false;
-            StatusMessage = $"已取消召唤：{item.Name}";
-        }
+        item.IsSummoned = !item.IsSummoned;
+        StatusMessage = item.IsSummoned ? $"已召唤：{item.Name}" : $"已取消召唤：{item.Name}";
         SummonChanged?.Invoke();
     }
 
