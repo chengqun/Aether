@@ -6,13 +6,6 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <UserControl.Styles>
-    <Style Selector="Border.expert-card">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="Padding" Value="16,14"/>
-    </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="White"/>
@@ -121,7 +114,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Classes="expert-card" Margin="0,0,12,12" Width="280">
+                  <Border Classes="card" Margin="0,0,12,12" Width="300">
                     <StackPanel Spacing="6">
                       <!-- 标题行 -->
                       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -187,8 +180,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                      CornerRadius="16" Padding="20" Width="340" Margin="0,0,12,12">
+              <Border Classes="card" Width="300" Margin="0,0,12,12">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel Grid.Column="0" Spacing="10">
                     <StackPanel Orientation="Horizontal" Spacing="10">
@@ -266,7 +258,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="expert-card" Margin="0,0,12,12" Width="300">
+                <Border Classes="card" Margin="0,0,12,12" Width="300">
                   <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <TextBlock Text="🤖" FontSize="18" VerticalAlignment="Center" />

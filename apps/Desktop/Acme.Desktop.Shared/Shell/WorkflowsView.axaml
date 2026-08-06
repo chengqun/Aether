@@ -4,13 +4,6 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <UserControl.Styles>
-    <Style Selector="Border.wf-card">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="Padding" Value="16,14"/>
-    </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="White"/>
@@ -41,7 +34,7 @@
 
     <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
-        <Border Classes="wf-card" Margin="0,0,0,12" IsVisible="{Binding !Workflows.Count}"
+        <Border Classes="card" Margin="0,0,0,12" IsVisible="{Binding !Workflows.Count}"
                 HorizontalAlignment="Center" Padding="40">
           <StackPanel Spacing="6" HorizontalAlignment="Center">
             <TextBlock Text="还没有工作流" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center"
@@ -52,9 +45,14 @@
         </Border>
 
         <ItemsControl ItemsSource="{Binding Workflows}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="wf-card" Margin="0,0,0,12">
+              <Border Classes="card" Margin="0,0,12,12" Width="300">
                 <StackPanel Spacing="6">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"

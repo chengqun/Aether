@@ -4,14 +4,6 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <UserControl.Styles>
-    <Style Selector="Border.mcp-card">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="Padding" Value="16,14"/>
-      <Setter Property="Margin" Value="0,0,0,10"/>
-    </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="White"/>
@@ -47,7 +39,7 @@
       </Grid>
     </Border>
 
-    <ScrollViewer Padding="20,12">
+    <ScrollViewer Padding="20,12" HorizontalScrollBarVisibility="Disabled">
       <Panel>
         <!-- 空态 -->
         <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="White"
@@ -63,9 +55,14 @@
 
         <!-- server 列表 -->
         <ItemsControl ItemsSource="{Binding Servers}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="mcp-card">
+              <Border Classes="card" Margin="0,0,12,12" Width="300">
                 <StackPanel Spacing="8">
                   <!-- 头部：名称 + 状态 + 操作 -->
                   <Grid ColumnDefinitions="*,Auto">

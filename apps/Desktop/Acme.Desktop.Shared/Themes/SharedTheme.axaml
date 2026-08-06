@@ -252,6 +252,15 @@
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
 
+  <!-- 通用卡片外框：专家/专家团/市场/MCP/连接器 各 tab 共用，容器用 ItemsControl+WrapPanel 换行。 -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="White"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="Padding" Value="18"/>
+  </Style>
+
   <!-- 消息卡（思考/工具/计划/审批 统一底）：淡 tint + 圆角 + 描边 -->
   <Style Selector="Border.msg-card">
     <Setter Property="Background" Value="{DynamicResource ToolCallBrush}"/>
