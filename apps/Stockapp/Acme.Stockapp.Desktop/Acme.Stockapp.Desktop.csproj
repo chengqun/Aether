@@ -3,8 +3,12 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!-- 多目标：net10.0-windows 才引 StockTrading.Infrastructure（FlaUI/WPF，Windows-only）；
-         net10.0 保留 macOS/Linux 跨平台构建（CTP/回测等其它上下文不受影响）。 -->
-    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
+         net10.0 保留 macOS/Linux 跨平台构建（CTP/回测等其它上下文不受影响）。
+         按 OS 条件化：Windows 上双目标（dev 用 -f net10.0-windows 带 FlaUI）；mac/linux 只声明
+         net10.0——否则 restore 仍会评估 net10.0-windows TFM → 触及 Infrastructure（net10.0-windows +
+         UseWPF）→ NETSDK1100。windows TFM 在非 Windows 上根本不声明，restore/build 都不碰它。 -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
