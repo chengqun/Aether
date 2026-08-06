@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              x:Class="Acme.Desktop.Shared.Shell.ExpertsView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -174,10 +175,63 @@
       </DockPanel>
     </Panel>
 
-    <!-- ===== 连接器面板（ContentControl 由宿主 DataTemplate 解析） ===== -->
+    <!-- ===== 连接器面板（数据驱动：ItemsControl + WrapPanel，共享卡片模板） =====
+         各租户只提供 IConnectorViewModel.Cards，加卡 = 加项，零 XAML 改动，自动换行。 -->
     <Panel IsVisible="{Binding IsConnectorTab}">
       <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
-        <ContentControl Content="{Binding Connector}" />
+        <ItemsControl ItemsSource="{Binding Connector.Cards}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                      CornerRadius="16" Padding="20" Width="340" Margin="0,0,12,12">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0" Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                      <Border Width="44" Height="44" CornerRadius="22" Background="{Binding IconBackground}">
+                        <TextBlock Text="{Binding Icon}" FontSize="22"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                        <TextBlock Text="{Binding Description}" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                      </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Ellipse Width="8" Height="8"
+                                   Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
+                          <TextBlock Text="{Binding StatusText}" FontSize="12"
+                                     Foreground="{DynamicResource TextPrimaryBrush}" />
+                        </StackPanel>
+                      </Border>
+                      <Button Content="同步" Command="{Binding SyncCommand}"
+                              IsVisible="{Binding ShowSync}" Padding="10,6" FontSize="11" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                    <Button Command="{Binding PrimaryCommand}" IsEnabled="{Binding IsPrimaryEnabled}"
+                            Width="32" Height="32" CornerRadius="16"
+                            Background="{DynamicResource AccentBrush}" Foreground="White" BorderThickness="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            HorizontalAlignment="Right">
+                      <TextBlock Text="+" Foreground="White" FontSize="20" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
       </ScrollViewer>
     </Panel>
 

@@ -16,10 +16,10 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 ///   - stocktrade.configured：用户曾成功连接过（= 配置已验证就绪）。
 /// 启动期若 configured=true，自动尝试 ConnectAsync 重新确认窗口是否还在（同花顺客户端需人工登录，
 /// 故不自动启动 exe，只确认窗口）——窗口在则「已连接」，不在则提示「请启动客户端」（配置仍有效）。
-/// 与 <see cref="CtpConnectorViewModel"/> 并列，不实现 <see cref="IConnectorViewModel"/>
+/// 与 <see cref="CtpConnectorViewModel"/> 并列，作为连接器 tab 的一张卡片
 /// （由复合 <see cref="StockappConnectorViewModel"/> 统一对外）。
 /// </summary>
-public partial class ThsConnectorViewModel : ObservableObject
+public partial class ThsConnectorViewModel : ConnectorCardViewModel
 {
     private const string KeyExePath = "stocktrade.exePath";
     private const string KeyWindowTitle = "stocktrade.windowTitle";
@@ -36,12 +36,20 @@ public partial class ThsConnectorViewModel : ObservableObject
     public ThsConnectorViewModel(
         IStockTradingApplicationService service,
         IStockTradingOptions options,
-        IPreferencesStore? preferences)
+        IPreferencesStore? preferences,
+        IConnectorSettingsDialogService dialogs)
     {
         _service = service;
         _options = options;
         _preferences = preferences!;
         _dispatcher = Dispatcher.UIThread;
+
+        Icon = "💹";
+        IconBackground = "#E3F2FD";
+        Title = "同花顺股票交易";
+        Description = "连接同花顺下单客户端，供股票下单/撤单/持仓工具调用";
+        PrimaryCommand = new AsyncRelayCommand(() => dialogs.ShowSettingsAsync(this));
+
         _service.LogReceived += OnLogReceived;
 
         // 启动期用已持久化的配置回填 options（FlaUI 适配器读 options 即时生效）
@@ -56,12 +64,13 @@ public partial class ThsConnectorViewModel : ObservableObject
     [ObservableProperty] private string _clientExecutablePath = "";
     [ObservableProperty] private string _clientWindowTitle = "网上股票交易系统5.0";
 
-    [ObservableProperty] private bool _isConnected;
-    [ObservableProperty] private string _statusText = "未连接";
     [ObservableProperty] private bool _isBusy;
 
+    /// <summary>忙碌时禁用「+」主操作。</summary>
+    partial void OnIsBusyChanged(bool value) => IsPrimaryEnabled = !value;
+
     /// <summary>启动期/切到连接器 tab 时刷新：若曾配置过且当前未连接，自动尝试重新确认窗口。</summary>
-    public async Task RefreshAsync()
+    public override async Task RefreshAsync()
     {
         if (_configured && !_service.IsConnected)
         {

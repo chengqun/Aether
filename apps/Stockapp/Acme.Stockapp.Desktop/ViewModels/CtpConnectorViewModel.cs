@@ -7,22 +7,30 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Stockapp.Desktop.ViewModels;
 
 /// <summary>
-/// CTP 期货连接器 ViewModel（Stockapp 租户）。连接/断开 CTP、持久化凭据、显示连接状态。
-/// 实现 <see cref="IConnectorViewModel"/> 供 ExpertsViewModel 可选持有。UI 无关。
-/// 镜像 AlphaAgent 的 Stockapp ConnectorViewModel。
+/// CTP 期货连接器卡片 ViewModel（Stockapp 租户）。连接/断开 CTP、持久化凭据、显示连接状态。
+/// 继承 <see cref="ConnectorCardViewModel"/> 作为连接器 tab 的一张卡片；「+」打开 CTP 设置对话框
+/// （<see cref="CtpLoginWindow"/>，对话框内填表单 + 连接）。UI 无关。
 /// </summary>
-public sealed partial class CtpConnectorViewModel : ObservableObject, IConnectorViewModel
+public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
 {
     private readonly ICtpTradingService _trading;
     private readonly ICtpConfigStore _configStore;
 
-    public CtpConnectorViewModel(ICtpTradingService trading, ICtpConfigStore configStore)
+    public CtpConnectorViewModel(ICtpTradingService trading, ICtpConfigStore configStore,
+        IConnectorSettingsDialogService dialogs)
     {
         _trading = trading ?? throw new ArgumentNullException(nameof(trading));
         _configStore = configStore ?? throw new ArgumentNullException(nameof(configStore));
+
+        Icon = "📈";
+        IconBackground = "#E8F5E9";
+        Title = "CTP 期货交易";
+        Description = "连接期货柜台，供交易/行情工具调用";
+        PrimaryCommand = new AsyncRelayCommand(() => dialogs.ShowSettingsAsync(this));
+
         _trading.ConnectionStateChanged += OnConnectionStateChanged;
-        _isConnected = _trading.IsConnected;
-        _statusText = _isConnected ? "已连接" : "未连接";
+        IsConnected = _trading.IsConnected;
+        StatusText = IsConnected ? "已连接" : "未连接";
     }
 
     [ObservableProperty] private string _frontAddress = string.Empty;
@@ -34,12 +42,10 @@ public sealed partial class CtpConnectorViewModel : ObservableObject, IConnector
     [ObservableProperty] private string _authCode = string.Empty;
     [ObservableProperty] private bool _autoLogin;
 
-    [ObservableProperty] private bool _isConnected;
-    [ObservableProperty] private string _statusText = "未连接";
     [ObservableProperty] private bool _isConnecting;
 
     /// <summary>从存储加载已存配置到表单，刷新连接状态，若启用自动登录则自动连接。</summary>
-    public async Task RefreshAsync()
+    public override async Task RefreshAsync()
     {
         var cfg = await _configStore.GetAsync();
         if (cfg is not null)

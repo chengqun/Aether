@@ -105,6 +105,7 @@ public partial class App : global::Avalonia.Application
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
 
         // 连接器子面板（CTP 期货 + 同花顺股票，并列在连接器 tab）
+        services.AddSingleton<IConnectorSettingsDialogService, StockappConnectorSettingsDialogService>();
         services.AddSingleton<CtpConnectorViewModel>();
         services.AddSingleton<ThsConnectorViewModel>();
         // 复合连接器 = CTP + 同花顺，实现 IConnectorViewModel 注入 ExpertsViewModel

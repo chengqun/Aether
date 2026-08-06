@@ -3,9 +3,9 @@ using Acme.Shell;
 namespace Acme.Stockapp.Desktop.ViewModels;
 
 /// <summary>
-/// Stockapp 复合连接器：实现 <see cref="IConnectorViewModel"/>，内部并列两个子连接器面板——
-/// <see cref="Ctp"/>（CTP 期货）+ <see cref="Ths"/>（同花顺股票）。注入 ExpertsViewModel 的连接器 tab。
-/// 两套连接逻辑互不搭界，UI 各自一张卡片（见 ConnectorView）。Refresh 统一刷新两者状态。
+/// Stockapp 复合连接器：实现 <see cref="IConnectorViewModel"/>，内部并列两张卡片——
+/// <see cref="Ctp"/>（CTP 期货）+ <see cref="Ths"/>（同花顺股票）。注入 ExpertsViewModel 的连接器 tab，
+/// 由共享 ItemsControl + WrapPanel 数据驱动渲染（<see cref="Cards"/>）。Refresh 逐张刷新。
 /// </summary>
 public sealed class StockappConnectorViewModel : IConnectorViewModel
 {
@@ -13,15 +13,19 @@ public sealed class StockappConnectorViewModel : IConnectorViewModel
     {
         Ctp = ctp;
         Ths = ths;
+        Cards = [ctp, ths];
     }
 
-    /// <summary>CTP 期货连接器子面板。</summary>
+    /// <summary>CTP 期货连接器卡片。</summary>
     public CtpConnectorViewModel Ctp { get; }
 
-    /// <summary>同花顺股票连接器子面板。</summary>
+    /// <summary>同花顺股票连接器卡片。</summary>
     public ThsConnectorViewModel Ths { get; }
 
-    /// <summary>切到连接器 tab 时刷新两个子面板状态。</summary>
+    /// <summary>连接器卡片列表（共享面板数据驱动渲染）。</summary>
+    public IReadOnlyList<ConnectorCardViewModel> Cards { get; }
+
+    /// <summary>切到连接器 tab 时逐张刷新状态。</summary>
     public async Task RefreshAsync()
     {
         await Ctp.RefreshAsync();
