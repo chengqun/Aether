@@ -183,18 +183,19 @@
               <Border Classes="card" Width="300" Margin="0,0,12,12">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel Grid.Column="0" Spacing="10">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                      <Border Width="44" Height="44" CornerRadius="22" Background="{Binding IconBackground}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                      <Border Grid.Column="0" Width="44" Height="44" CornerRadius="22" Background="{Binding IconBackground}">
                         <TextBlock Text="{Binding Icon}" FontSize="22"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                       </Border>
-                      <StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="2">
                         <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimaryBrush}" />
+                                   Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="{Binding Description}" FontSize="11"
-                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
-                    </StackPanel>
+                    </Grid>
 
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0">
