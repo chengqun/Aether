@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Single solution: `Aether.AI.Platform.slnx` (note: `.slnx`, not `.sln`). .NET 10.
 
 ```bash
-# Lean is a git submodule — init before first build (shallow, pinned to a fixed commit)
-git submodule update --init externals/Lean
+# git submodules — init before first build (shallow, pinned to a fixed commit)
+git submodule update --init externals/Lean externals/FlaUI-MCP   # Lean = futures engine; FlaUI-MCP = Windows desktop-control MCP server (optional, Windows-only)
 
 dotnet build Aether.AI.Platform.slnx          # build everything
 dotnet test  Aether.AI.Platform.slnx          # run all test projects
@@ -30,7 +30,7 @@ A multi-context DDD platform built on **Microsoft Agent Framework** (`Microsoft.
 - `src/` — the **Aether.AI platform** itself, standalone. `Aether.AI.Core` (framework-agnostic domain, zero deps), `Aether.AI.Harness` (AgentFactory/HarnessRuntime/SessionManager/ToolRegistry/SkillRegistry/IChatClientFactory wrapping MEAI), `Aether.AI.Workflows` (WorkflowFactory wrapping MAF Workflows — peer of Harness, does NOT depend on Harness), `Aether.AI.Memory` (IConversationStore abstraction + InMemory impl), `Aether.AI.Memory.Sqlite` (SQLite impl, opt-in), `Aether.AI.Hosting` (`services.AddAetherAI()` DI entry point + DefaultChatClientFactory + ConversationTitleService). Platform source never references `business/` or `ai/`.
 - `business/` — **pure DDD bounded contexts**, each `Acme.<Context>.{Domain,Application,Infrastructure}`. AI-free.
 - `ai/` — **business AI adapters** bridging Aether and each context. Peers of `business/`, kept separate so business stays AI-free. 7 tool adapters (`Ctp/Quotes/Qifu/Notes/Trading/ApkParser/SystemTools`) + 1 agent bridge (`Agents`). Not every context has an AI adapter — e.g. Automation has none (its business port `IAgentExecutor` is implemented host-side; see [business-port pattern](#business-domain-port--host-implementation) below). The **agent bridge** `ai/Agents/Acme.Agents.AI` is NOT a tool adapter — it registers `ICustomAgentCatalog`/`ICustomAgentRunner` (CRUD + run-time for custom agents), not tools. It is the only adapter that doesn't follow the "register tools only" convention, by design.
-- `externals/` — third-party engines: `Ctp.Net.Core` (native CTP wrapper) and `Lean` (QuantConnect Lean, git submodule).
+- `externals/` — third-party engines: `Ctp.Net.Core` (native CTP wrapper), `Lean` (QuantConnect Lean, git submodule), and `FlaUI-MCP` (Windows desktop-control MCP server, git submodule; consumed by the AppAutomation MCP path, see `docs/desktop-control-mcp.md`).
 - `apps/` — consumers/hosts: `Acme.Shell` (UI-agnostic shell VM library), `Desktop/Acme.Desktop.Shared` (Avalonia views + composition root), `Qifu/Acme.Qifu.Desktop` + `Stockapp/Acme.Stockapp.Desktop` (tenant host apps). (Qifu 不在 slnx 注册——Stockapp 同步 GitHub 时 Qifu 隐藏。)
 - `tests/` — all test projects live here, never interleaved with source.
 

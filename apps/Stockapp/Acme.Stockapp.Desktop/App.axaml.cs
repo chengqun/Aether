@@ -22,12 +22,15 @@ using Acme.StockTrading.Application.DependencyInjection;
 using Acme.StockTrading.Domain;
 using Acme.AppAutomation.Domain;
 using Acme.AppAutomation.Infrastructure;
+using Acme.AppAutomation.McpClientHost;
 using Acme.AppAutomation.StockTradingBridge;
+using Aether.AI.Hosting;
+using Aether.AI.Mcp;
 #if WINDOWS
 using Acme.StockTrading.Infrastructure;
 using Acme.StockTrading.Infrastructure.DependencyInjection;
-using Microsoft.Extensions.Logging;
 #endif
+using Microsoft.Extensions.Logging;
 using Acme.Stockapp.Desktop.Hosting;
 using Acme.Notes.Application;
 using Acme.Trading.Runtime.Domain;
@@ -107,9 +110,11 @@ public partial class App : global::Avalonia.Application
         services.AddKeyedSingleton<IStockBrokerage>("flaui", new UnsupportedStockBrokerage(
             "股票交易（FlaUI 同花顺）仅支持 Windows。当前操作系统不支持自动下单。"));
 #endif
-        // MCP 后端（AppAutomation 固定过程路径，跨平台）。IMcpToolInvoker 用未连接桩（Windows 期换真 McpClient 连 FlaUI-MCP）。
+        // MCP 后端（AppAutomation 固定过程路径，跨平台）。
+        // IMcpToolInvoker：Windows 上读 <tenantDir>/mcp-servers/desktop.json，找到 "desktop" server 配置就注册真
+        // McpDesktopToolInvoker（包 McpClient 连 FlaUI-MCP）；找不到/非 Windows 回退 NotConnectedMcpToolInvoker 桩（优雅失败）。
         services.AddAppAutomation();
-        services.AddSingleton<IMcpToolInvoker, NotConnectedMcpToolInvoker>();
+        services.AddSingleton<IMcpToolInvoker>(sp => CreateDesktopMcpInvoker(tenantDir, sp.GetService<ILoggerFactory>()));
         services.AddKeyedSingleton<IStockBrokerage>("mcp", (sp, _) =>
             new AppAutomationStockBrokerage(sp.GetRequiredService<IProcedureRunner>()));
         // 路由 brokerage = 默认 IStockBrokerage（同时注册具体类型供 VM 注入选方式）。
@@ -141,6 +146,36 @@ public partial class App : global::Avalonia.Application
         services.AddSingleton<MainViewModelBase>(sp => sp.GetRequiredService<StockappMainViewModel>());
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// 构造桌面控制 <see cref="IMcpToolInvoker"/>：从 <paramref name="tenantDir"/>/mcp-servers/*.json 找名为
+    /// <c>desktop</c> 的 server 配置 → <see cref="McpDesktopToolInvoker"/>（真连）；找不到 → <see cref="NotConnectedMcpToolInvoker"/>（桩，优雅失败）。
+    /// <para>这样「配 desktop.json 即启用 MCP 下单」，无需改代码；与 LLM 直连路径（agent 走 <c>McpServerRegistry</c>）共用同一配置目录。</para>
+    /// </summary>
+    private static IMcpToolInvoker CreateDesktopMcpInvoker(string tenantDir, ILoggerFactory? loggerFactory)
+    {
+        var mcpDir = Path.Combine(tenantDir, "mcp-servers");
+        McpServerConfig? desktop = null;
+        if (Directory.Exists(mcpDir))
+        {
+            foreach (var cfg in McpServerConfigLoader.LoadFromDirectory(mcpDir))
+            {
+                if (string.Equals(cfg.Name, "desktop", StringComparison.OrdinalIgnoreCase))
+                {
+                    desktop = cfg;
+                    break;
+                }
+            }
+        }
+
+        if (desktop is null)
+        {
+            // 无 desktop 配置：未连接桩（Mac/未配 server）。操作优雅失败「桌面控制后端未连接」。
+            return new NotConnectedMcpToolInvoker();
+        }
+
+        return new McpDesktopToolInvoker(desktop, loggerFactory);
     }
 }
 

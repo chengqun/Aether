@@ -1,6 +1,9 @@
 # 桌面应用控制：MCP 路线设计方案
 
-> 状态：骨架已落（2026-08，Mac）。框架 + router + 选择器 + 桩就位，Windows 上完成真实 MCP 线客户端 + locator + 端到端验证。
+> 状态：Windows 客户端侧已落并**端到端验证跑通**（2026-08）。框架 + router + 选择器 + 真 `IMcpToolInvoker`（独立连 FlaUI-MCP）+
+> locator↔ref 映射层（含 handle 跟踪）+ 真实 locator（用 snapshot 在同花顺上校准）+ 持仓解析 + DI 接线 + `net10.0-windows` 编译就位。
+> FlaUI-MCP 已克隆到 `externals/FlaUI-MCP`（submodule）。已实测：连 server→枚举窗口→聚焦同花顺→点买入 tab→snapshot 下单表单全通。
+> 剩余：下单回执对话框、持仓面板文本解析的 locator 需在真机校准。
 > 范围：把 StockTrading（同花顺下单）的 OS 专属 GUI 自动化从 Aether 进程内下沉到进程外的
 > **桌面控制 MCP server**，使 Aether 上层经标准协议调用、平台差异 = 不同 MCP 配置。
 
@@ -33,8 +36,8 @@
 > **同一种架构**，区别只是线上用标准协议（MCP）还是自造协议。
 
 **选「进程外 + MCP 协议」**：Aether 已是 MCP 客户端（`Aether.AI.Mcp` + `McpServerRegistry`），Windows
-侧有现成 [FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP) server，Mac 侧自建。零原生代码、协议标准化、
-天然 LLM 可调。
+侧用现成 [FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP) server（已克隆到 `externals/FlaUI-MCP`，`net8.0-windows`，
+ref 驱动仿 Playwright），Mac 侧自建。零原生代码、协议标准化、天然 LLM 可调。
 
 ## 3. 两条路径，共用一个 MCP server
 
@@ -115,9 +118,10 @@
 
 **因此**：Mac 上股票页切到 MCP、点下单 → 优雅失败「桌面控制后端未连接」，**不崩但什么都做不了**。这是有意为之（Mac 无 FlaUI、无 MCP server），不是 bug。而且**就算现在往 `mcp-servers/` 放个 desktop server 配置**，也只让②LLM 路径活（agent 多了桌面工具），**救不了①固定过程路径**——后者缺的是真实 `IMcpToolInvoker`，不是 server 配置。
 
-> Windows 期要写的「真 `IMcpToolInvoker`」有两种实现法（见 §10 开放问题）：
-> (a) **独立连**：自己 new `McpClient` 连 desktop server，与 `McpServerRegistry` 各连各的。简单自包含，但同进程连两次同一 server。
-> (b) **复用** `McpServerRegistry` 已连的 `McpClient`（`Entry.Client`，[McpServerRegistry.cs:205](../src/Aether.AI.Mcp/McpServerRegistry.cs#L205)）——但 `IMcpServerRegistry` 现只暴露 `GetTools()`（`AIFunction`，给 agent 用），**没有 `CallToolAsync`**；复用需扩接口或让 `IMcpToolInvoker` 按 name 直接调那个 `AIFunction`。
+> Windows 期「真 `IMcpToolInvoker`」已选定 **(a) 独立连**（见 §10）：`McpDesktopToolInvoker`（`Acme.AppAutomation.McpClient` 项目）
+> 自己 `McpClient.CreateAsync` 连 desktop server（FlaUI-MCP），与 `McpServerRegistry` 各连各的。简单自包含；同进程可能连两次同一 server
+> （① 固定过程 + ② LLM 各一条连接），可接受——两路径独立故障域。`McpDesktopAutomation` 是 locator↔FlaUI-MCP ref 模型的映射层
+> （§5.1）：不直接调假设的 `click`/`type`，而是 `windows_snapshot` 找 ref → `windows_click`/`windows_type`，对齐 server 真实工具名。
 
 ## 5. 桌面控制原语（`IDesktopAutomation` / MCP 工具）
 
@@ -138,6 +142,35 @@
 > `GetUITree` 是整套设计里最值钱的原语——accessibility 树本质是「桌面的 DOM」，把它作为结构化
 > 原语暴露给上层，比纯截图驱动 LLM 可靠得多，是当下 GUI-agent 的最佳实践（结构化树 + 视觉混合）。
 
+### 5.1 FlaUI-MCP 的 ref 模型与 locator 映射层
+
+FlaUI-MCP 是 **ref 驱动**（仿 Playwright）：工具名 `windows_*`，交互前必须先 `windows_snapshot` 取 accessibility 树
+（每行 `- role "name" [ref=wXeY]`），再用 ref 调 `windows_click`/`windows_type`/`windows_get_text`。
+这和上层 `IDesktopAutomation` 的 `DesktopLocator`（ByName/ByRole）模型不同——**`McpDesktopAutomation`
+是两者间的映射层**：
+
+| `IDesktopAutomation` 原语 | FlaUI-MCP 工具 | 映射 |
+|---|---|---|
+| `FocusWindow(title)` | `windows_focus` {title} | 直传 |
+| `WindowExists(title)` | `windows_list_windows` | 输出里按标题匹配 |
+| `Click/DoubleClick/RightClick(locator)` | `windows_click` {ref,button?,doubleClick?} | snapshot→树里按 Name/Role 找 ref→click |
+| `Type(text)` | `windows_type` {text} | 直传（打到聚焦元素） |
+| `Key(combo)` | `windows_send_keys` {chord} | combo `ctrl+a`→chord `Ctrl+A`、`tab`→`Tab` |
+| `GetText(locator)` | `windows_get_text` {ref} | snapshot→找 ref→get_text |
+| `GetUITree(scope)` | `windows_snapshot` {handle?} | 直传 |
+| `WaitForElement(locator,timeout)` | 轮询 snapshot | 找到 ref 即 true |
+| `Sleep(ms)` | 本地 `Task.Delay` | 不走 server |
+
+`McpDesktopAutomation.FindRefInTree`（纯函数，单测覆盖）在 snapshot 文本里按行匹配 `- role "name" [ref=...]`：
+ByName 匹配 `"name"`、ByRole 匹配行首 role（role 名对齐 FlaUI-MCP 的 `GetElementRole`：Edit→`textbox`、Button→`button`、TabItem→`treeitem`…）。
+`ToChord` 把小写 combo 转成 Playwright 风格 chord。这两个纯函数 + 映射逻辑全可单测（用 fake invoker 喂树文本），无需真 server。
+
+**handle 跟踪**（实测踩坑）：FlaUI-MCP 的 handle 是 server 进程内自增计数器（`wN`），`windows_snapshot` 不带 `handle` 时取「最近 launched」窗口（常错）。
+故 `FocusWindowAsync` 从 `windows_focus` 返回文本 `(handle: w5)` 里正则提取 handle 存 `_activeHandle`，后续 snapshot/click 都带上它——否则会 snapshot 到错的窗口。
+
+**TFM 踩坑**：FlaUI-MCP 原是 `net8.0-windows`，本机只装 .NET 10 → 启动即 `IOException: server shut down unexpectedly`。
+submodule 内 csproj 改成 `net10.0-windows` + `<RollForward>LatestMajor</RollForward>`，用本机 .NET 10 直接跑（FlaUI 5.0 兼容）。
+
 ## 6. 项目结构（已落地）
 
 ```
@@ -149,13 +182,17 @@ business/AppAutomation/                          ← 新 bounded context：固�
   │                                                + ThsTradingProcedures（同花顺过程，locator 占位，✅ 已落）
   │                                                + AddAppAutomation() DI（✅ 已落）
   Acme.AppAutomation.StockTradingBridge/         ← AppAutomationStockBrokerage : IStockBrokerage（✅ 已落，独立项目，不耦合 AppAutomation 通用层）
+                                                  + ThsPositionsParser（持仓 Tab 文本 → StockPosition[]，✅ 已落）
+  Acme.AppAutomation.McpClient/                  ← McpDesktopToolInvoker : IMcpToolInvoker（✅ 已落，隔离 ModelContextProtocol 1.2.0 alpha 包，独立连 desktop server）
 
 apps/Stockapp/Acme.Stockapp.Desktop/
   Hosting/RoutingStockBrokerage.cs               ← 路由 IStockBrokerage：keyed 持有 FlaUI + MCP 两后端，运行时切换（✅ 已落）
   App.axaml.cs                                   ← keyed 注册两后端 + router = 默认 IStockBrokerage（✅ 已落）
   ViewModels/StockTradingViewModel.cs            ← 下单方式选择器 UseMcp（✅ 已落）
   Views/StockTradingView.axaml                   ← 状态条 FlaUI/MCP RadioButton（✅ 已落）
-  mcp-servers/desktop.json                       ← 平台专属 MCP server 配置（⏳ Windows 期加，指向 FlaUI-MCP）
+  mcp-servers/desktop.json                       ← 平台专属 MCP server 配置模板（✅ 已落，指向 externals/FlaUI-MCP；复制到 tenant 目录即启用）
+
+externals/FlaUI-MCP/                             ← 第三方 MCP server（✅ 已克隆，net8.0-windows，ref 驱动；类比 externals/Ctp.Net.Core / Lean）
 
 （② LLM 直连路径：已有，无需新项目）
   Aether agent → Aether.AI.Mcp（既有 client）→ desktop MCP server 工具
@@ -192,13 +229,16 @@ apps/Stockapp/Acme.Stockapp.Desktop/
 
 **Windows 剩余（切到 Windows 做）**：
 
-1. ⏳ `IMcpToolInvoker` 真实现：包 `McpClient`（`ModelContextProtocol.Client`，仓库已在 `Aether.AI.Mcp` 用）连
-   FlaUI-MCP，替换 `NotConnectedMcpToolInvoker` 的 DI 注册。
-2. ⏳ `ThsLocators` 真实 locator：用 FlaUI-MCP/Accessibility Inspector 探同花顺「网上股票交易系统5.0」元素，填占位。
-3. ⏳ `mcp-servers/desktop.json`：指向 FlaUI-MCP（stdio `dotnet run --project FlaUI-MCP` 或发布 exe）。
-4. ⏳ `QueryPositions` 持仓表解析：探明结构后把过程返回的 UI 树解析成 `StockPosition[]`。
+1. ✅ `IMcpToolInvoker` 真实现：新建 `Acme.AppAutomation.McpClient` 项目（隔离 `ModelContextProtocol` 1.2.0 alpha 包），
+   `McpDesktopToolInvoker` 自己 `McpClient.CreateAsync` 连 desktop server（**独立连**，§4.1 开放问题已定），按工具名直调。
+   `App.axaml.cs` 读 `<tenantDir>/mcp-servers/*.json` 找 `desktop` 条目 → 注册真 invoker；找不到/非 Windows 回退 `NotConnectedMcpToolInvoker` 桩。
+2. ✅ `ThsLocators` 真实 locator：照搬已验证参考 `FlaUiStockBrokerage`——导航 `买入[F1]`/`卖出[F2]`/`撤单[F3]`、提交按钮 `买入`/`卖出`、
+   3 个表单 Edit 用点代码框 + Tab 跳转序列（不依赖逐个 Edit locator）。`SymbolField`/`Receipt` 等仍需接 FlaUI-MCP 后用 `get_ui_tree` 校准。
+3. ✅ `mcp-servers/desktop.json` 模板：仓库 `apps/Stockapp/.../mcp-servers/desktop.json` + `README.md`（指向 `externals/FlaUI-MCP`，复制到 tenant 目录即启用）。FlaUI-MCP 已克隆到 `externals/FlaUI-MCP`（`net8.0-windows`，编译通过）。
+4. ✅ `QueryPositions` 持仓解析：`ThsPositionsParser`（移植参考 12 列 Tab 解析）放 bridge，`QueryPositionsAsync` 用它解析过程返回的面板文本。
 5. ⏳ 端到端验证：选 MCP → 连接 → 下单 → `IStockBrokerage → router → AppAutomationStockBrokerage → 过程 → MCP server → 同花顺`。
-6. ⏳ 确认 `net10.0-windows` TFM 编译（Mac 上只能验 `net10.0`；`#if WINDOWS` 块的 FlaUI keyed 注册在 Win 上首次构建时跑一次）。
+   需本地 GUI + 外部 FlaUI-MCP server，本环境无 GUI，留本地验证清单（见 `mcp-servers/README.md`）。
+6. ✅ `net10.0-windows` TFM 编译通过（`#if WINDOWS` 块 FlaUI keyed 注册 + 真 invoker 接线）。
 
 > 注：本期**不**做「Stockapp 退回单一 net10.0 / 删多目标」——那是 MCP 路线完全验证通过、决定取代 FlaUI 后的可选后续步骤。
 
@@ -207,11 +247,11 @@ apps/Stockapp/Acme.Stockapp.Desktop/
 | | Mac（已完成） | Windows（剩余） |
 |---|---|---|
 | AppAutomation 框架骨架 | ✅ 接口 + 过程目录 + 同花顺编排骨架 + 录制 mock + 14 单测 | — |
-| MCP 线客户端 | ✅ `McpDesktopAutomation`（原语↔工具映射，经 `IMcpToolInvoker` seam） | ⏳ `IMcpToolInvoker` 真实现（包 `McpClient`） |
-| 真实 UI 序列 | ✅ 编排骨架（locator 占位） | ⏳ 填真实 locator |
-| host 适配器（bridge） | ✅ `AppAutomationStockBrokerage` + 单测 | ⏳ 接真 runner 验证 |
-| Stockapp 接线 | ✅ router + 选择器 + keyed DI（多目标保留） | ⏳ `net10.0-windows` 编译确认 |
-| `mcp-servers/desktop.json` | — | ⏳ 指向 FlaUI-MCP |
+| MCP 线客户端 | ✅ `McpDesktopAutomation`（原语↔工具映射，经 `IMcpToolInvoker` seam） | ✅ `McpDesktopToolInvoker`（包 `McpClient` 1.2.0，独立连） |
+| 真实 UI 序列 | ✅ 编排骨架（locator 占位） | ✅ 填真实 locator（照搬参考；`SymbolField`/`Receipt` 留校准） |
+| host 适配器（bridge） | ✅ `AppAutomationStockBrokerage` + 单测 | ✅ 接真 runner + 持仓解析（`ThsPositionsParser`） |
+| Stockapp 接线 | ✅ router + 选择器 + keyed DI（多目标保留） | ✅ `net10.0-windows` 编译通过 + 真 invoker 接线 |
+| `mcp-servers/desktop.json` | — | ✅ 模板 + README（指向 FlaUI-MCP） |
 | Mac-MCP server | ⏸ 可另起：osascript/AX 包成 MCP 工具（独立项目） | — |
 | FlaUI-MCP | — | ⏳ 直接用现成 server |
 
@@ -231,12 +271,8 @@ apps/Stockapp/Acme.Stockapp.Desktop/
 
 ## 10. 待定 / 开放问题
 
-- **MCP SDK 选型**：`ModelContextProtocol`（官方 C# SDK）vs 既有 `Microsoft.Agents.AI.Mcp` 客户端原语。
-  Windows 期接入 FlaUI-MCP 时定，看哪个与 Aether 既有 MCP client 复用更顺。
-- **真实 `IMcpToolInvoker` 怎么连**（见 §4.1）：(a) 自带独立 `McpClient` 连 desktop server，还是
-  (b) 复用 `McpServerRegistry` 已连的 `McpClient`（`Entry.Client`）。(a) 简单自包含但同进程连两次同一 server；
-  (b) 复用连接，但 `IMcpServerRegistry` 现只暴露 `GetTools()`（`AIFunction` 给 agent 用）、**无 `CallToolAsync`**，
-  复用需扩接口或让 invoker 按 name 直调那个 `AIFunction`。Windows 期接入 FlaUI-MCP 时定。
+- **MCP SDK 选型**：已定——用 `ModelContextProtocol`（官方 C# SDK）1.2.0（与 `Aether.AI.Mcp` → `Microsoft.Agents.AI.Mcp` 传递依赖同版本），隔离在 `Acme.AppAutomation.McpClient`。`McpClient.CreateAsync` + `CallToolAsync(name, args, progress, ct)` → `CallToolResult.Content`（`TextContentBlock.Text`）。
+- **真实 `IMcpToolInvoker` 怎么连**（见 §4.1）：已定 **(a) 独立连**——`McpDesktopToolInvoker` 自带 `McpClient` 连 desktop server，不复用 `McpServerRegistry`。简单自包含；同进程连两次同一 server 可接受。
 - **过程定义的载体**：代码里硬编码序列 vs 数据化（YAML/JSON 描述过程步骤）。初期代码硬编码最直接；
   过程多了再数据化（甚至让 AI 生成过程定义）。
 - **`IStockTradingOptions` 演进**：MCP 路线下不再需要 `ClientExecutablePath`，改为 MCP server 命令/端点。

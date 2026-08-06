@@ -123,6 +123,7 @@
     <Project Path="business/AppAutomation/Acme.AppAutomation.Application/Acme.AppAutomation.Application.csproj" />
     <Project Path="business/AppAutomation/Acme.AppAutomation.Infrastructure/Acme.AppAutomation.Infrastructure.csproj" />
     <Project Path="business/AppAutomation/Acme.AppAutomation.StockTradingBridge/Acme.AppAutomation.StockTradingBridge.csproj" />
+    <Project Path="business/AppAutomation/Acme.AppAutomation.McpClient/Acme.AppAutomation.McpClient.csproj" />
   </Folder>
   <Folder Name="/business/Trading.Runtime/">
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Domain/Acme.Trading.Runtime.Domain.csproj" />

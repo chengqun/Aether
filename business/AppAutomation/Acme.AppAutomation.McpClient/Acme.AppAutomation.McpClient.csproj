@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.AppAutomation.McpClientHost</RootNamespace>
+    <!-- MCP 集成是 alpha 预发布；与 Aether.AI.Mcp 同源隔离在本项目（opt-in，宿主按需引）。 -->
+    <NoWarn>$(NoWarn);NU5104;MAAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 版本与 Aether.AI.Mcp → Microsoft.Agents.AI.Mcp 的传递依赖一致（nuspec 确认 1.2.0），避免版本冲突。 -->
+    <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只需 IMcpToolInvoker 端口（Domain 纯净，无 MCP 依赖）。 -->
+    <ProjectReference Include="..\Acme.AppAutomation.Domain\Acme.AppAutomation.Domain.csproj" />
+    <!-- McpServerConfig（连接配置 POCO，定义在 Hosting，不引 alpha）——复用其 stdio/http 解析，与 McpServerRegistry 同构。 -->
+    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -16,16 +16,17 @@ public class ThsProcedureTests
         var result = await proc.ExecuteAsync(desk, args, default);
 
         Assert.True(result.Success);
-        // 序列：切买入tab → 点代码框 → 输代码 → tab → 输价 → tab → 输量 → 点下单 → 读回执
-        Assert.Equal("click:Name=买入", desk.Calls[0]);
-        Assert.Equal("click:AutomationId=TODO:代码输入框", desk.Calls[1]);
-        Assert.Equal("type:600000", desk.Calls[2]);
-        Assert.Equal("key:tab", desk.Calls[3]);
-        Assert.Equal("type:12.34", desk.Calls[4]);
-        Assert.Equal("key:tab", desk.Calls[5]);
-        Assert.Equal("type:100", desk.Calls[6]);
-        Assert.Equal("click:Name=下单", desk.Calls[7]);
-        Assert.Equal("gettext:Name=TODO:回执", desk.Calls[8]);
+        // 序列：聚焦主窗口 → 切买入tab → 点代码框 → 输代码 → tab → 输价 → tab → 输量 → 点提交 → 读回执
+        Assert.Equal("focus:网上股票交易系统5.0", desk.Calls[0]);
+        Assert.Equal("click:Name=买入[F1]", desk.Calls[1]);
+        Assert.Equal("click:Role=textbox", desk.Calls[2]);
+        Assert.Equal("type:600000", desk.Calls[3]);
+        Assert.Equal("key:tab", desk.Calls[4]);
+        Assert.Equal("type:12.34", desk.Calls[5]);
+        Assert.Equal("key:tab", desk.Calls[6]);
+        Assert.Equal("type:100", desk.Calls[7]);
+        Assert.Equal("click:Name=买入", desk.Calls[8]);
+        Assert.Equal("gettext:Name=确定", desk.Calls[9]);
     }
 
     [Fact]
@@ -36,7 +37,10 @@ public class ThsProcedureTests
 
         await proc.ExecuteAsync(desk, new ThsPlaceOrderArgs("000001", 10m, 200, "sell"), default);
 
-        Assert.Equal("click:Name=卖出", desk.Calls[0]);
+        // 聚焦后切卖出 tab，提交按钮为「卖出」
+        Assert.Equal("focus:网上股票交易系统5.0", desk.Calls[0]);
+        Assert.Equal("click:Name=卖出[F2]", desk.Calls[1]);
+        Assert.Contains("click:Name=卖出", desk.Calls);
     }
 
     [Fact]
