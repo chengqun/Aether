@@ -152,5 +152,28 @@ public class RuleSourceParserTests
         Assert.Equal("规则", def!.Category);   // 缺省“规则”
         Assert.Equal(AgentMemoryMode.Off, def.Memory); // 缺省 Off（规则无 LLM 记忆）
         Assert.Equal(20, def.MaxHistory);     // 缺省 20
+        Assert.False(def.RequireToolApproval); // 缺省 false（不开审批）
+    }
+
+    [Fact]
+    public void Serialize_round_trips_require_tool_approval()
+    {
+        Assert.True(_parser.TryParse(Sample, out var def, out _));
+        Assert.NotNull(def);
+        Assert.False(def!.RequireToolApproval); // Sample 未开审批
+
+        def.RequireToolApproval = true;
+        var yaml = _parser.Serialize(def);
+        Assert.Contains("requireToolApproval: true", yaml);
+
+        // 往返：重解析应保留 true
+        Assert.True(_parser.TryParse(yaml, out var def2, out _));
+        Assert.NotNull(def2);
+        Assert.True(def2!.RequireToolApproval);
+
+        // 关掉再往返：应回落 false，且序列化不输出该键（OmitNull）
+        def2.RequireToolApproval = false;
+        var yaml2 = _parser.Serialize(def2);
+        Assert.DoesNotContain("requireToolApproval", yaml2);
     }
 }

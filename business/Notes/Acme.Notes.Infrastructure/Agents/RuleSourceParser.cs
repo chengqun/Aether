@@ -76,6 +76,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
             ToolApprovals = doc.ToolApprovals ?? new Dictionary<string, string>(),
             Memory = doc.Memory ?? AgentMemoryMode.Off,
             MaxHistory = doc.MaxHistory ?? 20,
+            RequireToolApproval = doc.RequireToolApproval ?? false,
         };
         return true;
     }
@@ -91,6 +92,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
             Category = def.Category,
             Tools = def.Tools?.ToList() ?? new List<string>(),
             ToolApprovals = (def.ToolApprovals is { Count: > 0 }) ? def.ToolApprovals : null,
+            RequireToolApproval = def.RequireToolApproval ? true : null,
             Memory = def.Memory,
             MaxHistory = def.MaxHistory,
             ModelId = string.IsNullOrEmpty(def.ModelId) ? null : def.ModelId,
@@ -127,6 +129,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
         public string? Category { get; set; }
         public List<string>? Tools { get; set; }
         public Dictionary<string, string>? ToolApprovals { get; set; }
+        public bool? RequireToolApproval { get; set; }
         public AgentMemoryMode? Memory { get; set; }
         public int? MaxHistory { get; set; }
         public string? ModelId { get; set; }
