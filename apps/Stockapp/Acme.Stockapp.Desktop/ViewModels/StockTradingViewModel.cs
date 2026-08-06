@@ -23,6 +23,7 @@ public partial class StockTradingViewModel : ObservableObject
         _service = service;
         _dispatcher = Dispatcher.UIThread;
         _service.LogReceived += OnLogReceived;
+        RefreshState();   // 启动期读一次连接态（连接由连接器 tab 负责）
     }
 
     // —— 连接态 ——
@@ -52,12 +53,13 @@ public partial class StockTradingViewModel : ObservableObject
 
     private void OnLogReceived(object? sender, string msg)
     {
-        // FlaUI/STA 后台线程触发的事件，切回 UI 线程刷新集合。
+        // FlaUI/STA 后台线程触发的事件，切回 UI 线程刷新集合 + 连接态。
         _dispatcher.Post(() =>
         {
             const int max = 500;
             Logs.Add(msg);
             while (Logs.Count > max) Logs.RemoveAt(0);
+            RefreshState();   // 连接/操作有日志 → 顺带刷新状态（连接在连接器 tab 触发）
         });
     }
 
@@ -65,43 +67,6 @@ public partial class StockTradingViewModel : ObservableObject
     {
         IsConnected = _service.IsConnected;
         StatusMessage = IsConnected ? "已连接" : "未连接";
-    }
-
-    [RelayCommand]
-    private async Task LaunchAsync()
-    {
-        IsBusy = true;
-        try
-        {
-            var (ok, err) = await _service.LaunchClientAsync();
-            StatusMessage = ok ? "客户端已启动，请手动登录后点击连接" : $"启动失败: {err}";
-        }
-        finally { IsBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task ConnectAsync()
-    {
-        IsBusy = true;
-        try
-        {
-            var (ok, err) = await _service.ConnectAsync();
-            RefreshState();
-            if (!ok) StatusMessage = $"连接失败: {err}";
-        }
-        finally { IsBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task DisconnectAsync()
-    {
-        IsBusy = true;
-        try
-        {
-            await _service.DisconnectAsync();
-            RefreshState();
-        }
-        finally { IsBusy = false; }
     }
 
     [RelayCommand(CanExecute = nameof(CanPlace))]

@@ -17,6 +17,7 @@ using Acme.StockTrading.AI;
 using Acme.Trading.Application.DependencyInjection;
 using Acme.Trading.Runtime.Lean.DependencyInjection;
 using Acme.Trading.Scripting;
+using Acme.StockTrading.Application;
 using Acme.StockTrading.Application.DependencyInjection;
 using Acme.StockTrading.Domain;
 #if WINDOWS
@@ -91,9 +92,10 @@ public partial class App : global::Avalonia.Application
 #if WINDOWS
         services.AddStockTradingFlaUi();
 #else
-        // 非 Windows：注册一个「未连接」桩实现，让页面能解析、能打开，但操作提示不支持。
+        // 非 Windows：注册「未连接」桩 brokerage + 空壳 options，让页面能解析、能打开，但操作提示不支持。
         services.AddSingleton<IStockBrokerage>(new UnsupportedStockBrokerage(
             "股票交易（FlaUI 同花顺）仅支持 Windows。当前操作系统不支持自动下单。"));
+        services.AddSingleton<IStockTradingOptions>(new UnsupportedStockTradingOptions());
 #endif
 
         // 公共组合（AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement + 公共 AI 工具）
@@ -102,9 +104,12 @@ public partial class App : global::Avalonia.Application
         services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
 
-        // CTP 连接器（Stockapp 专属；注入 ExpertsViewModel 的 Connector tab）
-        services.AddSingleton<IConnectorViewModel, CtpConnectorViewModel>();
-        services.AddSingleton<CtpConnectorViewModel>(sp => (CtpConnectorViewModel)sp.GetRequiredService<IConnectorViewModel>());
+        // 连接器子面板（CTP 期货 + 同花顺股票，并列在连接器 tab）
+        services.AddSingleton<CtpConnectorViewModel>();
+        services.AddSingleton<ThsConnectorViewModel>();
+        // 复合连接器 = CTP + 同花顺，实现 IConnectorViewModel 注入 ExpertsViewModel
+        services.AddSingleton<StockappConnectorViewModel>();
+        services.AddSingleton<IConnectorViewModel>(sp => sp.GetRequiredService<StockappConnectorViewModel>());
         // 期货页 ViewModel（行情 + 交易）
         services.AddSingleton<CtpViewModel>();
         // 回测/实盘页 ViewModel
@@ -139,5 +144,13 @@ file sealed class UnsupportedStockBrokerage : IStockBrokerage
         => Task.FromResult((false, _reason));
     public Task<IReadOnlyList<StockPosition>> QueryPositionsAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<StockPosition>>(Array.Empty<StockPosition>());
+}
+
+/// <summary>非 Windows 平台的空壳配置：字段可读写但不被任何 brokerage 消费（桩 brokerage 忽略）。</summary>
+file sealed class UnsupportedStockTradingOptions : IStockTradingOptions
+{
+    public string ClientExecutablePath { get; set; } = "";
+    public string ClientWindowTitle { get; set; } = "网上股票交易系统5.0";
+    public int StepDelayMs { get; set; } = 100;
 }
 #endif

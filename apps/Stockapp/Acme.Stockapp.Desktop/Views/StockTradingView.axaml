@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Stockapp.Desktop.ViewModels"
+             xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              x:Class="Acme.Stockapp.Desktop.Views.StockTradingView"
              Background="{DynamicResource ContentBgBrush}"
              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -26,25 +27,16 @@
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="20" Spacing="14">
 
-      <!-- 连接 -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="sectionTitle" Text="同花顺下单客户端" />
-          <DockPanel>
-            <TextBlock Text="连接状态：" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding StatusMessage}" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-              <Button Content="启动客户端" Command="{Binding LaunchCommand}"
-                      IsEnabled="{Binding !IsBusy}" />
-              <Button Content="连接" Command="{Binding ConnectCommand}"
-                      IsEnabled="{Binding !IsBusy}" />
-              <Button Content="断开" Command="{Binding DisconnectCommand}"
-                      IsEnabled="{Binding !IsBusy}" />
-            </StackPanel>
-          </DockPanel>
-          <TextBlock Text="提示：先点「启动客户端」打开同花顺 xiadan.exe，手动登录后点「连接」。"
-                     FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
-        </StackPanel>
+      <!-- 连接状态条（连接/配置在「专家 → 连接器」tab，此处仅显示状态） -->
+      <Border Classes="card" Padding="16,10">
+        <DockPanel>
+          <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
+                   Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
+          <TextBlock Text="{Binding StatusMessage}" FontSize="12" VerticalAlignment="Center" />
+          <TextBlock HorizontalAlignment="Right" FontSize="11"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     Text="连接/配置请在「专家 → 连接器」tab 操作" />
+        </DockPanel>
       </Border>
 
       <!-- 下单 -->

@@ -12,7 +12,7 @@
     </Application.Styles>
 
     <Application.DataTemplates>
-        <DataTemplate DataType="vm:CtpConnectorViewModel">
+        <DataTemplate DataType="vm:StockappConnectorViewModel">
             <views:ConnectorView />
         </DataTemplate>
         <DataTemplate DataType="vm:CtpViewModel">
