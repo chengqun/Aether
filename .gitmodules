@@ -2,3 +2,6 @@
 	path = externals/Lean
 	url = https://github.com/QuantConnect/Lean.git
 	shallow = true
+[submodule "externals/FlaUI-MCP"]
+	path = externals/FlaUI-MCP
+	url = https://github.com/shanselman/FlaUI-MCP.git
