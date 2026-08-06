@@ -11,6 +11,13 @@
     <UseWindowsForms>false</UseWindowsForms>
   </PropertyGroup>
 
+  <!-- 非 Windows 上允许评估 net10.0-windows TFM（FlaUI/WPF 引用程序集）。否则 macOS/Linux 的 IDE
+       与 dotnet build slnx 报 NETSDK1100、项目加载失败标红。mac 上 Stockapp 走 net10.0 不引用本项目，
+       这里的 windows DLL 不会被 mac 产物消费；仅让 IDE/restore/整库构建在非 Windows 上跑通。 -->
+  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Acme.StockTrading.Domain\Acme.StockTrading.Domain.csproj" />
   </ItemGroup>
