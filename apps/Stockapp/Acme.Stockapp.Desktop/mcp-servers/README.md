@@ -15,7 +15,9 @@
 > **TFM 已改为 `net10.0-windows`**：原 repo 是 `net8.0-windows`，但本机只装 .NET 10 → 启动即「server shut down」。
 > submodule 内 csproj 改成 `net10.0-windows` + `RollForward`，用本机 .NET 10 直接跑。FlaUI 5.0 兼容 .NET 10。
 
-`McpDesktopAutomation`（`business/AppAutomation/Acme.AppAutomation.Infrastructure`）把上层的 `DesktopLocator`（ByName/ByRole）翻译成「snapshot → 树里按 Name/Role 找 ref → windows_click ref」序列；`FocusWindowAsync` 记下 server 返回的 handle，后续 snapshot 带上它定位正确窗口。工具名对齐 server：
+`McpDesktopAutomation`（`business/AppAutomation/Acme.AppAutomation.Infrastructure`）把上层的 `DesktopLocator`（ByName/ByRole）翻译成「snapshot → 树里按 Name/Role 找 ref → windows_click ref」序列；`FocusWindowAsync` 记下 server 返回的 handle，后续 snapshot 带上它定位正确窗口。
+
+**复用 `McpServerRegistry` 连接**：`RegistryMcpToolInvoker`（`Acme.AppAutomation.McpClient`）不自己连 server，而是复用 `IMcpServerRegistry` 已连好的 desktop server 工具（与专家页 MCP tab 同源）——配一份 `desktop.json`，专家页 MCP 工具和股票页 MCP 下单**两条路径都通**，零重复连接。`MainViewModelBase.InitializeAsync` 后台 `StartAsync` 已连好，股票页 `IsConnected` 真实反映 desktop server 状态。工具名对齐 server：
 
 | McpDesktopAutomation 原语 | FlaUI-MCP 工具 | 参数 |
 |---|---|---|

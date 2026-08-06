@@ -118,10 +118,12 @@ ref 驱动仿 Playwright），Mac 侧自建。零原生代码、协议标准化�
 
 **因此**：Mac 上股票页切到 MCP、点下单 → 优雅失败「桌面控制后端未连接」，**不崩但什么都做不了**。这是有意为之（Mac 无 FlaUI、无 MCP server），不是 bug。而且**就算现在往 `mcp-servers/` 放个 desktop server 配置**，也只让②LLM 路径活（agent 多了桌面工具），**救不了①固定过程路径**——后者缺的是真实 `IMcpToolInvoker`，不是 server 配置。
 
-> Windows 期「真 `IMcpToolInvoker`」已选定 **(a) 独立连**（见 §10）：`McpDesktopToolInvoker`（`Acme.AppAutomation.McpClient` 项目）
-> 自己 `McpClient.CreateAsync` 连 desktop server（FlaUI-MCP），与 `McpServerRegistry` 各连各的。简单自包含；同进程可能连两次同一 server
-> （① 固定过程 + ② LLM 各一条连接），可接受——两路径独立故障域。`McpDesktopAutomation` 是 locator↔FlaUI-MCP ref 模型的映射层
-> （§5.1）：不直接调假设的 `click`/`type`，而是 `windows_snapshot` 找 ref → `windows_click`/`windows_type`，对齐 server 真实工具名。
+> Windows 期「真 `IMcpToolInvoker`」已选定 **复用 `McpServerRegistry` 连接**（§10 开放问题 (b) 落地）：
+> `RegistryMcpToolInvoker`（`Acme.AppAutomation.McpClient`）不自己连 server，而是复用 `IMcpServerRegistry` 已连好的 desktop server
+> 工具——按工具名从 `GetTools()` 找 `AIFunction` 调 `InvokeAsync`。与专家页 MCP tab 同源，配一份 `desktop.json` 两条路径都通，零重复连接。
+> `MainViewModelBase.InitializeAsync` 后台 `StartAsync` 已连好，`IsConnected` 真实反映 desktop server 状态。
+> （`McpDesktopToolInvoker` 独立连版保留为备选，未启用。）
+> `McpDesktopAutomation` 是 locator↔FlaUI-MCP ref 模型的映射层（§5.1）：`windows_snapshot` 找 ref → `windows_click`/`windows_type`，对齐 server 真实工具名。
 
 ## 5. 桌面控制原语（`IDesktopAutomation` / MCP 工具）
 
@@ -183,7 +185,7 @@ business/AppAutomation/                          ← 新 bounded context：固�
   │                                                + AddAppAutomation() DI（✅ 已落）
   Acme.AppAutomation.StockTradingBridge/         ← AppAutomationStockBrokerage : IStockBrokerage（✅ 已落，独立项目，不耦合 AppAutomation 通用层）
                                                   + ThsPositionsParser（持仓 Tab 文本 → StockPosition[]，✅ 已落）
-  Acme.AppAutomation.McpClient/                  ← McpDesktopToolInvoker : IMcpToolInvoker（✅ 已落，隔离 ModelContextProtocol 1.2.0 alpha 包，独立连 desktop server）
+  Acme.AppAutomation.McpClient/                  ← RegistryMcpToolInvoker : IMcpToolInvoker（✅ 已落，复用 IMcpServerRegistry 已连的 desktop server 工具）+ McpDesktopToolInvoker（独立连备选）
 
 apps/Stockapp/Acme.Stockapp.Desktop/
   Hosting/RoutingStockBrokerage.cs               ← 路由 IStockBrokerage：keyed 持有 FlaUI + MCP 两后端，运行时切换（✅ 已落）
@@ -272,7 +274,7 @@ externals/FlaUI-MCP/                             ← 第三方 MCP server（✅ 
 ## 10. 待定 / 开放问题
 
 - **MCP SDK 选型**：已定——用 `ModelContextProtocol`（官方 C# SDK）1.2.0（与 `Aether.AI.Mcp` → `Microsoft.Agents.AI.Mcp` 传递依赖同版本），隔离在 `Acme.AppAutomation.McpClient`。`McpClient.CreateAsync` + `CallToolAsync(name, args, progress, ct)` → `CallToolResult.Content`（`TextContentBlock.Text`）。
-- **真实 `IMcpToolInvoker` 怎么连**（见 §4.1）：已定 **(a) 独立连**——`McpDesktopToolInvoker` 自带 `McpClient` 连 desktop server，不复用 `McpServerRegistry`。简单自包含；同进程连两次同一 server 可接受。
+- **真实 `IMcpToolInvoker` 怎么连**（见 §4.1）：已定 **(b) 复用 `McpServerRegistry`**——`RegistryMcpToolInvoker` 复用 registry 已连的 desktop server 工具（`AIFunction.InvokeAsync`），零重复连接、与专家页 MCP 同源。（`McpDesktopToolInvoker` 独立连版保留备选。）
 - **过程定义的载体**：代码里硬编码序列 vs 数据化（YAML/JSON 描述过程步骤）。初期代码硬编码最直接；
   过程多了再数据化（甚至让 AI 生成过程定义）。
 - **`IStockTradingOptions` 演进**：MCP 路线下不再需要 `ClientExecutablePath`，改为 MCP server 命令/端点。

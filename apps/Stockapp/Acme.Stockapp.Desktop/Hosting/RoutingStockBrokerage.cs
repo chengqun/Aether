@@ -47,7 +47,16 @@ public sealed partial class RoutingStockBrokerage : ObservableObject, IStockBrok
 
     private IStockBrokerage Active => Method == OrderMethod.Mcp ? _mcp : _flaUi;
 
-    public bool IsConnected => Active.IsConnected;
+    /// <summary>
+    /// 任一后端已连接即视为已连接。连接器卡片绑此属性——它反映「同花顺窗口物理可达」这一事实，
+    /// 不应随下单方式（FlaUI/MCP）切换而变（用户切到 MCP 时，FlaUI 后端可能仍连着；切回去也不该瞬间「掉线」）。
+    /// 下单操作仍走 <see cref="Active"/>（当前选中的后端）；若该后端未连，操作会自行报错。
+    /// </summary>
+    public bool IsConnected => _flaUi.IsConnected || _mcp.IsConnected;
+
+    /// <summary>指定后端是否已连接（供股票页切换时确认目标后端就绪，而非看整体 <see cref="IsConnected"/>）。</summary>
+    public bool IsConnectedByMethod(OrderMethod method) => method == OrderMethod.Mcp ? _mcp.IsConnected : _flaUi.IsConnected;
+
     public event EventHandler<string>? LogReceived;
 
     public Task<(bool Success, string? Error)> ConnectAsync(CancellationToken ct = default) => Active.ConnectAsync(ct);

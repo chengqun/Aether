@@ -47,10 +47,8 @@
     <!-- AppAutomation：固定过程 + MCP 桌面控制；StockTradingBridge 提供 IStockBrokerage 的 MCP 实现 -->
     <ProjectReference Include="..\..\..\business\AppAutomation\Acme.AppAutomation.Infrastructure\Acme.AppAutomation.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\AppAutomation\Acme.AppAutomation.StockTradingBridge\Acme.AppAutomation.StockTradingBridge.csproj" />
-    <!-- AppAutomation.McpClient：真 IMcpToolInvoker（包 McpClient 连 desktop server）。Windows 侧注册；跨平台可引（net10.0）。 -->
+    <!-- AppAutomation.McpClient：RegistryMcpToolInvoker 复用 IMcpServerRegistry 已连的 desktop server 工具。 -->
     <ProjectReference Include="..\..\..\business\AppAutomation\Acme.AppAutomation.McpClient\Acme.AppAutomation.McpClient.csproj" />
-    <!-- Aether.AI.Mcp：McpServerConfigLoader（读 mcp-servers/*.json）。Desktop.Shared 已传递引用，显式引以用其 loader。 -->
-    <ProjectReference Include="..\..\..\src\Aether.AI.Mcp\Aether.AI.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

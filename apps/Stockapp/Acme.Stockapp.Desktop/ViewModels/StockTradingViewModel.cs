@@ -29,6 +29,9 @@ public partial class StockTradingViewModel : ObservableObject
         _service.LogReceived += OnLogReceived;
         _useMcp = router.Method == OrderMethod.Mcp;   // 启动期读持久化的下单方式
         RefreshState();   // 启动期读一次连接态（连接由连接器 tab 负责）
+        // 启动即是 MCP 模式且 MCP 后端未连接 → 自动确认一次（同 OnUseMcpChanged 切换逻辑）。
+        if (_useMcp && !_router.IsConnectedByMethod(OrderMethod.Mcp))
+            _ = ConnectCurrentAsync();
     }
 
     // —— 下单方式（FlaUI / MCP 运行时切换）——
@@ -37,6 +40,29 @@ public partial class StockTradingViewModel : ObservableObject
     {
         _router.Method = value ? OrderMethod.Mcp : OrderMethod.FlaUI;
         RefreshState();   // 切后端 → 连接态随之变
+        // 切到目标后端且该后端尚未连接时，自动发起一次连接确认（确认同花顺窗口在不在），
+        // 免得用户切了 MCP 还得跑去连接器 tab 点连接。看的是目标后端自身状态（而非 router 整体，
+        // 因为 IsConnected 是「任一连接」，FlaUI 连着时不能据此跳过 MCP 的连接确认）。
+        var target = value ? OrderMethod.Mcp : OrderMethod.FlaUI;
+        if (!_router.IsConnectedByMethod(target))
+            _ = ConnectCurrentAsync();
+    }
+
+    /// <summary>对当前选中的后端发起一次连接确认（异步、不阻塞 UI；结果经日志事件刷新状态）。</summary>
+    private async Task ConnectCurrentAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var (ok, err) = await _service.ConnectAsync();
+            // ConnectAsync 内部会发 LogReceived → OnLogReceived → RefreshState，但保险起见再刷一次。
+            if (!ok && !string.IsNullOrEmpty(err))
+                _dispatcher.Post(() => StatusMessage = $"未连接：{err}");
+        }
+        finally
+        {
+            _dispatcher.Post(() => IsBusy = false);
+        }
     }
 
     // —— 连接态 ——
