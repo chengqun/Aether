@@ -48,6 +48,9 @@ public partial class RulesViewModel : ObservableObject
             var all = await _catalog.ListAsync();
             await _dispatcher.InvokeAsync(() =>
             {
+                // 保留召唤状态：切 tab/NotesChanged 触发 reload 时按 Id 把 IsSummoned 迁移到新实例，
+                // 否则卡片显示成未召唤（聊天下拉框持有旧实例仍能用，但卡片与 GetSummonedRules 不一致）。
+                var prevSummoned = Rules.Where(r => r.IsSummoned).Select(r => r.Id).ToHashSet();
                 Rules.Clear();
                 foreach (var def in all)
                 {
@@ -71,6 +74,7 @@ public partial class RulesViewModel : ObservableObject
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
+                    if (prevSummoned.Contains(item.Id)) item.IsSummoned = true;
                     Rules.Add(item);
                 }
             });

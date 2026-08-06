@@ -765,6 +765,16 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         _ => ChatTargetKind.None,
     };
 
+    /// <summary>目标的逻辑标识（Id+Kind）。reload 后实例被替换，按引用匹配会丢选中，
+    /// 故用 (Id,Kind) 作为「同一目标」的判据。</summary>
+    private static (Guid Id, ChatTargetKind Kind) TargetKey(object? t, ChatTargetKind kind) => t switch
+    {
+        ExpertItem e => (e.Id, kind),
+        WorkflowItem w => (w.Id, ChatTargetKind.Workflow),
+        _ => (Guid.Empty, ChatTargetKind.None),
+    };
+    private (Guid Id, ChatTargetKind Kind) _selectedTargetKey = (Guid.Empty, ChatTargetKind.None);
+
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
 
@@ -1158,7 +1168,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         SelectedMode = HasModeSupport ? "plan" : null;
         _syncingMode = false;
 
+        var newKey = TargetKey(value, kind);
+        var prevKey = _selectedTargetKey;
+        _selectedTargetKey = newKey; // 始终跟踪（含启动期/resume，保证下一次真实切换判据正确）
+
         if (_isInitializing) return;
+
+        // 同一逻辑目标（同 Id+Kind；实例可能因 reload 被替换）→ 非用户切换，不重置会话。
+        if (newKey == prevKey) return;
 
         // 统一行为变更：切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
         _currentConversationId = Guid.Empty;
@@ -1194,21 +1211,24 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     partial void OnIsAgentRunningChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
-    /// <summary>刷新聊天头统一下拉池（已召唤的 agent/规则/工作流），保留当前选中。</summary>
+    /// <summary>刷新聊天头统一下拉池（已召唤的 agent/规则/工作流），保留当前选中。
+    /// 按 (Id,Kind) 匹配而非引用：reload 后实例被替换，引用匹配会丢选中并误切目标。</summary>
     private void RefreshChatTargetItems()
     {
         _dispatcher.Post(() =>
         {
             var current = SelectedChatTarget;
+            var curKey = TargetKey(current, KindOf(current));
             ChatTargetItems.Clear();
             foreach (var e in Experts.GetSummonedExperts()) ChatTargetItems.Add(e);
             foreach (var r in Rules.GetSummonedRules()) ChatTargetItems.Add(r);
             foreach (var w in Workflows.GetSummonedWorkflows()) ChatTargetItems.Add(w);
 
-            // 当前仍在池中 → 保持选中；否则回退第一个（避免清空导致选中丢失）
-            SelectedChatTarget = (current is not null && ChatTargetItems.Contains(current))
-                ? current
-                : ChatTargetItems.FirstOrDefault();
+            // 同一逻辑目标仍在池中 → 选中其新实例；否则回退第一个（避免清空导致选中丢失）
+            object? next = null;
+            if (curKey.Kind != ChatTargetKind.None)
+                next = ChatTargetItems.FirstOrDefault(t => TargetKey(t, KindOf(t)) == curKey);
+            SelectedChatTarget = next ?? ChatTargetItems.FirstOrDefault();
         });
     }
 

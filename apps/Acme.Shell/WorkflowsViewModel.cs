@@ -41,9 +41,15 @@ public partial class WorkflowsViewModel : ObservableObject
             var list = await _catalog.ListAsync();
             await _dispatcher.InvokeAsync(() =>
             {
+                // 保留召唤状态：NotesChanged 等触发 reload 时按 Id 迁移 IsSummoned 到新实例。
+                var prevSummoned = Workflows.Where(w => w.IsSummoned).Select(w => w.Id).ToHashSet();
                 Workflows.Clear();
                 foreach (var d in list)
-                    Workflows.Add(ToItem(d));
+                {
+                    var item = ToItem(d);
+                    if (prevSummoned.Contains(item.Id)) item.IsSummoned = true;
+                    Workflows.Add(item);
+                }
             });
         }
         catch (Exception ex) { StatusMessage = $"加载失败：{ex.Message}"; }

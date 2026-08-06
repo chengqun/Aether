@@ -122,6 +122,8 @@ public partial class ExpertsViewModel : ObservableObject
 
             await _dispatcher.InvokeAsync(() =>
             {
+                // 保留召唤状态：NotesChanged 等触发 reload 时按 Id 迁移 IsSummoned 到新实例。
+                var prevSummoned = Experts.Where(e => e.IsSummoned).Select(e => e.Id).ToHashSet();
                 Experts.Clear();
                 var catSet = new List<string>();
 
@@ -158,6 +160,7 @@ public partial class ExpertsViewModel : ObservableObject
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
+                    if (prevSummoned.Contains(item.Id)) item.IsSummoned = true;
                     Experts.Add(item);
 
                     var cat = item.Category;
