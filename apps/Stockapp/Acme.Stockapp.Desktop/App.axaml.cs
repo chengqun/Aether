@@ -20,8 +20,13 @@ using Acme.Trading.Scripting;
 using Acme.StockTrading.Application;
 using Acme.StockTrading.Application.DependencyInjection;
 using Acme.StockTrading.Domain;
+using Acme.AppAutomation.Domain;
+using Acme.AppAutomation.Infrastructure;
+using Acme.AppAutomation.StockTradingBridge;
 #if WINDOWS
+using Acme.StockTrading.Infrastructure;
 using Acme.StockTrading.Infrastructure.DependencyInjection;
+using Microsoft.Extensions.Logging;
 #endif
 using Acme.Stockapp.Desktop.Hosting;
 using Acme.Notes.Application;
@@ -87,16 +92,29 @@ public partial class App : global::Avalonia.Application
         services.AddQuotesApplication();
         services.AddTradingApplication();
         services.AddTradingRuntimeLean();
-        // 股票交易（FlaUI 操控同花顺下单客户端，Windows-only）
+        // 股票交易：两种下单方式经路由 brokerage 运行时切换（FlaUI / MCP），见 RoutingStockBrokerage。
         services.AddStockTradingApplication();
 #if WINDOWS
+        // FlaUI 后端（Windows-only）。AddStockTradingFlaUi 注册 options + IStockTradingOptions + IStockBrokerage(unkeyed)。
+        // 这里额外把 FlaUI 注册为 keyed "flaui"（router 经此拿 FlaUI 实例）；其 unkeyed 注册被下面的 router 覆盖。
         services.AddStockTradingFlaUi();
+        services.AddKeyedSingleton<IStockBrokerage>("flaui", (sp, _) =>
+            new FlaUiStockBrokerage(sp.GetRequiredService<FlaUiStockBrokerageOptions>(),
+                sp.GetService<ILogger<FlaUiStockBrokerage>>()));
 #else
-        // 非 Windows：注册「未连接」桩 brokerage + 空壳 options，让页面能解析、能打开，但操作提示不支持。
-        services.AddSingleton<IStockBrokerage>(new UnsupportedStockBrokerage(
-            "股票交易（FlaUI 同花顺）仅支持 Windows。当前操作系统不支持自动下单。"));
+        // 非 Windows：FlaUI 后端为「未连接」桩，页面能解析、能打开但操作提示不支持。
         services.AddSingleton<IStockTradingOptions>(new UnsupportedStockTradingOptions());
+        services.AddKeyedSingleton<IStockBrokerage>("flaui", new UnsupportedStockBrokerage(
+            "股票交易（FlaUI 同花顺）仅支持 Windows。当前操作系统不支持自动下单。"));
 #endif
+        // MCP 后端（AppAutomation 固定过程路径，跨平台）。IMcpToolInvoker 用未连接桩（Windows 期换真 McpClient 连 FlaUI-MCP）。
+        services.AddAppAutomation();
+        services.AddSingleton<IMcpToolInvoker, NotConnectedMcpToolInvoker>();
+        services.AddKeyedSingleton<IStockBrokerage>("mcp", (sp, _) =>
+            new AppAutomationStockBrokerage(sp.GetRequiredService<IProcedureRunner>()));
+        // 路由 brokerage = 默认 IStockBrokerage（同时注册具体类型供 VM 注入选方式）。
+        services.AddSingleton<RoutingStockBrokerage>();
+        services.AddSingleton<IStockBrokerage>(sp => sp.GetRequiredService<RoutingStockBrokerage>());
 
         // 公共组合（AppAuth/Llm/Notes/Automation/ChatSocial/DeviceConnect/DeviceManagement + 公共 AI 工具）
         var aether = services.AddDesktopCommon("stockapp", tenantDir);

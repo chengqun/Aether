@@ -27,15 +27,21 @@
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="20" Spacing="14">
 
-      <!-- 连接状态条（连接/配置在「专家 → 连接器」tab，此处仅显示状态） -->
+      <!-- 连接状态条 + 下单方式选择器 -->
       <Border Classes="card" Padding="16,10">
         <DockPanel>
           <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
                    Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
           <TextBlock Text="{Binding StatusMessage}" FontSize="12" VerticalAlignment="Center" />
-          <TextBlock HorizontalAlignment="Right" FontSize="11"
-                     Foreground="{DynamicResource TextSecondaryBrush}"
-                     Text="连接/配置请在「专家 → 连接器」tab 操作" />
+          <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <TextBlock Text="下单方式" FontSize="11" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <RadioButton Content="FlaUI" FontSize="11" IsChecked="{Binding !UseMcp}" VerticalAlignment="Center" />
+            <RadioButton Content="MCP" FontSize="11" IsChecked="{Binding UseMcp}" VerticalAlignment="Center" />
+            <TextBlock FontSize="11" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="连接/配置请在「专家 → 连接器」tab 操作" Margin="8,0,0,0" />
+          </StackPanel>
         </DockPanel>
       </Border>
 

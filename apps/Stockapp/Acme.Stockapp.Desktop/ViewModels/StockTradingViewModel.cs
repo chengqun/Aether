@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Acme.Shell;
 using Acme.StockTrading.Application;
 using Acme.StockTrading.Domain;
+using Acme.Stockapp.Desktop.Hosting;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,21 +10,33 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Stockapp.Desktop.ViewModels;
 
 /// <summary>
-/// 股票交易页 ViewModel：经 <see cref="IStockTradingApplicationService"/> 操控同花顺下单客户端
-/// （FlaUI 实现，Windows-only）。UI/AI 都走 Application 契约，不直接依赖 Infrastructure。
+/// 股票交易页 ViewModel：经 <see cref="IStockTradingApplicationService"/> 操控同花顺下单客户端。
+/// 两种下单方式（FlaUI 本地 / MCP 固定过程）经 <see cref="RoutingStockBrokerage"/> 运行时切换，
+/// 页面顶部的「下单方式」选择器绑定 <see cref="UseMcp"/>。UI/AI 都走 Application 契约，不直接依赖 Infrastructure。
 /// 区别于 TradingViewModel（Lean 期货回测/实盘）——这是 A 股 GUI 自动化下单。
 /// </summary>
 public partial class StockTradingViewModel : ObservableObject
 {
     private readonly IStockTradingApplicationService _service;
+    private readonly RoutingStockBrokerage _router;
     private readonly Dispatcher _dispatcher;
 
-    public StockTradingViewModel(IStockTradingApplicationService service)
+    public StockTradingViewModel(IStockTradingApplicationService service, RoutingStockBrokerage router)
     {
         _service = service;
+        _router = router;
         _dispatcher = Dispatcher.UIThread;
         _service.LogReceived += OnLogReceived;
+        _useMcp = router.Method == OrderMethod.Mcp;   // 启动期读持久化的下单方式
         RefreshState();   // 启动期读一次连接态（连接由连接器 tab 负责）
+    }
+
+    // —— 下单方式（FlaUI / MCP 运行时切换）——
+    [ObservableProperty] private bool _useMcp;
+    partial void OnUseMcpChanged(bool value)
+    {
+        _router.Method = value ? OrderMethod.Mcp : OrderMethod.FlaUI;
+        RefreshState();   // 切后端 → 连接态随之变
     }
 
     // —— 连接态 ——

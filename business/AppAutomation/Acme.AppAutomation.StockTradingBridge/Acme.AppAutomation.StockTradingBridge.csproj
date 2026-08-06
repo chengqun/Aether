@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.AppAutomation.StockTradingBridge</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- AppAutomation 通用过程运行器 + 同花顺过程/args -->
+    <ProjectReference Include="..\Acme.AppAutomation.Application\Acme.AppAutomation.Application.csproj" />
+    <ProjectReference Include="..\Acme.AppAutomation.Infrastructure\Acme.AppAutomation.Infrastructure.csproj" />
+    <!-- StockTrading 端口（外域契约）：IStockBrokerage / StockOrderRequest / StockPosition -->
+    <ProjectReference Include="..\..\StockTrading\Acme.StockTrading.Domain\Acme.StockTrading.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

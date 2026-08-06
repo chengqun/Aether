@@ -44,6 +44,9 @@
     <ProjectReference Include="..\..\..\ai\Ctp\Acme.Ctp.AI\Acme.Ctp.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Trading\Acme.Trading.AI\Acme.Trading.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\StockTrading\Acme.StockTrading.AI\Acme.StockTrading.AI.csproj" />
+    <!-- AppAutomation：固定过程 + MCP 桌面控制；StockTradingBridge 提供 IStockBrokerage 的 MCP 实现 -->
+    <ProjectReference Include="..\..\..\business\AppAutomation\Acme.AppAutomation.Infrastructure\Acme.AppAutomation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\AppAutomation\Acme.AppAutomation.StockTradingBridge\Acme.AppAutomation.StockTradingBridge.csproj" />
   </ItemGroup>
 
 </Project>

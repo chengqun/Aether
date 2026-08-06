@@ -118,6 +118,12 @@
     <Project Path="business/StockTrading/Acme.StockTrading.Domain/Acme.StockTrading.Domain.csproj" />
     <Project Path="business/StockTrading/Acme.StockTrading.Infrastructure/Acme.StockTrading.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/business/AppAutomation/">
+    <Project Path="business/AppAutomation/Acme.AppAutomation.Domain/Acme.AppAutomation.Domain.csproj" />
+    <Project Path="business/AppAutomation/Acme.AppAutomation.Application/Acme.AppAutomation.Application.csproj" />
+    <Project Path="business/AppAutomation/Acme.AppAutomation.Infrastructure/Acme.AppAutomation.Infrastructure.csproj" />
+    <Project Path="business/AppAutomation/Acme.AppAutomation.StockTradingBridge/Acme.AppAutomation.StockTradingBridge.csproj" />
+  </Folder>
   <Folder Name="/business/Trading.Runtime/">
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Domain/Acme.Trading.Runtime.Domain.csproj" />
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Lean/Acme.Trading.Runtime.Lean.csproj" />
@@ -146,5 +152,6 @@
     <Project Path="tests/Aether.AI.Memory.Tests/Aether.AI.Memory.Tests.csproj" />
     <Project Path="tests/Acme.Trading.Domain.Tests/Acme.Trading.Domain.Tests.csproj" />
     <Project Path="tests/Acme.Trading.Runtime.Tests/Acme.Trading.Runtime.Tests.csproj" />
+    <Project Path="tests/Acme.AppAutomation.Tests/Acme.AppAutomation.Tests.csproj" />
   </Folder>
 </Solution>
