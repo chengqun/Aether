@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Threading;
+using Acme.Agents.AI;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Knowledge;
@@ -33,6 +34,10 @@ public partial class NotesViewModel : ObservableObject
 
     private IKnowledgeSourceParser KnowledgeParser =>
         _knowledgeParser ??= _serviceProvider.GetRequiredService<IKnowledgeSourceParser>();
+
+    private ICustomAgentRunner? _agentRunner;
+    /// <summary>自定义 agent 运行时（agent/规则/workflow 笔记源码栏直改后失效缓存，否则召唤仍跑旧程序）。</summary>
+    private ICustomAgentRunner? AgentRunner => _agentRunner ??= _serviceProvider.GetService<ICustomAgentRunner>();
 
     private NotesEditorOptions? _editorOptions;
     private NotesEditorOptions EditorOptions =>
@@ -80,6 +85,13 @@ public partial class NotesViewModel : ObservableObject
                     Tags = node.Tags,
                     Icon = node.IconKey ?? "",
                 });
+
+                // 源码栏直改 agent/规则/workflow 笔记后，失效运行时缓存的 agent。
+                // 否则已召唤的规则/专家仍跑旧程序（如改了规则 steps 却不生效）。
+                if (node.NodeType is NoteNodeType.Agent or NoteNodeType.Rule or NoteNodeType.Workflow)
+                {
+                    AgentRunner?.Invalidate(node.Id);
+                }
             }
             finally { _suppressExternalRefresh = false; }
         }
