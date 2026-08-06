@@ -101,7 +101,11 @@ build_one() {
   fi
 
   echo "==> [${variant}] dotnet publish (${RUNTIME}, self-contained)"
+  # Stockapp 多目标 net10.0-windows;net10.0 —— publish 必须指定 -f（NETSDK1129）。
+  # mac 取 net10.0：不引 StockTrading.Infrastructure（FlaUI/WPF，Windows-only），股票交易走桩页禁用提示。
+  # net10.0-windows 只在 Windows 打包时用（带真 FlaUI 同花顺功能）。
   dotnet publish "${ROOT}/${proj}" \
+    -f net10.0 \
     -c "${CONFIG}" \
     -r "${RUNTIME}" \
     --self-contained true \
