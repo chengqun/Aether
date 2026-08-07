@@ -174,13 +174,19 @@ public partial class NotesView : UserControl
             var editVm = main.Rules.CreateCodeRuleEditViewModel(rule);
             editVm.SaveRequested += async saved =>
             {
+                // 下栏源码可能改了 C# body：从当前节点 content 重新取 body，避免表单保存用 VM 快照覆盖下栏改动
+                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
+                    saved.SystemPrompt = _vm.CodeBodyFromContent(c);
                 var result = await main.Rules.SaveAsync(saved);
                 if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = result.Error;
             };
             // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
+            // 同样从 live content 回填 body——否则调工具/改权限触发的自动保存会把 C# 源码重置成旧快照。
             editVm.AutoSaveRequested += async saved =>
             {
+                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
+                    saved.SystemPrompt = _vm.CodeBodyFromContent(c);
                 var result = await _vm.SaveFormItemSilentlyAsync(() => main.Rules.SaveAsync(saved), saved.Id);
                 if (result.Success) SyncCodeEditor();
             };

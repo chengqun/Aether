@@ -4,6 +4,7 @@ using System.Threading;
 using Acme.Agents.AI;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
+using Acme.Notes.Domain.Agents;
 using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -207,6 +208,22 @@ public partial class NotesViewModel : ObservableObject
         if (!KnowledgeParser.TryParse(content, out var def, out var error))
             return (null, error);
         return (def, null);
+    }
+
+    private ICodeSourceParser? _codeParser;
+    private ICodeSourceParser CodeParser =>
+        _codeParser ??= _serviceProvider.GetRequiredService<ICodeSourceParser>();
+
+    /// <summary>
+    /// 从代码规则节点的完整内容（front-matter + C# 正文）取出 C# 正文。
+    /// 供表单自动保存前回填 <c>SystemPrompt</c>——否则表单用编辑 VM 构造时的快照覆盖下栏最新 C# 改动。
+    /// 解析失败（如编辑中 front-matter 不完整）回退原文本，让编译器报真实错。
+    /// </summary>
+    public string CodeBodyFromContent(string content)
+    {
+        if (CodeParser.TryParse(content, out var def, out _) && def is not null)
+            return def.SystemPrompt ?? content;
+        return content;
     }
 
     /// <summary>保存知识对象：序列化 def → 更新笔记 Content/Title → 刷新树。name 单独传（def 内无 Name）。</summary>
