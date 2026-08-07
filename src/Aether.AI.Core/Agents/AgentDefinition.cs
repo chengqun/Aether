@@ -23,10 +23,18 @@ public sealed class AgentDefinition
 
     /// <summary>
     /// 规则程序（<see cref="RuleProgram"/>）。仅 <see cref="Engine"/>==<see cref="EngineKind.Rule"/>
-    /// 时使用；由适配器 <c>RuleProgramYaml</c> 从 YAML 规整成对象后直接传入，Harness 交给
-    /// <c>RuleProgramBrain</c>，全程不经 JSON 中转。LLM 引擎忽略此字段。
+    /// 且 <see cref="IsCodeRule"/> 为 <c>false</c> 时使用；由适配器 <c>RuleProgramYaml</c> 从 YAML
+    /// 规整成对象后直接传入，Harness 交给 <c>RuleProgramBrain</c>，全程不经 JSON 中转。LLM 引擎忽略此字段。
     /// </summary>
     public RuleProgram? Rules { get; init; }
+
+    /// <summary>
+    /// 代码规则大脑标记。为 <c>true</c> 时 <see cref="Engine"/> 须为 <see cref="EngineKind.Rule"/>，
+    /// Harness 走代码大脑路径：从 <c>ICodeBrainRegistry</c> 按笔记 Id 取 <see cref="IRuleBrain"/> 工厂
+    /// （<c>CodeRuleBrain</c> 实例，由 Roslyn 即时编译的 C# 笔记注册），代替 <c>RuleProgramBrain</c>。
+    /// <see cref="Rules"/> 在此路径下忽略。<c>false</c>（默认）= YAML 声明式规则。
+    /// </summary>
+    public bool IsCodeRule { get; init; }
 
     /// <summary>The system prompt / instructions that shape agent behavior.</summary>
     public string Instructions { get; init; } = string.Empty;

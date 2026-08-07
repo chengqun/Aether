@@ -31,7 +31,7 @@ public class CustomAgentCatalogTests : IDisposable
     public async Task Save_List_Get_Update_Delete_round_trip()
     {
         var notes = _provider.GetRequiredService<INoteService>();
-        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), new RuleRegistry());
+        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), new CodeSourceParser(), new RuleRegistry());
 
         var def = new CustomAgentDefinition
         {
@@ -89,7 +89,7 @@ public class CustomAgentCatalogTests : IDisposable
     {
         var notes = _provider.GetRequiredService<INoteService>();
         var ruleRegistry = new RuleRegistry();
-        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), ruleRegistry);
+        var catalog = new CustomAgentCatalog(notes, new ToolRegistry(), new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), new CodeSourceParser(), ruleRegistry);
 
         // 普通 agent + 规则 agent 各一
         await catalog.SaveAsync(new CustomAgentDefinition
@@ -156,7 +156,7 @@ public class CustomAgentCatalogTests : IDisposable
         registry.Register("ReadFile", "读取文件", "系统工具", _ => null!);
         registry.Register("QueryAccount", "查询账户", "期货交易", _ => null!);
 
-        var catalog = new CustomAgentCatalog(notes, registry, new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), new RuleRegistry());
+        var catalog = new CustomAgentCatalog(notes, registry, new SkillRegistry(), new DefaultModelSource(), new AgentSourceParser(), new RuleSourceParser(), new CodeSourceParser(), new RuleRegistry());
         var tools = catalog.GetAvailableTools();
 
         Assert.Equal(2, tools.Count);

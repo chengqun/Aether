@@ -164,6 +164,10 @@
                 <Border IsVisible="{Binding IsRuleNode}">
                   <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
                 </Border>
+                <!-- 代码规则表单（复用 RuleEditView；NodeType=CodeRule，下栏为 C# 源码） -->
+                <Border IsVisible="{Binding IsCodeRuleNode}">
+                  <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+                </Border>
                 <!-- Workflow 表单 -->
                 <Border IsVisible="{Binding IsWorkflowNode}">
                   <shell:WorkflowEditView DataContext="{Binding ActiveEditVm}"/>

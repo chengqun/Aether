@@ -19,6 +19,7 @@ public static class NotesInfrastructureExtensions
         services.AddSingleton<INoteRepository>(_ => SqliteNoteRepository.ForFile(dbPath));
         services.AddSingleton<IAgentSourceParser, AgentSourceParser>();
         services.AddSingleton<IRuleSourceParser, RuleSourceParser>();
+        services.AddSingleton<ICodeSourceParser, CodeSourceParser>();
         services.AddSingleton<IWorkflowSourceParser, WorkflowSourceParser>();
         services.AddSingleton<IKnowledgeSourceParser, KnowledgeSourceParser>();
         return services;

@@ -23,6 +23,7 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.Workflow, "Workflow",  NavIcons.Workflow, "#1F8A4C", "workflow",   "json", "新专家团", "# Workflow 模板\n\n"),
             new(NoteNodeType.Knowledge, "知识对象", NavIcons.Knowledge, "#0891B2", "knowledge", "yaml", "新知识对象", KnowledgeTemplate),
             new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate),
+            new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate),
         };
     }
 
@@ -35,6 +36,39 @@ kind: Entity
 links: []
 ---
 （在此写知识说明 / 粘贴结构化数据 / 任何 markdown）
+";
+
+    /// <summary>
+    /// 代码规则默认模板：YAML front-matter（元数据，与 <c>CodeSourceParser</c> 往返一致）+ 原始 C# 正文。
+    /// 正文是一个 <c>CodeRuleBrain</c> 子类——平台 Roslyn 服务编译它成代码大脑（无 LLM，确定性）。
+    /// 基类 helper：Step（本回合已调工具数）、UserText、LastResult、AvailableTools、History；
+    /// Call("工具名", new { 参数 }) 调工具（循环继续），Reply("文本") 终答（循环结束）。
+    /// name 同时是笔记标题与 front-matter 字段；engine 由解析器硬编码为 "Rule"。
+    /// </summary>
+    private const string CodeRuleTemplate = @"---
+name: 新代码规则
+description: 代码规则示例：回显用户输入
+category: 代码规则
+tools: []
+tool_approvals: {}
+memory: Off
+max_history: 20
+model:
+require_tool_approval: false
+---
+using System.Collections.Generic;
+using Aether.AI.Harness.Agents;
+using Microsoft.Extensions.AI;
+
+public class EchoRule : CodeRuleBrain
+{
+    protected override IReadOnlyList<AIContent> Decide()
+    {
+        // 状态机式：Step=本回合已调工具数，UserText=用户消息，LastResult=上一步工具结果。
+        // Call(""工具名"", new { 参数 = 值 }) 调工具（循环继续）；Reply(""文本"") 终答（循环结束）。
+        return Reply(""你说了："" + UserText);
+    }
+}
 ";
 
     /// <summary>

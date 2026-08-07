@@ -88,7 +88,7 @@ public partial class NotesViewModel : ObservableObject
 
                 // 源码栏直改 agent/规则/workflow 笔记后，失效运行时缓存的 agent。
                 // 否则已召唤的规则/专家仍跑旧程序（如改了规则 steps 却不生效）。
-                if (node.NodeType is NoteNodeType.Agent or NoteNodeType.Rule or NoteNodeType.Workflow)
+                if (node.NodeType is NoteNodeType.Agent or NoteNodeType.Rule or NoteNodeType.CodeRule or NoteNodeType.Workflow)
                 {
                     AgentRunner?.Invalidate(node.Id);
                 }
@@ -161,7 +161,8 @@ public partial class NotesViewModel : ObservableObject
     public bool IsWorkflowNode => SelectedNode?.NodeType == NoteNodeType.Workflow;
     public bool IsKnowledgeNode => SelectedNode?.NodeType == NoteNodeType.Knowledge;
     public bool IsRuleNode => SelectedNode?.NodeType == NoteNodeType.Rule;
-    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode || IsRuleNode;
+    public bool IsCodeRuleNode => SelectedNode?.NodeType == NoteNodeType.CodeRule;
+    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode || IsRuleNode || IsCodeRuleNode;
     public bool HasRightPane => IsMarkdownNode || IsFormNode;
 
     public bool IsCodeEdit => SelectedNode is not null;
@@ -186,6 +187,7 @@ public partial class NotesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsWorkflowNode));
         OnPropertyChanged(nameof(IsKnowledgeNode));
         OnPropertyChanged(nameof(IsRuleNode));
+        OnPropertyChanged(nameof(IsCodeRuleNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));

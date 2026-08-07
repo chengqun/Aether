@@ -7,4 +7,5 @@ public enum NoteNodeType
     Workflow = 2,
     Knowledge = 3,
     Rule = 4,
+    CodeRule = 5,
 }

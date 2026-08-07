@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
+using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using NotesAgentMemoryMode = Acme.Notes.Domain.Agents.AgentMemoryMode;
 using NotesAgentResponseFormat = Acme.Notes.Domain.Agents.AgentResponseFormat;
@@ -77,9 +78,11 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
     internal static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
     {
         // 规则 agent：body(SystemPrompt) 是 YAML 规则程序，由适配器解析成 RuleProgram 对象直接喂平台 Rules seam；
-        // 规则不消费 system prompt（Instructions 置空）。LLM agent：body 是 system prompt，Rules=null（现行）。
+        // 规则不消费 system prompt（Instructions 置空）。代码规则 agent（NodeType==CodeRule）：body 是 C# 源码，
+        // 不解析成 RuleProgram——IsCodeRule=true 让 AgentFactory 从 ICodeBrainRegistry 取代码大脑。LLM agent：body 是 system prompt。
         var isRule = Enum.TryParse<EngineKind>(def.Engine, true, out var engine) && engine == EngineKind.Rule;
-        RuleProgram? rules = isRule && RuleProgramYaml.TryDeserialize(def.SystemPrompt, out var p) ? p : null;
+        var isCodeRule = isRule && def.NodeType == NoteNodeType.CodeRule;
+        RuleProgram? rules = isRule && !isCodeRule && RuleProgramYaml.TryDeserialize(def.SystemPrompt, out var p) ? p : null;
         return new AgentDefinition
         {
             Id = id,
@@ -87,6 +90,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             Instructions = isRule ? string.Empty : def.SystemPrompt,
             Rules = rules,
             Engine = engine,
+            IsCodeRule = isCodeRule,
             Tools = def.Tools,
             ToolApprovals = def.ToolApprovals,
             Skills = def.Skills,

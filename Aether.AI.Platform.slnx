@@ -136,6 +136,7 @@
   <Folder Name="/src/">
     <Project Path="src/Aether.AI.Core/Aether.AI.Core.csproj" />
     <Project Path="src/Aether.AI.Harness/Aether.AI.Harness.csproj" />
+    <Project Path="src/Aether.AI.Harness.Scripting/Aether.AI.Harness.Scripting.csproj" />
     <Project Path="src/Aether.AI.Hosting/Aether.AI.Hosting.csproj" />
     <Project Path="src/Aether.AI.Memory/Aether.AI.Memory.csproj" />
     <Project Path="src/Aether.AI.Memory.Sqlite/Aether.AI.Memory.Sqlite.csproj" />

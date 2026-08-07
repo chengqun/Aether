@@ -16,8 +16,14 @@ namespace Acme.Shell;
 /// </summary>
 public sealed partial class RuleEditViewModel : ObservableObject
 {
-    public RuleEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<McpServerStatus>? mcpServers)
+    private readonly NoteNodeType _nodeType;
+
+    /// <param name="nodeType">规则节点类型：<see cref="NoteNodeType.Rule"/>（YAML 规则）或
+    /// <see cref="NoteNodeType.CodeRule"/>（C# 代码规则）。两者共用同一表单（基本信息/记忆/工具/审批），
+    /// 仅 NodeType、默认类别与默认模板不同。代码规则另经笔记页两栏编辑（规则 tab 卡片无「编辑」按钮）。</param>
+    public RuleEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<McpServerStatus>? mcpServers, NoteNodeType nodeType = NoteNodeType.Rule)
     {
+        _nodeType = nodeType;
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
 
         // 按分类分组构建原生工具列表（MCP 工具已在 GetAvailableTools 过滤，单独走 MCP 区）。
@@ -90,8 +96,8 @@ public sealed partial class RuleEditViewModel : ObservableObject
             Id = Guid.NewGuid();
             Name = string.Empty;
             Description = string.Empty;
-            Category = "规则";
-            SystemPrompt = NoteNodeTypeRegistry.Get(NoteNodeType.Rule).DefaultContent;
+            Category = _nodeType == NoteNodeType.CodeRule ? "代码规则" : "规则";
+            SystemPrompt = NoteNodeTypeRegistry.Get(_nodeType).DefaultContent;
             Memory = AgentMemoryMode.Off; // 规则是确定性大脑，无会话内记忆必要
             MaxHistory = 20;
             IsEditing = false;
@@ -103,7 +109,10 @@ public sealed partial class RuleEditViewModel : ObservableObject
     public Guid Id { get; }
     public bool IsEditing { get; }
 
-    public string WindowTitle => IsEditing ? "编辑规则" : "创建规则";
+    public string WindowTitle =>
+        _nodeType == NoteNodeType.CodeRule
+            ? (IsEditing ? "编辑代码规则" : "创建代码规则")
+            : (IsEditing ? "编辑规则" : "创建规则");
 
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _description = string.Empty;
@@ -210,10 +219,12 @@ public sealed partial class RuleEditViewModel : ObservableObject
             Id = Id,
             Name = Name.Trim(),
             Description = Description.Trim(),
-            Category = string.IsNullOrWhiteSpace(Category) ? "规则" : Category.Trim(),
+            Category = string.IsNullOrWhiteSpace(Category)
+                ? (_nodeType == NoteNodeType.CodeRule ? "代码规则" : "规则")
+                : Category.Trim(),
             SystemPrompt = SystemPrompt,
             Engine = "Rule",
-            NodeType = NoteNodeType.Rule,
+            NodeType = _nodeType,
             Tools = toolList,
             ToolApprovals = Tools.Where(t => t.IsSelected && t.ApprovalLevel != t.DeclaredLevel)
                 .ToDictionary(t => t.Name, t => t.ApprovalLevel),

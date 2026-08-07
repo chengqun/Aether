@@ -117,7 +117,8 @@ public static class AetherAIServiceCollectionExtensions
                 sp.GetRequiredService<SkillRegistry>(),
                 sp.GetService<ILoggerFactory>(),
                 sp.GetService<Func<AgentDefinition, AIContextProvider?>>(),
-                sp.GetService<Func<AgentDefinition, ChatHistoryProvider?>>());
+                sp.GetService<Func<AgentDefinition, ChatHistoryProvider?>>(),
+                sp.GetService<ICodeBrainRegistry>());
             factory.UseChatClientAgent = sp.GetRequiredService<AetherAIOptions>().UseChatClientAgent;
             factory.FileMemoryRoot = sp.GetRequiredService<AetherAIOptions>().FileMemoryRoot;
             factory.SkillsDirectory = sp.GetRequiredService<AetherAIOptions>().SkillsDirectory;

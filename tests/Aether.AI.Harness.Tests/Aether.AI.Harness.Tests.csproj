@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Core\Aether.AI.Core.csproj" />
+    <ProjectReference Include="..\..\src\Aether.AI.Harness.Scripting\Aether.AI.Harness.Scripting.csproj" />
   </ItemGroup>
 
 </Project>

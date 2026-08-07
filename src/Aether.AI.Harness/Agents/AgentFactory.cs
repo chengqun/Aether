@@ -37,6 +37,7 @@ public sealed class AgentFactory
     private readonly AgentFileSkillScriptRunner _skillScriptRunner;
     private readonly Func<AgentDefinition, AIContextProvider?>? _memoryContextProviderFactory;
     private readonly Func<AgentDefinition, ChatHistoryProvider?>? _historyProviderFactory;
+    private readonly ICodeBrainRegistry? _codeBrainRegistry;
 
     /// <summary>
     /// When <c>true</c> (default), builds a <see cref="HarnessAgent"/>. When
@@ -63,7 +64,8 @@ public sealed class AgentFactory
     /// </param>
     public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, SkillRegistry skillRegistry, ILoggerFactory? loggerFactory = null,
         Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null,
-        Func<AgentDefinition, ChatHistoryProvider?>? historyProviderFactory = null)
+        Func<AgentDefinition, ChatHistoryProvider?>? historyProviderFactory = null,
+        ICodeBrainRegistry? codeBrainRegistry = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
@@ -72,6 +74,7 @@ public sealed class AgentFactory
         _skillScriptRunner = RunSkillScriptAsync;
         _memoryContextProviderFactory = memoryContextProviderFactory;
         _historyProviderFactory = historyProviderFactory;
+        _codeBrainRegistry = codeBrainRegistry;
     }
 
     /// <summary>Builds a cached, runnable agent for the given definition.</summary>
@@ -128,8 +131,24 @@ public sealed class AgentFactory
     /// </summary>
     private AIAgent BuildRuleAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
     {
-        var program = definition.Rules ?? new RuleProgram();
-        var brain = new RuleProgramBrain(program);
+        // 代码规则大脑：按笔记 Id 从注册表取工厂得 fresh 实例（Roslyn 即时编译的 CodeRuleBrain）。
+        // 未注册/编译失败 → ErrorReplyBrain 兜底，产一句提示终止循环。
+        // 声明式 YAML 规则：RuleProgramBrain（definition.Rules）。
+        IRuleBrain brain;
+        if (definition.IsCodeRule)
+        {
+            // 未配 registry / 未注册 / 编译失败 → ErrorReplyBrain 兜底，产一句提示终止循环。
+            // 预声明 + 预赋值，避免 TryCreate 短路未调时的「未赋值局部变量」编译错。
+            IRuleBrain? codeBrain = null;
+            string? codeError = null;
+            bool got = _codeBrainRegistry is not null && _codeBrainRegistry.TryCreate(definition.Id, out codeBrain, out codeError);
+            brain = got ? codeBrain! : new ErrorReplyBrain(codeError);
+        }
+        else
+        {
+            var program = definition.Rules ?? new RuleProgram();
+            brain = new RuleProgramBrain(program);
+        }
         var client = new RuleChatClient(brain, _loggerFactory?.CreateLogger<RuleChatClient>());
 
         var options = new HarnessAgentOptions

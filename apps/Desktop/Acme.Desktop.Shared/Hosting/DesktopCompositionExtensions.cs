@@ -3,6 +3,7 @@ using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Shell;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Harness.Scripting;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Hosting;
 using Aether.AI.Mcp;
@@ -94,6 +95,12 @@ public static class DesktopCompositionExtensions
 
         services.AddNotesInfrastructure(Path.Combine(tenantDir, "notes.db"));
         services.AddNotesApplication();
+
+        // 代码规则脚本加载（CodeRule 笔记 → Roslyn 编译 → ICodeBrainRegistry）。两租户共用。
+        // ICodeBrainRegistry 单例同时注入 AgentFactory（按笔记 Id 取代码大脑）与 IRuleScriptingService（编译注册）。
+        // 启动 fire 由各租户 App 调 CodeRuleHost.Start。
+        services.AddRuleScripting();
+        services.AddSingleton<ICodeNoteSource, CodeNoteSource>();
 
         services.AddAutomationInfrastructure(Path.Combine(tenantDir, "automation.db"));
         services.AddAutomationApplication();

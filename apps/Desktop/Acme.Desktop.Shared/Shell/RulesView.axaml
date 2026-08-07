@@ -84,7 +84,8 @@
                             Padding="12,4" FontSize="12"
                             IsVisible="{Binding IsSummoned}" />
                     <Button Content="编辑" Click="OnEditClick" Tag="{Binding}"
-                            Padding="12,4" FontSize="12" />
+                            Padding="12,4" FontSize="12"
+                            IsVisible="{Binding !IsCodeRule}" />
                     <Button Content="删除" Classes="danger" Click="OnDeleteClick" Tag="{Binding}"
                             Padding="12,4" FontSize="12" />
                   </StackPanel>

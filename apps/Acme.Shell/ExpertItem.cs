@@ -57,7 +57,15 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
 
-    public string DisplayIcon => NodeType == NoteNodeType.Rule ? "⚙️" : "🤖";
+    public string DisplayIcon => NodeType switch
+    {
+        NoteNodeType.Rule => "⚙️",
+        NoteNodeType.CodeRule => "💻",
+        _ => "🤖",
+    };
+
+    /// <summary>是否代码规则（C# 代码大脑；编辑走笔记页两栏，规则 tab 卡片无「编辑」按钮）。</summary>
+    public bool IsCodeRule => NodeType == NoteNodeType.CodeRule;
     /// <summary>来源徽章：本地 / 市场。</summary>
     public string SourceBadge => string.Equals(Source, "Marketplace", StringComparison.OrdinalIgnoreCase) ? "市场" : "本地";
     /// <summary>是否市场召唤的 agent。</summary>

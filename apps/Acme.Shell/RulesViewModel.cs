@@ -54,7 +54,7 @@ public partial class RulesViewModel : ObservableObject
                 Rules.Clear();
                 foreach (var def in all)
                 {
-                    if (def.NodeType != NoteNodeType.Rule) continue;
+                    if (def.NodeType != NoteNodeType.Rule && def.NodeType != NoteNodeType.CodeRule) continue;
                     var item = new ExpertItem
                     {
                         Id = def.Id,
@@ -117,7 +117,9 @@ public partial class RulesViewModel : ObservableObject
                 Id = item.Id,
                 Name = item.Name,
                 Description = item.Description,
-                Category = string.IsNullOrWhiteSpace(item.Category) ? "规则" : item.Category,
+                Category = string.IsNullOrWhiteSpace(item.Category)
+                    ? (item.NodeType == NoteNodeType.CodeRule ? "代码规则" : "规则")
+                    : item.Category,
                 SystemPrompt = item.SystemPrompt,
                 Engine = string.IsNullOrWhiteSpace(item.Engine) ? "Rule" : item.Engine,
                 NodeType = item.NodeType,
@@ -200,5 +202,12 @@ public partial class RulesViewModel : ObservableObject
     {
         var tools = _catalog.GetAvailableTools();
         return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList());
+    }
+
+    /// <summary>创建代码规则编辑 ViewModel（笔记页两栏用；NodeType=CodeRule，默认类别「代码规则」、默认 C# 模板）。</summary>
+    public RuleEditViewModel CreateCodeRuleEditViewModel(ExpertItem? existing)
+    {
+        var tools = _catalog.GetAvailableTools();
+        return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList(), NoteNodeType.CodeRule);
     }
 }

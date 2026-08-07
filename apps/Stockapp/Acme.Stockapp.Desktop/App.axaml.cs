@@ -72,6 +72,8 @@ public partial class App : global::Avalonia.Application
             var notes = Services.GetRequiredService<INoteService>();
             notes.NotesChanged += () => scripting.Reload(); // 笔记变更 → 防抖重编译注册策略
             _ = scripting.LoadAsync();
+            // 启动加载代码规则脚本笔记 → Roslyn 编译 → ICodeBrainRegistry（NotesChanged 时自动重加载）
+            CodeRuleHost.Start(Services);
         }
 
         base.OnFrameworkInitializationCompleted();

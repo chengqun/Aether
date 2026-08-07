@@ -167,6 +167,26 @@ public partial class NotesView : UserControl
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
         }
+        else if (node.NodeType == NoteNodeType.CodeRule)
+        {
+            var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == node.Id);
+            if (rule is null) return;
+            var editVm = main.Rules.CreateCodeRuleEditViewModel(rule);
+            editVm.SaveRequested += async saved =>
+            {
+                var result = await main.Rules.SaveAsync(saved);
+                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
+                else editVm.Error = result.Error;
+            };
+            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
+            editVm.AutoSaveRequested += async saved =>
+            {
+                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Rules.SaveAsync(saved), saved.Id);
+                if (result.Success) SyncCodeEditor();
+            };
+            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
+            _vm.ActiveEditVm = editVm;
+        }
         else if (node.NodeType == NoteNodeType.Workflow)
         {
             var wf = main.Workflows.Workflows.FirstOrDefault(w => w.Id == node.Id);

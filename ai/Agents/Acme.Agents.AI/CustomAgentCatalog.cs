@@ -21,9 +21,10 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     private readonly IModelSource _modelSource;
     private readonly IAgentSourceParser _agentParser;
     private readonly IRuleSourceParser _ruleParser;
+    private readonly ICodeSourceParser _codeParser;
     private readonly RuleRegistry _ruleRegistry;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, RuleRegistry ruleRegistry)
+    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, ICodeSourceParser codeParser, RuleRegistry ruleRegistry)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
@@ -31,19 +32,21 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
         _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         _ruleParser = ruleParser ?? throw new ArgumentNullException(nameof(ruleParser));
+        _codeParser = codeParser ?? throw new ArgumentNullException(nameof(codeParser));
         _ruleRegistry = ruleRegistry ?? throw new ArgumentNullException(nameof(ruleRegistry));
     }
 
-    /// <summary>按节点类型选解析器：Rule→规则单 YAML 解析器；其余→agent front-matter 解析器。</summary>
+    /// <summary>按节点类型选解析器：Rule→规则单 YAML；CodeRule→代码规则 front-matter+C#；其余→agent front-matter+body。</summary>
     private bool TryParseNote(NoteNodeType nodeType, string content, out CustomAgentDefinition? def, out string error)
         => nodeType == NoteNodeType.Rule ? _ruleParser.TryParse(content, out def, out error)
-                                         : _agentParser.TryParse(content, out def, out error);
+         : nodeType == NoteNodeType.CodeRule ? _codeParser.TryParse(content, out def, out error)
+                                             : _agentParser.TryParse(content, out def, out error);
 
     public async Task<IReadOnlyList<CustomAgentDefinition>> ListAsync(CancellationToken ct = default)
     {
         var all = await _notes.GetAllAsync(ct);
         var result = new List<CustomAgentDefinition>();
-        foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Agent || n.NodeType == NoteNodeType.Rule))
+        foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Agent || n.NodeType == NoteNodeType.Rule || n.NodeType == NoteNodeType.CodeRule))
         {
             if (TryParseNote(note.NodeType, note.Content, out var def, out _) && def is not null)
             {
@@ -67,7 +70,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     public async Task<CustomAgentDefinition?> GetAsync(Guid id, CancellationToken ct = default)
     {
         var note = await _notes.GetAsync(id.ToString(), ct);
-        if (note is null || (note.NodeType != NoteNodeType.Agent && note.NodeType != NoteNodeType.Rule)) return null;
+        if (note is null || (note.NodeType != NoteNodeType.Agent && note.NodeType != NoteNodeType.Rule && note.NodeType != NoteNodeType.CodeRule)) return null;
         if (!TryParseNote(note.NodeType, note.Content, out var def, out _) || def is null) return null;
         def.Id = id;
         def.NodeType = note.NodeType;
@@ -88,7 +91,9 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 
         var source = definition.NodeType == NoteNodeType.Rule
             ? _ruleParser.Serialize(definition)
-            : _agentParser.Serialize(definition);
+            : definition.NodeType == NoteNodeType.CodeRule
+                ? _codeParser.Serialize(definition)
+                : _agentParser.Serialize(definition);
 
         var existing = await _notes.GetAsync(definition.Id.ToString(), ct);
         if (existing is null)
