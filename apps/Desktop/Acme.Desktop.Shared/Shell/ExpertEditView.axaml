@@ -149,7 +149,7 @@
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis" MaxWidth="320"/>
                             <ComboBox ItemsSource="{x:Static vm:ToolOption.ApprovalLevelOptions}"
-                                      SelectedValue="{Binding ApprovalLevel}"
+                                      SelectedValue="{Binding ApprovalLevel, Mode=TwoWay}"
                                       SelectedValueBinding="{Binding Value}"
                                       FontSize="9" MinWidth="54" Padding="4,1">
                               <ComboBox.ItemTemplate>
@@ -205,7 +205,7 @@
                                            Foreground="{DynamicResource TextSecondaryBrush}"
                                            TextTrimming="CharacterEllipsis" MaxWidth="300"/>
                                 <ComboBox ItemsSource="{x:Static vm:ToolOption.ApprovalLevelOptions}"
-                                          SelectedValue="{Binding ApprovalLevel}"
+                                          SelectedValue="{Binding ApprovalLevel, Mode=TwoWay}"
                                           SelectedValueBinding="{Binding Value}"
                                           FontSize="9" MinWidth="54" Padding="4,1">
                                   <ComboBox.ItemTemplate>

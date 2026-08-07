@@ -125,8 +125,8 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                 ToolCategories.Add(group);
             }
 
-            // 工具选中变化时刷新所属类别的全选状态
-            opt.PropertyChanged += (_, _) => group.RefreshIsAllSelected();
+            // 工具选中/权限变化时刷新所属类别的全选状态并触发自动保存（权限改动也要落库进 tool_approvals）
+            opt.PropertyChanged += (_, _) => { group.RefreshIsAllSelected(); ScheduleAutoSave(); };
             Tools.Add(opt);
             group.Tools.Add(opt);
         }
@@ -145,11 +145,14 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                         Description = tool.Description,
                         Category = "MCP",
                         DeclaredLevel = "Dangerous",
-                        ApprovalLevel = "Dangerous",
+                        ApprovalLevel = (existing?.ToolApprovals is not null
+                            && existing.ToolApprovals.TryGetValue(tool.Name, out var mcpOv)) ? mcpOv : "Dangerous",
                         IsSelected = selectedSet.Contains(tool.Name),
                     };
                     Tools.Add(opt);
                     grp.Tools.Add(opt);
+                    // MCP 工具选中/权限变化同样触发自动保存
+                    opt.PropertyChanged += (_, _) => ScheduleAutoSave();
                 }
                 McpServerGroups.Add(grp);
             }

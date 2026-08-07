@@ -137,6 +137,12 @@ public partial class NotesView : UserControl
                 if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = result.Error;
             };
+            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
+            editVm.AutoSaveRequested += async saved =>
+            {
+                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Experts.SaveAsync(saved), saved.Id);
+                if (result.Success) SyncCodeEditor();
+            };
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
         }
@@ -152,6 +158,12 @@ public partial class NotesView : UserControl
                 if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = result.Error;
             };
+            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
+            editVm.AutoSaveRequested += async saved =>
+            {
+                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Rules.SaveAsync(saved), saved.Id);
+                if (result.Success) SyncCodeEditor();
+            };
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
         }
@@ -166,6 +178,12 @@ public partial class NotesView : UserControl
                 var result = await main.Workflows.SaveAsync(saved);
                 if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
                 else editVm.Error = result.Error;
+            };
+            // 自动保存：静默落库（不重载树）+ 同步下栏源码。
+            editVm.AutoSaveRequested += async saved =>
+            {
+                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Workflows.SaveAsync(saved), saved.Id);
+                if (result.Success) SyncCodeEditor();
             };
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;
@@ -196,9 +214,10 @@ public partial class NotesView : UserControl
                     var (redef, _) = _vm.TryParseKnowledge(c);
                     if (redef is not null) saved.Body = redef.Body;
                 }
-                var (ok, err) = await _vm.SaveKnowledgeAsync(saved, editVm.Name);
-                if (ok) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
-                else editVm.Error = err;
+                // 静默落库（不重载树）+ 同步下栏源码（含 kind/links/body 改动）
+                var result = await _vm.SaveFormItemSilentlyAsync(() => _vm.SaveKnowledgeAsync(saved, editVm.Name), editVm.Id);
+                if (result.Success) { _vm.StatusMessage = "已保存"; SyncCodeEditor(); }
+                else editVm.Error = result.Error;
             };
             editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
             _vm.ActiveEditVm = editVm;

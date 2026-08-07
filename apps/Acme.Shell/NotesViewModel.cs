@@ -101,6 +101,32 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 表单自动保存（如调整 per-tool 权限、改 Knowledge 字段）：用 <see cref="_suppressExternalRefresh"/> 抑制保存触发的整树 Reload
+    /// （避免明显刷新感，同 <see cref="SaveNodeInternalAsync"/> 的静默模式），落库后回读选中节点内容供源码栏同步
+    /// （含 tool_approvals）。不重载树、不重建表单。返回保存结果（含错误信息）。
+    /// </summary>
+    public async Task<(bool Success, string? Error)> SaveFormItemSilentlyAsync(Func<Task<(bool Success, string? Error)>> saveAction, Guid nodeId)
+    {
+        _suppressExternalRefresh = true;
+        try
+        {
+            var result = await saveAction();
+            if (!result.Success) return result;
+            if (SelectedNode is { } node && node.Id == nodeId)
+            {
+                var dto = await NoteService.GetAsync(nodeId.ToString());
+                if (dto is not null)
+                {
+                    node.Content = dto.Content ?? "";
+                    if (!string.IsNullOrWhiteSpace(dto.Title)) node.Title = dto.Title;
+                }
+            }
+            return result;
+        }
+        finally { _suppressExternalRefresh = false; }
+    }
+
     public ObservableCollection<NoteNodeVM> Roots { get; } = new();
 
     [ObservableProperty]

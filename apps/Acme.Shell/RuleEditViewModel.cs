@@ -41,7 +41,7 @@ public sealed partial class RuleEditViewModel : ObservableObject
                 ToolCategories.Add(group);
             }
 
-            opt.PropertyChanged += (_, _) => group.RefreshIsAllSelected();
+            opt.PropertyChanged += (_, _) => { group.RefreshIsAllSelected(); ScheduleAutoSave(); };
             Tools.Add(opt);
             group.Tools.Add(opt);
         }
@@ -66,6 +66,8 @@ public sealed partial class RuleEditViewModel : ObservableObject
                     };
                     Tools.Add(opt);
                     grp.Tools.Add(opt);
+                    // MCP 工具选中/权限变化同样触发自动保存
+                    opt.PropertyChanged += (_, _) => ScheduleAutoSave();
                 }
                 McpServerGroups.Add(grp);
             }
