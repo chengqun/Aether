@@ -1,5 +1,5 @@
+using System.Collections;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aether.AI.Core.Agents;
 using Microsoft.Extensions.AI;
@@ -34,6 +34,14 @@ public sealed class RuleProgramBrain : IRuleBrain
         var userText = ctx.LatestUser?.Text ?? string.Empty;
         var resultText = ctx.LatestToolResult?.Result?.ToString() ?? string.Empty;
 
+        // 程序级捕获：对最新 user 消息预匹配一次，捕获组供无 OnUserRegex 的步骤兜底用 {user.N}。
+        Match? captureMatch = null;
+        if (!string.IsNullOrEmpty(_program.Capture) && !string.IsNullOrEmpty(userText))
+        {
+            captureMatch = Regex.Match(userText, _program.Capture, RegexOptions.None, TimeSpan.FromSeconds(1));
+            if (!captureMatch.Success) captureMatch = null;
+        }
+
         foreach (var step in _program.Steps)
         {
             if (!Matches(step.Match, ctx, userText, resultText, out var userMatch))
@@ -41,18 +49,20 @@ public sealed class RuleProgramBrain : IRuleBrain
                 continue;
             }
 
+            // 步骤有自己的 OnUserRegex 捕获组优先；否则回退程序级 Capture。
+            var match = userMatch ?? captureMatch;
             var action = step.Action;
 
             // 终答 → 流 TextContent，终止循环。
             if (!string.IsNullOrEmpty(action.ReplyText))
             {
-                return new[] { new TextContent(Substitute(action.ReplyText, userMatch, userText, resultText)) };
+                return new[] { new TextContent(Substitute(action.ReplyText, match, userText, resultText)) };
             }
 
             // 工具调用 → 流 FunctionCallContent，循环继续（MAF 执行后回填结果再调本大脑）。
             if (!string.IsNullOrEmpty(action.Tool))
             {
-                var args = ParseArgs(Substitute(action.ArgsJson ?? "{}", userMatch, userText, resultText));
+                var args = SubstituteArgs(action.Args, match, userText, resultText);
                 var callId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
                 return new[] { new FunctionCallContent(callId, action.Tool, args) };
             }
@@ -129,38 +139,48 @@ public sealed class RuleProgramBrain : IRuleBrain
         return result;
     }
 
-    /// <summary>把替换后的 JSON 解析成参数字典。解析失败返回空字典（容错，不崩）。</summary>
-    private static Dictionary<string, object?> ParseArgs(string json)
+    /// <summary>对工具参数字典逐值做模板替换：字符串叶子走 <see cref="Substitute"/>，嵌套 dict/list 递归，其余原样。空→空字典。</summary>
+    private static Dictionary<string, object?> SubstituteArgs(
+        Dictionary<string, object?>? args, Match? userMatch, string userText, string resultText)
     {
-        if (string.IsNullOrWhiteSpace(json))
+        if (args is null || args.Count == 0)
         {
             return new Dictionary<string, object?>();
         }
 
-        try
+        var result = new Dictionary<string, object?>(args.Count, StringComparer.Ordinal);
+        foreach (var kv in args)
         {
-            using var doc = JsonDocument.Parse(json);
-            var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                {
-                    dict[prop.Name] = prop.Value.ValueKind switch
-                    {
-                        JsonValueKind.String => prop.Value.GetString(),
-                        JsonValueKind.Number => prop.Value.GetDecimal(),
-                        JsonValueKind.True => true,
-                        JsonValueKind.False => false,
-                        JsonValueKind.Null => null,
-                        _ => prop.Value.GetRawText(), // 对象/数组保留原始 JSON
-                    };
-                }
-            }
-            return dict;
+            result[kv.Key] = SubstituteValue(kv.Value, userMatch, userText, resultText);
         }
-        catch (JsonException)
+        return result;
+    }
+
+    private static object? SubstituteValue(object? v, Match? userMatch, string userText, string resultText) => v switch
+    {
+        string s => Substitute(s, userMatch, userText, resultText),
+        IDictionary d => SubstituteDict(d, userMatch, userText, resultText),
+        IList l => SubstituteList(l, userMatch, userText, resultText),
+        _ => v,
+    };
+
+    private static Dictionary<string, object?> SubstituteDict(IDictionary d, Match? userMatch, string userText, string resultText)
+    {
+        var result = new Dictionary<string, object?>(d.Count, StringComparer.Ordinal);
+        foreach (DictionaryEntry kv in d)
         {
-            return new Dictionary<string, object?>();
+            result[kv.Key?.ToString() ?? string.Empty] = SubstituteValue(kv.Value, userMatch, userText, resultText);
         }
+        return result;
+    }
+
+    private static List<object?> SubstituteList(IList l, Match? userMatch, string userText, string resultText)
+    {
+        var result = new List<object?>(l.Count);
+        foreach (var item in l)
+        {
+            result.Add(SubstituteValue(item, userMatch, userText, resultText));
+        }
+        return result;
     }
 }

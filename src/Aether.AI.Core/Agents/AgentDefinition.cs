@@ -22,10 +22,11 @@ public sealed class AgentDefinition
     public EngineKind Engine { get; init; } = EngineKind.Llm;
 
     /// <summary>
-    /// 规则程序 JSON（<see cref="RuleProgram"/> 序列化）。仅 <see cref="Engine"/>==<see cref="EngineKind.Rule"/>
-    /// 时使用；Harness 反序列化后交给 <c>RuleProgramBrain</c>。LLM 引擎忽略此字段。
+    /// 规则程序（<see cref="RuleProgram"/>）。仅 <see cref="Engine"/>==<see cref="EngineKind.Rule"/>
+    /// 时使用；由适配器 <c>RuleProgramYaml</c> 从 YAML 规整成对象后直接传入，Harness 交给
+    /// <c>RuleProgramBrain</c>，全程不经 JSON 中转。LLM 引擎忽略此字段。
     /// </summary>
-    public string? Rules { get; init; }
+    public RuleProgram? Rules { get; init; }
 
     /// <summary>The system prompt / instructions that shape agent behavior.</summary>
     public string Instructions { get; init; } = string.Empty;

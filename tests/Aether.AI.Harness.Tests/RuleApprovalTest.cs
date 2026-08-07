@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Skills;
@@ -29,7 +28,7 @@ public class RuleApprovalTest
                 {
                     Name = "删文件",
                     Match = new() { OnUserRegex = "删(.+)", MaxToolCalls = 0 },
-                    Action = new() { Tool = "DeleteFile", ArgsJson = """{"filePath":"{user.1}"}""" },
+                    Action = new() { Tool = "DeleteFile", Args = new() { ["filePath"] = "{user.1}" } },
                 },
                 new RuleStep
                 {
@@ -49,7 +48,7 @@ public class RuleApprovalTest
             Id = "rule-del",
             Name = "RuleDel",
             Engine = EngineKind.Rule,
-            Rules = JsonSerializer.Serialize(program),
+            Rules = program,
             Instructions = "rule",
             Tools = new[] { "DeleteFile" },
             Memory = AgentMemoryMode.Off,

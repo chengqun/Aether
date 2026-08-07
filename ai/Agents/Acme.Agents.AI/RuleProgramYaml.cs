@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text.Json;
 using Aether.AI.Core.Agents;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -8,11 +7,12 @@ namespace Acme.Agents.AI;
 
 /// <summary>
 /// 规则程序 YAML ↔ <see cref="RuleProgram"/>（Core DTO）转换。仅此桥接适配器引 YamlDotNet——
-/// <c>src/</c> 平台层不引。规则 agent 的笔记 body 是 YAML 程序，这里解析成 <see cref="RuleProgram"/>，
-/// 再序列化成 JSON 串喂平台已有 seam（<c>AgentDefinition.Rules</c> + <c>DeserializeRules</c>）。
+/// <c>src/</c> 平台层不引。规则 agent 的笔记 body 是 YAML 程序，这里解析成 <see cref="RuleProgram"/>
+/// <strong>对象</strong>直接喂平台 seam（<see cref="AgentDefinition.Rules"/>），全程不经 JSON 中转。
 /// <para>YAML 面 <c>args</c> 是结构化 map（如 <c>args: {text: "{user.1}"}</c>），映射到
-/// <see cref="RuleAction.ArgsJson"/>（JSON 串）：递归规整 YamlDotNet 松散类型后 <see cref="JsonSerializer"/> 序列化。
-/// Core DTO <c>ArgsJson</c> 不变 → <see cref="Aether.AI.Harness.Agents.RuleProgramBrain"/>/平台测试不动。</para>
+/// <see cref="RuleAction.Args"/>（<c>Dictionary&lt;string,object?&gt;</c>）：递归规整 YamlDotNet 松散类型后
+/// 直接作为对象传递。模板占位符（<c>{user.N}</c>/<c>{result}</c>）原样保留，替换在
+/// <see cref="Aether.AI.Harness.Agents.RuleProgramBrain"/> 运行时按值做。</para>
 /// </summary>
 internal static class RuleProgramYaml
 {
@@ -39,21 +39,13 @@ internal static class RuleProgramYaml
         }
     }
 
-    /// <summary>解析 YAML→<see cref="RuleProgram"/>→JSON 串（喂平台 seam）。失败→false + null。</summary>
-    public static bool TrySerializeToJson(string? yaml, out string? json)
-    {
-        json = null;
-        if (!TryDeserialize(yaml, out var program) || program is null) return false;
-        json = JsonSerializer.Serialize(program);
-        return true;
-    }
-
     private static RuleProgram Map(RuleProgramDto dto) => new()
     {
         Name = dto.Name ?? string.Empty,
         Steps = (dto.Steps ?? new()).Select(MapStep).ToList(),
         NoMatchReply = dto.NoMatchReply,
         MaxSteps = dto.MaxSteps > 0 ? dto.MaxSteps : 20,
+        Capture = dto.Capture,
     };
 
     private static RuleStep MapStep(RuleStepDto s) => new()
@@ -80,20 +72,21 @@ internal static class RuleProgramYaml
         };
         if (a?.Args is { Count: > 0 } args)
         {
-            action.ArgsJson = JsonSerializer.Serialize(Normalize(args));
+            action.Args = NormalizeDict(args);
         }
         return action;
     }
 
-    /// <summary>递归规整 YamlDotNet 松散类型为 JSON 可序列化形式：
-    /// <c>Dictionary&lt;object,object&gt;</c>→<c>Dictionary&lt;string,object?&gt;</c>、<c>IList</c>→<c>List&lt;object&gt;</c>、标量原样。</summary>
+    /// <summary>递归规整 YamlDotNet 松散类型为干净 .NET 类型：
+    /// <c>Dictionary&lt;object,object&gt;</c>→<c>Dictionary&lt;string,object?&gt;</c>、<c>IList</c>→<c>List&lt;object?&gt;</c>、标量原样。
+    /// 不再经 JSON 中转——对象直接作为 <see cref="RuleAction.Args"/> 透传给规则大脑。</summary>
     private static object? Normalize(object? v) => v switch
     {
         null => null,
         IDictionary d => NormalizeDict(d),
         IList l => NormalizeList(l),
         string or bool or long or int or double or float or decimal => v,
-        // YamlDotNet 可能产出其它标量（DateTime 等）；原样交给 JsonSerializer
+        // YamlDotNet 可能产出其它标量（DateTime 等）；原样透传
         _ => v,
     };
 
@@ -122,6 +115,7 @@ internal static class RuleProgramYaml
         public List<RuleStepDto>? Steps { get; set; }
         public string? NoMatchReply { get; set; }
         public int MaxSteps { get; set; } = 20;
+        public string? Capture { get; set; }
     }
 
     private sealed class RuleStepDto
@@ -142,7 +136,7 @@ internal static class RuleProgramYaml
     private sealed class RuleActionDto
     {
         public string? Tool { get; set; }
-        /// <summary>结构化工具参数（YAML map）。映射到 <see cref="RuleAction.ArgsJson"/>（JSON 串）。</summary>
+        /// <summary>结构化工具参数（YAML map）。规整后映射到 <see cref="RuleAction.Args"/>。</summary>
         public Dictionary<string, object?>? Args { get; set; }
         public string? ReplyText { get; set; }
     }

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Skills;
@@ -29,7 +28,7 @@ public class ReproListDirTest
                 {
                     Name = "列目录",
                     Match = new() { OnUserRegex = "列(.+)", MaxToolCalls = 0 },
-                    Action = new() { Tool = "ExploreDirectory", ArgsJson = """{"path":"{user.1}","recursionDepth":"1"}""" },
+                    Action = new() { Tool = "ExploreDirectory", Args = new() { ["path"] = "{user.1}", ["recursionDepth"] = 1 } },
                 },
                 new RuleStep
                 {
@@ -38,7 +37,6 @@ public class ReproListDirTest
                 },
             },
         };
-        var rulesJson = JsonSerializer.Serialize(program);
 
         var tools = new ToolRegistry();
         tools.Register("ExploreDirectory", "列目录", "测试", _ => AIFunctionFactory.Create((Func<string, int, string>)ExploreDirectory));
@@ -49,7 +47,7 @@ public class ReproListDirTest
             Id = "rule-list",
             Name = "RuleList",
             Engine = EngineKind.Rule,
-            Rules = rulesJson,
+            Rules = program,
             Instructions = "rule",
             Tools = new[] { "ExploreDirectory" },
             Memory = AgentMemoryMode.Off, // 用户规则显式 Off

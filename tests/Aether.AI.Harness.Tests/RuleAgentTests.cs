@@ -26,7 +26,7 @@ public class RuleAgentTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)" },
-                    Action = new() { Tool = "Query", ArgsJson = """{"symbol":"{user.1}"}""" },
+                    Action = new() { Tool = "Query", Args = new() { ["symbol"] = "{user.1}" } },
                 },
             },
         };
@@ -154,6 +154,30 @@ public class RuleAgentTests
         Assert.Equal("你说:hello 词:hello 果:R", Assert.Single(output.OfType<TextContent>()).Text);
     }
 
+    [Fact]
+    public async Task Program_capture_supplies_groups_to_step_without_onUserRegex()
+    {
+        // 程序级 capture：从 user 消息提取参数；步骤本身无 OnUserRegex（靠 minToolCalls/maxToolCalls 命中），
+        // 仍能用 {user.1} 引用 capture 捕获组。典型用法：多步复用同一参数免重复正则。
+        var program = new RuleProgram
+        {
+            Capture = "读(.+)",
+            Steps = new()
+            {
+                new RuleStep { Match = new() { MaxToolCalls = 0 },
+                               Action = new() { Tool = "Read", Args = new() { ["filePath"] = "{user.1}" } } },
+                new RuleStep { Match = new() { MinToolCalls = 1 }, Action = new() { ReplyText = "内容：{result}" } },
+            },
+        };
+        var brain = new RuleProgramBrain(program);
+
+        var first = await brain.DecideAsync(new RuleContext { LatestUser = User("读/tmp/note.txt"), ToolCallsThisTurn = 0 }, default);
+        var fc = Assert.Single(first.OfType<FunctionCallContent>());
+        Assert.Equal("Read", fc.Name);
+        var args = Assert.IsAssignableFrom<IDictionary<string, object?>>(fc.Arguments);
+        Assert.Equal("/tmp/note.txt", args["filePath"]?.ToString());
+    }
+
     // —— RuleChatClient 端到端刺探（驱动真实 MAF agent 循环，无 LLM）——
 
     [Fact]
@@ -165,7 +189,7 @@ public class RuleAgentTests
             Steps = new()
             {
                 new RuleStep { Match = new() { OnUserRegex = @"查(?<sym>\d+)" },
-                               Action = new() { Tool = "Query", ArgsJson = """{"symbol":"{user.1}"}""" } },
+                               Action = new() { Tool = "Query", Args = new() { ["symbol"] = "{user.1}" } } },
             },
         };
         var client = new RuleChatClient(new RuleProgramBrain(program));
@@ -189,7 +213,7 @@ public class RuleAgentTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)", MinToolCalls = 0, MaxToolCalls = 0 },
-                    Action = new() { Tool = "Echo", ArgsJson = """{"text":"{user.1}"}""" },
+                    Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } },
                 },
                 new RuleStep
                 {

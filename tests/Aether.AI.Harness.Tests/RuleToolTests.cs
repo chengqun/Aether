@@ -25,7 +25,7 @@ public class RuleToolTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)", MaxToolCalls = 0 },
-                    Action = new() { Tool = "Echo", ArgsJson = """{"text":"{user.1}"}""" },
+                    Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } },
                 },
                 new RuleStep { Match = new() { MinToolCalls = 1 }, Action = new() { ReplyText = "结果：{result}" } },
             },
@@ -52,9 +52,9 @@ public class RuleToolTests
             Steps = new()
             {
                 new RuleStep { Match = new() { OnUserRegex = "(.+)", MaxToolCalls = 0 },
-                               Action = new() { Tool = "Append", ArgsJson = """{"text":"{user.1}"}""" } },
+                               Action = new() { Tool = "Append", Args = new() { ["text"] = "{user.1}" } } },
                 new RuleStep { Match = new() { MinToolCalls = 1, MaxToolCalls = 1 },
-                               Action = new() { Tool = "Append", ArgsJson = """{"text":"{result}"}""" } },
+                               Action = new() { Tool = "Append", Args = new() { ["text"] = "{result}" } } },
                 new RuleStep { Match = new() { MinToolCalls = 2 }, Action = new() { ReplyText = "{result}" } },
             },
         };
@@ -113,7 +113,7 @@ public class RuleToolTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)", MaxToolCalls = 0 },
-                    Action = new() { Tool = "Echo", ArgsJson = """{"text":"{user.1}"}""" },
+                    Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } },
                 },
                 new RuleStep { Match = new() { MinToolCalls = 1 }, Action = new() { ReplyText = "echo:{result}" } },
             },
@@ -155,7 +155,7 @@ public class RuleToolTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)", MaxToolCalls = 0 },
-                    Action = new() { Tool = "Echo", ArgsJson = """{"text":"{user.1}"}""" },
+                    Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } },
                 },
                 new RuleStep { Match = new() { MinToolCalls = 1 }, Action = new() { ReplyText = "echo:{result}" } },
             },

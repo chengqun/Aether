@@ -122,13 +122,13 @@ public sealed class AgentFactory
 
     /// <summary>
     /// 构建规则大脑 agent：用 <see cref="RuleChatClient"/>（IChatClient）代替 LLM 客户端接入 HarnessAgent。
-    /// 规则程序从 <see cref="AgentDefinition.Rules"/>（JSON）反序列化；空/失败退空程序（NoMatch 兜底）。
-    /// 关掉所有注入式 NL 上下文 provider——规则不消费它们，且 TodoProvider 会污染 LatestUser。
+    /// 规则程序取自 <see cref="AgentDefinition.Rules"/>（已由适配器规整成 <see cref="RuleProgram"/> 对象）；
+    /// null 退空程序（NoMatch 兜底）。关掉所有注入式 NL 上下文 provider——规则不消费它们，且 TodoProvider 会污染 LatestUser。
     /// 工具执行、结果回填、循环仍由 MAF 框架负责（与 LLM 路径同源）。
     /// </summary>
     private AIAgent BuildRuleAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
     {
-        var program = DeserializeRules(definition.Rules);
+        var program = definition.Rules ?? new RuleProgram();
         var brain = new RuleProgramBrain(program);
         var client = new RuleChatClient(brain, _loggerFactory?.CreateLogger<RuleChatClient>());
 
@@ -155,23 +155,6 @@ public sealed class AgentFactory
         };
 
         return client.AsHarnessAgent(options, _loggerFactory);
-    }
-
-    /// <summary>反序列化规则程序 JSON；空/非法退空程序（NoMatch 兜底，不崩）。</summary>
-    private static RuleProgram DeserializeRules(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return new RuleProgram();
-        }
-        try
-        {
-            return JsonSerializer.Deserialize<RuleProgram>(json) ?? new RuleProgram();
-        }
-        catch (JsonException)
-        {
-            return new RuleProgram();
-        }
     }
 
     private AIAgent BuildHarnessAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)

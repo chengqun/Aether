@@ -53,10 +53,12 @@ memory: Off
 maxHistory: 20
 noMatchReply: 无匹配规则
 maxSteps: 20
+# 程序级捕获：从 user 消息提取一次，所有步骤可复用 {user.N}（步骤无需各自写 onUserRegex）
+capture: '读(.+)'
 steps:
   - name: 读取文件
     match:
-      onUserRegex: '读(.+)'
+      maxToolCalls: 0
     action:
       tool: ReadFile
       args:

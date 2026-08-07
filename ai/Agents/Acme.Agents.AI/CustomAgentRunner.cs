@@ -76,10 +76,10 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
 
     internal static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
     {
-        // 规则 agent：body(SystemPrompt) 是 YAML 规则程序，由适配器解析成 RuleProgram→JSON 串喂平台 Rules seam；
+        // 规则 agent：body(SystemPrompt) 是 YAML 规则程序，由适配器解析成 RuleProgram 对象直接喂平台 Rules seam；
         // 规则不消费 system prompt（Instructions 置空）。LLM agent：body 是 system prompt，Rules=null（现行）。
         var isRule = Enum.TryParse<EngineKind>(def.Engine, true, out var engine) && engine == EngineKind.Rule;
-        var rules = isRule && RuleProgramYaml.TrySerializeToJson(def.SystemPrompt, out var json) ? json : null;
+        RuleProgram? rules = isRule && RuleProgramYaml.TryDeserialize(def.SystemPrompt, out var p) ? p : null;
         return new AgentDefinition
         {
             Id = id,

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Skills;
@@ -27,7 +26,7 @@ public class AgentFactoryRuleBranchTests
                 new RuleStep
                 {
                     Match = new() { OnUserRegex = @"查(?<sym>\d+)", MinToolCalls = 0, MaxToolCalls = 0 },
-                    Action = new() { Tool = "Echo", ArgsJson = """{"text":"{user.1}"}""" },
+                    Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } },
                 },
                 new RuleStep
                 {
@@ -36,7 +35,6 @@ public class AgentFactoryRuleBranchTests
                 },
             },
         };
-        var rulesJson = JsonSerializer.Serialize(program);
 
         var tools = new ToolRegistry();
         tools.Register("Echo", "回显输入", "测试", _ => AIFunctionFactory.Create((Func<string, string>)Echo));
@@ -48,7 +46,7 @@ public class AgentFactoryRuleBranchTests
             Id = "rule-af",
             Name = "RuleAF",
             Engine = EngineKind.Rule,
-            Rules = rulesJson,
+            Rules = program,
             Instructions = "rule",
             Tools = new[] { "Echo" },
         });

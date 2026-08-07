@@ -54,12 +54,13 @@ public sealed class RuleSourceParser : IRuleSourceParser
             return false;
         }
 
-        // 程序部分：单独序列化 steps/noMatchReply/maxSteps，供 RuleProgramYaml 解析。
+        // 程序部分：单独序列化 steps/noMatchReply/maxSteps/capture，供 RuleProgramYaml 解析。
         var prog = new RuleProgramDoc
         {
             Steps = doc.Steps,
             NoMatchReply = doc.NoMatchReply,
             MaxSteps = doc.MaxSteps,
+            Capture = doc.Capture,
         };
         var programYaml = _serializer.Serialize(prog).TrimEnd();
 
@@ -109,6 +110,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
                     doc.Steps = prog.Steps;
                     doc.NoMatchReply = prog.NoMatchReply;
                     doc.MaxSteps = prog.MaxSteps;
+                    doc.Capture = prog.Capture;
                 }
             }
             catch
@@ -135,15 +137,17 @@ public sealed class RuleSourceParser : IRuleSourceParser
         public string? ModelId { get; set; }
         public string? NoMatchReply { get; set; }
         public int? MaxSteps { get; set; }
+        public string? Capture { get; set; }
         public List<RuleStepDto>? Steps { get; set; }
     }
 
-    /// <summary>程序部分子集（仅 steps/noMatchReply/maxSteps），用于 SystemPrompt 往返。</summary>
+    /// <summary>程序部分子集（仅 steps/noMatchReply/maxSteps/capture），用于 SystemPrompt 往返。</summary>
     private sealed class RuleProgramDoc
     {
         public List<RuleStepDto>? Steps { get; set; }
         public string? NoMatchReply { get; set; }
         public int? MaxSteps { get; set; }
+        public string? Capture { get; set; }
     }
 
     private sealed class RuleStepDto
