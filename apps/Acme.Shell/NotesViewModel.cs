@@ -345,6 +345,10 @@ public partial class NotesViewModel : ObservableObject
 
     public async Task LoadAsync()
     {
+        // 表单静默保存（SaveFormItemSilentlyAsync）期间，跨 VM 订阅（WorkflowsChanged/RulesChanged/
+        // SummonChanged → Notes.LoadAsync）会因保存触发的 catalog 事件而回流，导致整树重载、选中节点丢失、
+        // 表单重建（焦点离开）。此时跳过——SaveFormItemSilentlyAsync 已自行回填选中节点内容供源码栏同步。
+        if (_suppressExternalRefresh) return;
         try
         {
             var all = await NoteService.GetAllAsync();
@@ -408,6 +412,8 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>重新加载树，保持展开状态和选中节点。</summary>
     public async Task RefreshAsync()
     {
+        // 表单静默保存期间跳过（同 LoadAsync 的守卫；SaveKnowledgeAsync 的显式 RefreshAsync 也由此抑制）。
+        if (_suppressExternalRefresh) return;
         var selectedId = SelectedNode?.Id;
         var expanded = new HashSet<Guid>();
         CollectExpanded(Roots, expanded);
