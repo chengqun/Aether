@@ -6,6 +6,7 @@ using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Scripting;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Hosting;
+using Aether.AI.Hosting.Agents;
 using Aether.AI.Mcp;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
@@ -122,6 +123,9 @@ public static class DesktopCompositionExtensions
 
         // —— 公共 AI 工具（两租户共用）——
         aether.AddSystemTools().AddApkParserTools().AddNotesTools();
+        // 长期记忆工具（recall_memory/save_memory）：把 IMemoryStore 暴露为显式工具。代码规则大脑经此获取
+        // 跨会话记忆（其不接 MemoryContextProvider 注入式 NL）；LLM agent 亦可显式存/查，与自动注入互补。
+        aether.AddMemoryTools();
 
         // ask_user 交互对话框工具：agent 需用户拍板/澄清时调用（替代纯文本提问）。AgentFactory 自动纳入各 agent。
         services.AddSingleton<IAskUserDialogService, AskUserDialogService>();
@@ -129,7 +133,8 @@ public static class DesktopCompositionExtensions
         aether.ConfigureToolRegistry(reg => reg.Register(
             "ask_user", "向用户提问/确认并阻塞等待回答（返回用户选择或自由文本）。需要用户拍板/澄清时用此工具而非纯文本提问。", "交互",
             sp => AIFunctionFactory.Create(
-                typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>())));
+                typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>(),
+                "ask_user")));
 
         // 规则程序注册表 + run_rule 工具：规则 agent（Engine=Rule）的程序同时可被 LLM agent 经
         // run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。RuleRegistry 由
