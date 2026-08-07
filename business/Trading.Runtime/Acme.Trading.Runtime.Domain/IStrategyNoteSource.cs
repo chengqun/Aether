@@ -4,9 +4,9 @@ namespace Acme.Trading.Runtime.Domain;
 /// 让 Trading.Scripting 不直接依赖 Notes.Application，通过 Domain 端口隔离。</summary>
 public interface IStrategyNoteSource
 {
-    /// <summary>获取所有候选笔记（含 Tags，由 Scripting 服务过滤策略标记）。</summary>
+    /// <summary>获取所有策略笔记（host 已按 CodeStrategy 节点类型预过滤，Content 为 IStrategy 实现类 C# 源码）。</summary>
     Task<IReadOnlyList<StrategyNote>> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>策略候选笔记（从 Notes 桥接的最小字段）。</summary>
-public sealed record StrategyNote(string Id, string Title, string Content, string? Tags);
+public sealed record StrategyNote(string Id, string Title, string Content);

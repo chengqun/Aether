@@ -50,7 +50,7 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
         try
         {
             var all = await _source.GetAllAsync(cancellationToken);
-            var strategyNotes = all.Where(IsStrategyNote).ToList();
+            var strategyNotes = all.ToList();
 
             // 先 unregister 上次动态注册的（清理已删除/改名的策略，避免选择器残留失效策略）
             foreach (var name in _registeredNames) StrategyRegistry.Unregister(name);
@@ -84,13 +84,5 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
         {
             Interlocked.Exchange(ref _loading, 0);
         }
-    }
-
-    /// <summary>判断是否策略笔记：Tags 含 "strategy"（逗号分隔，忽略大小写）。</summary>
-    private static bool IsStrategyNote(StrategyNote n)
-    {
-        if (string.IsNullOrEmpty(n.Tags)) return false;
-        var tags = n.Tags!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return tags.Contains("strategy", StringComparer.OrdinalIgnoreCase);
     }
 }

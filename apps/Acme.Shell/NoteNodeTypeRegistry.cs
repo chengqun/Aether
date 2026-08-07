@@ -24,6 +24,7 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.Knowledge, "知识对象", NavIcons.Knowledge, "#0891B2", "knowledge", "yaml", "新知识对象", KnowledgeTemplate),
             new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate),
             new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate),
+            new(NoteNodeType.CodeStrategy, "策略",  NavIcons.LineChart, "#2563EB", "line",      "csharp", "新策略",   CodeStrategyTemplate),
         };
     }
 
@@ -68,6 +69,57 @@ public class EchoRule : CodeRuleBrain
         // 协程式：await Call(""工具名"", new { 参数 = 值 }) 调工具并取结果；return ""文本"" 终答。
         // UserText = 用户消息；多步流程直接顺序 await，无需手动计步。
         return ""你说了："" + UserText;
+    }
+}
+";
+
+    /// <summary>
+    /// 策略默认模板：纯 C# 源码（无 front-matter），一个 <c>IStrategy</c> 实现类。
+    /// 由 <c>StrategyScriptCompiler</c>（Trading.Scripting）Roslyn 编译成 <c>IStrategy</c> 实例，注册进
+    /// <c>StrategyRegistry</c>，供回测/实盘页策略选择器使用。name = 笔记标题（= StrategyRegistry 键）。
+    /// 策略无可配置元数据（参数从代码 <c>ParameterDefinitions</c> 来），故是纯代码节点而非 form 节点。
+    /// 注意：Roslyn 编译的源码无 ImplicitUsings，所需 using 须显式写出。
+    /// </summary>
+    private const string CodeStrategyTemplate = @"using System;
+using System.Collections.Generic;
+using Acme.Trading.Domain;
+
+public class SmaCrossStrategy : IStrategy
+{
+    private int _fastPeriod = 5;
+    private int _slowPeriod = 20;
+    private readonly List<decimal> _closes = new();
+
+    public int WarmUpBars => _slowPeriod;
+
+    // 策略参数定义：UI 据此动态渲染输入框。默认空；策略可选覆盖。
+    public IReadOnlyList<StrategyParameterDef> ParameterDefinitions => new[]
+    {
+        new StrategyParameterDef(""FastPeriod"", ""快线周期"", ""5""),
+        new StrategyParameterDef(""SlowPeriod"", ""慢线周期"", ""20""),
+    };
+
+    public void Initialize(StrategyParameters parameters)
+    {
+        _fastPeriod = parameters.Get(""FastPeriod"", 5);
+        _slowPeriod = parameters.Get(""SlowPeriod"", 20);
+    }
+
+    public SignalDirection EvaluateSignal(MarketBar bar)
+    {
+        _closes.Add(bar.Close);
+        if (_closes.Count < _slowPeriod) return SignalDirection.Hold;
+
+        decimal fast = Average(_closes.Count - _fastPeriod, _fastPeriod);
+        decimal slow = Average(_closes.Count - _slowPeriod, _slowPeriod);
+        return fast > slow ? SignalDirection.Long : SignalDirection.Flat;
+    }
+
+    private decimal Average(int start, int length)
+    {
+        decimal sum = 0;
+        for (int i = start; i < start + length; i++) sum += _closes[i];
+        return sum / length;
     }
 }
 ";

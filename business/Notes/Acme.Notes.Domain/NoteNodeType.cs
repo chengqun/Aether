@@ -8,4 +8,5 @@ public enum NoteNodeType
     Knowledge = 3,
     Rule = 4,
     CodeRule = 5,
+    CodeStrategy = 6,
 }
