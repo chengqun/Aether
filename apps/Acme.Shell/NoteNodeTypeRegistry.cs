@@ -41,9 +41,11 @@ links: []
     /// <summary>
     /// 代码规则默认模板：YAML front-matter（元数据，与 <c>CodeSourceParser</c> 往返一致）+ 原始 C# 正文。
     /// 正文是一个 <c>CodeRuleBrain</c> 子类——平台 Roslyn 服务编译它成代码大脑（无 LLM，确定性）。
-    /// 基类 helper：Step（本回合已调工具数）、UserText、LastResult、AvailableTools、History；
-    /// Call("工具名", new { 参数 }) 调工具（循环继续），Reply("文本") 终答（循环结束）。
+    /// 基类 helper：UserText（用户消息）、Step（本回合已调工具数）、LastResult、AvailableTools、History。
+    /// 作者模型为协程式：override <c>RunAsync</c>，<c>await Call("工具名", new { 参数 = 值 })</c> 调工具并取结果，
+    /// <c>return "文本"</c> 终答（循环结束）。多步流程直接顺序 await，无需 Step 计数分支。
     /// name 同时是笔记标题与 front-matter 字段；engine 由解析器硬编码为 "Rule"。
+    /// 注意：Roslyn 编译的源码无 ImplicitUsings，所需 using 须显式写出。
     /// </summary>
     private const string CodeRuleTemplate = @"---
 name: 新代码规则
@@ -56,17 +58,16 @@ max_history: 20
 model:
 require_tool_approval: false
 ---
-using System.Collections.Generic;
+using System.Threading.Tasks;
 using Aether.AI.Harness.Agents;
-using Microsoft.Extensions.AI;
 
 public class EchoRule : CodeRuleBrain
 {
-    protected override IReadOnlyList<AIContent> Decide()
+    protected override async Task<string> RunAsync()
     {
-        // 状态机式：Step=本回合已调工具数，UserText=用户消息，LastResult=上一步工具结果。
-        // Call(""工具名"", new { 参数 = 值 }) 调工具（循环继续）；Reply(""文本"") 终答（循环结束）。
-        return Reply(""你说了："" + UserText);
+        // 协程式：await Call(""工具名"", new { 参数 = 值 }) 调工具并取结果；return ""文本"" 终答。
+        // UserText = 用户消息；多步流程直接顺序 await，无需手动计步。
+        return ""你说了："" + UserText;
     }
 }
 ";
