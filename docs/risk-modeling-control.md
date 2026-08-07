@@ -141,4 +141,4 @@ AI 建模型（CreateKnowledgeObject kind=模型）
 
 ---
 
-> 参见 [docs/notes.md](notes.md)「迭代闭环（与控制工程 / AI 编程同构）」节（三者结构对应）、[docs/ai-coding-control.md](ai-coding-control.md)（AI 编程扩展的控制工程路线图 + 交易策略落地实例）。
+> 参见 CLAUDE.md「Knowledge objects」节（知识对象闭环与控制工程同构，三者结构对应）、[docs/ai-coding-control.md](ai-coding-control.md)（AI 编程扩展的控制工程路线图 + 交易策略落地实例）。
