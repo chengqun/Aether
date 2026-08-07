@@ -42,6 +42,13 @@ public sealed class RuleProgramBrain : IRuleBrain
             if (!captureMatch.Success) captureMatch = null;
         }
 
+        // 程序级 Capture 设定但未匹配 user 输入 → 不让无 OnUserRegex 的步骤兜底命中，直接 no-match。
+        // （capture 匹配时供参行为不变；工具链中段 LatestUser 不变仍匹配，OnResultRegex 步骤照常工作。）
+        if (!string.IsNullOrEmpty(_program.Capture) && !string.IsNullOrEmpty(userText) && captureMatch is null)
+        {
+            return new[] { new TextContent(_program.NoMatchReply ?? "无匹配规则") };
+        }
+
         foreach (var step in _program.Steps)
         {
             if (!Matches(step.Match, ctx, userText, resultText, out var userMatch))

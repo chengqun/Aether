@@ -178,6 +178,29 @@ public class RuleAgentTests
         Assert.Equal("/tmp/note.txt", args["filePath"]?.ToString());
     }
 
+    [Fact]
+    public async Task Capture_gates_when_user_input_does_not_match()
+    {
+        // 程序级 capture 设定但 user 输入不匹配 → 不让无 OnUserRegex 的步骤兜底命中，直接 no-match。
+        // 否则「你是谁」会错误命中 maxToolCalls:0 的 Read 步骤（capture 只供参不拦截的 footgun）。
+        var program = new RuleProgram
+        {
+            Capture = "读(.+)",
+            NoMatchReply = "听不懂",
+            Steps = new()
+            {
+                new RuleStep { Match = new() { MaxToolCalls = 0 },
+                               Action = new() { Tool = "Read", Args = new() { ["filePath"] = "{user.1}" } } },
+            },
+        };
+        var brain = new RuleProgramBrain(program);
+
+        var output = await brain.DecideAsync(new RuleContext { LatestUser = User("你是谁"), ToolCallsThisTurn = 0 }, default);
+
+        Assert.Empty(output.OfType<FunctionCallContent>()); // 不调工具
+        Assert.Equal("听不懂", Assert.Single(output.OfType<TextContent>()).Text); // 走 no-match
+    }
+
     // —— RuleChatClient 端到端刺探（驱动真实 MAF agent 循环，无 LLM）——
 
     [Fact]
