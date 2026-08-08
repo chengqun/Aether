@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.IO;
 using Acme.Notes.Domain;
+using Acme.Persistence;
 using Microsoft.Data.Sqlite;
 
 namespace Acme.Notes.Infrastructure;
@@ -9,7 +9,7 @@ namespace Acme.Notes.Infrastructure;
 /// SQLite-backed <see cref="INoteRepository"/>. Table <c>note_node</c> stores the
 /// tree-structured note nodes. Single-user (no user_id column). WAL + busy_timeout.
 /// </summary>
-public sealed class SqliteNoteRepository : INoteRepository
+public sealed class SqliteNoteRepository : SqliteStoreBase, INoteRepository
 {
     private const string TableName = "note_node";
     private const string CreateSql =
@@ -22,17 +22,13 @@ public sealed class SqliteNoteRepository : INoteRepository
 
     private static readonly string Cols = "id, parent_id, sort_order, title, content, syntax, tags, is_readonly, node_type, linked_id, source, marketplace_id, marketplace_synced_at, display_name, icon, created_at, updated_at";
 
-    private readonly string _cs;
-    private int _init;
+    public SqliteNoteRepository(string connectionString) : base(connectionString) { }
 
-    public SqliteNoteRepository(string connectionString)
-        => _cs = !string.IsNullOrWhiteSpace(connectionString) ? connectionString : throw new ArgumentException("required", nameof(connectionString));
-
-    public static SqliteNoteRepository ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteNoteRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     public async Task<List<NoteNode>> GetAllAsync(CancellationToken ct = default)
     {
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = $"SELECT {Cols} FROM {TableName} ORDER BY sort_order";
@@ -41,7 +37,7 @@ public sealed class SqliteNoteRepository : INoteRepository
 
     public async Task<NoteNode?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = $"SELECT {Cols} FROM {TableName} WHERE id=@id";
@@ -52,7 +48,7 @@ public sealed class SqliteNoteRepository : INoteRepository
 
     public async Task<List<NoteNode>> GetChildrenAsync(Guid? parentId, CancellationToken ct = default)
     {
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = parentId is null
@@ -66,7 +62,7 @@ public sealed class SqliteNoteRepository : INoteRepository
     {
         if (node.Id == Guid.Empty) node.Id = Guid.NewGuid();
         node.CreatedAt = node.UpdatedAt = DateTimeOffset.UtcNow;
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = $"INSERT INTO {TableName} ({Cols}) VALUES (@id,@pid,@so,@t,@cnt,@syn,@tg,@ro,@nt,@lid,@src,@mid,@msa,@dn,@icon,@ca,@ua)";
@@ -78,7 +74,7 @@ public sealed class SqliteNoteRepository : INoteRepository
     public async Task UpdateAsync(NoteNode node, CancellationToken ct = default)
     {
         node.Touch();
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = $"UPDATE {TableName} SET parent_id=@pid, sort_order=@so, title=@t, content=@cnt, syntax=@syn, tags=@tg, is_readonly=@ro, node_type=@nt, linked_id=@lid, source=@src, marketplace_id=@mid, marketplace_synced_at=@msa, display_name=@dn, icon=@icon, updated_at=@ua WHERE id=@id";
@@ -88,7 +84,7 @@ public sealed class SqliteNoteRepository : INoteRepository
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var tx = (SqliteTransaction)await c.BeginTransactionAsync(ct);
         // Children promoted to root (parent_id = NULL)
@@ -99,7 +95,7 @@ public sealed class SqliteNoteRepository : INoteRepository
 
     public async Task<List<NoteNode>> SearchAsync(string query, CancellationToken ct = default)
     {
-        await EnsureAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = $"SELECT {Cols} FROM {TableName} WHERE title LIKE @q OR content LIKE @q OR tags LIKE @q ORDER BY updated_at DESC";
@@ -158,59 +154,7 @@ public sealed class SqliteNoteRepository : INoteRepository
         return list;
     }
 
-    private async Task EnsureAsync(CancellationToken ct)
-    {
-        if (Interlocked.CompareExchange(ref _init, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractPath();
-            if (!string.IsNullOrEmpty(dbPath)) { var dir = Path.GetDirectoryName(dbPath); if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir); }
-            await using var c = await OpenAsync(ct);
-            await using (var wal = c.CreateCommand()) { wal.CommandText = "PRAGMA journal_mode=WAL;"; await wal.ExecuteNonQueryAsync(ct); }
-            await using var cmd = c.CreateCommand();
-            cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync(ct);
-            // 老库迁移：note_node 早期无 icon 列，按需补列（已存在则忽略）。
-            await MigrateAddColumnAsync(c, "icon", "TEXT", ct);
-        }
-        catch { Interlocked.Exchange(ref _init, 0); throw; }
-    }
-
-    /// <summary>给老库补列：ADD COLUMN 在列已存在时抛异常，吞掉即可（幂等迁移）。</summary>
-    private static async Task MigrateAddColumnAsync(SqliteConnection c, string column, string type, CancellationToken ct)
-    {
-        try
-        {
-            await using var m = c.CreateCommand();
-            m.CommandText = $"ALTER TABLE {TableName} ADD COLUMN {column} {type}";
-            await m.ExecuteNonQueryAsync(ct);
-        }
-        catch (SqliteException)
-        {
-            // 列已存在 — 忽略。
-        }
-    }
-
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
-    {
-        var c = new SqliteConnection(_cs);
-        await c.OpenAsync(ct);
-        await using var p = c.CreateCommand();
-        p.CommandText = "PRAGMA busy_timeout=5000;";
-        await p.ExecuteNonQueryAsync(ct);
-        return c;
-    }
-
-    private string? ExtractPath()
-    {
-        foreach (var part in _cs.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) continue;
-            var key = part[..eq].Trim();
-            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) || key.Equals("Filename", StringComparison.OrdinalIgnoreCase))
-            { var val = part[(eq + 1)..].Trim(); return val.Equals(":memory:", StringComparison.OrdinalIgnoreCase) ? null : val; }
-        }
-        return null;
-    }
+    /// <summary>老库迁移：note_node 早期无 icon 列，按需补列（幂等）。</summary>
+    protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
+        => await SqliteMigrations.AddColumnAsync(connection, TableName, "icon", "TEXT", ct);
 }

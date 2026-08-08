@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.IO;
+using Acme.Persistence;
 using Acme.Securities.Domain;
 using Microsoft.Data.Sqlite;
 
@@ -10,7 +10,7 @@ namespace Acme.Securities.Infrastructure;
 /// securities master data (synced from the app server). Upsert is by (code, type).
 /// Replaces AlphaAgent's EF Core <c>SecurityRepository</c>.
 /// </summary>
-public sealed class SqliteSecurityRepository : ISecurityRepository
+public sealed class SqliteSecurityRepository : SqliteStoreBase, ISecurityRepository
 {
     private const string TableName = "security";
     private const string CreateSql =
@@ -21,17 +21,13 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
         "UNIQUE (code, type))";
     private static readonly string Columns = "id, code, name, type, exchange, base_code, updated_at";
 
-    private readonly string _connectionString;
-    private int _initialized;
+    public SqliteSecurityRepository(string connectionString) : base(connectionString) { }
 
-    public SqliteSecurityRepository(string connectionString)
-        => _connectionString = !string.IsNullOrWhiteSpace(connectionString) ? connectionString : throw new ArgumentException("required", nameof(connectionString));
-
-    public static SqliteSecurityRepository ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteSecurityRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     public async Task<List<Security>> GetAllAsync()
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName}";
@@ -40,7 +36,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<Security?> GetByIdAsync(int id)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE id = @id";
@@ -51,7 +47,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<Security?> GetByCodeAsync(string code)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE code = @code LIMIT 1";
@@ -62,7 +58,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<List<Security>> GetByExchangeAsync(string exchange)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE exchange = @ex";
@@ -72,7 +68,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<List<Security>> GetByTypeAsync(string type)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE type = @type";
@@ -82,7 +78,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<bool> ExistsAsync(string code)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(1) FROM {TableName} WHERE code = @code";
@@ -94,7 +90,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<Security> UpdateAsync(Security security)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"UPDATE {TableName} SET code=@code,name=@name,type=@type,exchange=@ex,base_code=@bc,updated_at=@u WHERE id=@id";
@@ -106,7 +102,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task DeleteAsync(int id)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"DELETE FROM {TableName} WHERE id = @id";
@@ -116,7 +112,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task<List<Security>> SearchAsync(string keyword)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE code LIKE @kw OR name LIKE @kw";
@@ -128,7 +124,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     public async Task AddRangeAsync(IEnumerable<Security> securities, int batchSize)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync();
         foreach (var s in securities)
@@ -144,7 +140,7 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
 
     private async Task<Security> UpsertAsync(Security security)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = UpsertSql() + "; SELECT id FROM " + TableName + " WHERE code=@code AND type=@type;";
@@ -179,51 +175,5 @@ public sealed class SqliteSecurityRepository : ISecurityRepository
                 reader.GetString(3), reader.GetString(4), reader.GetString(5),
                 DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture)));
         return list;
-    }
-
-    private async Task EnsureSchemaAsync()
-    {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractDataSourcePath();
-            if (!string.IsNullOrEmpty(dbPath))
-            {
-                var dir = Path.GetDirectoryName(dbPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            }
-            await using var conn = await OpenAsync();
-            await using (var wal = conn.CreateCommand()) { wal.CommandText = "PRAGMA journal_mode=WAL;"; await wal.ExecuteNonQueryAsync(); }
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync();
-        }
-        catch { Interlocked.Exchange(ref _initialized, 0); throw; }
-    }
-
-    private async Task<SqliteConnection> OpenAsync()
-    {
-        var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var p = conn.CreateCommand();
-        p.CommandText = "PRAGMA busy_timeout=5000;";
-        await p.ExecuteNonQueryAsync();
-        return conn;
-    }
-
-    private string? ExtractDataSourcePath()
-    {
-        foreach (var part in _connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) continue;
-            var key = part[..eq].Trim();
-            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) || key.Equals("Filename", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part[(eq + 1)..].Trim();
-                return val.Equals(":memory:", StringComparison.OrdinalIgnoreCase) ? null : val;
-            }
-        }
-        return null;
     }
 }

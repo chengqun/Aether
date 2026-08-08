@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.IO;
+using Acme.Persistence;
 using Acme.Quotes.Domain;
 using Microsoft.Data.Sqlite;
 
@@ -11,7 +11,7 @@ namespace Acme.Quotes.Infrastructure;
 /// and not read back (Quote entity has no Id ctor; AnalysisManager uses Date/OHLCV).
 /// Replaces AlphaAgent's EF Core <c>QuoteRepository</c>.
 /// </summary>
-public sealed class SqliteQuoteRepository : IQuoteRepository
+public sealed class SqliteQuoteRepository : SqliteStoreBase, IQuoteRepository
 {
     private const string TableName = "quote";
     private const string CreateSql =
@@ -22,17 +22,13 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
         "UNIQUE (security_id, freq, date))";
     private static readonly string Columns = "security_id, freq, date, open, high, low, close, volume";
 
-    private readonly string _connectionString;
-    private int _initialized;
+    public SqliteQuoteRepository(string connectionString) : base(connectionString) { }
 
-    public SqliteQuoteRepository(string connectionString)
-        => _connectionString = !string.IsNullOrWhiteSpace(connectionString) ? connectionString : throw new ArgumentException("required", nameof(connectionString));
-
-    public static SqliteQuoteRepository ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteQuoteRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     public async Task<List<Quote>> GetBySecurityIdAsync(int securityId, string freq, int limit = 100)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM (SELECT {Columns} FROM {TableName} WHERE security_id=@s AND freq=@f ORDER BY date DESC LIMIT @l) ORDER BY date ASC";
@@ -44,7 +40,7 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
 
     public async Task<Quote?> GetLatestBySecurityIdAsync(int securityId, string freq)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM {TableName} WHERE security_id=@s AND freq=@f ORDER BY date DESC LIMIT 1";
@@ -62,7 +58,7 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
 
     public async Task AddRangeAsync(IEnumerable<Quote> quotes)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync();
         foreach (var q in quotes)
@@ -90,7 +86,7 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
 
     public async Task DeleteBySecurityIdAsync(int securityId, string freq)
     {
-        await EnsureSchemaAsync();
+        await EnsureSchemaAsync(CreateSql);
         await using var conn = await OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"DELETE FROM {TableName} WHERE security_id=@s AND freq=@f";
@@ -118,51 +114,5 @@ public sealed class SqliteQuoteRepository : IQuoteRepository
                 reader.GetString(1)));
         }
         return list;
-    }
-
-    private async Task EnsureSchemaAsync()
-    {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractDataSourcePath();
-            if (!string.IsNullOrEmpty(dbPath))
-            {
-                var dir = Path.GetDirectoryName(dbPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            }
-            await using var conn = await OpenAsync();
-            await using (var wal = conn.CreateCommand()) { wal.CommandText = "PRAGMA journal_mode=WAL;"; await wal.ExecuteNonQueryAsync(); }
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync();
-        }
-        catch { Interlocked.Exchange(ref _initialized, 0); throw; }
-    }
-
-    private async Task<SqliteConnection> OpenAsync()
-    {
-        var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
-        await using var p = conn.CreateCommand();
-        p.CommandText = "PRAGMA busy_timeout=5000;";
-        await p.ExecuteNonQueryAsync();
-        return conn;
-    }
-
-    private string? ExtractDataSourcePath()
-    {
-        foreach (var part in _connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) continue;
-            var key = part[..eq].Trim();
-            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) || key.Equals("Filename", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part[(eq + 1)..].Trim();
-                return val.Equals(":memory:", StringComparison.OrdinalIgnoreCase) ? null : val;
-            }
-        }
-        return null;
     }
 }

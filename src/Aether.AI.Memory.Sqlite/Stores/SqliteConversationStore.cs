@@ -1,4 +1,5 @@
 using System.Globalization;
+using Acme.Persistence;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Messages;
 using Microsoft.Data.Sqlite;
@@ -8,10 +9,9 @@ namespace Aether.AI.Memory.Stores;
 /// <summary>
 /// SQLite-backed <see cref="IConversationStore"/>. Tables <c>conversation</c> +
 /// <c>conversation_message</c>. Single-user (user_id column kept for the abstraction
-/// but the desktop passes empty). WAL + busy_timeout, lazy schema. Mirrors
-/// <c>SqliteNoteRepository</c>'s pattern (no EF Core).
+/// but the desktop passes empty). WAL + busy_timeout + foreign_keys, lazy schema.
 /// </summary>
-public sealed class SqliteConversationStore : IConversationStore
+public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStore
 {
     private const string ConvTable = "conversation";
     private const string MsgTable = "conversation_message";
@@ -32,19 +32,21 @@ public sealed class SqliteConversationStore : IConversationStore
     private const string CreateMsgConvIdx =
         "CREATE INDEX IF NOT EXISTS idx_message_conv ON " + MsgTable + "(conversation_id, seq)";
 
-    private readonly string _cs;
-    private int _init;
+    private const string CreateSchemaSql =
+        CreateConvSql + ";" + CreateMsgSql + ";" + CreateConvUpdatedIdx + ";" + CreateMsgConvIdx;
 
-    public SqliteConversationStore(string connectionString)
-        => _cs = !string.IsNullOrWhiteSpace(connectionString) ? connectionString : throw new ArgumentException("required", nameof(connectionString));
+    public SqliteConversationStore(string connectionString) : base(connectionString) { }
 
-    public static SqliteConversationStore ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteConversationStore ForFile(string dbPath) => new(BuildConnectionString(dbPath));
+
+    // FK ON DELETE CASCADE on conversation_message→conversation; enable enforcement on every connection.
+    protected override bool ForeignKeysEnabled => true;
 
     public async Task SaveAsync(Conversation conversation, CancellationToken cancellationToken = default)
     {
         if (conversation is null) throw new ArgumentNullException(nameof(conversation));
         conversation.UpdatedAt = DateTimeOffset.UtcNow;
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var tx = await c.BeginTransactionAsync(cancellationToken);
 
@@ -101,7 +103,7 @@ public sealed class SqliteConversationStore : IConversationStore
 
     public async Task<Conversation?> GetAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         var conv = await ReadConversationAsync(c, conversationId, cancellationToken);
         if (conv is null) return null;
@@ -111,7 +113,7 @@ public sealed class SqliteConversationStore : IConversationStore
 
     public async Task<IReadOnlyList<ConversationSummary>> GetSummariesAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         cmd.CommandText =
@@ -139,7 +141,7 @@ public sealed class SqliteConversationStore : IConversationStore
 
     public async Task<IReadOnlyList<Conversation>> FindByUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT id FROM " + ConvTable + " WHERE @uid IS NULL OR user_id IS NULL OR user_id=@uid ORDER BY updated_at DESC";
@@ -164,13 +166,13 @@ public sealed class SqliteConversationStore : IConversationStore
 
     public async Task<bool> DeleteAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var tx = await c.BeginTransactionAsync(cancellationToken);
         await using (var dm = c.CreateCommand())
         {
             dm.Transaction = (SqliteTransaction)tx;
-            // FK ON DELETE CASCADE requires PRAGMA foreign_keys=ON; set it to be safe.
+            // FK ON DELETE CASCADE requires PRAGMA foreign_keys=ON; ForeignKeysEnabled sets it on every connection.
             dm.CommandText = "DELETE FROM " + MsgTable + " WHERE conversation_id=@cid";
             dm.Parameters.AddWithValue("@cid", conversationId.ToString());
             await dm.ExecuteNonQueryAsync(cancellationToken);
@@ -237,48 +239,9 @@ public sealed class SqliteConversationStore : IConversationStore
         catch { return null; }
     }
 
-    private async Task EnsureAsync(CancellationToken ct)
-    {
-        if (Interlocked.CompareExchange(ref _init, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractPath();
-            if (!string.IsNullOrEmpty(dbPath)) { var dir = Path.GetDirectoryName(dbPath); if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir); }
-            await using var c = await OpenAsync(ct);
-            await using (var fk = c.CreateCommand()) { fk.CommandText = "PRAGMA foreign_keys=ON;"; await fk.ExecuteNonQueryAsync(ct); }
-            await using (var wal = c.CreateCommand()) { wal.CommandText = "PRAGMA journal_mode=WAL;"; await wal.ExecuteNonQueryAsync(ct); }
-            await using var cmd = c.CreateCommand();
-            cmd.CommandText = CreateConvSql + ";" + CreateMsgSql + ";" + CreateConvUpdatedIdx + ";" + CreateMsgConvIdx;
-            await cmd.ExecuteNonQueryAsync(ct);
-
-            // 迁移：旧库的 message 表可能没有 metadata 列（用于持久化工具步 input/output、思考段标记等）。ALTER 幂等（列已存在则忽略）。
-            await using var alter = c.CreateCommand();
-            alter.CommandText = "ALTER TABLE " + MsgTable + " ADD COLUMN metadata TEXT";
-            try { await alter.ExecuteNonQueryAsync(ct); }
-            catch (Microsoft.Data.Sqlite.SqliteException) { /* 列已存在，忽略 */ }
-        }
-        catch { Interlocked.Exchange(ref _init, 0); throw; }
-    }
-
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
-    {
-        var c = new SqliteConnection(_cs);
-        await c.OpenAsync(ct);
-        await using var p = c.CreateCommand();
-        p.CommandText = "PRAGMA busy_timeout=5000;";
-        await p.ExecuteNonQueryAsync(ct);
-        return c;
-    }
-
-    private string? ExtractPath()
-    {
-        foreach (var part in _cs.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (part.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
-                return part["Data Source=".Length..];
-        }
-        return null;
-    }
+    /// <summary>迁移：旧库的 message 表可能没有 metadata 列（持久化工具步 input/output、思考段标记等）。幂等。</summary>
+    protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
+        => await SqliteMigrations.AddColumnAsync(connection, MsgTable, "metadata", "TEXT", ct);
 
     private static string Format(DateTimeOffset dto) => dto.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
     private static DateTimeOffset Parse(string s) => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);

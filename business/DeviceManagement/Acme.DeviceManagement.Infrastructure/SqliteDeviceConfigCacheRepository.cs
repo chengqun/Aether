@@ -1,11 +1,11 @@
 using System.Globalization;
-using System.IO;
 using Acme.DeviceManagement.Domain;
+using Acme.Persistence;
 using Microsoft.Data.Sqlite;
 
 namespace Acme.DeviceManagement.Infrastructure;
 
-public sealed class SqliteDeviceConfigCacheRepository : IDeviceConfigCacheRepository
+public sealed class SqliteDeviceConfigCacheRepository : SqliteStoreBase, IDeviceConfigCacheRepository
 {
     private const string TableName = "device_config";
     private const string CreateSql =
@@ -24,22 +24,14 @@ public sealed class SqliteDeviceConfigCacheRepository : IDeviceConfigCacheReposi
     private static readonly string SelectColumns =
         "id, user_id, server_url, authorization_code, device_name, device_type, last_agent_name, recent_agent_names_json, last_llm_id, cached_at";
 
-    private readonly string _connectionString;
-    private int _initialized;
+    public SqliteDeviceConfigCacheRepository(string connectionString) : base(connectionString) { }
 
-    public SqliteDeviceConfigCacheRepository(string connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-            throw new ArgumentException("SQLite connection string is required.", nameof(connectionString));
-        _connectionString = connectionString;
-    }
-
-    public static SqliteDeviceConfigCacheRepository ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteDeviceConfigCacheRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     public async Task<DeviceConfigCacheItem?> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} WHERE user_id = @uid";
         cmd.Parameters.AddWithValue("@uid", userId.ToString());
@@ -48,8 +40,8 @@ public sealed class SqliteDeviceConfigCacheRepository : IDeviceConfigCacheReposi
 
     public async Task<DeviceConfigCacheItem?> GetAnyAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} LIMIT 1";
         return await ReadOneAsync(cmd, ct);
@@ -57,8 +49,8 @@ public sealed class SqliteDeviceConfigCacheRepository : IDeviceConfigCacheReposi
 
     public async Task UpsertAsync(DeviceConfigCacheItem item, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             $"INSERT OR REPLACE INTO {TableName} " +
@@ -94,63 +86,5 @@ public sealed class SqliteDeviceConfigCacheRepository : IDeviceConfigCacheReposi
             LastLlmId = Guid.Parse(reader.GetString(8)),
             CachedAt = DateTime.Parse(reader.GetString(9), CultureInfo.InvariantCulture)
         };
-    }
-
-    private async Task EnsureSchemaAsync(CancellationToken ct)
-    {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractDataSourcePath();
-            if (!string.IsNullOrEmpty(dbPath))
-            {
-                var dir = Path.GetDirectoryName(dbPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-            }
-            await using var conn = await OpenConnectionAsync(ct);
-            await using (var wal = conn.CreateCommand())
-            {
-                wal.CommandText = "PRAGMA journal_mode=WAL;";
-                await wal.ExecuteNonQueryAsync(ct);
-            }
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-        catch
-        {
-            Interlocked.Exchange(ref _initialized, 0);
-            throw;
-        }
-    }
-
-    private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken ct)
-    {
-        var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var pragma = conn.CreateCommand();
-        pragma.CommandText = "PRAGMA busy_timeout=5000;";
-        await pragma.ExecuteNonQueryAsync(ct);
-        return conn;
-    }
-
-    private string? ExtractDataSourcePath()
-    {
-        foreach (var part in _connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) continue;
-            var key = part[..eq].Trim();
-            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("DataSource", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("Filename", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part[(eq + 1)..].Trim();
-                if (val.Equals(":memory:", StringComparison.OrdinalIgnoreCase)) return null;
-                return val;
-            }
-        }
-        return null;
     }
 }

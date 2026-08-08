@@ -1,27 +1,15 @@
 using Acme.Automation.Domain;
 using Acme.Automation.Domain.Interfaces;
+using Acme.Persistence;
 using Microsoft.Data.Sqlite;
 
 namespace Acme.Automation.Infrastructure.Persistence;
 
-public class SqliteAutomationTaskRepository : IAutomationTaskRepository
+public class SqliteAutomationTaskRepository : SqliteStoreBase, IAutomationTaskRepository
 {
-    private readonly string _connectionString;
+    private const string TableName = "AutomationTasks";
 
-    public SqliteAutomationTaskRepository(string connectionString)
-    {
-        _connectionString = connectionString;
-        // 一次性 schema 初始化用同步 SQLite API——避免 ctor 里 async-over-sync（.Wait() 在 UI 线程
-        // 阻塞无 ConfigureAwait(false) 的 async 会死锁）。数据方法（GetAllAsync 等带 CT）保持 async。
-        Initialize();
-    }
-
-    private void Initialize()
-    {
-        using var conn = new SqliteConnection(_connectionString);
-        conn.Open();
-
-        var createTable = @"
+    private const string CreateSql = @"
             CREATE TABLE IF NOT EXISTS AutomationTasks (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 AgentId TEXT NOT NULL,
@@ -41,33 +29,24 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
                 UpdatedAt TEXT NOT NULL
             );";
 
-        using var cmd = new SqliteCommand(createTable, conn);
-        cmd.ExecuteNonQuery();
-
-        // 幂等迁移：旧库补列（列已存在则忽略 duplicate column 错误）。
-        EnsureColumn(conn, "ConversationId", "TEXT NOT NULL DEFAULT ''");
-        EnsureColumn(conn, "Prompt", "TEXT NOT NULL DEFAULT ''");
-        EnsureColumn(conn, "WeekdaysJson", "TEXT");
+    public SqliteAutomationTaskRepository(string connectionString) : base(connectionString)
+    {
+        // 一次性 schema 初始化用同步 SQLite API（基类 EnsureSchema）——避免 ctor 里 async-over-sync
+        // （.Wait() 在 UI 线程阻塞无 ConfigureAwait(false) 的 async 会死锁，见 #3a）。数据方法保持 async。
+        EnsureSchema(CreateSql);
     }
 
-    private static void EnsureColumn(SqliteConnection conn, string column, string definition)
+    /// <summary>幂等迁移：旧库补列（列已存在则忽略）。</summary>
+    protected override void Migrate(SqliteConnection connection)
     {
-        try
-        {
-            using var cmd = new SqliteCommand(
-                $"ALTER TABLE AutomationTasks ADD COLUMN {column} {definition};", conn);
-            cmd.ExecuteNonQuery();
-        }
-        catch (SqliteException)
-        {
-            // 列已存在——忽略。
-        }
+        SqliteMigrations.AddColumn(connection, TableName, "ConversationId", "TEXT NOT NULL DEFAULT ''");
+        SqliteMigrations.AddColumn(connection, TableName, "Prompt", "TEXT NOT NULL DEFAULT ''");
+        SqliteMigrations.AddColumn(connection, TableName, "WeekdaysJson", "TEXT");
     }
 
     public async Task<List<AutomationTask>> GetAllAsync(CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand("SELECT * FROM AutomationTasks ORDER BY Id", conn);
         using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
@@ -81,8 +60,7 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     public async Task<AutomationTask?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand("SELECT * FROM AutomationTasks WHERE Id = @Id", conn);
         cmd.Parameters.AddWithValue("@Id", id);
@@ -93,8 +71,7 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     public async Task<AutomationTask> AddAsync(AutomationTask task, CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand(@"
             INSERT INTO AutomationTasks (AgentId, TaskName, ConversationId, Prompt, ScheduleType, IntervalMinutes,
@@ -114,8 +91,7 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     public async Task<AutomationTask> UpdateAsync(AutomationTask task, CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand(@"
             UPDATE AutomationTasks SET
@@ -137,8 +113,7 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     public async Task DeleteAsync(int id, CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         using var cmd = new SqliteCommand("DELETE FROM AutomationTasks WHERE Id = @Id", conn);
         cmd.Parameters.AddWithValue("@Id", id);
@@ -148,12 +123,11 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
 
     public async Task<List<AutomationTask>> GetDueTasksAsync(CancellationToken cancellationToken)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(cancellationToken);
+        await using var conn = await OpenAsync(cancellationToken);
 
         var now = DateTime.UtcNow.ToString("o");
         using var cmd = new SqliteCommand(
-            "SELECT * FROM AutomationTasks WHERE Enabled = 1 AND NextExecutionTime IS NOT NULL AND NextExecutionTime <= @Now", 
+            "SELECT * FROM AutomationTasks WHERE Enabled = 1 AND NextExecutionTime IS NOT NULL AND NextExecutionTime <= @Now",
             conn);
         cmd.Parameters.AddWithValue("@Now", now);
 

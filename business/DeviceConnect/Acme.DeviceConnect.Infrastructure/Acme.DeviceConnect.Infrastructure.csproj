@@ -2,11 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.DeviceConnect.Domain\Acme.DeviceConnect.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
 

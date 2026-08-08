@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.IO;
 using Acme.Llm.Domain;
+using Acme.Persistence;
 using Microsoft.Data.Sqlite;
 
 namespace Acme.Llm.Infrastructure;
@@ -13,9 +13,9 @@ namespace Acme.Llm.Infrastructure;
 /// <para><b>ConfigureAwait(false)</b>：此 repo 被 <c>DesktopLlmBootstrap</c> 在 UI 线程上
 /// sync-over-async 消费（<c>AddDesktopCommon</c> → <c>GetOrCreateActive</c> → <c>.GetAwaiter().GetResult()</c>）。
 /// 库代码加 ConfigureAwait(false) 让 continuation 跑线程池、不回 UI SynchronizationContext → 不死锁。
-/// 对正常 async 调用路径无副作用（库代码最佳实践）。</para>
+/// 基类 <see cref="SqliteStoreBase"/> 的 async 方法同样 ConfigureAwait(false)，故整条链安全。</para>
 /// </summary>
-public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
+public sealed class SqliteLlmConfigRepository : SqliteStoreBase, ILlmConfigRepository
 {
     private const string TableName = "llm_config";
     private const string CreateSql =
@@ -33,23 +33,15 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
     private static readonly string SelectColumns =
         "id, name, model_name, api_key, endpoint, temperature, is_default, is_system, cached_at";
 
-    private readonly string _connectionString;
-    private int _initialized;
+    public SqliteLlmConfigRepository(string connectionString) : base(connectionString) { }
 
-    public SqliteLlmConfigRepository(string connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-            throw new ArgumentException("SQLite connection string is required.", nameof(connectionString));
-        _connectionString = connectionString;
-    }
-
-    public static SqliteLlmConfigRepository ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteLlmConfigRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     /// <inheritdoc/>
     public async Task<List<LlmConfig>> GetAllAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct).ConfigureAwait(false);
-        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await EnsureSchemaAsync(CreateSql, ct).ConfigureAwait(false);
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName}";
         return await ReadAllAsync(cmd, ct).ConfigureAwait(false);
@@ -58,8 +50,8 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
     /// <inheritdoc/>
     public async Task UpsertRangeAsync(IEnumerable<LlmConfig> items, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct).ConfigureAwait(false);
-        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await EnsureSchemaAsync(CreateSql, ct).ConfigureAwait(false);
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
         await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         foreach (var item in items)
         {
@@ -86,8 +78,8 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
     /// <inheritdoc/>
     public async Task ClearAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct).ConfigureAwait(false);
-        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await EnsureSchemaAsync(CreateSql, ct).ConfigureAwait(false);
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"DELETE FROM {TableName}";
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -113,63 +105,5 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
             });
         }
         return list;
-    }
-
-    private async Task EnsureSchemaAsync(CancellationToken ct)
-    {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractDataSourcePath();
-            if (!string.IsNullOrEmpty(dbPath))
-            {
-                var dir = Path.GetDirectoryName(dbPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-            }
-            await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
-            await using (var wal = conn.CreateCommand())
-            {
-                wal.CommandText = "PRAGMA journal_mode=WAL;";
-                await wal.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            }
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            Interlocked.Exchange(ref _initialized, 0);
-            throw;
-        }
-    }
-
-    private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken ct)
-    {
-        var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(ct).ConfigureAwait(false);
-        await using var pragma = conn.CreateCommand();
-        pragma.CommandText = "PRAGMA busy_timeout=5000;";
-        await pragma.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        return conn;
-    }
-
-    private string? ExtractDataSourcePath()
-    {
-        foreach (var part in _connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) continue;
-            var key = part[..eq].Trim();
-            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("DataSource", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("Filename", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = part[(eq + 1)..].Trim();
-                if (val.Equals(":memory:", StringComparison.OrdinalIgnoreCase)) return null;
-                return val;
-            }
-        }
-        return null;
     }
 }

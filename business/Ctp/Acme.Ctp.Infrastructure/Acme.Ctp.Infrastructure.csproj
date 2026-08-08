@@ -3,10 +3,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
     <ProjectReference Include="..\..\..\externals\Ctp.Net.Core\Ctp.Net.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
 

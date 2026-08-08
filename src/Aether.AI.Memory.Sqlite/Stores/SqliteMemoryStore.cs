@@ -1,4 +1,5 @@
 using System.Globalization;
+using Acme.Persistence;
 using Aether.AI.Core.Memory;
 using Microsoft.Data.Sqlite;
 
@@ -10,7 +11,7 @@ namespace Aether.AI.Memory.Stores;
 /// <para>Search is a simple substring (LIKE) match over key/content — no embeddings. Sufficient for
 /// Phase 1; a vector backend can implement <see cref="IMemoryStore"/> separately later.</para>
 /// </summary>
-public sealed class SqliteMemoryStore : IMemoryStore
+public sealed class SqliteMemoryStore : SqliteStoreBase, IMemoryStore
 {
     private const string Table = "agent_memory";
 
@@ -22,18 +23,16 @@ public sealed class SqliteMemoryStore : IMemoryStore
     private const string CreateUserIdx =
         "CREATE INDEX IF NOT EXISTS idx_memory_user ON " + Table + "(user_id)";
 
-    private readonly string _cs;
-    private int _init;
+    private const string CreateSchemaSql = CreateTableSql + ";" + CreateUserIdx;
 
-    public SqliteMemoryStore(string connectionString)
-        => _cs = !string.IsNullOrWhiteSpace(connectionString) ? connectionString : throw new ArgumentException("required", nameof(connectionString));
+    public SqliteMemoryStore(string connectionString) : base(connectionString) { }
 
-    public static SqliteMemoryStore ForFile(string dbPath) => new($"Data Source={dbPath}");
+    public static SqliteMemoryStore ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
     public async Task SaveAsync(MemoryItem item, CancellationToken cancellationToken = default)
     {
         if (item is null) throw new ArgumentNullException(nameof(item));
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         // upsert by id
@@ -55,7 +54,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<MemoryItem?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT id,user_id,type,key,content,importance,created_at,updated_at,metadata FROM " + Table + " WHERE id=@id";
@@ -66,7 +65,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<IReadOnlyList<MemoryItem>> FindByUserAsync(string? userId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         if (userId is null)
@@ -83,7 +82,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<IReadOnlyList<MemoryItem>> FindByTypeAsync(string? userId, MemoryType type, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = userId is null
@@ -97,7 +96,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
     public async Task<IReadOnlyList<MemoryItem>> SearchAsync(string? userId, string query, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return await FindByUserAsync(userId, cancellationToken);
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         var q = $"%{query}%";
@@ -116,7 +115,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = "DELETE FROM " + Table + " WHERE id=@id";
@@ -126,7 +125,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<int> ClearAsync(string? userId, CancellationToken cancellationToken = default)
     {
-        await EnsureAsync(cancellationToken);
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
         if (userId is null)
@@ -177,42 +176,6 @@ public sealed class SqliteMemoryStore : IMemoryStore
     {
         try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new(); }
         catch { return new(); }
-    }
-
-    private async Task EnsureAsync(CancellationToken ct)
-    {
-        if (Interlocked.CompareExchange(ref _init, 1, 0) != 0) return;
-        try
-        {
-            var dbPath = ExtractPath();
-            if (!string.IsNullOrEmpty(dbPath)) { var dir = Path.GetDirectoryName(dbPath); if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir); }
-            await using var c = await OpenAsync(ct);
-            await using (var wal = c.CreateCommand()) { wal.CommandText = "PRAGMA journal_mode=WAL;"; await wal.ExecuteNonQueryAsync(ct); }
-            await using var cmd = c.CreateCommand();
-            cmd.CommandText = CreateTableSql + ";" + CreateUserIdx;
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-        catch { Interlocked.Exchange(ref _init, 0); throw; }
-    }
-
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
-    {
-        var c = new SqliteConnection(_cs);
-        await c.OpenAsync(ct);
-        await using var p = c.CreateCommand();
-        p.CommandText = "PRAGMA busy_timeout=5000;";
-        await p.ExecuteNonQueryAsync(ct);
-        return c;
-    }
-
-    private string? ExtractPath()
-    {
-        foreach (var part in _cs.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (part.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
-                return part["Data Source=".Length..];
-        }
-        return null;
     }
 
     private static string Format(DateTimeOffset dto) => dto.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);

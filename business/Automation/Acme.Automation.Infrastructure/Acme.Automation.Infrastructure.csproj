@@ -8,10 +8,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Acme.Automation.Domain\Acme.Automation.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
 
