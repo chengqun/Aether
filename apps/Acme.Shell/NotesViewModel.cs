@@ -89,7 +89,8 @@ public partial class NotesViewModel : ObservableObject
 
                 // 源码栏直改 agent/规则/workflow 笔记后，失效运行时缓存的 agent。
                 // 否则已召唤的规则/专家仍跑旧程序（如改了规则 steps 却不生效）。
-                if (node.NodeType is NoteNodeType.Agent or NoteNodeType.Rule or NoteNodeType.CodeRule or NoteNodeType.Workflow)
+                // 用描述符 HasAgentRunner 旗标——单点声明哪些类型有 agent 运行时缓存。
+                if (NoteNodeTypeRegistry.Get(node.NodeType).HasAgentRunner)
                 {
                     AgentRunner?.Invalidate(node.Id);
                 }
@@ -163,7 +164,8 @@ public partial class NotesViewModel : ObservableObject
     public bool IsKnowledgeNode => SelectedNode?.NodeType == NoteNodeType.Knowledge;
     public bool IsRuleNode => SelectedNode?.NodeType == NoteNodeType.Rule;
     public bool IsCodeRuleNode => SelectedNode?.NodeType == NoteNodeType.CodeRule;
-    public bool IsFormNode => IsAgentNode || IsWorkflowNode || IsKnowledgeNode || IsRuleNode || IsCodeRuleNode;
+    // IsFormNode/HasRightPane 由描述符旗标驱动——单点声明哪些类型有右栏表单，避免散落类型表。
+    public bool IsFormNode => SelectedNode is not null && NoteNodeTypeRegistry.Get(SelectedNode.NodeType).IsFormNode;
     public bool HasRightPane => IsMarkdownNode || IsFormNode;
 
     public bool IsCodeEdit => SelectedNode is not null;

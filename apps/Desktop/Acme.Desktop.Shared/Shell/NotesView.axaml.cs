@@ -117,7 +117,10 @@ public partial class NotesView : UserControl
 
     private MainViewModelBase? MainVm => (TopLevel.GetTopLevel(this)?.DataContext) as MainViewModelBase;
 
-    /// <summary>选中 Agent/Workflow 时创建对应表单 VM；保存后 RefreshAsync 同步源码。</summary>
+    /// <summary>选中 form 节点时经工厂注册表创建对应表单 VM；工厂封装查同级 VM + 建编辑 VM + 接
+    /// Save/AutoSave/Cancel 事件（含 CodeRule 的 C# body 回填、Knowledge 的 body 重解析）。Note/策略族
+    /// （Strategy/CodeStrategy）无工厂 → 字典未命中 → 不建表单（全宽代码编辑器）。新增 form 类型 = 加一个工厂 + 注册。</summary>
+    private Dictionary<NoteNodeType, INoteNodeEditVmFactory>? _editVmFactories;
     private async Task CreateEditVmForNodeAsync()
     {
         var node = _vm?.SelectedNode;
@@ -125,129 +128,10 @@ public partial class NotesView : UserControl
         var main = MainVm;
         if (main is null) return;
 
-        if (node.NodeType == NoteNodeType.Agent)
-        {
-            var expert = main.Experts.Experts.FirstOrDefault(e => e.Id == node.Id);
-            if (expert is null) return;
-            var editVm = main.Experts.CreateEditViewModel(expert);
-            if (editVm is null) return;
-            editVm.SaveRequested += async saved =>
-            {
-                var result = await main.Experts.SaveAsync(saved);
-                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
-                else editVm.Error = result.Error;
-            };
-            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
-            editVm.AutoSaveRequested += async saved =>
-            {
-                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Experts.SaveAsync(saved), saved.Id);
-                if (result.Success) SyncCodeEditor();
-            };
-            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
-            _vm.ActiveEditVm = editVm;
-        }
-        else if (node.NodeType == NoteNodeType.Rule)
-        {
-            var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == node.Id);
-            if (rule is null) return;
-            var editVm = main.Rules.CreateEditViewModel(rule);
-            if (editVm is null) return;
-            editVm.SaveRequested += async saved =>
-            {
-                var result = await main.Rules.SaveAsync(saved);
-                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
-                else editVm.Error = result.Error;
-            };
-            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
-            editVm.AutoSaveRequested += async saved =>
-            {
-                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Rules.SaveAsync(saved), saved.Id);
-                if (result.Success) SyncCodeEditor();
-            };
-            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
-            _vm.ActiveEditVm = editVm;
-        }
-        else if (node.NodeType == NoteNodeType.CodeRule)
-        {
-            var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == node.Id);
-            if (rule is null) return;
-            var editVm = main.Rules.CreateCodeRuleEditViewModel(rule);
-            editVm.SaveRequested += async saved =>
-            {
-                // 下栏源码可能改了 C# body：从当前节点 content 重新取 body，避免表单保存用 VM 快照覆盖下栏改动
-                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
-                    saved.SystemPrompt = _vm.CodeBodyFromContent(c);
-                var result = await main.Rules.SaveAsync(saved);
-                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
-                else editVm.Error = result.Error;
-            };
-            // 自动保存（含 per-tool 权限调整）：静默落库（不重载树）+ 同步下栏源码（含 tool_approvals）。
-            // 同样从 live content 回填 body——否则调工具/改权限触发的自动保存会把 C# 源码重置成旧快照。
-            editVm.AutoSaveRequested += async saved =>
-            {
-                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
-                    saved.SystemPrompt = _vm.CodeBodyFromContent(c);
-                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Rules.SaveAsync(saved), saved.Id);
-                if (result.Success) SyncCodeEditor();
-            };
-            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
-            _vm.ActiveEditVm = editVm;
-        }
-        else if (node.NodeType == NoteNodeType.Workflow)
-        {
-            var wf = main.Workflows.Workflows.FirstOrDefault(w => w.Id == node.Id);
-            if (wf is null) return;
-            var editVm = await main.Workflows.CreateEditViewModelAsync(wf);
-            if (editVm is null) return;
-            editVm.SaveRequested += async saved =>
-            {
-                var result = await main.Workflows.SaveAsync(saved);
-                if (result.Success) { _vm.StatusMessage = "已保存"; await _vm.RefreshAsync(); }
-                else editVm.Error = result.Error;
-            };
-            // 自动保存：静默落库（不重载树）+ 同步下栏源码。
-            editVm.AutoSaveRequested += async saved =>
-            {
-                var result = await _vm.SaveFormItemSilentlyAsync(() => main.Workflows.SaveAsync(saved), saved.Id);
-                if (result.Success) SyncCodeEditor();
-            };
-            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
-            _vm.ActiveEditVm = editVm;
-        }
-        else if (node.NodeType == NoteNodeType.Knowledge)
-        {
-            var (def, parseErr) = _vm.TryParseKnowledge(node.Content ?? "");
-            if (def is null)
-            {
-                _vm.StatusMessage = "解析失败：" + parseErr;
-                return;
-            }
-            var editVm = new KnowledgeEditViewModel(node.Id, node.Title, def,
-                _vm?.GetLinkTargets(node.Id) ?? Array.Empty<TargetOption>(),
-                _vm?.GetLinkTargetTree(node.Id) ?? Array.Empty<TargetTreeNode>(),
-                title => _vm?.FindNoteByTitle(title) is { } tn ? (tn.Id, tn.Title) : ((Guid Id, string Title)?)null,
-                id => _vm?.FindNoteById(id)?.Title,
-                title => _vm?.FindNoteByTitle(title) is { } tn2
-                    ? (tn2.Title, _vm.TryParseKnowledge(tn2.Content ?? "").Def)
-                    : ((string Title, KnowledgeObjectDefinition? Def)?)null);
-            editVm.SaveRequested += async saved =>
-            {
-                // debounce 自动保存可能跨越节点切换：仅当当前选中节点仍是本对象时才写库
-                if (_vm?.SelectedNode?.Id != editVm.Id) return;
-                // 下栏源码可能改了 body：从当前节点 content 重新解析 body，避免表单保存覆盖下栏改动
-                if (_vm?.SelectedNode?.Content is string c && !string.IsNullOrEmpty(c))
-                {
-                    var (redef, _) = _vm.TryParseKnowledge(c);
-                    if (redef is not null) saved.Body = redef.Body;
-                }
-                // 静默落库（不重载树）+ 同步下栏源码（含 kind/links/body 改动）
-                var result = await _vm.SaveFormItemSilentlyAsync(() => _vm.SaveKnowledgeAsync(saved, editVm.Name), editVm.Id);
-                if (result.Success) { _vm.StatusMessage = "已保存"; SyncCodeEditor(); }
-                else editVm.Error = result.Error;
-            };
-            editVm.CancelRequested += () => { _vm.IsPreviewOnly = false; };
-            _vm.ActiveEditVm = editVm;
-        }
+        _editVmFactories ??= DesktopApp.Services.GetServices<INoteNodeEditVmFactory>()
+            .ToDictionary(f => f.NodeType);
+        if (!_editVmFactories.TryGetValue(node.NodeType, out var factory)) return;
+        _vm.ActiveEditVm = await factory.CreateAsync(new EditVmContext(node, _vm, main, SyncCodeEditor));
     }
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)

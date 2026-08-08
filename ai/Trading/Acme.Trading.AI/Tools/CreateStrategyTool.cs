@@ -8,7 +8,7 @@ using Acme.Trading.Scripting;
 namespace Acme.Trading.AI.Tools;
 
 /// <summary>
-/// 创建交易策略工具：把 AI 写的 C# 策略源码存为策略笔记（tags=strategy, syntax=csharp），
+/// 创建交易策略工具：把 AI 写的 C# 策略源码存为 CodeStrategy 笔记（NodeType=CodeStrategy, syntax=csharp），
 /// 立即编译验证返回错误（前馈传感器）。创建后 NotesChanged → StrategyScriptingService 自动编译注册到
 /// StrategyRegistry，回测页策略选择器自动出现（不需重启）。
 /// </summary>
@@ -45,9 +45,8 @@ public class CreateStrategyTool
             {
                 Title = name.Trim(),
                 Content = source,
-                NodeType = NoteNodeType.Note,
+                NodeType = NoteNodeType.CodeStrategy,
                 Syntax = "csharp",
-                Tags = "strategy",
                 ParentId = parentId,
             }, cancellationToken);
 
