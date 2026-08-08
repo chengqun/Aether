@@ -1,9 +1,9 @@
 using System.Text.Json;
 
-namespace Aether.AI.Hosting;
+namespace Aether.AI.Abstractions;
 
 /// <summary>
-/// 一个 MCP server 的连接配置（纯 POCO，放 Hosting 便于 VM/接口共用，不引 alpha）。
+/// 一个 MCP server 的连接配置（纯 POCO，放 Abstractions 便于 VM/接口/business 共用，不引 alpha）。
 /// 支持 stdio（本地子进程）或 HTTP/SSE（远程）两种 transport。格式与主流 <c>.mcp.json</c> 对齐：
 /// <c>command</c>+<c>args</c>(<c>arguments</c>)+<c>env</c>（stdio）或 <c>url</c>+<c>headers</c>（HTTP）。
 /// </summary>
@@ -145,4 +145,3 @@ public sealed class McpServerConfig
         return dict.Count == 0 ? null : dict;
     }
 }
-

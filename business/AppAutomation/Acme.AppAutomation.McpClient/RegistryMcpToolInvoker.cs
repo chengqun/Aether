@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Acme.AppAutomation.Domain;
-using Aether.AI.Hosting;
+using Aether.AI.Abstractions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -18,7 +18,7 @@ namespace Acme.AppAutomation.McpClientHost;
 /// <para>工具查找：从 <see cref="IMcpServerRegistry.GetTools"/> 按精确名找（desktop server 工具为 <c>windows_*</c> 前缀）。
 /// 结果：<see cref="AIFunction.InvokeAsync"/> 返回 <c>TextContent</c>（<see cref="object.ToString"/> 给文本），本类转成字符串。</para>
 ///
-/// <para>MCP alpha 包隔离在 <c>Acme.AppAutomation.McpClient</c>；本类只引 <see cref="IMcpServerRegistry"/>（Hosting 接口，无 alpha）
+/// <para>MCP alpha 包隔离在 <c>Acme.AppAutomation.McpClient</c>；本类只引 <see cref="IMcpServerRegistry"/>（Abstractions 接口，无 alpha）
 /// + <c>Microsoft.Extensions.AI</c>（<see cref="AIFunction"/>，稳定包）。</para>
 /// </summary>
 public sealed class RegistryMcpToolInvoker : IMcpToolInvoker

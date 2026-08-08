@@ -1,4 +1,4 @@
-using Aether.AI.Hosting;
+using Aether.AI.Abstractions;
 
 namespace Aether.AI.Mcp.Tests;
 

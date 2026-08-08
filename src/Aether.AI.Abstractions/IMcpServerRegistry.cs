@@ -1,9 +1,9 @@
 using Microsoft.Extensions.AI;
 
-namespace Aether.AI.Hosting;
+namespace Aether.AI.Abstractions;
 
 /// <summary>
-/// MCP server 注册表的稳定抽象（定义在 Hosting，避免 shell/宿主引用 alpha 版的 <c>Aether.AI.Mcp</c>）。
+/// MCP server 注册表的稳定抽象（定义在 Abstractions，避免 shell/宿主/business 引用 alpha 版的 <c>Aether.AI.Mcp</c>）。
 /// 具体实现 <c>Aether.AI.Mcp.McpServerRegistry</c> 在 <c>Aether.AI.Mcp</c> 项目（opt-in）。
 /// <para>宿主在启动时调用 <see cref="StartAsync"/> 连接各 server 并预解析工具；
 /// <see cref="GetTools"/> 供 <c>AgentFactory</c>（经 <c>Func&lt;IReadOnlyList&lt;AIFunction&gt;&gt;</c>）取用。</para>

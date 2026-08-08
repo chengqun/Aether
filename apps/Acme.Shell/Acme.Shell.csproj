@@ -23,6 +23,8 @@
     <!-- 平台：会话存储 + 标题服务 -->
     <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <!-- MCP 稳定契约（McpServerConfig / IMcpManagementService / McpServerStatus 等，VM 直接用）——零 alpha 依赖。 -->
+    <ProjectReference Include="..\..\src\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

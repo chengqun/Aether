@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace Aether.AI.Hosting;
+namespace Aether.AI.Abstractions;
 
 /// <summary>单个 MCP server 的连接结果（低层，registry 返回；<see cref="Tools"/> 为 MEAI AIFunction）。</summary>
 public sealed class McpServerEntry
@@ -25,7 +25,7 @@ public sealed record McpServerStatus(
 
 /// <summary>
 /// MCP 管理服务（VM 面向）：读写 <c>mcp-servers/</c> 配置 + 查询连接状态/工具。
-/// impl 在 <c>Aether.AI.Mcp</c> 项目；接口在 Hosting 供 VM（不引 alpha）使用。
+/// impl 在 <c>Aether.AI.Mcp</c> 项目；接口在 Abstractions 供 VM（及 business AppAutomation.McpClient）使用，不引 alpha。
 /// </summary>
 public interface IMcpManagementService
 {

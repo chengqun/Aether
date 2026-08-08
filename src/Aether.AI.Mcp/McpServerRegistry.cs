@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;

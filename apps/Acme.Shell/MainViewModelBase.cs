@@ -12,6 +12,7 @@ using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
+using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using Aether.AI.Memory;
 using CommunityToolkit.Mvvm.ComponentModel;

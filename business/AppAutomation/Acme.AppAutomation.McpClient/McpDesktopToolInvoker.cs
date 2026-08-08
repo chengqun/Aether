@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Acme.AppAutomation.Domain;
-using Aether.AI.Hosting;
+using Aether.AI.Abstractions;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;

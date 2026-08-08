@@ -8,7 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- AetherAIBuilder / AetherAIOptions（DI 入口 + 配置） -->
     <ProjectReference Include="..\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <!-- MCP 稳定契约（McpServerConfig / IMcpServerRegistry / IMcpManagementService 等）——impl 实现这些接口。 -->
+    <ProjectReference Include="..\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

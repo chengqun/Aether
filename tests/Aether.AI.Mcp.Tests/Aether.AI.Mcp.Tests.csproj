@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aether.AI.Mcp\Aether.AI.Mcp.csproj" />
+    <!-- McpServerConfig 等契约现定义在 Abstractions（经 Mcp 传递可达，显式引用便于测试直接解析类型）。 -->
+    <ProjectReference Include="..\..\src\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

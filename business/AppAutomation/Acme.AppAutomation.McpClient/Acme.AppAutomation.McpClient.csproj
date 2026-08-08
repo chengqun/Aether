@@ -20,8 +20,9 @@
   <ItemGroup>
     <!-- 只需 IMcpToolInvoker 端口（Domain 纯净，无 MCP 依赖）。 -->
     <ProjectReference Include="..\Acme.AppAutomation.Domain\Acme.AppAutomation.Domain.csproj" />
-    <!-- McpServerConfig（连接配置 POCO，定义在 Hosting，不引 alpha）——复用其 stdio/http 解析，与 McpServerRegistry 同构。 -->
-    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <!-- MCP 稳定契约（McpServerConfig + IMcpServerRegistry + McpServerEntry 等，定义在 Abstractions）——
+         复用 stdio/http 解析 + 注入已连 registry，与 McpServerRegistry 同构。零 alpha 依赖，是 business/ 引 Aether.AI.* 的唯一合法出口。 -->
+    <ProjectReference Include="..\..\..\src\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

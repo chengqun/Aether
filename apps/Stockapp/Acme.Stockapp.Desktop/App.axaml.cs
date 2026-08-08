@@ -24,6 +24,7 @@ using Acme.AppAutomation.Domain;
 using Acme.AppAutomation.Infrastructure;
 using Acme.AppAutomation.McpClientHost;
 using Acme.AppAutomation.StockTradingBridge;
+using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 #if WINDOWS
 using Acme.StockTrading.Infrastructure;

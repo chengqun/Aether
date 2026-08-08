@@ -134,6 +134,7 @@
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Aether.AI.Abstractions/Aether.AI.Abstractions.csproj" />
     <Project Path="src/Aether.AI.Core/Aether.AI.Core.csproj" />
     <Project Path="src/Aether.AI.Harness/Aether.AI.Harness.csproj" />
     <Project Path="src/Aether.AI.Harness.Scripting/Aether.AI.Harness.Scripting.csproj" />

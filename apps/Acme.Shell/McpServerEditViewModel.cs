@@ -1,3 +1,4 @@
+using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
