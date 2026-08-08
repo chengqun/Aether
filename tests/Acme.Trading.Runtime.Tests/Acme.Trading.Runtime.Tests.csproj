@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\business\Trading\Acme.Trading.Application\Acme.Trading.Application.csproj" />
     <ProjectReference Include="..\..\business\Trading.Runtime\Acme.Trading.Runtime.Lean\Acme.Trading.Runtime.Lean.csproj" />
+    <ProjectReference Include="..\..\business\Trading.Runtime\Acme.Trading.Scripting\Acme.Trading.Scripting.csproj" />
   </ItemGroup>
 
 </Project>

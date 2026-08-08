@@ -64,18 +64,47 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                     lock (_lock) _loadErrors[note.Title] = "策略源码为空";
                     continue;
                 }
-                if (StrategyScriptCompiler.TryCompile(note.Content!, out var instance, out var err) && instance is not null)
+
+                if (note.Kind == StrategyKind.Yaml)
                 {
-                    var type = instance.GetType();
-                    var name = note.Title;
-                    StrategyRegistry.Register(name, () => (IStrategy)Activator.CreateInstance(type)!);
-                    _registeredNames.Add(name);
-                    _logger.LogInformation("已加载策略脚本：{Name}", name);
+                    // 声明式 YAML 策略：解析成 StrategyProgram → YamlStrategy。Code 路径不受影响。
+                    if (StrategyProgramYaml.TryDeserialize(note.Content, out var program) && program is not null)
+                    {
+                        try
+                        {
+                            var prog = program;
+                            StrategyRegistry.Register(note.Title, () => new YamlStrategy(prog));
+                            _registeredNames.Add(note.Title);
+                            _logger.LogInformation("已加载 YAML 策略：{Name}", note.Title);
+                        }
+                        catch (Exception ex) // IndicatorFactory 未知类型 / 缺参等
+                        {
+                            lock (_lock) _loadErrors[note.Title] = ex.Message;
+                            _logger.LogWarning("YAML 策略构建失败 {Name}：{Err}", note.Title, ex.Message);
+                        }
+                    }
+                    else
+                    {
+                        lock (_lock) _loadErrors[note.Title] = "YAML 策略解析失败";
+                        _logger.LogWarning("YAML 策略解析失败 {Name}", note.Title);
+                    }
                 }
                 else
                 {
-                    lock (_lock) _loadErrors[note.Title] = err ?? "未知编译错误";
-                    _logger.LogWarning("策略脚本编译失败 {Name}：{Err}", note.Title, err);
+                    // Code 策略：Roslyn 编译 IStrategy 源码（既有路径，原样）。
+                    if (StrategyScriptCompiler.TryCompile(note.Content!, out var instance, out var err) && instance is not null)
+                    {
+                        var type = instance.GetType();
+                        var name = note.Title;
+                        StrategyRegistry.Register(name, () => (IStrategy)Activator.CreateInstance(type)!);
+                        _registeredNames.Add(name);
+                        _logger.LogInformation("已加载策略脚本：{Name}", name);
+                    }
+                    else
+                    {
+                        lock (_lock) _loadErrors[note.Title] = err ?? "未知编译错误";
+                        _logger.LogWarning("策略脚本编译失败 {Name}：{Err}", note.Title, err);
+                    }
                 }
             }
             StrategiesLoaded?.Invoke();

@@ -24,7 +24,8 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.Knowledge, "知识对象", NavIcons.Knowledge, "#0891B2", "knowledge", "yaml", "新知识对象", KnowledgeTemplate),
             new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate),
             new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate),
-            new(NoteNodeType.CodeStrategy, "策略",  NavIcons.LineChart, "#2563EB", "line",      "csharp", "新策略",   CodeStrategyTemplate),
+            new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate),
+            new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate),
         };
     }
 
@@ -78,19 +79,20 @@ public class EchoRule : CodeRuleBrain
     /// 由 <c>StrategyScriptCompiler</c>（Trading.Scripting）Roslyn 编译成 <c>IStrategy</c> 实例，注册进
     /// <c>StrategyRegistry</c>，供回测/实盘页策略选择器使用。name = 笔记标题（= StrategyRegistry 键）。
     /// 策略无可配置元数据（参数从代码 <c>ParameterDefinitions</c> 来），故是纯代码节点而非 form 节点。
+    /// 复用与 YAML 策略同一套增量指标库（<c>IndicatorFactory</c>）——两形底层同源，对照回测结果一致。
     /// 注意：Roslyn 编译的源码无 ImplicitUsings，所需 using 须显式写出。
     /// </summary>
     private const string CodeStrategyTemplate = @"using System;
 using System.Collections.Generic;
 using Acme.Trading.Domain;
+using Acme.Trading.Domain.Indicators;
 
 public class SmaCrossStrategy : IStrategy
 {
-    private int _fastPeriod = 5;
-    private int _slowPeriod = 20;
-    private readonly List<decimal> _closes = new();
+    private IIndicator _fast = null!;
+    private IIndicator _slow = null!;
 
-    public int WarmUpBars => _slowPeriod;
+    public int WarmUpBars { get; private set; }
 
     // 策略参数定义：UI 据此动态渲染输入框。默认空；策略可选覆盖。
     public IReadOnlyList<StrategyParameterDef> ParameterDefinitions => new[]
@@ -101,27 +103,46 @@ public class SmaCrossStrategy : IStrategy
 
     public void Initialize(StrategyParameters parameters)
     {
-        _fastPeriod = parameters.Get(""FastPeriod"", 5);
-        _slowPeriod = parameters.Get(""SlowPeriod"", 20);
+        int fast = parameters.Get(""FastPeriod"", 5);
+        int slow = parameters.Get(""SlowPeriod"", 20);
+        // 复用与 YAML 策略同一套增量指标库（IndicatorFactory）——两形底层同源，对照回测结果一致。
+        _fast = IndicatorFactory.Create(""sma"", new Dictionary<string, string> { [""period""] = fast.ToString() }, parameters);
+        _slow = IndicatorFactory.Create(""sma"", new Dictionary<string, string> { [""period""] = slow.ToString() }, parameters);
+        WarmUpBars = Math.Max(_fast.RequiredBars, _slow.RequiredBars);
     }
 
     public SignalDirection EvaluateSignal(MarketBar bar)
     {
-        _closes.Add(bar.Close);
-        if (_closes.Count < _slowPeriod) return SignalDirection.Hold;
-
-        decimal fast = Average(_closes.Count - _fastPeriod, _fastPeriod);
-        decimal slow = Average(_closes.Count - _slowPeriod, _slowPeriod);
-        return fast > slow ? SignalDirection.Long : SignalDirection.Flat;
-    }
-
-    private decimal Average(int start, int length)
-    {
-        decimal sum = 0;
-        for (int i = start; i < start + length; i++) sum += _closes[i];
-        return sum / length;
+        _fast.Update(bar);
+        _slow.Update(bar);
+        if (!_fast.IsReady || !_slow.IsReady) return SignalDirection.Hold;
+        // 快线在慢线上方→做多，否则清仓（均线带策略；穿越信号可自行加 prev 比较）
+        return _fast.Value > _slow.Value ? SignalDirection.Long : SignalDirection.Flat;
     }
 }
+";
+
+    /// <summary>
+    /// 声明式 YAML 策略默认模板：纯 YAML 配方（无 front-matter），由 <c>StrategyProgramYaml</c>（Trading.Scripting）
+    /// 解析成 <c>StrategyProgram</c> → <c>YamlStrategy</c>（Trading.Domain），注册进 <c>StrategyRegistry</c>。
+    /// 结构：params（参数定义，UI 渲染输入框）+ indicators（命名指标，值可含 {ParamKey} 模板）+
+    /// rules（top-down 首匹配：signal + when 条件 AST）+ default（无匹配信号）。
+    /// 条件 AST 是结构化嵌套对象（非表达式字符串）——加新算子 = 加一个 ICondition 类，老 YAML 不动。
+    /// 算子：gt/lt/gte/lte/cross_above/cross_below/and/or/not。叶子：指标名（或 name.output）/ 数字。
+    /// 复杂逻辑（仓位 sizing / 自定义指标）走 CodeStrategy（C#）。name = 笔记标题（= StrategyRegistry 键）。
+    /// </summary>
+    private const string YamlStrategyTemplate = @"params:
+  - { key: FastPeriod, label: 快线周期, default: 5 }
+  - { key: SlowPeriod, label: 慢线周期, default: 20 }
+indicators:
+  fast: { type: sma, period: ""{FastPeriod}"" }
+  slow: { type: sma, period: ""{SlowPeriod}"" }
+rules:
+  - signal: Long
+    when: { cross_above: [fast, slow] }
+  - signal: Flat
+    when: { cross_below: [fast, slow] }
+default: Hold
 ";
 
     /// <summary>

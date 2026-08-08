@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Acme.Trading.Runtime.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Trading\Acme.Trading.Domain\Acme.Trading.Domain.csproj" />
     <ProjectReference Include="..\Acme.Trading.Runtime.Domain\Acme.Trading.Runtime.Domain.csproj" />
   </ItemGroup>
@@ -15,6 +19,8 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <!-- YAML 策略配方解析（仅此脚本层引 YamlDotNet；Trading.Domain 保持纯净不引）。 -->
+    <PackageReference Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>
 
 </Project>
