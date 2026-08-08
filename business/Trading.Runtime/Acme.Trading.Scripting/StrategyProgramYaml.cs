@@ -13,7 +13,7 @@ namespace Acme.Trading.Scripting;
 /// <para>条件树（<c>when</c>）反序列化为原始对象图，经 <see cref="ConditionDef.TryParse"/> 解析成 AST
 /// （纯 .NET 类型操作，在 Domain 内，可脱库测试）。</para>
 /// </summary>
-internal static class StrategyProgramYaml
+public static class StrategyProgramYaml
 {
     private static readonly IDeserializer _yaml = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
@@ -22,18 +22,24 @@ internal static class StrategyProgramYaml
 
     /// <summary>尝试把 YAML 策略文本解析成 <see cref="StrategyProgram"/>。空/异常→false + null。</summary>
     public static bool TryDeserialize(string? yaml, out StrategyProgram? program)
+        => TryDeserialize(yaml, out program, out _);
+
+    /// <summary>同上，额外返回解析错误信息（供 AI 工具反馈给 agent 迭代）。</summary>
+    public static bool TryDeserialize(string? yaml, out StrategyProgram? program, out string? error)
     {
         program = null;
-        if (string.IsNullOrWhiteSpace(yaml)) return false;
+        error = null;
+        if (string.IsNullOrWhiteSpace(yaml)) { error = "YAML 为空"; return false; }
         try
         {
             var dto = _yaml.Deserialize<ProgramDto>(yaml);
-            if (dto is null) return false;
+            if (dto is null) { error = "YAML 解析结果为空"; return false; }
             program = Map(dto);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            error = ex.Message;
             return false;
         }
     }

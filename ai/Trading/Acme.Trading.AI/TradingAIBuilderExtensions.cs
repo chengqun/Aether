@@ -14,7 +14,7 @@ namespace Acme.Trading.AI;
 public static class TradingAIBuilderExtensions
 {
     /// <summary>The Trading tool names. MEAI AIFunctionFactory.Create keeps the method name as-is.</summary>
-    public static readonly string[] ToolNames = { "RunBacktest", "RunStrategy", "CreateStrategy" };
+    public static readonly string[] ToolNames = { "RunBacktest", "RunStrategy", "CreateStrategy", "CreateYamlStrategy" };
 
     /// <summary>Registers the backtest + signal-probe + create-strategy tools (no agent). Business layer
     /// (<c>AddTradingApplication</c>) is wired by the host.</summary>
@@ -24,6 +24,7 @@ public static class TradingAIBuilderExtensions
         services.AddTransient<BacktestTool>();
         services.AddTransient<RunStrategyTool>();
         services.AddTransient<CreateStrategyTool>();
+        services.AddTransient<CreateYamlStrategyTool>();
 
         const string cat = "量化回测";
         builder.ConfigureToolRegistry(reg =>
@@ -35,6 +36,9 @@ public static class TradingAIBuilderExtensions
                 sp => CreateTool<RunStrategyTool>(sp, nameof(RunStrategyTool.RunStrategy)));
             reg.Register("CreateStrategy", "创建交易策略（C# 源码笔记）", cat,
                 sp => CreateTool<CreateStrategyTool>(sp, nameof(CreateStrategyTool.CreateStrategy)), ToolApprovalLevel.Confirm);
+            // 声明式 YAML 策略（无 LLM 写代码的风险，schema 有界）：解析验证 + 落 Strategy 笔记。镜像 CreateStrategy。
+            reg.Register("CreateYamlStrategy", "创建声明式 YAML 交易策略（配方笔记）", cat,
+                sp => CreateTool<CreateYamlStrategyTool>(sp, nameof(CreateYamlStrategyTool.CreateYamlStrategy)), ToolApprovalLevel.Confirm);
         });
         return builder;
     }
