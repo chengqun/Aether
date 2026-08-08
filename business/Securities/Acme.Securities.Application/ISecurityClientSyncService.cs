@@ -1,11 +1,12 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.Securities.Application;
 
 public interface ISecurityClientSyncService
 {
-    Task<SecuritySyncResult> SyncFromServerAsync();
+    Task<SecuritySyncResult> SyncFromServerAsync(CancellationToken ct = default);
 }
 
 public class SecuritySyncResult

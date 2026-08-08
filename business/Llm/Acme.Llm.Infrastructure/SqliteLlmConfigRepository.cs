@@ -10,6 +10,10 @@ namespace Acme.Llm.Infrastructure;
 /// holds the local device's LLM provider configs. No per-user column — the
 /// local device is single-user (the logged-in app user). WAL + busy_timeout are
 /// set so the shared SQLite file cooperates with other bounded contexts.
+/// <para><b>ConfigureAwait(false)</b>：此 repo 被 <c>DesktopLlmBootstrap</c> 在 UI 线程上
+/// sync-over-async 消费（<c>AddDesktopCommon</c> → <c>GetOrCreateActive</c> → <c>.GetAwaiter().GetResult()</c>）。
+/// 库代码加 ConfigureAwait(false) 让 continuation 跑线程池、不回 UI SynchronizationContext → 不死锁。
+/// 对正常 async 调用路径无副作用（库代码最佳实践）。</para>
 /// </summary>
 public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
 {
@@ -44,19 +48,19 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
     /// <inheritdoc/>
     public async Task<List<LlmConfig>> GetAllAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
+        await EnsureSchemaAsync(ct).ConfigureAwait(false);
+        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName}";
-        return await ReadAllAsync(cmd, ct);
+        return await ReadAllAsync(cmd, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public async Task UpsertRangeAsync(IEnumerable<LlmConfig> items, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
-        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+        await EnsureSchemaAsync(ct).ConfigureAwait(false);
+        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         foreach (var item in items)
         {
             await using var cmd = conn.CreateCommand();
@@ -74,26 +78,26 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
             cmd.Parameters.AddWithValue("@d", item.IsDefault ? 1 : 0);
             cmd.Parameters.AddWithValue("@s", item.IsSystem ? 1 : 0);
             cmd.Parameters.AddWithValue("@c", item.CachedAt.ToString("O", CultureInfo.InvariantCulture));
-            await cmd.ExecuteNonQueryAsync(ct);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-        await tx.CommitAsync(ct);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
     public async Task ClearAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        await using var conn = await OpenConnectionAsync(ct);
+        await EnsureSchemaAsync(ct).ConfigureAwait(false);
+        await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"DELETE FROM {TableName}";
-        await cmd.ExecuteNonQueryAsync(ct);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task<List<LlmConfig>> ReadAllAsync(SqliteCommand cmd, CancellationToken ct)
     {
         var list = new List<LlmConfig>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             list.Add(new LlmConfig
             {
@@ -123,15 +127,15 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
             }
-            await using var conn = await OpenConnectionAsync(ct);
+            await using var conn = await OpenConnectionAsync(ct).ConfigureAwait(false);
             await using (var wal = conn.CreateCommand())
             {
                 wal.CommandText = "PRAGMA journal_mode=WAL;";
-                await wal.ExecuteNonQueryAsync(ct);
+                await wal.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             }
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = CreateSql;
-            await cmd.ExecuteNonQueryAsync(ct);
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
         catch
         {
@@ -143,10 +147,10 @@ public sealed class SqliteLlmConfigRepository : ILlmConfigRepository
     private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken ct)
     {
         var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync(ct);
+        await conn.OpenAsync(ct).ConfigureAwait(false);
         await using var pragma = conn.CreateCommand();
         pragma.CommandText = "PRAGMA busy_timeout=5000;";
-        await pragma.ExecuteNonQueryAsync(ct);
+        await pragma.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return conn;
     }
 

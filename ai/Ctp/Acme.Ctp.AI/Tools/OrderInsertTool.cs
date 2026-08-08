@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
@@ -16,7 +17,8 @@ public class OrderInsertTool
     public async Task<string> OrderInsertAsync(
         string instrumentId,
         CtpDirection direction, CtpOffsetFlag offsetFlag, CtpOrderPriceType priceType,
-        double limitPrice, int volume, bool requireConfirmation = true)
+        double limitPrice, int volume, bool requireConfirmation = true,
+        CancellationToken cancellationToken = default)
     {
         if (requireConfirmation)
         {
@@ -42,7 +44,7 @@ public class OrderInsertTool
             PriceType = priceType,
             LimitPrice = limitPrice,
             Volume = volume
-        });
+        }, cancellationToken);
 
         return $"已下单: OrderRef={result.OrderRef}";
     }

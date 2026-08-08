@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.ServiceAccount.Domain;
 
 public interface IServiceAccountCacheService
 {
-    Task<List<ServiceAccountPostListItem>> GetCachedPostsAsync();
-    Task<List<ServiceAccountPostListItem>> GetCachedPostsAsync(Guid serviceAccountId);
-    Task<DateTime?> GetLatestCachedPublishedAtAsync();
-    Task UpdateCacheAsync(List<ServiceAccountPostListItem> posts);
-    Task AddPostAsync(ServiceAccountPostListItem post);
-    Task ClearCacheAsync();
+    Task<List<ServiceAccountPostListItem>> GetCachedPostsAsync(CancellationToken ct = default);
+    Task<List<ServiceAccountPostListItem>> GetCachedPostsAsync(Guid serviceAccountId, CancellationToken ct = default);
+    Task<DateTime?> GetLatestCachedPublishedAtAsync(CancellationToken ct = default);
+    Task UpdateCacheAsync(List<ServiceAccountPostListItem> posts, CancellationToken ct = default);
+    Task AddPostAsync(ServiceAccountPostListItem post, CancellationToken ct = default);
+    Task ClearCacheAsync(CancellationToken ct = default);
 }

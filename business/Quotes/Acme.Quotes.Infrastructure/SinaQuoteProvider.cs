@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.Quotes.Infrastructure;
@@ -29,7 +30,7 @@ public class SinaQuoteProvider : IQuoteProvider
         return type == "期货";
     }
 
-    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange)
+    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange, CancellationToken ct = default)
     {
         var url = BuildRequestUrl(code, freq, type, exchange);
 
@@ -39,14 +40,14 @@ public class SinaQuoteProvider : IQuoteProvider
             try
             {
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-                var response = await _httpClient.GetByteArrayAsync(url);
+                var response = await _httpClient.GetByteArrayAsync(url, ct);
                 var content = Encoding.GetEncoding("GBK").GetString(response);
                 return ParseKlineData(content);
             }
             catch (HttpRequestException ex) when (attempt < 3)
             {
                 _logger.LogWarning(ex, "新浪行情请求失败 (尝试 {Attempt}/3)，500ms 后重试: {Url}", attempt, url);
-                await Task.Delay(500);
+                await Task.Delay(500, ct);
             }
             catch (Exception ex)
             {

@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
@@ -15,7 +16,8 @@ public class OrderActionTool
 
     public async Task<string> OrderActionAsync(
         int frontId, int sessionId, string orderRef, string exchangeId,
-        bool requireConfirmation = true)
+        bool requireConfirmation = true,
+        CancellationToken cancellationToken = default)
     {
         if (requireConfirmation)
         {
@@ -23,7 +25,7 @@ public class OrderActionTool
         }
 
         await _service.CancelOrderAsync(new CtpOrderRef(
-            _service.BrokerId ?? "", _service.UserId ?? "", frontId, sessionId, orderRef, exchangeId));
+            _service.BrokerId ?? "", _service.UserId ?? "", frontId, sessionId, orderRef, exchangeId), cancellationToken);
 
         return $"已撤单: orderRef={orderRef}";
     }

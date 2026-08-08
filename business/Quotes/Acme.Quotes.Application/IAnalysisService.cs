@@ -1,4 +1,5 @@
 using Acme.Quotes.Domain;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.Quotes.Application;
@@ -9,5 +10,5 @@ namespace Acme.Quotes.Application;
 public interface IAnalysisService
 {
     Task<TechnicalAnalysisResult> CalculateAsync(
-        string keyword, string freq, string indicators, int rowCount = 60);
+        string keyword, string freq, string indicators, int rowCount = 60, CancellationToken ct = default);
 }

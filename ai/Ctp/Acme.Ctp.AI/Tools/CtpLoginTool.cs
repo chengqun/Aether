@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
@@ -15,7 +16,8 @@ public class CtpLoginTool
 
     public async Task<string> LoginAsync(
         string frontAddress, string mdFrontAddress, string brokerId, string userId,
-        string password, string appId, string authCode)
+        string password, string appId, string authCode,
+        CancellationToken cancellationToken = default)
     {
         if (_service.IsConnected)
         {
@@ -35,7 +37,7 @@ public class CtpLoginTool
 
         try
         {
-            var result = await _service.LoginAsync(request);
+            var result = await _service.LoginAsync(request, cancellationToken);
             return $"登录成功！交易日={result.TradingDay} FrontID={result.FrontId} SessionID={result.SessionId}";
         }
         catch (Exception ex)
@@ -44,9 +46,9 @@ public class CtpLoginTool
         }
     }
 
-    public async Task<string> LogoutAsync()
+    public async Task<string> LogoutAsync(CancellationToken cancellationToken = default)
     {
-        await _service.LogoutAsync();
+        await _service.LogoutAsync(cancellationToken);
         return "已登出";
     }
 

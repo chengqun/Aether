@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
@@ -13,8 +14,8 @@ public class QueryAccountTool
         _service = service;
     }
 
-    public async Task<CtpAccount> QueryAccountAsync()
+    public async Task<CtpAccount> QueryAccountAsync(CancellationToken cancellationToken = default)
     {
-        return await _service.QueryAccountAsync();
+        return await _service.QueryAccountAsync(cancellationToken);
     }
 }

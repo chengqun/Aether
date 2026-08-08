@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.Quotes.Infrastructure;
@@ -25,7 +26,7 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
         _logger.LogInformation("Registered providers count: {ProviderCount}", providers.Count());
     }
 
-    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange)
+    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange, CancellationToken ct = default)
     {
         _logger.LogInformation("GetKlineAsync - Code: {Code}, Freq: {Freq}, Type: {Type}, Exchange: {Exchange}", code, freq, type, exchange);
 
@@ -61,7 +62,7 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
             try
             {
                 _logger.LogDebug("Trying provider: {ProviderName}", providerName);
-                var result = await provider.GetKlineAsync(code, freq, type, exchange);
+                var result = await provider.GetKlineAsync(code, freq, type, exchange, ct);
                 if (result != null && result.Count > 0)
                 {
                     _logger.LogInformation("Provider {ProviderName} returned {QuoteCount} quotes", providerName, result.Count);
@@ -101,7 +102,7 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
                 try
                 {
                     _logger.LogDebug("Retrying skipped provider: {ProviderName}", providerName);
-                    var result = await provider.GetKlineAsync(code, freq, type, exchange);
+                    var result = await provider.GetKlineAsync(code, freq, type, exchange, ct);
                     if (result != null && result.Count > 0)
                     {
                         _logger.LogInformation("Retry provider {ProviderName} returned {QuoteCount} quotes", providerName, result.Count);

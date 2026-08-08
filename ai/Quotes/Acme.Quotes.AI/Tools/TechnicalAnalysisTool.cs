@@ -24,7 +24,7 @@ public class TechnicalAnalysisTool
     {
         try
         {
-            var result = await _analysisService.CalculateAsync(keyword, freq, indicators, rowCount);
+            var result = await _analysisService.CalculateAsync(keyword, freq, indicators, rowCount, cancellationToken);
 
             return new Output
             {

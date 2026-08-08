@@ -11,13 +11,15 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
     public SqliteAutomationTaskRepository(string connectionString)
     {
         _connectionString = connectionString;
-        InitializeAsync().Wait();
+        // 一次性 schema 初始化用同步 SQLite API——避免 ctor 里 async-over-sync（.Wait() 在 UI 线程
+        // 阻塞无 ConfigureAwait(false) 的 async 会死锁）。数据方法（GetAllAsync 等带 CT）保持 async。
+        Initialize();
     }
 
-    private async Task InitializeAsync()
+    private void Initialize()
     {
         using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        conn.Open();
 
         var createTable = @"
             CREATE TABLE IF NOT EXISTS AutomationTasks (
@@ -40,21 +42,21 @@ public class SqliteAutomationTaskRepository : IAutomationTaskRepository
             );";
 
         using var cmd = new SqliteCommand(createTable, conn);
-        await cmd.ExecuteNonQueryAsync();
+        cmd.ExecuteNonQuery();
 
         // 幂等迁移：旧库补列（列已存在则忽略 duplicate column 错误）。
-        await EnsureColumnAsync(conn, "ConversationId", "TEXT NOT NULL DEFAULT ''");
-        await EnsureColumnAsync(conn, "Prompt", "TEXT NOT NULL DEFAULT ''");
-        await EnsureColumnAsync(conn, "WeekdaysJson", "TEXT");
+        EnsureColumn(conn, "ConversationId", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumn(conn, "Prompt", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumn(conn, "WeekdaysJson", "TEXT");
     }
 
-    private static async Task EnsureColumnAsync(SqliteConnection conn, string column, string definition)
+    private static void EnsureColumn(SqliteConnection conn, string column, string definition)
     {
         try
         {
             using var cmd = new SqliteCommand(
                 $"ALTER TABLE AutomationTasks ADD COLUMN {column} {definition};", conn);
-            await cmd.ExecuteNonQueryAsync();
+            cmd.ExecuteNonQuery();
         }
         catch (SqliteException)
         {

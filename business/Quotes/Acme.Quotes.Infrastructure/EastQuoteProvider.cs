@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.Quotes.Infrastructure;
@@ -31,7 +32,7 @@ public class EastQuoteProvider : IQuoteProvider
             );
     }
 
-    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange)
+    public async Task<List<Quote>> GetKlineAsync(string code, string freq, string type, string exchange, CancellationToken ct = default)
     {
         var url = BuildRequestUrl(code, freq, type, exchange);
 
@@ -40,13 +41,13 @@ public class EastQuoteProvider : IQuoteProvider
         {
             try
             {
-                var response = await _httpClient.GetStringAsync(url);
+                var response = await _httpClient.GetStringAsync(url, ct);
                 return ParseKlineData(response);
             }
             catch (HttpRequestException ex) when (attempt < 3)
             {
                 _logger.LogWarning(ex, "东方财富行情请求失败 (尝试 {Attempt}/3)，500ms 后重试: {Url}", attempt, url);
-                await Task.Delay(500);
+                await Task.Delay(500, ct);
             }
             catch (Exception ex)
             {

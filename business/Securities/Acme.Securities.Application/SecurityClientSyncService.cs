@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.AppAuth.Domain;
 using Acme.Securities.Domain;
@@ -28,9 +29,9 @@ public class SecurityClientSyncService : ISecurityClientSyncService
         _logger = logger;
     }
 
-    public async Task<SecuritySyncResult> SyncFromServerAsync()
+    public async Task<SecuritySyncResult> SyncFromServerAsync(CancellationToken ct = default)
     {
-        var lastSyncTime = await _syncMetadataStore.GetLastSyncTimeAsync(SyncTimeKey);
+        var lastSyncTime = await _syncMetadataStore.GetLastSyncTimeAsync(SyncTimeKey, ct);
         _logger.LogInformation("Security sync starting, lastSyncTime={LastSyncTime}", lastSyncTime);
 
         try
@@ -40,7 +41,7 @@ public class SecurityClientSyncService : ISecurityClientSyncService
                 : SyncEndpoint;
 
             _logger.LogDebug("Security sync GET {Endpoint}", endpoint);
-            var result = await _httpClientService.GetAsync<SecuritySyncResponseDto>(endpoint);
+            var result = await _httpClientService.GetAsync<SecuritySyncResponseDto>(endpoint, ct);
 
             if (result == null)
             {
@@ -60,9 +61,10 @@ public class SecurityClientSyncService : ISecurityClientSyncService
             var securities = result.Securities.Select(dto =>
                 new Security(0, dto.Code, dto.Name, dto.Type, dto.Exchange, dto.BaseCode, dto.UpdatedAt)).ToList();
 
+            // ISecurityRepository 是本地 SQLite 深链（取消无意义，已显式延后），故不转发 ct。
             await _securityRepository.AddRangeAsync(securities, 1000);
 
-            await _syncMetadataStore.SetLastSyncTimeAsync(SyncTimeKey, result.ServerTime);
+            await _syncMetadataStore.SetLastSyncTimeAsync(SyncTimeKey, result.ServerTime, ct);
 
             _logger.LogInformation("Security sync completed, synced {Count} securities, saved lastSyncTime={ServerTime}",
                 result.Securities.Count, result.ServerTime);

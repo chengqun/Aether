@@ -3,6 +3,7 @@ using Acme.AppAuth.Domain;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Acme.ChatSocial.Application;
@@ -16,44 +17,44 @@ public class GroupService : IGroupService
         _httpClient = httpClient;
     }
 
-    public async Task<Group> CreateGroupAsync(string name, string description, List<string>? inviteUsernames = null)
+    public async Task<Group> CreateGroupAsync(string name, string description, List<string>? inviteUsernames = null, CancellationToken ct = default)
     {
         var body = new { Name = name, Description = description, InviteUsernames = inviteUsernames ?? new List<string>() };
-        var response = await _httpClient.PostRawAsync("api/app/group/group", body);
-        return await ParseResponseAsync<Group>(response);
+        var response = await _httpClient.PostRawAsync("api/app/group/group", body, ct);
+        return await ParseResponseAsync<Group>(response, ct);
     }
 
-    public async Task<List<Group>> GetMyGroupsAsync()
+    public async Task<List<Group>> GetMyGroupsAsync(CancellationToken ct = default)
     {
-        return await _httpClient.GetAsync<List<Group>>("api/app/group/my-groups") ?? new List<Group>();
+        return await _httpClient.GetAsync<List<Group>>("api/app/group/my-groups", ct) ?? new List<Group>();
     }
 
-    public async Task<List<GroupMember>> GetGroupMembersAsync(string groupId)
+    public async Task<List<GroupMember>> GetGroupMembersAsync(string groupId, CancellationToken ct = default)
     {
-        return await _httpClient.GetAsync<List<GroupMember>>($"api/app/group/group-members/{groupId}") ?? new List<GroupMember>();
+        return await _httpClient.GetAsync<List<GroupMember>>($"api/app/group/group-members/{groupId}", ct) ?? new List<GroupMember>();
     }
 
-    public async Task AddMemberAsync(string groupId, string username)
+    public async Task AddMemberAsync(string groupId, string username, CancellationToken ct = default)
     {
-        await _httpClient.PostRawAsync($"api/app/group/member/{groupId}", new { Username = username });
+        await _httpClient.PostRawAsync($"api/app/group/member/{groupId}", new { Username = username }, ct);
     }
 
-    public async Task RemoveMemberAsync(string groupId, string userId)
+    public async Task RemoveMemberAsync(string groupId, string userId, CancellationToken ct = default)
     {
-        await _httpClient.GetAsync<object>($"api/app/group/member?groupId={groupId}&userId={userId}");
+        await _httpClient.GetAsync<object>($"api/app/group/member?groupId={groupId}&userId={userId}", ct);
     }
 
-    public async Task DisbandGroupAsync(string groupId)
+    public async Task DisbandGroupAsync(string groupId, CancellationToken ct = default)
     {
-        await _httpClient.PostRawAsync($"api/app/group/disband-group/{groupId}", new { });
+        await _httpClient.PostRawAsync($"api/app/group/disband-group/{groupId}", new { }, ct);
     }
 
-    private static async Task<T> ParseResponseAsync<T>(HttpResponseMessage? response) where T : new()
+    private static async Task<T> ParseResponseAsync<T>(HttpResponseMessage? response, CancellationToken ct) where T : new()
     {
         if (response == null || !response.IsSuccessStatusCode)
             return new T();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(ct);
         return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new T();
     }
 }

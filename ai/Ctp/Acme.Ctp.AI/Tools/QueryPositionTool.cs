@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
@@ -14,8 +15,8 @@ public class QueryPositionTool
         _service = service;
     }
 
-    public async Task<IReadOnlyList<CtpPosition>> QueryPositionsAsync(string? instrumentId = null)
+    public async Task<IReadOnlyList<CtpPosition>> QueryPositionsAsync(string? instrumentId = null, CancellationToken cancellationToken = default)
     {
-        return await _service.QueryPositionAsync(instrumentId);
+        return await _service.QueryPositionAsync(instrumentId, cancellationToken);
     }
 }

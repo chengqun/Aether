@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.Quotes.Domain;
 
@@ -29,9 +30,10 @@ public class AnalysisManager : IAnalysisManager, IAnalysisService
         string keyword,
         string freq,
         string indicators,
-        int rowCount = 60)
+        int rowCount = 60,
+        CancellationToken ct = default)
     {
-        var (quotes, security, error) = await GetKlineAsync(keyword, freq);
+        var (quotes, security, error) = await GetKlineAsync(keyword, freq, ct);
         if (quotes == null || security == null)
         {
             return TechnicalAnalysisResult.Failure(error ?? "无法获取行情数据");
@@ -47,7 +49,7 @@ public class AnalysisManager : IAnalysisManager, IAnalysisService
     }
 
     /// <inheritdoc />
-    public async Task<(List<Quote>? Quotes, SecurityRef? Security, string? Error)> GetKlineAsync(string keyword, string freq)
+    public async Task<(List<Quote>? Quotes, SecurityRef? Security, string? Error)> GetKlineAsync(string keyword, string freq, CancellationToken ct = default)
     {
         var securities = await _securityLookup.SearchAsync(keyword);
         if (securities.Count == 0)
@@ -62,7 +64,9 @@ public class AnalysisManager : IAnalysisManager, IAnalysisService
         // 检查是否需要从行情提供器获取数据
         if (NeedFetchFromProvider(existingQuotes))
         {
-            quotes = await _quoteProvider.GetKlineAsync(security.Code, freq, security.Type, security.Exchange);
+            // 仅 HTTP quote 获取转发 ct（可取消的网络请求）；_securityLookup/_quoteRepository 是本地
+            // SQLite 深链（取消无意义，已显式延后），故不转发。
+            quotes = await _quoteProvider.GetKlineAsync(security.Code, freq, security.Type, security.Exchange, ct);
             if (quotes.Count > 0)
             {
                 // 确保所有行情数据的 SecurityId 都设置为当前证券的 Id
