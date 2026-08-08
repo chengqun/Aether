@@ -83,8 +83,6 @@ public class TradingHostAlgorithm : QCAlgorithm
         var verbose = TradingGateway.VerboseLog;
         if (verbose) TradingGateway.Log($"[OnData] Bars count: {bars.Count}, IsWarmingUp: {IsWarmingUp}, Strategies count: {_strategies.Count}");
 
-        if (IsWarmingUp) return;
-
         foreach (var (symbol, strategy) in _strategies)
         {
             if (!bars.TryGetValue(symbol, out var bar))
@@ -98,9 +96,14 @@ public class TradingHostAlgorithm : QCAlgorithm
                 TradingGateway.Log($"[Bar] {symbol.Value} o={bar.Open} h={bar.High} l={bar.Low} c={bar.Close} v={bar.Volume} {bar.Time:yyyy-MM-dd HH:mm} (#{n})");
 
             var marketBar = MarketBarMapper.FromCtpBar(bar);
+            // 每根 bar（含预热期）都调 EvaluateSignal——这是 IStrategy 契约要求，且让策略指标在预热期就绪。
+            // 之前 if(IsWarmingUp) return 在此之前，导致预热期指标没喂、实际要 2×WarmUpBars 才 ready（违背契约）。
+            // 预热期策略本就返回 Hold，但仍照常喂指标；仅预热期不交易。
             var signal = strategy.EvaluateSignal(marketBar);
 
             if (verbose) TradingGateway.Log($"[Signal] {symbol.Value} Signal={signal}, CurrentInvested={_invested[symbol]}, BarCount={n}");
+
+            if (IsWarmingUp) continue;   // 预热期：指标已更新，但不交易
 
             switch (signal)
             {

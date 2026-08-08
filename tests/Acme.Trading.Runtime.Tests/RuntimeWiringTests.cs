@@ -56,4 +56,27 @@ public class RuntimeWiringTests
         Assert.Equal("ag2610", req.Symbol);
         Assert.Equal(BarResolution.Daily, req.Resolution);
     }
+
+    [Fact]
+    public void AddTradingRuntimeLean_registers_historical_bar_source()
+    {
+        // 信号探针用的轻量 bar 源（不起 Lean）。IAnalysisManager 可选——未注册时优雅失败。
+        var services = new ServiceCollection();
+        services.AddTradingRuntimeLean();
+        var sp = services.BuildServiceProvider();
+
+        Assert.NotNull(sp.GetService<IHistoricalBarSource>());
+    }
+
+    [Fact]
+    public void AddTradingApplication_wires_strategy_signal_service()
+    {
+        // 信号探针应用服务：依赖 IHistoricalBarSource（由 AddTradingRuntimeLean 注册）。
+        var services = new ServiceCollection();
+        services.AddTradingRuntimeLean();
+        services.AddTradingApplication();
+        var sp = services.BuildServiceProvider();
+
+        Assert.NotNull(sp.GetService<IStrategySignalApplicationService>());
+    }
 }
