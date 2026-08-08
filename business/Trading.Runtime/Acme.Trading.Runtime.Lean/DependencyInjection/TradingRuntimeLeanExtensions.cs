@@ -29,6 +29,10 @@ public static class TradingRuntimeLeanExtensions
             defaultDataFolder: defaultDataFolder));
 
         services.AddSingleton<ILiveTradingRuntime, LeanLiveTradingService>();
+
+        // 轻量历史 K 线源（不起 Lean 引擎）：桥接 IAnalysisManager，供信号探针等不需要回测管线的场景消费。
+        services.AddSingleton<IHistoricalBarSource>(sp => new HistoricalBarSource(
+            sp.GetService<IAnalysisManager>()));
         return services;
     }
 }

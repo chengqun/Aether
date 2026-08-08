@@ -14,6 +14,8 @@ public static class TradingApplicationExtensions
     {
         services.AddSingleton<IBacktestApplicationService, BacktestApplicationService>();
         services.AddSingleton<ILiveTradingApplicationService, LiveTradingApplicationService>();
+        // 信号探针（不起 Lean）：依赖 IHistoricalBarSource（由 AddTradingRuntimeLean 注册）。
+        services.AddSingleton<IStrategySignalApplicationService, StrategySignalApplicationService>();
         return services;
     }
 }
