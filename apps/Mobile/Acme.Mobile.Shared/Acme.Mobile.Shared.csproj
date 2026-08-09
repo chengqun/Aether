@@ -73,6 +73,7 @@
     <ProjectReference Include="..\..\..\business\ServiceAccount\Acme.ServiceAccount.Infrastructure\Acme.ServiceAccount.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Video\Acme.Video.Application\Acme.Video.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Infrastructure\Acme.Securities.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

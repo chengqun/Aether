@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.ContactDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    Title="联系人详情">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="0" Padding="0">
+
+            <!-- 头像 + 名称 + 类型 -->
+            <VerticalStackLayout Spacing="12" Padding="24,32,24,20"
+                                 HorizontalOptions="Center">
+                <Border WidthRequest="80" HeightRequest="80"
+                        BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 40" StrokeThickness="0"
+                        HorizontalOptions="Center">
+                    <Label Text="{Binding ContactInitial}" TextColor="White" FontSize="32" FontFamily="OpenSansSemibold"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+
+                <Label Text="{Binding ContactName}" FontSize="20" FontFamily="OpenSansSemibold"
+                       HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                <Label Text="{Binding ContactType}" FontSize="13"
+                       HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+            </VerticalStackLayout>
+
+            <!-- 操作按钮 -->
+            <VerticalStackLayout Spacing="12" Padding="24,8,24,16">
+                <Button Text="发消息"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding SendMessageCommand}" />
+
+                <Button Text="查看朋友圈"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding ViewMomentsCommand}" />
+
+                <Button Text="删除关系"
+                        Style="{StaticResource GhostButton}"
+                        TextColor="#D32F2F"
+                        Command="{Binding DeleteRelationshipCommand}" />
+            </VerticalStackLayout>
+
+            <!-- 状态消息 -->
+            <Label Text="{Binding StatusMessage}" FontSize="13" Padding="24,8"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

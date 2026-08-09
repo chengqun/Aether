@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.AiSettingsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    x:DataType="vm:AiSettingsViewModel"
+    Title="AI 设置">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
+
+            <!-- Agent picker section -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="股票模式 AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Picker Title="选择 AI 助手"
+                            ItemsSource="{Binding AvailableAgents}"
+                            ItemDisplayBinding="{Binding Name}"
+                            SelectedIndex="{Binding SelectedAgentIndex}" />
+
+                    <Label Text="{Binding CurrentSelectionText}" FontSize="13"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                    <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Yushu auth card -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="毓数平台" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Label Text="{Binding YushuStatusText}" FontSize="13"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                    <!-- Desktop: browser login -->
+                    <Button Text="浏览器登录" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding YushuLoginCommand}"
+                            IsVisible="{Binding IsDesktopPlatform}"
+                            IsEnabled="{Binding IsYushuLoggingIn, Converter={StaticResource InverseBool}}" />
+
+                    <!-- Mobile: sync from server -->
+                    <Button Text="从服务器同步" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding YushuLoginCommand}"
+                            IsVisible="{Binding IsDesktopPlatform, Converter={StaticResource InverseBool}}"
+                            IsEnabled="{Binding IsYushuLoggingIn, Converter={StaticResource InverseBool}}" />
+
+                    <ActivityIndicator IsRunning="{Binding IsYushuLoggingIn}" IsVisible="{Binding IsYushuLoggingIn}"
+                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+
+                    <!-- Sync to server (desktop only) -->
+                    <Button Text="同步到服务器" Style="{StaticResource GhostButton}"
+                            Command="{Binding YushuSyncToServerCommand}"
+                            IsVisible="{Binding IsDesktopPlatform}"
+                            IsEnabled="{Binding IsYushuSyncing, Converter={StaticResource InverseBool}}" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- CloudDocs auth card -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding HasCloudDocs}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="云文档" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Label Text="{Binding CloudDocsStatusText}" FontSize="13"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                    <!-- Desktop: browser login -->
+                    <Button Text="浏览器登录" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding CloudDocsLoginCommand}"
+                            IsVisible="{Binding IsDesktopPlatform}"
+                            IsEnabled="{Binding IsCloudDocsLoggingIn, Converter={StaticResource InverseBool}}" />
+
+                    <!-- Mobile: sync from server -->
+                    <Button Text="从服务器同步" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding CloudDocsLoginCommand}"
+                            IsVisible="{Binding IsDesktopPlatform, Converter={StaticResource InverseBool}}"
+                            IsEnabled="{Binding IsCloudDocsLoggingIn, Converter={StaticResource InverseBool}}" />
+
+                    <ActivityIndicator IsRunning="{Binding IsCloudDocsLoggingIn}" IsVisible="{Binding IsCloudDocsLoggingIn}"
+                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+
+                    <!-- Sync to server (desktop only) -->
+                    <Button Text="同步到服务器" Style="{StaticResource GhostButton}"
+                            Command="{Binding CloudDocsSyncToServerCommand}"
+                            IsVisible="{Binding IsDesktopPlatform}"
+                            IsEnabled="{Binding IsCloudDocsSyncing, Converter={StaticResource InverseBool}}" />
+                </VerticalStackLayout>
+            </Frame>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

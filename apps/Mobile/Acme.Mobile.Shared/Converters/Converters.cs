@@ -37,3 +37,15 @@ public class BoolToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is bool b && b;
 }
+
+/// <summary>取字符串首字符大写作为头像占位（空串返回 "?"）。</summary>
+public class InitialConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var s = value as string;
+        return string.IsNullOrEmpty(s) ? "?" : char.ToUpper(s[0]).ToString();
+    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.LlmConfigPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    xmlns:llm="clr-namespace:Acme.Llm.Domain;assembly=Acme.Llm.Domain"
+    x:DataType="vm:LlmConfigViewModel"
+    Title="LLM 配置">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
+
+            <!-- Status + Sync -->
+            <HorizontalStackLayout Spacing="8">
+                <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                                   Color="{StaticResource Primary}" VerticalOptions="Center" />
+                <Label Text="{Binding Status}" FontSize="13" VerticalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+            </HorizontalStackLayout>
+
+            <Button Text="从服务端同步" Style="{StaticResource GhostButton}"
+                    Command="{Binding SyncCommand}"
+                    HorizontalOptions="Start" />
+
+            <!-- LLM list -->
+            <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Llms}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="llm:LlmConfigDto">
+                        <Frame Style="{StaticResource CardFrame}" Padding="14">
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnLlmTapped" CommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+                            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+
+                                <!-- Name + badges -->
+                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                    <Label Grid.Column="0" Text="{Binding Name}" FontSize="16" FontFamily="OpenSansSemibold"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                    <Border Grid.Column="1" BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
+                                            IsVisible="{Binding IsDefault}">
+                                        <Label Text="默认" TextColor="White" FontSize="10" VerticalOptions="Center" />
+                                    </Border>
+                                    <Border Grid.Column="2" BackgroundColor="#9E9E9E" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
+                                            IsVisible="{Binding IsSystem}">
+                                        <Label Text="系统" TextColor="White" FontSize="10" VerticalOptions="Center" />
+                                    </Border>
+                                </Grid>
+
+                                <!-- Model -->
+                                <Label Grid.Row="1" Text="{Binding ModelName}" FontSize="13"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                                <!-- Endpoint -->
+                                <Label Grid.Row="2" Text="{Binding Endpoint}" FontSize="12"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <!-- Edit / Add form -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Label x:Name="EditTitleLabel" Text="添加新 LLM" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="名称" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry x:Name="NameEntry" Placeholder="如 DeepSeek" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="模型名" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry x:Name="ModelEntry" Placeholder="如 deepseek-v4-flash" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="API Key" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry x:Name="ApiKeyEntry" Placeholder="sk-..." IsPassword="True" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Endpoint" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry x:Name="EndpointEntry" Placeholder="https://api.deepseek.com" Keyboard="Url" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Temperature" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry x:Name="TemperatureEntry" Placeholder="0.5" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,4,0,0">
+                        <HorizontalStackLayout Grid.Column="0" Spacing="8" VerticalOptions="Center">
+                            <Switch x:Name="IsDefaultSwitch" />
+                            <Label Text="设为默认" FontSize="13" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        </HorizontalStackLayout>
+                        <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}"
+                                Clicked="OnSaveClicked" />
+                    </Grid>
+
+                    <Button x:Name="CancelButton" Text="取消编辑" Style="{StaticResource GhostButton}"
+                            Clicked="OnCancelEditClicked" IsVisible="False" />
+                </VerticalStackLayout>
+            </Frame>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

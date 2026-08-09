@@ -30,11 +30,15 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     }
 
     /// <inheritdoc/>
+    /// <remarks>只更新 <see cref="AppServerOptions.BaseUrl"/>，不再设 <c>HttpClient.BaseAddress</c>——
+    /// 单例 HttpClient 在首次请求后不允许改 <c>BaseAddress</c>（手机端启动期静默
+    /// <see cref="RefreshAsync"/> 会先用此 client，登录页再调 ConfigureBaseUrl 即抛
+    /// InvalidOperationException）。<see cref="PostFormAsync"/> 直接用 _options.BaseUrl
+    /// 拼绝对 URI，故运行时改地址即时生效，且不依赖可变 BaseAddress。</remarks>
     public void ConfigureBaseUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return;
         _options.BaseUrl = url;
-        _http.BaseAddress = new Uri(url);
     }
 
     /// <inheritdoc/>
@@ -54,7 +58,7 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
         if (!string.IsNullOrEmpty(_options.Scope)) form["scope"] = _options.Scope;
         if (!string.IsNullOrEmpty(_options.Tenant)) form["__tenant"] = _options.Tenant;
 
-        if (_http.BaseAddress is null)
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
             return new LoginResult { Error = "No APP_BASEURL configured (set the APP_BASEURL env var)." };
 
         HttpResponseMessage response;
@@ -92,7 +96,7 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
         };
         if (!string.IsNullOrEmpty(_options.Tenant)) form["__tenant"] = _options.Tenant;
 
-        if (_http.BaseAddress is null)
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
         {
             await _store.ClearAsync(ct);
             return false;
@@ -155,12 +159,25 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     /// Throws on transport failure — callers handle (login surfaces the message, refresh returns false).</summary>
     private async Task<HttpResponseMessage> PostFormAsync(string endpoint, IDictionary<string, string> form, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        // 用 _options.BaseUrl 拼绝对 URI（不依赖 HttpClient.BaseAddress——单例 client 首次请求后不可变）。
+        var requestUri = BuildRequestUri(endpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
         {
             Content = new FormUrlEncodedContent(form),
         };
         if (!string.IsNullOrWhiteSpace(_options.Tenant))
             request.Headers.Add("__tenant", _options.Tenant);
         return await _http.SendAsync(request, ct);
+    }
+
+    /// <summary>把相对端点拼成绝对 URI（基于 _options.BaseUrl）；已是绝对 URI 则原样返回。</summary>
+    private string BuildRequestUri(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint)) return endpoint;
+        if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return endpoint;
+        var baseUri = (_options.BaseUrl ?? string.Empty).TrimEnd('/');
+        return string.IsNullOrEmpty(baseUri) ? endpoint : $"{baseUri}/{endpoint.TrimStart('/')}";
     }
 }

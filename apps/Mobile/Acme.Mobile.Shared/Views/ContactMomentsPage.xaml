@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.ContactMomentsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    x:DataType="vm:ContactMomentsViewModel"
+    Title="{Binding Title}">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*"
+          BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+        <Label Grid.Row="0" Text="{Binding StatusMessage}"
+               FontSize="13" Margin="16,8"
+               IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}"
+               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+        <RefreshView Grid.Row="1"
+                     Command="{Binding RefreshMomentsCommand}"
+                     IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Moments}" SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MomentItem">
+                        <Border Style="{StaticResource CardFrame}" Margin="16,6">
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" Padding="12" RowSpacing="8">
+
+                                <!-- Row 0: avatar + username + time -->
+                                <Grid Grid.Row="0" ColumnDefinitions="36,*,Auto" ColumnSpacing="10">
+                                    <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                            BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 18" StrokeThickness="0"
+                                            HorizontalOptions="Start" VerticalOptions="Center">
+                                        <Label Text="{Binding Avatar}" TextColor="White" FontSize="16" FontFamily="OpenSansSemibold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                    <Label Grid.Column="1" Text="{Binding Username}" FontSize="15" FontAttributes="Bold"
+                                           VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                    <Label Grid.Column="2" Text="{Binding Time}" FontSize="12" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                </Grid>
+
+                                <!-- Row 1: content -->
+                                <Label Grid.Row="1" Text="{Binding Content}" FontSize="14" LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                                <!-- Row 2: optional image -->
+                                <Image Grid.Row="2" Source="{Binding ImageUrl}" IsVisible="{Binding HasImage}"
+                                       Aspect="AspectFill" HeightRequest="200" />
+
+                                <!-- Row 3: likes + comments -->
+                                <HorizontalStackLayout Grid.Row="3" Spacing="20">
+                                    <Label Text="{Binding Likes, StringFormat='&#x2665; {0}'}" FontSize="12"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                    <Label Text="{Binding Comments, StringFormat='&#x1F4AC; {0}'}" FontSize="12"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+    </Grid>
+
+</ContentPage>

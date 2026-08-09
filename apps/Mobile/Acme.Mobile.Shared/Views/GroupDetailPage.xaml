@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.GroupDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:domain="clr-namespace:Acme.ChatSocial.Domain;assembly=Acme.ChatSocial.Domain"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    Title="{Binding GroupName}">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="0">
+
+        <!-- 群信息卡 -->
+        <VerticalStackLayout Grid.Row="0" Spacing="6" Padding="24,20,24,16"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}">
+            <Label Text="{Binding GroupName}" FontSize="20" FontFamily="OpenSansSemibold"
+                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+            <Label Text="{Binding GroupDescription}" FontSize="13"
+                   IsVisible="{Binding GroupDescription, Converter={StaticResource StringToBool}}"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+            <Label Text="{Binding MemberCount, StringFormat='群成员 {0} 人'}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+        </VerticalStackLayout>
+
+        <!-- 添加成员（群主可见） -->
+        <VerticalStackLayout Grid.Row="1" Spacing="8" Padding="24,12,24,12"
+                             IsVisible="{Binding IsOwner}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Entry Grid.Column="0" Text="{Binding NewMemberUsername}" Placeholder="输入用户名添加成员" />
+                <Button Grid.Column="1" Text="添加"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding AddMemberCommand}"
+                        IsEnabled="{Binding IsAddingMember, Converter={StaticResource InverseBool}}" />
+            </Grid>
+
+            <!-- 从通讯录添加 / 收起（两个按钮按选择模式切换） -->
+            <Button Text="从通讯录添加"
+                    Style="{StaticResource GhostButton}"
+                    IsVisible="{Binding IsSelectFriendMode, Converter={StaticResource InverseBool}}"
+                    Command="{Binding ToggleSelectFriendModeCommand}" />
+            <Button Text="收起"
+                    Style="{StaticResource GhostButton}"
+                    IsVisible="{Binding IsSelectFriendMode}"
+                    Command="{Binding ToggleSelectFriendModeCommand}" />
+        </VerticalStackLayout>
+
+        <!-- 成员列表（非选择模式） -->
+        <CollectionView Grid.Row="2"
+                        IsVisible="{Binding IsSelectFriendMode, Converter={StaticResource InverseBool}}"
+                        ItemsSource="{Binding Members}"
+                        SelectionMode="None">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="domain:GroupMember">
+                    <Grid ColumnDefinitions="44,*,Auto" Padding="16,10" ColumnSpacing="12">
+                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
+                                BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Label Text="{Binding Username}" TextColor="White" FontSize="13" FontFamily="OpenSansSemibold"
+                                   LineBreakMode="TailTruncation"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="{Binding Username}" FontSize="16" />
+                            <Label Text="{Binding Role}" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
+
+                        <Button Grid.Column="2" Text="移除"
+                                Style="{StaticResource GhostButton}"
+                                TextColor="#D32F2F"
+                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.IsOwner}"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveMemberCommand}"
+                                CommandParameter="{Binding UserId}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- 从通讯录选择好友（选择模式可见） -->
+        <CollectionView Grid.Row="2"
+                        IsVisible="{Binding IsSelectFriendMode}"
+                        ItemsSource="{Binding AvailableFriends}"
+                        SelectionMode="None">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:FriendSelectItem">
+                    <Grid ColumnDefinitions="44,*,Auto" Padding="16,10" ColumnSpacing="12">
+                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
+                                BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Label Text="{Binding Initial}" TextColor="White" FontSize="18" FontFamily="OpenSansSemibold"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+
+                        <Label Grid.Column="1" Text="{Binding Username}" FontSize="16" VerticalOptions="Center" />
+
+                        <CheckBox Grid.Column="2" IsChecked="{Binding IsSelected}" VerticalOptions="Center" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- 底部操作栏 -->
+        <VerticalStackLayout Grid.Row="3" Spacing="8" Padding="24,8,24,16">
+            <Label Text="{Binding StatusMessage}" FontSize="13"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <Button Text="添加选中好友"
+                    Style="{StaticResource PrimaryButton}"
+                    IsVisible="{Binding IsSelectFriendMode}"
+                    Command="{Binding AddSelectedFriendsCommand}"
+                    IsEnabled="{Binding IsAddingMember, Converter={StaticResource InverseBool}}" />
+
+            <Button Text="发消息"
+                    Style="{StaticResource PrimaryButton}"
+                    Command="{Binding SendMessageCommand}" />
+
+            <Button Text="退出群聊"
+                    Style="{StaticResource GhostButton}"
+                    Command="{Binding LeaveGroupCommand}"
+                    IsVisible="{Binding IsOwner, Converter={StaticResource InverseBool}}" />
+
+            <Button Text="解散群聊"
+                    Style="{StaticResource GhostButton}"
+                    TextColor="#D32F2F"
+                    Command="{Binding DisbandGroupCommand}"
+                    IsVisible="{Binding IsOwner}" />
+        </VerticalStackLayout>
+
+    </Grid>
+
+</ContentPage>

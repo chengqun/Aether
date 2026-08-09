@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.CreateGroupPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    Title="创建群聊">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="16" Padding="24,24,24,24">
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="群名称" FontSize="14" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                <Entry Text="{Binding GroupName}" Placeholder="请输入群名称" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="群描述" FontSize="14" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                <Entry Text="{Binding GroupDescription}" Placeholder="可选" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="邀请用户名（逗号分隔）" FontSize="14" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                <Entry Text="{Binding InviteUsernamesText}" Placeholder="如 zhangsan, lisi, wangwu" />
+            </VerticalStackLayout>
+
+            <Button Text="创建群聊"
+                    Style="{StaticResource PrimaryButton}"
+                    Command="{Binding CreateGroupCommand}"
+                    IsEnabled="{Binding IsCreating, Converter={StaticResource InverseBool}}" />
+
+            <Label Text="{Binding StatusMessage}" FontSize="13"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

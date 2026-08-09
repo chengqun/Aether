@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.DeviceManagementPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:dm="clr-namespace:Acme.DeviceManagement.Domain;assembly=Acme.DeviceManagement.Domain"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    x:DataType="vm:DeviceManagementViewModel"
+    Title="设备管理">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*"
+          BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+        <!-- Row 0: add device form -->
+        <Frame Style="{StaticResource CardFrame}" Margin="16,8" Grid.Row="0">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="添加设备" FontSize="14" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                <Entry Text="{Binding NewDeviceName}" Placeholder="设备名称" ReturnType="Next" />
+                <Entry Text="{Binding NewDeviceType}" Placeholder="设备类型（如 Console）" ReturnType="Go"
+                       ReturnCommand="{Binding AddDeviceCommand}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <Button Grid.Column="0" Text="添加" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding AddDeviceCommand}"
+                            IsEnabled="{Binding IsAdding, Converter={StaticResource InverseBool}}" />
+                    <ActivityIndicator Grid.Column="1" IsRunning="{Binding IsAdding}" IsVisible="{Binding IsAdding}"
+                                       Color="{StaticResource Primary}" VerticalOptions="Center" />
+                </Grid>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- Row 1: status -->
+        <Label Grid.Row="1" Text="{Binding StatusMessage}" FontSize="13" Margin="16,4"
+               IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}"
+               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+        <!-- Row 2: device list -->
+        <RefreshView Grid.Row="2"
+                     Command="{Binding LoadDevicesCommand}"
+                     IsRefreshing="{Binding IsLoading}">
+            <CollectionView ItemsSource="{Binding Devices}" SelectionMode="None">
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="12">
+                        <Label Text="📱" FontSize="48" HorizontalOptions="Center" />
+                        <Label Text="暂无绑定设备" FontSize="16" HorizontalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="dm:MyDevice">
+                        <Border Style="{StaticResource CardFrame}" Margin="16,6">
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" Padding="12" RowSpacing="6">
+
+                                <!-- Row 0: name + relationship status -->
+                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <Label Grid.Column="0" Text="{Binding DeviceName}" FontSize="16" FontAttributes="Bold"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                    <Label Grid.Column="1" Text="● 已关联" FontSize="12" TextColor="#16A34A"
+                                           IsVisible="{Binding HasRelationship}" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="○ 未关联" FontSize="12" TextColor="#D97706"
+                                           IsVisible="{Binding HasRelationship, Converter={StaticResource InverseBool}}" VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- Row 1: type -->
+                                <Label Grid.Row="1" Text="{Binding DeviceType, StringFormat='类型: {0}'}" FontSize="13"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                                <!-- Row 2: device id -->
+                                <Label Grid.Row="2" Text="{Binding DeviceId, StringFormat='ID: {0}'}" FontSize="12"
+                                       FontFamily="Courier New" LineBreakMode="TailTruncation"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                                <!-- Row 3: actions -->
+                                <HorizontalStackLayout Grid.Row="3" Spacing="12" Margin="0,4,0,0">
+                                    <Button Text="复制授权码" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.CopyAuthCodeCommand}"
+                                            CommandParameter="{Binding AuthorizationCode}" />
+                                    <Button Text="恢复联系人" Style="{StaticResource GhostButton}" FontSize="12" Padding="12,4"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RestoreContactCommand}"
+                                            CommandParameter="{Binding DeviceId}" />
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+    </Grid>
+
+</ContentPage>

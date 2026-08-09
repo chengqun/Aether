@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.DiscoveryPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:DiscoveryViewModel"
+    Title="{Binding Title}">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="16" Padding="0,16,0,32">
+
+            <!-- 朋友圈 -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0">
+                <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" RowDefinitions="Auto">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding GoToMomentsCommand}" />
+                    </Grid.GestureRecognizers>
+
+                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
+                            BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 8" StrokeThickness="0"
+                            HorizontalOptions="Start" VerticalOptions="Center">
+                        <Label Text="📷" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
+
+                    <Label Grid.Column="1" Text="朋友圈"
+                           FontSize="16" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </Grid>
+            </Frame>
+
+            <!-- 视频号 -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0">
+                <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding GoToVideoChannelsCommand}" />
+                    </Grid.GestureRecognizers>
+
+                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
+                            BackgroundColor="{StaticResource Accent}" StrokeShape="RoundRectangle 8" StrokeThickness="0"
+                            HorizontalOptions="Start" VerticalOptions="Center">
+                        <Label Text="📺" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
+
+                    <Label Grid.Column="1" Text="视频号"
+                           FontSize="16" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </Grid>
+            </Frame>
+
+            <!-- 市场 -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0">
+                <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding GoToMarketCommand}" />
+                    </Grid.GestureRecognizers>
+
+                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
+                            BackgroundColor="{StaticResource PrimaryDark}" StrokeShape="RoundRectangle 8" StrokeThickness="0"
+                            HorizontalOptions="Start" VerticalOptions="Center">
+                        <Label Text="📈" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
+
+                    <Label Grid.Column="1" Text="市场"
+                           FontSize="16" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+
+                    <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </Grid>
+            </Frame>
+
+            <!-- 状态消息（调试/加载状态，次级文本） -->
+            <Label Text="{Binding StatusMessage}" FontSize="12" Margin="16,4"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

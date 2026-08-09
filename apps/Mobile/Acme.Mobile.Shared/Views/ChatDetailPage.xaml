@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.ChatDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:md="clr-namespace:Indiko.Maui.Controls.Markdown;assembly=Indiko.Maui.Controls.Markdown"
+    xmlns:domain="clr-namespace:Acme.ChatSocial.Domain;assembly=Acme.ChatSocial.Domain"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters;assembly=Acme.Mobile.Shared"
+    xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
+    Title="聊天">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+
+        <!-- 我的消息：右侧绿色气泡 -->
+        <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
+                <Border BackgroundColor="{StaticResource BubbleMine}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0"
+                        Padding="12,8" MaximumWidthRequest="280">
+                    <Label Text="{Binding Content}" TextColor="#1A1A1A" FontSize="15" LineBreakMode="WordWrap" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 对方消息：左侧白色气泡 + Markdown -->
+        <DataTemplate x:Key="OtherTemplate" x:DataType="domain:ChatMessage">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0"
+                        Padding="12,8" MaximumWidthRequest="300">
+                    <md:MarkdownView MarkdownText="{Binding Content}" Theme="{StaticResource AppMarkdownTheme}" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 人类聊天选择器：按 SenderId == 当前用户 区分我的/对方（ChatMessage 域类型无 Role） -->
+        <views:HumanChatMessageTemplateSelector x:Key="ChatMessageSelector"
+            MineTemplate="{StaticResource MineTemplate}"
+            OtherTemplate="{StaticResource OtherTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*,Auto">
+        <CollectionView x:Name="MessagesList"
+                        Grid.Row="0"
+                        ItemsSource="{Binding Messages}"
+                        ItemTemplate="{StaticResource ChatMessageSelector}"
+                        VerticalOptions="Fill">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" />
+            </CollectionView.ItemsLayout>
+        </CollectionView>
+
+        <!-- 输入栏 -->
+        <Border Grid.Row="1" Padding="8"
+                BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <!-- 语音/文字模式切换（Stage 2 voice 为 stub，OnAppearing 强制文字模式） -->
+                <Button Grid.Column="0" Text="🎤"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding ToggleInputModeCommand}"
+                        Padding="10,8">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsVoiceMode}" Value="True">
+                            <Setter Property="Text" Value="⌨" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+
+                <Entry Grid.Column="1" x:Name="MessageEntry"
+                       Text="{Binding MessageInput}"
+                       Placeholder="输入消息…"
+                       ReturnType="Send"
+                       ReturnCommand="{Binding SendMessageCommand}" />
+
+                <Button Grid.Column="2" Text="发送" Style="{StaticResource PrimaryButton}"
+                        Command="{Binding SendMessageCommand}"
+                        IsEnabled="{Binding HasMessageInput}"
+                        Padding="16,8" />
+            </Grid>
+        </Border>
+    </Grid>
+
+</ContentPage>

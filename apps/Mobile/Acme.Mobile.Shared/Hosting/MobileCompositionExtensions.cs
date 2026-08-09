@@ -4,6 +4,7 @@ using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;
 using Acme.ChatSocial.Application.DependencyInjection;
+using Acme.ChatSocial.Domain;
 using Acme.ChatSocial.Infrastructure.DependencyInjection;
 using Acme.Llm.Application.DependencyInjection;
 using Acme.Llm.Domain;
@@ -12,9 +13,20 @@ using Acme.Llm.Infrastructure.DependencyInjection;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Mobile.Shared.Services;
+using Acme.Mobile.Shared.Services.Caching;
+using Acme.Moments.Application.DependencyInjection;
+using Acme.Moments.Infrastructure.DependencyInjection;
 using Acme.Notes.AI;
 using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
+using Acme.Persistence;
+using Acme.Securities.Application.DependencyInjection;
+using Acme.Securities.Infrastructure.DependencyInjection;
+using Acme.DeviceManagement.Application.DependencyInjection;
+using Acme.DeviceManagement.Infrastructure.DependencyInjection;
+using Acme.Video.Application.DependencyInjection;
+using Acme.ServiceAccount.Application.DependencyInjection;
+using Acme.ServiceAccount.Infrastructure.DependencyInjection;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Tools;
@@ -83,6 +95,19 @@ public static class MobileCompositionExtensions
         services.AddChatSocialInfrastructure();
         services.AddChatSocialApplication();
 
+        // —— 社交上下文（Stage 2：朋友圈 / 服务号 / 证券搜索）——
+        services.AddMomentsApplication();
+        services.AddMomentsInfrastructure();
+        services.AddServiceAccountApplication();
+        services.AddServiceAccountInfrastructure(Path.Combine(tenantDir, "serviceaccount.db"));
+        services.AddSecurityApplication();
+        services.AddSecurityInfrastructure(Path.Combine(tenantDir, "securities.db"));
+
+        // —— 次要上下文（Stage 2b：视频号 / 设备管理）——
+        services.AddVideoApplication();
+        services.AddDeviceManagementApplication();
+        services.AddDeviceManagementInfrastructure(Path.Combine(tenantDir, "devicemgmt.db"));
+
         // —— 公共 AI 工具 ——
         aether.AddNotesTools();
         aether.AddMemoryTools();
@@ -113,9 +138,13 @@ public static class MobileCompositionExtensions
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
 
-        // 模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端（UI 无关，与桌面同逻辑）
-        services.AddSingleton<IModelSource, MobileLlmConfigModelSource>();
-        services.AddSingleton<IChatClientFactory, MobileChatClientFactory>();
+        // 模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端（UI 无关，与桌面同逻辑）。
+        // 先注册具体类型再别名接口——保证 MobileAgentConfigInitializer（依赖具体类型调 ClearCache/Invalidate）
+        // 与 IChatClientFactory/IModelSource 消费方拿到同一个单例实例。
+        services.AddSingleton<MobileChatClientFactory>();
+        services.AddSingleton<IChatClientFactory>(sp => sp.GetRequiredService<MobileChatClientFactory>());
+        services.AddSingleton<MobileLlmConfigModelSource>();
+        services.AddSingleton<IModelSource>(sp => sp.GetRequiredService<MobileLlmConfigModelSource>());
         // 会话 + 长期记忆持久化（SQLite，覆盖平台默认 InMemory）
         services.AddSingleton<IConversationStore>(sp => SqliteConversationStore.ForFile(Path.Combine(tenantDir, "conversations.db")));
         services.AddSingleton<IMemoryStore>(sp => SqliteMemoryStore.ForFile(Path.Combine(tenantDir, "memory.db")));
@@ -132,14 +161,29 @@ public static class MobileCompositionExtensions
         services.AddSingleton<ISpeechRecognitionService, StubSpeechRecognitionService>();        // Stage 2 接平台语音
         services.AddSingleton<IAgentConfigInitializer, MobileAgentConfigInitializer>();
 
-        // Stage 2 服务桩（实时/缓存/sync；登录后编排）——先 no-op，Stage 2 替换为真实实现
-        services.AddSingleton<ISignalRChatService, NoOpSignalRChatService>();
-        services.AddSingleton<IMessageCacheService, NoOpMessageCacheService>();
-        services.AddSingleton<IConversationSyncService, NoOpConversationSyncService>();
-        services.AddSingleton<IContactSyncService, NoOpContactSyncService>();
-        services.AddSingleton<IMomentCacheService, NoOpMomentCacheService>();
-        services.AddSingleton<ICoreInitializer, NoOpCoreInitializer>();
-        services.AddSingleton<IPostLoginInitializer, NoOpPostLoginInitializer>();
+        // —— 手机端社交基础设施（Stage 2：实时推送 + 离线缓存 + sync 编排 + mobile-local 服务）——
+        var socialCacheDb = SqliteStoreBase.BuildConnectionString(Path.Combine(tenantDir, "social-cache.db"));
+
+        // SignalR 实时推送（JWT 经 IAppTokenStore，自签名 CA 经 MobileCertificateHandler）
+        services.AddSingleton<ISignalRChatService>(sp =>
+            new SignalRChatService(sp.GetRequiredService<IAppTokenStore>(), MobileCertificateHandler.CreateHandler));
+
+        // 4 个 SQLite 离线缓存 store（共享 social-cache.db；会话/通讯录缓存注入服务端 sync 源）
+        services.AddSingleton<IMessageCacheService>(_ => SqliteMessageCacheStore.ForFile(Path.Combine(tenantDir, "social-cache.db")));
+        services.AddSingleton<IConversationSyncService>(sp =>
+            new SqliteConversationCacheStore(socialCacheDb, sp.GetService<IChatService>()));
+        services.AddSingleton<IContactSyncService>(sp =>
+            new SqliteContactCacheStore(socialCacheDb, sp.GetService<IRelationshipService>()));
+        services.AddSingleton<IMomentCacheService>(_ => SqliteMomentCacheStore.ForFile(Path.Combine(tenantDir, "social-cache.db")));
+
+        // mobile-local 事件总线 + 未读消息内存缓存 + 全局消息处理器（订阅 SignalR 事件 → 发 EventBus）
+        services.AddSingleton<IEventBusService, EventBusService>();
+        services.AddSingleton<IUnreadMessageCacheService, UnreadMessageCacheService>();
+        services.AddSingleton<IGlobalMessageHandler, GlobalMessageHandler>();
+
+        // 启动期核心初始化（强制建 social-cache.db schema）+ 登录后初始化（应用缓存 LLM 配置）
+        services.AddSingleton<ICoreInitializer, MobileCoreInitializer>();
+        services.AddSingleton<IPostLoginInitializer, MobilePostLoginInitializer>();
 
         return aether;
     }

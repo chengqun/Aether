@@ -42,6 +42,14 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
     // 缓存 userId，避免每次打开聊天页都重新解析 JWT
     private static Guid? _cachedUserId;
 
+    /// <summary>
+    /// 当前用户 Id 的静态缓存（解析 JWT 后设置）。供 <c>HumanChatMessageTemplateSelector</c>
+    /// 在 XAML 渲染时区分"我的"/"对方"消息气泡——<see cref="ChatMessage"/> 是域类型无 Role 字段，
+    /// 由选择器比较 <see cref="ChatMessage.SenderId"/> 与此缓存判定。<see cref="OnActivatedAsync"/>
+    /// 中先解析 userId（设此缓存）再加载消息，故渲染时已就绪。
+    /// </summary>
+    public static Guid CachedUserId => _cachedUserId ?? Guid.Empty;
+
     // 从通讯录导航时，会话尚未创建，需在 ChatDetail 内部创建
     [ObservableProperty]
     private string _pendingContactId = string.Empty;
