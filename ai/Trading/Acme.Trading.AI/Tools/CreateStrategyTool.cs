@@ -3,14 +3,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
+using Acme.Trading.Domain;
 using Acme.Trading.Scripting;
 
 namespace Acme.Trading.AI.Tools;
 
 /// <summary>
 /// 创建交易策略工具：把 AI 写的 C# 策略源码存为 CodeStrategy 笔记（NodeType=CodeStrategy, syntax=csharp），
-/// 立即编译验证返回错误（前馈传感器）。创建后 NotesChanged → StrategyScriptingService 自动编译注册到
-/// StrategyRegistry，回测页策略选择器自动出现（不需重启）。
+/// 立即编译验证返回错误（前馈传感器）。落库后立即注册到 StrategyRegistry（复用 pre-flight 已编译 type，
+/// 免 NotesChanged 500ms 防抖延时），CreateStrategy 返回后调用方即可回测该策略。随后 NotesChanged 防抖触发的
+/// StrategyScriptingService.LoadAsync 重扫 adopt（幂等），回测页策略选择器自动出现（不需重启）。
 /// </summary>
 public class CreateStrategyTool
 {
@@ -41,7 +43,7 @@ public class CreateStrategyTool
         name = name.Trim();
 
         // 先编译验证：不过不落库——避免坏策略笔记留在树里、agent 重试又建一个产生重复。
-        if (!StrategyScriptCompiler.TryCompile(source, out _, out var compileErr))
+        if (!StrategyScriptCompiler.TryCompile(source, out var instance, out var compileErr))
             return new CreateStrategyOutput { Success = false, Compiled = false, CompileError = compileErr };
 
         try
@@ -62,6 +64,7 @@ public class CreateStrategyTool
                     Syntax = "csharp",
                     NodeType = NoteNodeType.CodeStrategy,
                 }, cancellationToken);
+                RegisterCompiled(name, instance);
                 return new CreateStrategyOutput { Success = true, Id = existing.Id, Name = name, Compiled = true };
             }
 
@@ -74,12 +77,27 @@ public class CreateStrategyTool
                 ParentId = parentId,
             }, cancellationToken);
 
-            // ScriptingService 随后经 NotesChanged 自动编译注册到 StrategyRegistry，回测页选择器自动出现。
+            // 立即注册到 StrategyRegistry（复用上面 pre-flight 已编译的 type），免 NotesChanged 500ms 防抖延时——
+            // CreateStrategy 返回后调用方（CodeRule 大脑 / LLM agent）即可回测该策略。
+            // 500ms 后 NotesChanged 防抖触发的 StrategyScriptingService.LoadAsync 会重扫全部策略笔记并 adopt
+            // 进 _registeredNames（同名幂等覆盖），此后删除/改名由 LoadAsync 正常清理。
+            RegisterCompiled(name, instance);
             return new CreateStrategyOutput { Success = true, Id = dto.Id, Name = dto.Title, Compiled = true };
         }
         catch (Exception ex)
         {
             return new CreateStrategyOutput { Error = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// 把 pre-flight 已编译的 <paramref name="instance"/> 的 type 立即注册进 <see cref="StrategyRegistry"/>，
+    /// 使该策略在 CreateStrategy 返回前即可被回测解析（跨过 StrategyScriptingService 的 500ms 防抖延时）。
+    /// 与 <c>StrategyScriptingService.LoadAsync</c> 的注册逻辑等价（同 type、同无参构造 factory）。
+    /// </summary>
+    private static void RegisterCompiled(string name, IStrategy instance)
+    {
+        var type = instance.GetType();
+        StrategyRegistry.Register(name, () => (IStrategy)System.Activator.CreateInstance(type)!);
     }
 }
