@@ -125,8 +125,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _ => _dispatcher.Post(async () => await RefreshConversationsAsync());
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
-        // turn 增删影响 plan-accept 条显隐（ShowPlanAccept 依赖 Messages.Count）。
-        Messages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowPlanAccept));
 
         SubscribeToConnectionStateChanges();
     }
@@ -444,6 +442,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         foreach (var t in list)
             ActiveTodos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
         HasActivePlan = ActiveTodos.Count > 0;
+        _todosTouchedThisTurn = true; // 本轮确有 todos 更新（SendInputAsync 末尾据此置 PlanAwaitingAccept）
     }
 
     /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
@@ -548,10 +547,31 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     public ObservableCollection<TodoItemVM> ActiveTodos { get; } = new();
     [ObservableProperty] private bool _hasActivePlan;
     [ObservableProperty] private bool _isPlanExpanded = true;
+    /// <summary>plan 模式轮、且本轮产出计划后置 true（待用户接受）；execute 轮/接受后即 false。
+    /// 脱钩于 SelectedMode——避免 RefreshModeAsync 把模式回翻成 plan 时接受条误弹。</summary>
+    [ObservableProperty] private bool _planAwaitingAccept;
+    /// <summary>本轮是否调过 todos_*（区分「本轮新计划」vs「上轮残留计划」）。每轮开始重置。</summary>
+    private bool _todosTouchedThisTurn;
     public string PlanSummary => HasActivePlan ? $"📋 计划 ({ActiveTodos.Count(t => t.IsComplete)}/{ActiveTodos.Count})" : "";
-    partial void OnHasActivePlanChanged(bool value) => OnPropertyChanged(nameof(PlanSummary));
+    partial void OnHasActivePlanChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PlanSummary));
+        OnPropertyChanged(nameof(ShowPlanDismiss));
+    }
     partial void OnIsPlanExpandedChanged(bool value) => OnPropertyChanged(nameof(PlanSummary));
+    partial void OnPlanAwaitingAcceptChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowPlanAccept));
+        OnPropertyChanged(nameof(ShowPlanDismiss));
+    }
     [RelayCommand] private void TogglePlanExpanded() => IsPlanExpanded = !IsPlanExpanded;
+    /// <summary>确认执行完毕：收起浮动计划面板（HasActivePlan→false）。execute 完成后用户手动点。</summary>
+    [RelayCommand]
+    private void DismissPlan()
+    {
+        ActiveTodos.Clear();
+        HasActivePlan = false;
+    }
 
     /// <summary>运行 Trace 查看 VM（桌面端注册；null = 无 trace 查看，如 sample console）。</summary>
     public TraceViewModel? Trace { get; }
@@ -568,11 +588,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     [ObservableProperty]
     private bool _isAgentRunning;
 
-    /// <summary>plan 模式下、末轮产生了计划卡、且非运行中时显示"接受计划→执行"条（避免每轮盲弹）。</summary>
-    public bool ShowPlanAccept => HasModeSupport && SelectedMode == "plan" && !IsAgentRunning && LastTurnHasPlan;
+    /// <summary>plan 模式轮产出计划后（PlanAwaitingAccept）、非运行中时显示"接受计划→执行"条。
+    /// 门控用「本轮是否待接受」而非「当前模式」，避免 execute 跑完 RefreshModeAsync 把模式回翻 plan 时误弹。</summary>
+    public bool ShowPlanAccept => HasModeSupport && PlanAwaitingAccept && !IsAgentRunning;
 
-    /// <summary>末轮是否有计划卡（plan-accept 的触发信号）。</summary>
-    private bool LastTurnHasPlan => Messages.Count > 0 && Messages[^1].Children.Any(c => c.IsPlanCard);
+    /// <summary>有计划、非运行中、且不在待接受态 → execute 已跑完，可点「确认执行完毕」收起面板。</summary>
+    public bool ShowPlanDismiss => HasActivePlan && !IsAgentRunning && !PlanAwaitingAccept;
 
     /// <summary>输入框模式选择器选项（默认 plan/execute）。</summary>
     public ObservableCollection<string> ModeOptions { get; } = new() { "plan", "execute" };
@@ -609,7 +630,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false;
+            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
         _pendingHistoryTurns = null;
         foreach (var c in Conversations) c.IsCurrent = false;
     }
@@ -641,7 +662,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             _isInitializing = false;
 
             Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false;
+            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
             _pendingHistoryTurns = null;
             if (conv is not null)
             {
@@ -678,7 +699,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             {
                 _currentConversationId = Guid.Empty;
                 Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false;
+            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
             }
         }
         catch (Exception ex)
@@ -1181,7 +1202,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
         // 统一行为变更：切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
-        ActiveTodos.Clear(); HasActivePlan = false;
+        ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
         _pendingHistoryTurns = null;
 
         PersistSelectedTargetAsync().SafeFireAndForget();
@@ -1209,7 +1230,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             if (SelectedMode != target) SelectedMode = target;
         }
     }
-    partial void OnIsAgentRunningChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
+    partial void OnIsAgentRunningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowPlanAccept));
+        OnPropertyChanged(nameof(ShowPlanDismiss));
+    }
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
     /// <summary>刷新聊天头统一下拉池（已召唤的 agent/规则/工作流），保留当前选中。
@@ -1304,6 +1329,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
     private async Task AcceptPlanAsync()
     {
         if (!HasModeSupport || IsAgentRunning || _currentConversationId == Guid.Empty) return;
+        PlanAwaitingAccept = false; // 已接受→不再显示接受条（execute 轮后也不会误弹）
         await SetModeOnSessionAsync("execute");
         _syncingMode = true; SelectedMode = "execute"; _syncingMode = false;
         InputText = "（已接受计划，进入执行模式）";
@@ -1372,11 +1398,16 @@ public abstract partial class MainViewModelBase : ObservableObject, IChatViewMod
             var fullText = new System.Text.StringBuilder();
             // 规则无 mode（desiredMode 传 null）；agent/工作流传 HasModeSupport?SelectedMode:null。
             var desiredMode = kind == ChatTargetKind.Rule ? null : (HasModeSupport ? SelectedMode : null);
+            _todosTouchedThisTurn = false; // 本轮 todos 信号重置（HandleTodoList 里置 true）
             var runItems = await RunSegmentedStreamAsync(turn, targetName,
                 (handlers, approvalResponse, ct) => kind == ChatTargetKind.Workflow
                     ? _workflowRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct)
                     : _agentRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct),
                 fullText, _runCts?.Token ?? default);
+
+            // plan 模式轮、且本轮确实产出计划 → 待接受（驱动接受条）；execute 轮/无计划 → false。
+            // 放在 RefreshModeAsync 之前：避免模式回翻干扰（门控已脱钩 SelectedMode，但语义上先定信号再读模式）。
+            PlanAwaitingAccept = desiredMode == "plan" && _todosTouchedThisTurn && HasActivePlan;
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
             await PersistTurnAsync(content, runItems, fullText.ToString());
