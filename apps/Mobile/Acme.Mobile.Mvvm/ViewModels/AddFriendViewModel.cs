@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.ChatSocial.Domain;
 using Acme.Securities.Application;
+using Acme.ServiceAccount.Application;
+using Acme.ServiceAccount.Domain;
 using Acme.AppUpdate.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
@@ -19,6 +21,7 @@ public partial class AddFriendViewModel : NavigableViewModelBase
     private readonly IRelationshipService? _relationshipService;
     private readonly IEventBusService? _eventBusService;
     private readonly ISecurityService? _securityService;
+    private readonly IServiceAccountService? _serviceAccountService;
     private readonly ILogger<AddFriendViewModel>? _logger;
 
     [ObservableProperty]
@@ -40,12 +43,14 @@ public partial class AddFriendViewModel : NavigableViewModelBase
     public AddFriendViewModel(IRelationshipService? relationshipService = null,
                               IEventBusService? eventBusService = null,
                               ISecurityService? securityService = null,
+                              IServiceAccountService? serviceAccountService = null,
                               ILogger<AddFriendViewModel>? logger = null,
                               IUIThreadDispatcher? uiThreadDispatcher = null)
     {
         _relationshipService = relationshipService;
         _eventBusService = eventBusService;
         _securityService = securityService;
+        _serviceAccountService = serviceAccountService;
         _logger = logger;
         _uiThreadDispatcher = uiThreadDispatcher;
     }
@@ -65,8 +70,58 @@ public partial class AddFriendViewModel : NavigableViewModelBase
 
         try
         {
-            // SearchAllTargetsAsync 在 Aether IRelationshipService 中不存在，搜索暂未实现
-            _logger?.LogWarning("搜索暂未实现: SearchText={SearchText}", SearchText);
+            // Aether 契约无统一 SearchAllTargetsAsync——按可搜类型分别查：
+            // 股票（ISecurityService.SearchSecuritiesAsync）+ 服务号（IServiceAccountService.SearchAsync）。
+            // 用户/群搜索 Aether 契约未提供，暂不支持。
+            var keyword = SearchText.Trim();
+
+            // 股票
+            if (_securityService != null)
+            {
+                var securities = await Task.Run(() => _securityService.SearchSecuritiesAsync(keyword));
+                if (securities != null)
+                {
+                    foreach (var s in securities)
+                    {
+                        SearchResults.Add(new SearchResultItem
+                        {
+                            Id = s.Code,
+                            Name = s.Name,
+                            Initial = GetInitial(s.Name),
+                            Type = "股票",
+                            RelationshipType = RelationshipType.Stock,
+                            SecurityInfo = new TargetSecurityInfo
+                            {
+                                Code = s.Code,
+                                Name = s.Name,
+                                SecurityType = s.Type,
+                                Exchange = s.Exchange,
+                                BaseCode = s.BaseCode
+                            }
+                        });
+                    }
+                }
+            }
+
+            // 服务号
+            if (_serviceAccountService != null)
+            {
+                var accounts = await Task.Run(() => _serviceAccountService.SearchAsync(keyword));
+                if (accounts != null)
+                {
+                    foreach (var a in accounts)
+                    {
+                        SearchResults.Add(new SearchResultItem
+                        {
+                            Id = a.Id.ToString(),
+                            Name = a.Name,
+                            Initial = GetInitial(a.Name),
+                            Type = "服务号",
+                            RelationshipType = RelationshipType.ServiceAccount
+                        });
+                    }
+                }
+            }
 
             if (SearchResults.Count == 0)
             {
@@ -142,6 +197,9 @@ public partial class AddFriendViewModel : NavigableViewModelBase
         NavigationRequested?.Invoke(this, NavigationRequestedEvent.Back());
         return Task.CompletedTask;
     }
+
+    private static string GetInitial(string name)
+        => string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
 
     private async Task SyncLocalSecurityAsync(SearchResultItem item)
     {
