@@ -48,7 +48,9 @@ appsettings.secrets.json
 appsettings.backup.json
 .env
 
-## ABP server (server/) — 构建产物/依赖/证书/日志
+## ABP server (server/) — 构建产物/依赖/日志
 server/**/node_modules/
 server/**/Logs/
-server/**/*.pfx
+## openiddict.pfx is a self-signed DEV signing cert (ABP convention, committed in original
+## AlphaAgent repo); the real secret is the cert PASSWORD, which lives in gitignored
+## appsettings.Development.json. Production uses a CI-injected cert via GitHub Secrets.

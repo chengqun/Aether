@@ -1,0 +1,62 @@
+name: Deploy to IIS
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-iis.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Publish
+      run: dotnet publish server/Aether.Server.HttpApi.Host -c Release --self-contained true --runtime win-x64 -o ./publish
+
+    - name: Replace secrets in appsettings.json
+      shell: powershell
+      run: |
+        $file = './publish/appsettings.json'
+        $json = [System.IO.File]::ReadAllText($file)
+
+        $connStr = '${{ secrets.CONNECTION_STRING_DEFAULT }}'.Trim()
+        $passphrase = '${{ secrets.STRING_ENCRYPTION_PASSPHRASE }}'.Trim()
+        $clientSecret = '${{ secrets.OPENID_DICT_CLIENT_SECRET }}'.Trim()
+        $publishToken = '${{ secrets.VERSION_PUBLISH_TOKEN }}'.Trim()
+        $certPassword = '${{ secrets.OPENID_DICT_CERT_PASSWORD }}'.Trim()
+
+        $json = $json -replace '\$\{CONNECTION_STRING\}', $connStr
+        $json = $json -replace '\$\{PASSPHRASE\}', $passphrase
+        $json = $json -replace '\$\{CLIENT_SECRET\}', $clientSecret
+        $json = $json -replace '\$\{VERSION_PUBLISH_TOKEN\}', $publishToken
+        $json = $json -replace '\$\{CERT_PASSWORD\}', $certPassword
+        $json = $json -replace "`r", ""
+        [System.IO.File]::WriteAllText($file, $json)
+
+    - name: Deploy via msdeploy
+      shell: powershell
+      run: |
+        $siteName = '${{ secrets.IIS_SITE_NAME }}'
+        $serverHost = '${{ secrets.IIS_SERVER_HOST }}'
+        $username = '${{ secrets.IIS_USERNAME }}'
+        $password = '${{ secrets.IIS_PASSWORD }}'
+
+        $publishPath = (Get-Location).Path + "\publish"
+        $computerName = "https://$serverHost" + ":8172/msdeploy.axd?site=$siteName"
+
+        Write-Host "Deploying to: $computerName"
+        Write-Host "Site: $siteName"
+
+        $msdeployExe = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+        $destArg = "contentPath=$siteName,computerName=$computerName,userName=$username,password=$password,authType=Basic"
+        & $msdeployExe -verb:sync -source:contentPath=$publishPath "-dest:$destArg" -enableRule:AppOffline -allowUntrusted -verbose -skip:skipAction=Delete,objectName=contentPath,absolutePath=apk

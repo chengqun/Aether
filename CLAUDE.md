@@ -19,6 +19,15 @@ dotnet test tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj --filte
 # Run the desktop app (Avalonia; Stockapp tenant with CTP/Quotes/Trading; Qifu tenant with Yushu/CloudDocs)
 dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 dotnet run --project apps/Qifu/Acme.Qifu.Desktop
+
+# Run the ABP server backend (server/; migrated from AlphaAgent.Web)
+#   HttpApi.Host = API + OpenIddict OAuth2 + SignalR (:44319) — Aether desktop/mobile clients talk to this
+#   Blazor       = admin panel (:44337)
+# Directly runnable locally: appsettings.Development.json (gitignored, real dev values) overrides the
+# ${...} placeholders in appsettings.json, and openiddict.pfx (committed dev cert) is embedded. CI deploy
+# to IIS via .github/workflows/deploy-iis.yml injects production secrets into appsettings.json at publish.
+dotnet run --project server/Aether.Server.HttpApi.Host
+dotnet run --project server/Aether.Server.Blazor
 ```
 
 The first build after init is slow (Lean source compiles). Lean's transitive deps emit NU1902/3/4 vulnerability advisories (System.Drawing.Common / WCF / WinHttpHandler) — advisory only, expected.
@@ -32,6 +41,7 @@ A multi-context DDD platform built on **Microsoft Agent Framework** (`Microsoft.
 - `ai/` — **business AI adapters** bridging Aether and each context. Peers of `business/`, kept separate so business stays AI-free. 7 tool adapters (`Ctp/Quotes/Qifu/Notes/Trading/ApkParser/SystemTools`) + 1 agent bridge (`Agents`). Not every context has an AI adapter — e.g. Automation has none (its business port `IAgentExecutor` is implemented host-side; see [business-port pattern](#business-domain-port--host-implementation) below). The **agent bridge** `ai/Agents/Acme.Agents.AI` is NOT a tool adapter — it registers `ICustomAgentCatalog`/`ICustomAgentRunner` (CRUD + run-time for custom agents), not tools. It is the only adapter that doesn't follow the "register tools only" convention, by design.
 - `externals/` — third-party engines: `Ctp.Net.Core` (native CTP wrapper), `Lean` (QuantConnect Lean, git submodule), and `FlaUI-MCP` (Windows desktop-control MCP server, git submodule; consumed by the [AppAutomation](#appautomation-context-桌面控制--固定过程) MCP path).
 - `apps/` — consumers/hosts: `Acme.Desktop.Mvvm` (UI-agnostic shell VM library), `Desktop/Acme.Desktop.Shared` (Avalonia views + composition root), `Qifu/Acme.Qifu.Desktop` + `Stockapp/Acme.Stockapp.Desktop` (tenant host apps). (Qifu 不在 slnx 注册——Stockapp 同步 GitHub 时 Qifu 隐藏。)
+- `server/` — the **ABP backend server** (`Aether.Server.*`, migrated from the standalone `AlphaAgent.Web`). Not part of the DDD/AI layering — a self-contained ABP 10.4.1 tiered app that the desktop/mobile clients authenticate against (OAuth2 `alphaagent_chat` + `api/app/*` REST + SignalR `/hubs/chat`). 10 ABP-layered sub-projects + 2 runnable hosts. See [Server context (ABP backend)](#server-context-abp-backend) below.
 - `tests/` — all test projects live here, never interleaved with source.
 
 ### DDD layering rules (enforced; verify before changing csprojs)
@@ -72,6 +82,34 @@ Reference: Automation is the working template — `business/Automation/` (Domain
 ### Foundation context
 
 `business/AppAuth/` (`Acme.AppAuth.*`, DI classes named `Platform*Extensions`) is the **foundation**: app-server (ABP) OAuth2 auth + authenticated HTTP (`IAppServerHttpClient` with `TenantHeaderDelegatingHandler` + `BearerTokenDelegatingHandler`) + `ICurrentUser`. Other contexts consume its ports — never the reverse.
+
+### Server context (ABP backend)
+
+`server/` (`Aether.Server.*`, migrated from the standalone `AlphaAgent.Web`) is the **ABP backend** the desktop/mobile clients authenticate against. It is a self-contained ABP 10.4.1 tiered app — **not** part of the DDD/AI layering (`src/`+`business/`+`ai/`). All `ProjectReference`s are internal (no dependency on Aether platform/business); `business/AppAuth` is its client-side peer (talks to it over HTTP, never references it). .NET 10 + SQL Server (`Volo.Abp.EntityFrameworkCore.SqlServer`) + OpenIddict OAuth2 + SignalR + Serilog + Autofac. Redis only in DbMigrator.
+
+**10 ABP-layered sub-projects** (standard ABP tiered template, all renamed `AlphaAgent.Abp.*`→`Aether.Server.*`): `Domain.Shared` / `Domain` / `Application.Contracts` / `Application` / `EntityFrameworkCore` / `HttpApi` / `HttpApi.Client` / `HttpApi.Host` / `Blazor` / `DbMigrator`. `common.props` at `server/common.props` (sub-projects reference `..\common.props`). **ABP module classes stay `Abp*Module`** (e.g. `AbpHttpApiHostModule`/`AbpBlazorModule`/`AbpDomainModule`) — they never contained "AlphaAgent", so the namespace rename left `[DependsOn(typeof(AbpXxxModule))]` zero-change. This is why the migration was low-risk despite ~315 source files.
+
+**2 runnable hosts** (+1 console tool):
+- **`HttpApi.Host`** (`:44319`) — the API server Aether clients talk to. Serves OpenIddict OAuth2 (`/.well-known`, `/connect/token`) + `api/app/*` REST + Swagger + SignalR `/hubs/chat`. Host module `AbpHttpApiHostModule` maps `ChatHub` at `/hubs/chat` and creates conventional controllers from `AbpApplicationModule.Assembly` → ABP default route `api/app/<service-slug>` (no custom route template). Also hosts `DailySyncBackgroundService` (runs daily 20:01 local — syncs futures data + stock-picking strategies that publish Moments/service-account articles).
+- **`Blazor`** (`:44337`) — admin panel (LeptonXLite 5.4.1 theme; 5.4.1 vs ABP 10.4.1 mismatch is known but runs — version upgrade is an optional follow-up). 7 custom admin pages under `Components/Pages/`: `AgentConfigManagement` / `AgentUsage` / `LlmConfigManagement` / `Moments` / `SecurityManagement` / `ServiceAccountManagement` / `VersionConfigManagement` (+ stock ABP admin UI).
+- **`DbMigrator`** — console EF Core migration/seeding tool. 28 migrations in `EntityFrameworkCore/Migrations/` (table prefix `App`, migration history preserved → DB-compatible).
+
+**Custom domain** (`Aether.Server.Domain`, 16 `App*` entities): `AppConversation`/`AppConversationParticipant`/`AppChatMessage` (chat + social messaging), `AppMoment`/`AppGroup`/`AppRelationship` (社交/moments/contacts), `AppDevice` (device registry), `AppSecurity` (securities catalog, ~5400 rows incl. ~250 futures — synced by `SecurityAppService`/`DailySyncBackgroundService`, consumed by Quotes client-side sync), `AppNoteNode` (cloud-synced notes), `AppLlmConfig` (cloud LLM configs), `AppServiceAccount`/`AppServiceAccountPost` (服务号), `AppVersionConfig` (app version distribution), `AppAgentUsageRecord` (agent usage telemetry), `AppYushuToken`/`AppCloudDocsToken` (Qifu tenant SSO tokens). **13 app services** (`Aether.Server.Application`) expose these as `api/app/<slug>`: `Chat`/`Moment`/`Group`/`Device`/`Security`/`NoteNode`/`LlmConfig`/`ServiceAccount`/`VersionConfig`/`AgentUsage`/`AgentMarketplace`/`YushuToken`/`CloudDocsToken`.
+
+**ChatHub** (`HttpApi/Hubs/ChatHub.cs`, raw SignalR `Hub` not `AbpHub`, route `/hubs/chat`): dual-auth (JWT `sub` claim for users, or `authorizationCode` query param for devices). Methods: `SendMessage(conversationId, content, type)` (broadcasts to `conv_{id}` group via `IChatNotifier`, fires unread-count + new-conversation notifications) / `MarkAsRead` / `JoinConversation` (on connect, auto-joins all the user's conversation groups). This is the real-time backbone for the MAUI mobile social feed + desktop chat.
+
+**OpenIddict** (`Domain/OpenIddict/OpenIddictDataSeedContributor.cs`, host-only seed): scopes `Abp` + `alphaagent_chat`; 3 clients — `Abp_BlazorServerTiered` (Confidential, Hybrid), `Abp_Swagger` (Public, AuthorizationCode), **`Aether_Chat`** (Confidential, **Password + RefreshToken** grants — this is the Aether desktop/mobile client's grant). The `Aether_Chat` client's `ClientId` VALUE is `"alphaagent_chat"` (preserved on migration for client-contract compat) — note the config *key* `Aether_Chat` ≠ the *value* `alphaagent_chat`. ClientSecret read from `OpenIddict:Applications` config; code fallback `"chat_secret"`. **Client-side scope must be `"Abp alphaagent_chat"`** (both scopes) or the token lacks the `Abp` audience → `401` on protected endpoints — see [ABP auth scope gotcha](#non-obvious-gotchas).
+
+**Naming preserved on migration (compat)**: OpenIddict clientId **value** `alphaagent_chat` + DB name `AlphaAgent` (connection string `Database=AlphaAgent`) + `Abp*Module` class names + table prefix `App` + migration history. Changing namespace/ProjectReference paths was the only rename.
+
+**Config / secrets split (directly runnable locally, GitHub-safe)** — mirrors the original AlphaAgent.Web design:
+- `appsettings.json` (git-tracked) = **template** with `${...}` placeholders (`${CONNECTION_STRING}`/`${PASSPHRASE}`/`${CERT_PASSWORD}`/`${CLIENT_SECRET}`/`${VERSION_PUBLISH_TOKEN}`). **No secrets.** .NET does NOT expand `${...}` — these are literal until replaced.
+- `appsettings.Development.json` (gitignored — `appsettings.Development.json` is a global ignore) = **real local dev values** (SQL Server `117.72.186.128,1433` + sa password + passphrase + cert password + `chat_secret` + `dev-token`). Loaded only in `Development` env → **overrides** the placeholders → server runs directly. Real dev creds never enter git.
+- `openiddict.pfx` (git-tracked, in `HttpApi.Host` + `Blazor`) = self-signed **DEV** signing cert (ABP template convention; committed in the original AlphaAgent repo too). csproj embeds it as `EmbeddedResource` via `<ItemGroup Condition="Exists('./openiddict.pfx')">` — absent → build still passes (Condition skips) but OpenIddict can't sign tokens at runtime → startup fails. The real secret is the cert **password** (`b677a31c-...`, in gitignored dev settings), not the cert itself.
+
+**Running locally (directly runnable — dev values + pfx are in place)**: `dotnet run --project server/Aether.Server.HttpApi.Host` (ASPNETCORE_ENVIRONMENT=Development → dev settings override) → Swagger `https://localhost:44319/swagger`. First run on a fresh DB: `dotnet run --project server/Aether.Server.DbMigrator` (creates schema + seeds OpenIddict clients + admin user). The `AlphaAgent` DB at `117.72.186.128` already exists + is seeded, so DbMigrator is only needed for a new DB.
+
+**CI deploy to IIS** (`.github/workflows/deploy-iis.yml`, migrated from AlphaAgent): on push to `main` touching `server/**` — `dotnet publish server/Aether.Server.HttpApi.Host -c Release --self-contained true --runtime win-x64` → PowerShell replaces the `${...}` placeholders in `./publish/appsettings.json` with GitHub Secrets (`CONNECTION_STRING_DEFAULT`/`STRING_ENCRYPTION_PASSPHRASE`/`OPENID_DICT_CLIENT_SECRET`/`VERSION_PUBLISH_TOKEN`/`OPENID_DICT_CERT_PASSWORD`) → msdeploy to IIS (Web Deploy `:8172/msdeploy.axd`, secrets `IIS_SITE_NAME`/`IIS_SERVER_HOST`/`IIS_USERNAME`/`IIS_PASSWORD`). Fresh CI checkout has no `appsettings.Development.json` (gitignored) so only the placeholder `appsettings.json` ships, then gets secret-injected — production secrets never touch git. Only HttpApi.Host is CI-deployed (Blazor admin panel is not — matches original). Required GitHub Secrets: the 5 config-replacement + 4 IIS msdeploy ones listed above.
 
 ### Trading + Lean (the engine-bridge pattern)
 
