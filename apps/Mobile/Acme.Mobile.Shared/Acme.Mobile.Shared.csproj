@@ -20,6 +20,7 @@
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.9" />
     <PackageReference Include="CommunityToolkit.Maui" Version="14.2.0" />
+    <PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
     <PackageReference Include="Indiko.Maui.Controls.Markdown" Version="1.5.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
   </ItemGroup>
@@ -73,6 +74,7 @@
     <ProjectReference Include="..\..\..\business\ServiceAccount\Acme.ServiceAccount.Application\Acme.ServiceAccount.Application.csproj" />
     <ProjectReference Include="..\..\..\business\ServiceAccount\Acme.ServiceAccount.Infrastructure\Acme.ServiceAccount.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Video\Acme.Video.Application\Acme.Video.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Video\Acme.Video.Infrastructure\Acme.Video.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Infrastructure\Acme.Securities.Infrastructure.csproj" />
   </ItemGroup>

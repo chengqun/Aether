@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.ServiceAccount.Domain;
-using Acme.ServiceAccount.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -219,7 +218,8 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         DateTime? since = null;
         if (_cacheService != null)
         {
-            since = await Task.Run(() => _cacheService.GetLatestCachedPublishedAtAsync());
+            // 按账号隔离 since 游标：之前用全局 MAX，多服务号切换时较旧账号的新文章被过滤掉，永远同步不到。
+            since = await Task.Run(() => _cacheService.GetLatestCachedPublishedAtAsync(ServiceAccountId));
         }
 
         var newItems = new List<ServiceAccountPostListItem>();

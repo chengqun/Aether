@@ -25,6 +25,44 @@ public sealed class SqliteVideoFeedRepository : SqliteStoreBase, IVideoFeedRepos
 
     public static SqliteVideoFeedRepository ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
+    /// <summary>
+    /// 幂等种子：首次建表后插入 2 条示例视频（m3u8 直链），保证视频号页有内容可播。
+    /// INSERT OR IGNORE + 固定 Guid 主键 → 重复执行不报错、不重复。
+    /// 对齐 AlphaAgent VideoFeedData 的两条种子（聚宝盆 / 修仙不如干饭）。
+    /// </summary>
+    protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        await SeedAsync(connection, ct).ConfigureAwait(false);
+    }
+
+    private static async Task SeedAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        // 固定 Guid（幂等主键），与 VideoFeedData.All 对齐。
+        var seeds = new[]
+        {
+            (Id: Guid.Parse("d1c10000-0000-0000-0000-000000000001"), Title: "聚宝盆",
+             Url: "https://vodcnd01.myqqdd.com/20260511/noPZHlna/2619kb/hls/index.m3u8"),
+            (Id: Guid.Parse("d1c10000-0000-0000-0000-000000000002"), Title: "修仙不如干饭",
+             Url: "https://play.modujx11.com/20260502/5EQ8k4ac/index.m3u8"),
+        };
+
+        foreach (var s in seeds)
+        {
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                $"INSERT OR IGNORE INTO {TableName} (id, title, video_url, cover_url, author, duration, created_at) " +
+                "VALUES (@id, @t, @v, @c, @a, @d, @ca)";
+            cmd.Parameters.AddWithValue("@id", s.Id.ToString());
+            cmd.Parameters.AddWithValue("@t", s.Title);
+            cmd.Parameters.AddWithValue("@v", s.Url);
+            cmd.Parameters.AddWithValue("@c", string.Empty);
+            cmd.Parameters.AddWithValue("@a", "视频号推荐");
+            cmd.Parameters.AddWithValue("@d", 0);
+            cmd.Parameters.AddWithValue("@ca", "2026-01-01T00:00:00Z");
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+    }
+
     public async Task<List<VideoItem>> GetPagedAsync(int limit, int offset, CancellationToken ct = default)
     {
         await EnsureSchemaAsync(CreateSql, ct);

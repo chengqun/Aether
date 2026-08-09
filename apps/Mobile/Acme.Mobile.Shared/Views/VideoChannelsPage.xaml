@@ -6,77 +6,65 @@
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     xmlns:mdl="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    xmlns:media="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui.MediaElement"
     x:DataType="vm:VideoChannelsViewModel"
-    Title="视频号">
+    Title="视频号"
+    BackgroundColor="Black">
 
     <ContentPage.Resources>
         <conv:StringToBoolConverter x:Key="StringToBool" />
         <conv:InverseBoolConverter x:Key="InverseBool" />
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,*"
-          BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+    <Grid>
+        <!-- Loading overlay -->
+        <ActivityIndicator IsRunning="{Binding IsLoading}"
+                           IsVisible="{Binding IsLoading}"
+                           Color="White"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
 
-        <!-- Status / loading row -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Padding="16,8">
-            <ActivityIndicator Grid.Column="0" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                               Color="{StaticResource Primary}" WidthRequest="20" HeightRequest="20" />
-            <Label Grid.Column="1" Text="{Binding StatusMessage}" FontSize="13" VerticalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                   IsVisible="{Binding StatusMessage, Converter={StaticResource StringToBool}}" />
-            <Button Grid.Column="2" Text="重试" Style="{StaticResource GhostButton}"
-                    Command="{Binding RetryLoadCommand}" IsVisible="{Binding HasError}"
-                    Padding="12,4" FontSize="13" />
+        <!-- Error / empty overlay -->
+        <VerticalStackLayout IsVisible="{Binding HasError}"
+                             HorizontalOptions="Center"
+                             VerticalOptions="Center"
+                             Spacing="12">
+            <Label Text="{Binding ErrorMessage}" TextColor="White" FontSize="16"
+                   HorizontalTextAlignment="Center" />
+            <Button Text="重新加载" Command="{Binding RetryLoadCommand}"
+                    BackgroundColor="#2A2A2A" TextColor="White" />
+        </VerticalStackLayout>
+
+        <!-- TikTok-style single MediaElement + swipe gesture -->
+        <Grid IsVisible="{Binding IsLoading, Converter={StaticResource InverseBool}}">
+            <media:MediaElement x:Name="Player"
+                                ShouldAutoPlay="True"
+                                ShouldLoopPlayback="True"
+                                ShouldShowPlaybackControls="False"
+                                Aspect="AspectFill"
+                                HorizontalOptions="Fill"
+                                VerticalOptions="Fill" />
+
+            <!-- Overlay: author + title at bottom -->
+            <VerticalStackLayout Padding="16,0,16,28"
+                                 Spacing="4"
+                                 VerticalOptions="End"
+                                 HorizontalOptions="Start">
+                <Label Text="{Binding CurrentVideo.Author, StringFormat='@{0}'}"
+                       FontSize="16" FontAttributes="Bold" TextColor="White" Opacity="0.9" />
+                <Label Text="{Binding CurrentVideo.Title}"
+                       FontSize="14" TextColor="White" Opacity="0.8"
+                       LineBreakMode="TailTruncation" MaxLines="2" />
+            </VerticalStackLayout>
+
+            <!-- Swipe up/down indicators -->
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="End" Margin="0,0,12,0">
+                <Label Text="▲ 上滑" TextColor="White" Opacity="0.5" FontSize="12"
+                       IsVisible="{Binding HasPrevious}" />
+                <Label Text="▼ 下滑" TextColor="White" Opacity="0.5" FontSize="12"
+                       IsVisible="{Binding HasNext}" Margin="0,16,0,0" />
+            </VerticalStackLayout>
         </Grid>
-
-        <RefreshView Grid.Row="1"
-                     Command="{Binding RetryLoadCommand}"
-                     IsRefreshing="{Binding IsLoading}">
-            <CollectionView ItemsSource="{Binding Videos}" SelectionMode="None">
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="12">
-                        <Label Text="📺" FontSize="48" HorizontalOptions="Center" />
-                        <Label Text="暂无视频" FontSize="16" HorizontalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        <Button Text="重试" Style="{StaticResource GhostButton}"
-                                Command="{Binding RetryLoadCommand}" IsVisible="{Binding HasError}" />
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
-
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="mdl:VideoItem">
-                        <Border Style="{StaticResource CardFrame}" Margin="16,6">
-                            <Grid RowDefinitions="200,Auto,Auto" RowSpacing="8" Padding="0">
-
-                                <!-- Row 0: cover image with placeholder -->
-                                <Grid Grid.Row="0"
-                                      BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                                    <Label Text="📺" FontSize="48"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                                           HorizontalOptions="Center" VerticalOptions="Center" />
-                                    <Image Source="{Binding CoverUrl}" Aspect="AspectFill"
-                                           IsVisible="{Binding CoverUrl, Converter={StaticResource StringToBool}}" />
-                                </Grid>
-
-                                <!-- Row 1: title -->
-                                <Label Grid.Row="1" Text="{Binding Title}" FontSize="16" FontAttributes="Bold"
-                                       Padding="12,0"
-                                       LineBreakMode="WordWrap"
-                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-
-                                <!-- Row 2: author + duration -->
-                                <HorizontalStackLayout Grid.Row="2" Spacing="16" Padding="12,0,12,12">
-                                    <Label Text="{Binding Author, StringFormat='👤 {0}'}" FontSize="12"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                    <Label Text="{Binding Duration, StringFormat='⏱ {0}'}" FontSize="12"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </HorizontalStackLayout>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-        </RefreshView>
     </Grid>
 
 </ContentPage>

@@ -32,7 +32,7 @@ public sealed class SqliteServiceAccountPostCacheRepository : SqliteStoreBase, I
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} ORDER BY published_at DESC";
+        cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} ORDER BY is_pinned DESC, published_at DESC";
         return await ReadAllAsync(cmd, ct);
     }
 
@@ -41,7 +41,7 @@ public sealed class SqliteServiceAccountPostCacheRepository : SqliteStoreBase, I
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} WHERE service_account_id = @sid ORDER BY published_at DESC";
+        cmd.CommandText = $"SELECT {SelectColumns} FROM {TableName} WHERE service_account_id = @sid ORDER BY is_pinned DESC, published_at DESC";
         cmd.Parameters.AddWithValue("@sid", serviceAccountId.ToString());
         return await ReadAllAsync(cmd, ct);
     }
@@ -52,6 +52,19 @@ public sealed class SqliteServiceAccountPostCacheRepository : SqliteStoreBase, I
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT MAX(published_at) FROM " + TableName;
+        var result = await cmd.ExecuteScalarAsync(ct);
+        if (result is null or DBNull) return null;
+        return DateTime.Parse(result.ToString()!, CultureInfo.InvariantCulture);
+    }
+
+    public async Task<DateTime?> GetLatestPublishedAtAsync(Guid serviceAccountId, CancellationToken ct = default)
+    {
+        // 按账号隔离 since 游标：之前用全局 MAX，多服务号切换时较旧账号的新文章被全局 MAX 过滤掉，永远同步不到。
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT MAX(published_at) FROM " + TableName + " WHERE service_account_id = @sid";
+        cmd.Parameters.AddWithValue("@sid", serviceAccountId.ToString());
         var result = await cmd.ExecuteScalarAsync(ct);
         if (result is null or DBNull) return null;
         return DateTime.Parse(result.ToString()!, CultureInfo.InvariantCulture);

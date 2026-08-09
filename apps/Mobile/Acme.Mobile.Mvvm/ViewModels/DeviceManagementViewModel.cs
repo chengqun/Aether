@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.DeviceManagement.Domain;
-using Acme.DeviceManagement.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -66,7 +65,7 @@ public partial class DeviceManagementViewModel : NavigableViewModelBase
 
         try
         {
-            // GetMyDevicesAsync 返回裸 List<MyDevice>（失败抛异常，由 catch 处理）
+            // GetMyDevicesAsync 返回 nullable：null=HTTP 失败（不清空既有列表，保留可见数据），空列表=成功无设备。
             var devices = await Task.Run(async () => await _deviceService.GetMyDevicesAsync());
 
             if (devices != null)
@@ -82,8 +81,8 @@ public partial class DeviceManagementViewModel : NavigableViewModelBase
             }
             else
             {
+                // 失败：不清空 Devices、不动 HasDevices（保留既有列表可见），仅提示失败。
                 StatusMessage = "加载设备列表失败";
-                HasDevices = false;
             }
         }
         catch (Exception ex)
@@ -113,7 +112,7 @@ public partial class DeviceManagementViewModel : NavigableViewModelBase
 
         try
         {
-            // CreateDeviceAsync 返回裸 MyDevice（失败抛异常，由 catch 处理）
+            // CreateDeviceAsync 失败抛 HttpRequestException（不兜底空对象），由 catch 处理 → "创建失败"。
             await Task.Run(async () =>
                 await _deviceService.CreateDeviceAsync(NewDeviceName, NewDeviceType));
 

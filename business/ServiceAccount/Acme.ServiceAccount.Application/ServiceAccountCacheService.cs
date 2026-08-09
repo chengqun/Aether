@@ -33,6 +33,11 @@ public class ServiceAccountCacheService : IServiceAccountCacheService
         return await _repository.GetLatestPublishedAtAsync(ct);
     }
 
+    public async Task<DateTime?> GetLatestCachedPublishedAtAsync(Guid serviceAccountId, CancellationToken ct = default)
+    {
+        return await _repository.GetLatestPublishedAtAsync(serviceAccountId, ct);
+    }
+
     public async Task UpdateCacheAsync(List<ServiceAccountPostListItem> posts, CancellationToken ct = default)
     {
         var items = posts.Select(ToItem);

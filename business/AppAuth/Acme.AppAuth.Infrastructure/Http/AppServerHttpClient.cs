@@ -59,6 +59,20 @@ public sealed class AppServerHttpClient : IAppServerHttpClient
     }
 
     /// <inheritdoc/>
+    public async Task<HttpResponseMessage?> DeleteRawAsync(string endpoint, CancellationToken ct = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, BuildRequestUri(endpoint));
+            return await _httpClient.SendAsync(request, ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<HttpResponseMessage?> PostRawAsync(string endpoint, object? body = null, CancellationToken ct = default)
     {
         try

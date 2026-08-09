@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.Moments.Domain;
-using Acme.Moments.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -18,6 +17,9 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
     private readonly IMomentCacheService? _momentCacheService;
     private bool _isLoaded;
     private readonly HashSet<string> _displayedMomentIds = new();
+    // _displayedMomentIds 跨 LoadCachedMomentsAsync(主线程)/SyncIncrementalAsync(Task.Run)/RefreshMomentsAsync(Task.Run) 访问，
+    // HashSet 非线程安全，并发 Add 会结构损坏——对齐 MomentsViewModel 加锁。
+    private readonly object _displayedMomentIdsLock = new();
 
     [ObservableProperty]
     private string _title = "朋友圈";
@@ -65,6 +67,16 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
         Title = string.IsNullOrEmpty(Username) ? "朋友圈" : $"{Username}的朋友圈";
     }
 
+    /// <summary>把 UI 类型（通讯录传入的"好友"/"群组"/"股票"/"设备"）映射为服务端 type 参数。</summary>
+    private string MapServiceType() => TargetType switch
+    {
+        "好友" or "用户" => "friendship",
+        "群组" => "group",
+        "股票" => "stock",
+        "设备" => "device",
+        _ => "friendship"
+    };
+
     public override async Task OnActivatedAsync()
     {
         if (!string.IsNullOrEmpty(TargetId) && !_isLoaded)
@@ -78,7 +90,7 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
     {
         _isLoaded = false;
         Moments.Clear();
-        _displayedMomentIds.Clear();
+        lock (_displayedMomentIdsLock) _displayedMomentIds.Clear();
     }
 
     private async Task LoadMomentsAsync()
@@ -106,7 +118,9 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
         var cached = await Task.Run(() => _momentCacheService.GetCachedMomentsAsync(TargetId));
         foreach (var dto in cached)
         {
-            if (_displayedMomentIds.Add(dto.Id.ToString()))
+            bool added;
+            lock (_displayedMomentIdsLock) added = _displayedMomentIds.Add(dto.Id.ToString());
+            if (added)
             {
                 Moments.Add(ToMomentItem(dto));
             }
@@ -121,13 +135,16 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
         {
             List<Moment> newItems = await Task.Run(async () =>
             {
-                var moments = await _momentService.GetFriendsMomentsAsync(50, 0);
+                // BUG-3 修复：改调 GetMomentsAsync(targetId, type) 按联系人过滤，而非全局 GetFriendsMomentsAsync。
+                var moments = await _momentService.GetMomentsAsync(TargetId, MapServiceType(), 50, 0);
                 var newDtos = new List<Moment>();
                 if (moments != null && moments.Count > 0)
                 {
                     foreach (var dto in moments)
                     {
-                        if (_displayedMomentIds.Add(dto.Id.ToString()))
+                        bool added;
+                        lock (_displayedMomentIdsLock) added = _displayedMomentIds.Add(dto.Id.ToString());
+                        if (added)
                         {
                             newDtos.Add(dto);
                         }
@@ -212,13 +229,15 @@ public partial class ContactMomentsViewModel : NavigableViewModelBase
 
             List<Moment> newItems = await Task.Run(async () =>
             {
-                var moments = await _momentService.GetFriendsMomentsAsync(50, 0);
+                var moments = await _momentService.GetMomentsAsync(TargetId, MapServiceType(), 50, 0);
                 var newDtos = new List<Moment>();
                 if (moments != null && moments.Count > 0)
                 {
                     foreach (var dto in moments)
                     {
-                        if (_displayedMomentIds.Add(dto.Id.ToString()))
+                        bool added;
+                        lock (_displayedMomentIdsLock) added = _displayedMomentIds.Add(dto.Id.ToString());
+                        if (added)
                         {
                             newDtos.Add(dto);
                         }

@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.ServiceAccount.Domain;
-using Acme.ServiceAccount.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 
 namespace Acme.Mobile.Mvvm.ViewModels;

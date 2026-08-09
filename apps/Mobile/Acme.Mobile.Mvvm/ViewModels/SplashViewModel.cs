@@ -78,6 +78,14 @@ public partial class SplashViewModel : NavigableViewModelBase
             StatusMessage = "正在登录...";
             isLoggedIn = await _authService.IsLoggedInAsync();
 
+            // access token 过期时尝试用 refresh token 续期（对齐 AlphaAgent AutoLoginAsync 语义）。
+            // IsLoggedInAsync 在 access token 过期（默认 1h TTL）时返 false；若直接跳登录页，refresh token
+            // （通常 7-30 天）仍有效却被迫重新输密码。RefreshAsync 无 refresh token 时快速返 false（首次启动无影响）。
+            if (!isLoggedIn)
+            {
+                isLoggedIn = await _authService.RefreshAsync();
+            }
+
             // 自动登录(返回用户)成功:应用本地缓存配置,秒级,直接进 ChatPage
             if (isLoggedIn && _postLoginInitializer != null)
             {

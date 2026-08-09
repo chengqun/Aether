@@ -25,6 +25,7 @@ using Acme.Securities.Infrastructure.DependencyInjection;
 using Acme.DeviceManagement.Application.DependencyInjection;
 using Acme.DeviceManagement.Infrastructure.DependencyInjection;
 using Acme.Video.Application.DependencyInjection;
+using Acme.Video.Infrastructure.DependencyInjection;
 using Acme.ServiceAccount.Application.DependencyInjection;
 using Acme.ServiceAccount.Infrastructure.DependencyInjection;
 using Aether.AI.Harness;
@@ -105,6 +106,7 @@ public static class MobileCompositionExtensions
 
         // —— 次要上下文（Stage 2b：视频号 / 设备管理）——
         services.AddVideoApplication();
+        services.AddVideoInfrastructure(Path.Combine(tenantDir, "video.db"));
         services.AddDeviceManagementApplication();
         services.AddDeviceManagementInfrastructure(Path.Combine(tenantDir, "devicemgmt.db"));
 
