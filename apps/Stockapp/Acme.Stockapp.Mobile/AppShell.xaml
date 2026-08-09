@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="Acme.Stockapp.Mobile.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:views="clr-namespace:Acme.Mobile.Shared.Views;assembly=Acme.Mobile.Shared"
+    Shell.FlyoutBehavior="Disabled"
+    Title="Aether">
+
+    <!-- 启动页 + 登录页（不在 TabBar） -->
+    <ShellContent Title="启动" ContentTemplate="{DataTemplate views:SplashPage}" Route="SplashPage" />
+    <ShellContent Title="登录" ContentTemplate="{DataTemplate views:LoginPage}" Route="LoginPage" />
+
+    <!-- 主页 TabBar（聊天/通讯录/发现/我 四 tab；图标 svg 在 Mobile.Shared/Resources/Images） -->
+    <TabBar Route="Main">
+        <ShellContent Title="聊天" Icon="chat" ContentTemplate="{DataTemplate views:ChatPage}" Route="ChatPage" />
+        <ShellContent Title="通讯录" Icon="contact" ContentTemplate="{DataTemplate views:ContactsPage}" Route="ContactsPage" />
+        <ShellContent Title="发现" Icon="discovery" ContentTemplate="{DataTemplate views:DiscoveryPage}" Route="DiscoveryPage" />
+        <ShellContent Title="我" Icon="me" ContentTemplate="{DataTemplate views:MePage}" Route="MePage" />
+    </TabBar>
+
+</Shell>

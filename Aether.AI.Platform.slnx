@@ -38,6 +38,7 @@
   </Folder>
   <Folder Name="/apps/Stockapp/">
     <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
+    <Project Path="apps/Stockapp/Acme.Stockapp.Mobile/Acme.Stockapp.Mobile.csproj" />
   </Folder>
   <Folder Name="/business/" />
   <Folder Name="/business/Ctp/">
