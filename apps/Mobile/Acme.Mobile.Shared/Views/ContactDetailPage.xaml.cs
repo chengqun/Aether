@@ -43,8 +43,6 @@ public partial class ContactDetailPage : ContentPage, IQueryAttributable
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
-        _vm.NavigationRequested -= OnNavigationRequested;
-        _vm.PopAndRefreshRequested -= OnPopAndRefreshRequested;
         await _vm.OnDeactivatedAsync();
     }
 }

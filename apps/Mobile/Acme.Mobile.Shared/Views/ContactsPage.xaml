@@ -6,6 +6,10 @@
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     Title="通讯录">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem IconImageSource="addfriend" Command="{Binding AddFriendCommand}" />
+    </ContentPage.ToolbarItems>
+
     <Grid RowDefinitions="Auto,*">
         <SearchBar Grid.Row="0" Placeholder="搜索"
                    Text="{Binding SearchText}"

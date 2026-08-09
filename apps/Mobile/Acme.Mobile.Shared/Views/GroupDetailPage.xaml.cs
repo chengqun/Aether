@@ -56,8 +56,6 @@ public partial class GroupDetailPage : ContentPage, IQueryAttributable
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
-        _vm.NavigationRequested -= OnNavigationRequested;
-        _vm.PopAndRefreshRequested -= OnPopAndRefreshRequested;
         await _vm.OnDeactivatedAsync();
     }
 }

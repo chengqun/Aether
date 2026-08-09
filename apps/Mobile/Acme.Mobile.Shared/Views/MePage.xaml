@@ -96,6 +96,19 @@
                     </Grid>
                     <BoxView Style="{StaticResource Divider}" Margin="14,0" />
 
+                    <!-- Agent市场 -->
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToMarketCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🏪" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Agent市场" FontSize="16" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+
                     <!-- 主题切换 -->
                     <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
                         <Label Grid.Column="0" Text="{Binding ThemeIcon}" FontSize="20" VerticalOptions="Center" />

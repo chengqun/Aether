@@ -48,7 +48,6 @@ public partial class MePage : ContentPage
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
-        _vm.NavigationRequested -= OnNavigationRequested;
         await _vm.OnDeactivatedAsync();
     }
 }

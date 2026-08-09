@@ -36,6 +36,7 @@
     <MauiImage Update="Resources\Images\keyboard.svg" BaseSize="24,24" />
     <MauiImage Update="Resources\Images\camera.svg" BaseSize="24,24" />
     <MauiImage Update="Resources\Images\right_arrow.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\addfriend.svg" BaseSize="24,24" />
     <MauiFont Include="Resources\Fonts\*" />
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

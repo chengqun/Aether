@@ -40,8 +40,6 @@ public partial class MomentsPage : ContentPage
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
-        _vm.NavigationRequested -= OnNavigationRequested;
-        _vm.PublishMomentRequested -= OnPublishMomentRequested;
         await _vm.OnDeactivatedAsync();
     }
 }

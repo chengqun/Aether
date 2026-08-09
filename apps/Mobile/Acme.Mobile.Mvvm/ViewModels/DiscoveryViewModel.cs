@@ -51,11 +51,4 @@ public partial class DiscoveryViewModel : NavigableViewModelBase
         NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("VideoChannelsPage"));
         return Task.CompletedTask;
     }
-
-    [RelayCommand]
-    private Task GoToMarketAsync()
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("MarketPage"));
-        return Task.CompletedTask;
-    }
 }

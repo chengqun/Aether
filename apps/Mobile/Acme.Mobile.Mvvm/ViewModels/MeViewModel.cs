@@ -218,6 +218,15 @@ public partial class MeViewModel : NavigableViewModelBase
     }
 
     [RelayCommand]
+    private Task NavigateToMarketAsync()
+    {
+        // Agent 市场：浏览云端 agent 目录并召唤到本地（IAgentMarketplaceService）。
+        // 原在「发现」页，按需移至此处——与 AI设置/LLM配置 并列，属 agent 获取入口。
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("MarketPage"));
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
     private async Task CheckUpdateAsync()
     {
         if (_updateService == null || _platformInfo == null)
