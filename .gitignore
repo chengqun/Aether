@@ -44,4 +44,11 @@ scripts/build-desktop-macos.sh
 
 ## Local config / secrets
 appsettings.Development.json
+appsettings.secrets.json
+appsettings.backup.json
 .env
+
+## ABP server (server/) — 构建产物/依赖/证书/日志
+server/**/node_modules/
+server/**/Logs/
+server/**/*.pfx

@@ -1,0 +1,324 @@
+@page "/moments"
+@page "/moments/{type}/{id}"
+@page "/moments/{userId}"
+@using Aether.Server.Application.Contracts.DTOs.Moment
+@using Aether.Server.Application.Contracts.Services.Moment
+@using Aether.Server.Application.Contracts.Services.Relationships
+@using Aether.Server.Domain.Shared.Enums
+@inject IMomentAppService MomentAppService
+@inject NavigationManager NavigationManager
+@inject IRelationshipService RelationshipService
+@inherits AbpComponentBase
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            @if (!string.IsNullOrEmpty(UserId))
+            {
+                <div class="d-flex align-items-center mb-4">
+                    <button type="button" class="btn btn-outline-secondary mr-3" @onclick="NavigateBack">
+                        <i class="fas fa-arrow-left"></i> 返回
+                    </button>
+                    <h2>@FriendName 的朋友圈</h2>
+                </div>
+            } else {
+                <h2>朋友圈</h2>
+                <p class="text-muted">分享生活，记录美好时光</p>
+            }
+        </div>
+    </div>
+
+    <!-- 发布动态表单 -->
+    @if (string.IsNullOrEmpty(UserId))
+    {
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">发布动态</h4>
+                    </div>
+                    <div class="card-body">
+
+                        
+                        <div class="mb-3">
+                            <textarea class="form-control" @bind="newMomentContent" placeholder="分享你的想法..." rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">图片</label>
+                            <input type="file" class="form-control" @onchange="HandleImageUpload" accept="image/*" />
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-primary" @onclick="PublishMoment">
+                                <i class="fas fa-paper-plane"></i> 发布
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- 动态列表 -->
+    <div class="row">
+        <div class="col-md-12">
+            @if (isLoading) {
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                </div>
+            } else if (moments.Any()) {
+                @foreach (var moment in moments) {
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">@moment.Username</h5>
+                                    <small class="text-muted">@moment.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small>
+                                </div>
+                                @if (moment.UserId == CurrentUser.Id) {
+                                    <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeleteMoment(moment.Id)">
+                                        <i class="fas fa-trash"></i> 删除
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p>@moment.Content</p>
+                            @if (!string.IsNullOrEmpty(moment.ImageUrl)) {
+                                <div class="mt-3">
+                                    <img src="@moment.ImageUrl" class="img-fluid rounded" alt="动态图片" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                <div class="text-center py-4">
+                    <button type="button" class="btn btn-outline-primary" @onclick="LoadMoreMoments" disabled="@isLoadingMore">
+                        @(isLoadingMore ? "加载中..." : "加载更多")
+                    </button>
+                </div>
+            } else {
+                <div class="text-center py-8 text-muted">
+                    <i class="fas fa-feather-alt" style="font-size: 48px;"></i>
+                    <p class="mt-3">暂无动态</p>
+                    @if (string.IsNullOrEmpty(UserId))
+                    {
+                        <p>分享你的第一条动态吧！</p>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? userId { get; set; }
+    
+    [Parameter]
+    public string? type { get; set; }
+    
+    [Parameter]
+    public string? id { get; set; }
+    
+    private string UserId => userId ?? string.Empty;
+    private string PageTitleText => GetPageTitle();
+    private string FriendName { get; set; } = string.Empty;
+    private List<MomentDto> moments = new List<MomentDto>();
+    private string newMomentContent = string.Empty;
+    private string imageUrl = string.Empty;
+    private bool isLoading = false;
+    private bool isLoadingMore = false;
+    private int offset = 0;
+    private const int limit = 10;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMoments();
+    }
+
+    private string GetPageTitle()
+    {
+        if (!string.IsNullOrEmpty(UserId))
+        {
+            if (int.TryParse(UserId, out var stockId))
+            {
+                // 股票动态 - 数字ID
+                return $"股票的朋友圈";
+            }
+            else if (UserId.Contains("-") || (UserId.Length > 4 && UserId.All(char.IsUpper)))
+            {
+                // 如果包含 "-" 则是 Guid（好友），如果是大写字母则是股票代码
+                if (UserId.Contains("-"))
+                {
+                    // Guid 格式 - 好友动态
+                    return $"{FriendName} 的朋友圈";
+                }
+                else
+                {
+                    // 股票代码格式 - 股票动态
+                    return $"股票的朋友圈";
+                }
+            }
+            else
+            {
+                // 其他情况视为好友动态
+                return $"{FriendName} 的朋友圈";
+            }
+        }
+        else
+        {
+            return "朋友圈";
+        }
+    }
+
+
+
+    private async Task LoadMoments()
+    {
+        isLoading = true;
+        try
+        {
+            if (!string.IsNullOrEmpty(UserId))
+            {
+                // 使用带type参数的API
+                string targetType = type ?? DetermineTypeFromId(UserId);
+                moments = await MomentAppService.GetMomentsAsync(UserId, targetType, limit, 0);
+            } else {
+                // 加载所有好友的动态
+                moments = await MomentAppService.GetFriendsMomentsAsync(limit, 0);
+            }
+            offset = limit;
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string DetermineTypeFromId(string id)
+    {
+        if (int.TryParse(id, out _))
+        {
+            return "stock";
+        }
+        else if (id.Contains("-"))
+        {
+            return "friendship";
+        }
+        else
+        {
+            return "stock"; // 默认视为股票代码
+        }
+    }
+
+    private async Task LoadMoreMoments()
+    {
+        if (isLoadingMore) return;
+
+        isLoadingMore = true;
+        try
+        {
+            List<MomentDto> moreMoments;
+            if (!string.IsNullOrEmpty(UserId))
+            {
+                // 使用带type参数的API
+                string targetType = type ?? DetermineTypeFromId(UserId);
+                moreMoments = await MomentAppService.GetMomentsAsync(UserId, targetType, limit, offset);
+            } else {
+                // 加载所有好友的更多动态
+                moreMoments = await MomentAppService.GetFriendsMomentsAsync(limit, offset);
+            }
+            
+            if (moreMoments.Any())
+            {
+                moments.AddRange(moreMoments);
+                offset += limit;
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex);
+        }
+        finally
+        {
+            isLoadingMore = false;
+        }
+    }
+
+    private async Task PublishMoment()
+    {
+        if (string.IsNullOrWhiteSpace(newMomentContent))
+        {
+            await Notify.Info("请输入内容");
+            return;
+        }
+
+        try
+        {
+            // 发布个人动态
+            var createDto = new CreateMomentDto
+            {
+                Content = newMomentContent,
+                ImageUrl = imageUrl,
+                Type = string.IsNullOrEmpty(imageUrl) ? "Text" : "Image",
+                Visibility = "Friends"
+            };
+
+            await MomentAppService.CreateMomentAsync(createDto);
+            
+            await Notify.Success("动态发布成功");
+            
+            // 清空表单
+            newMomentContent = string.Empty;
+            imageUrl = string.Empty;
+            
+            // 重新加载动态列表
+            await LoadMoments();
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex);
+        }
+    }
+
+    private async Task DeleteMoment(Guid momentId)
+    {
+        try
+        {
+            await MomentAppService.DeleteMomentAsync(momentId);
+            await Notify.Success("动态删除成功");
+            await LoadMoments();
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex);
+        }
+    }
+
+    private void HandleImageUpload(ChangeEventArgs e)
+    {
+        // 这里可以实现图片上传逻辑
+        // 暂时只做演示，实际项目中需要实现文件上传
+        imageUrl = "https://via.placeholder.com/400x300"; // 占位图片
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/moments");
+    }
+
+    protected override async Task HandleErrorAsync(Exception ex)
+    {
+        await Notify.Error($"操作失败：{ex.Message}");
+    }
+
+
+}

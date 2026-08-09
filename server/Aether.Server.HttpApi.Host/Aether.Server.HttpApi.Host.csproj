@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <Import Project="..\common.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>Aether.Server.HttpApi.Host-f1b5b5e2-9a8a-47a4-b99a-3a8b5c6d7e8f</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Volo.Abp.Autofac" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Swashbuckle" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.AspNetCore.Serilog" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Account.Web.OpenIddict" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Identity.HttpApi" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.TenantManagement.HttpApi" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.SettingManagement.HttpApi" Version="10.4.1" />
+    <PackageReference Include="OpenIddict.AspNetCore" Version="7.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aether.Server.Application\Aether.Server.Application.csproj" />
+    <ProjectReference Include="..\Aether.Server.HttpApi\Aether.Server.HttpApi.csproj" />
+    <ProjectReference Include="..\Aether.Server.EntityFrameworkCore\Aether.Server.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('./openiddict.pfx')">
+    <None Remove="openiddict.pfx" />
+    <EmbeddedResource Include="openiddict.pfx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

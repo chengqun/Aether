@@ -40,6 +40,18 @@
     <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
     <Project Path="apps/Stockapp/Acme.Stockapp.Mobile/Acme.Stockapp.Mobile.csproj" />
   </Folder>
+  <Folder Name="/server/">
+    <Project Path="server/Aether.Server.Domain.Shared/Aether.Server.Domain.Shared.csproj" />
+    <Project Path="server/Aether.Server.Domain/Aether.Server.Domain.csproj" />
+    <Project Path="server/Aether.Server.Application.Contracts/Aether.Server.Application.Contracts.csproj" />
+    <Project Path="server/Aether.Server.Application/Aether.Server.Application.csproj" />
+    <Project Path="server/Aether.Server.EntityFrameworkCore/Aether.Server.EntityFrameworkCore.csproj" />
+    <Project Path="server/Aether.Server.HttpApi/Aether.Server.HttpApi.csproj" />
+    <Project Path="server/Aether.Server.HttpApi.Client/Aether.Server.HttpApi.Client.csproj" />
+    <Project Path="server/Aether.Server.HttpApi.Host/Aether.Server.HttpApi.Host.csproj" />
+    <Project Path="server/Aether.Server.Blazor/Aether.Server.Blazor.csproj" />
+    <Project Path="server/Aether.Server.DbMigrator/Aether.Server.DbMigrator.csproj" />
+  </Folder>
   <Folder Name="/business/" />
   <Folder Name="/business/Ctp/">
     <Project Path="business/Ctp/Acme.Ctp.Application/Acme.Ctp.Application.csproj" />

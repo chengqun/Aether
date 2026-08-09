@@ -1,0 +1,227 @@
+@page "/security-management"
+@inherits AbpComponentBase
+@using Aether.Server.Application.Contracts.DTOs.Security
+@using Aether.Server.Application.Contracts.DTOs.Moment
+@using Aether.Server.Application.Contracts.Services.Security
+@using Aether.Server.Application.Contracts.Services.Moment
+@inject ISecurityAppService SecurityAppService
+@inject ISecuritySyncService SecuritySyncService
+@inject IMomentAppService MomentAppService
+@inject IJSRuntime JS
+
+<PageTitle>股票信息管理</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">股票信息管理</h2>
+                <button type="button" class="btn btn-primary" @onclick="ShowCreateModal">
+                    <i class="fas fa-plus"></i> 新增股票
+                </button>
+                <button type="button" class="btn btn-outline-success" @onclick="SyncFromExternal" disabled="@isSyncing">
+                    @if (isSyncing)
+                    {
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    }
+                    else
+                    {
+                        <i class="fas fa-sync-alt"></i>
+                    }
+                    同步期货数据
+                </button>
+                <button type="button" class="btn btn-outline-info" @onclick="SyncStockPickingMoments" disabled="@isSyncingPicking">
+                    @if (isSyncingPicking)
+                    {
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    }
+                    else
+                    {
+                        <i class="fas fa-bullseye"></i>
+                    }
+                    同步选股策略发朋友圈
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 股票列表 -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="sr-only">加载中...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (securities.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>代码</th>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>交易所</th>
+                                        <th>基础代码</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var security in securities)
+                                    {
+                                        <tr>
+                                            <td>@security.Id</td>
+                                            <td>@security.Code</td>
+                                            <td>@security.Name</td>
+                                            <td>@security.Type</td>
+                                            <td>@security.Exchange</td>
+                                            <td>@security.BaseCode</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-info me-1" @onclick="() => ShowCreateMomentModal(security)">发动态</button>
+                                                <button type="button" class="btn btn-sm btn-outline-warning me-1" @onclick="() => ShowEditModal(security)">编辑</button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSecurity(security)">删除</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- 分页 -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <small class="text-muted">共 @totalCount 条记录，第 @currentPage / @totalPages 页</small>
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => GoToPage(1)" disabled="@(currentPage <= 1)">首页</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="PrevPage" disabled="@(currentPage <= 1)">上一页</button>
+                                @foreach (var p in GetPageNumbers())
+                                {
+                                    if (p < 0)
+                                    {
+                                        <span class="px-1 text-muted">…</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn @(p == currentPage ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick="() => GoToPage(p)">@p</button>
+                                    }
+                                }
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="NextPage" disabled="@(currentPage >= totalPages)">下一页</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => GoToPage(totalPages)" disabled="@(currentPage >= totalPages)">末页</button>
+                                <span class="mx-1 text-muted">跳至</span>
+                                <input type="number" class="form-control form-control-sm" style="width:60px;" @bind="jumpPage" min="1" max="@totalPages" placeholder="页码" />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => GoToPage(jumpPage)">确定</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-shield-alt" style="font-size: 48px;"></i>
+                            <p class="mt-3">暂无股票数据</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑 Modal -->
+<div class="modal" tabindex="-1" role="dialog" style="display: @(showModal ? "block" : "none");" @onclick="CloseModal">
+    <div class="modal-dialog" role="document" @onclick:stopPropagation>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(isEditing ? "编辑股票" : "新增股票")</h5>
+                <button type="button" class="close" aria-label="Close" @onclick="CloseModal">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>代码</label>
+                    <input type="text" class="form-control" @bind="editingSecurity.Code" disabled="@isEditing" placeholder="股票代码（如 600000）" />
+                </div>
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" class="form-control" @bind="editingSecurity.Name" placeholder="股票名称" />
+                </div>
+                <div class="form-group">
+                    <label>类型</label>
+                    <input type="text" class="form-control" @bind="editingSecurity.Type" placeholder="类型（如 Stock、期货）" />
+                </div>
+                <div class="form-group">
+                    <label>交易所</label>
+                    <input type="text" class="form-control" @bind="editingSecurity.Exchange" placeholder="交易所（如 SSE、8）" />
+                </div>
+                <div class="form-group">
+                    <label>基础代码</label>
+                    <input type="text" class="form-control" @bind="editingSecurity.BaseCode" placeholder="基础代码" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">取消</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveSecurity" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    }
+                    else
+                    {
+                        <span>保存</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 发动态 Modal -->
+<div class="modal" tabindex="-1" role="dialog" style="display: @(showMomentModal ? "block" : "none");" @onclick="CloseMomentModal">
+    <div class="modal-dialog" role="document" @onclick:stopPropagation>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">为 @momentStockName 发动态</h5>
+                <button type="button" class="close" aria-label="Close" @onclick="CloseMomentModal">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>内容</label>
+                    <textarea class="form-control" @bind="momentContent" rows="4" placeholder="输入动态内容"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>可见性</label>
+                    <select class="form-control" @bind="momentVisibility">
+                        <option value="Friends">好友可见</option>
+                        <option value="Public">公开</option>
+                        <option value="Private">仅自己可见</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseMomentModal">取消</button>
+                <button type="button" class="btn btn-primary" @onclick="CreateMoment" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                    }
+                    else
+                    {
+                        <span>发布</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (showModal || showMomentModal)
+{
+    <div class="modal-backdrop fade show"></div>
+}

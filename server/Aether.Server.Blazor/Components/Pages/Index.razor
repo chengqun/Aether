@@ -1,0 +1,707 @@
+@page "/"
+@layout Aether.Server.Blazor.Components.Layout.EmptyLayout
+@using Aether.Server.Blazor
+@inject NavigationManager NavigationManager
+@inherits AbpComponentBase
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+}
+
+<PageTitle>Aether - 智能证券分析平台</PageTitle>
+
+<div class="home-container">
+    <div class="bg-pattern"></div>
+    <div class="bg-gradient"></div>
+    
+    <!-- 顶部导航区域 -->
+    <div class="home-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+                </div>
+                <span class="logo-text">Aether</span>
+                <span class="logo-tag">智能金融</span>
+            </div>
+            <div class="header-actions">
+                @if (!CurrentUser.IsAuthenticated)
+                {
+                    <button class="btn-login" @onclick='() => NavigationManager.NavigateTo("/Account/Login?returnUrl=/", true)'>
+                        登录
+                    </button>
+                }
+                else
+                {
+                    <div class="user-info">
+                        <span class="user-name">@CurrentUser.UserName</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="home-main">
+        <!-- Hero 区域 -->
+        <div class="hero-section">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="badge-dot"></span>
+                    AI 驱动的智能金融分析
+                </div>
+                <h1 class="hero-title">
+                    智能证券<br />
+                    <span class="text-gradient">分析助手</span>
+                </h1>
+                <p class="hero-subtitle">
+                    基于 DeepSeek AI 强大的分析能力，为您提供专业的股票分析、技术指标计算和投资决策建议
+                </p>
+                <div class="hero-actions">
+                    @if (CurrentUser.IsAuthenticated)
+                    {
+                        <span class="btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            功能开发中
+                        </span>
+                    }
+                    else
+                    {
+                        <button class="btn-primary" @onclick='() => NavigationManager.NavigateTo("/Account/Login?returnUrl=/", true)'>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            立即体验
+                        </button>
+                    }
+                    <div class="hero-stats">
+                        <div class="stat-item">
+                            <span class="stat-value">99.9%</span>
+                            <span class="stat-label">准确率</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat-item">
+                            <span class="stat-value">7×24</span>
+                            <span class="stat-label">服务时间</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="visual-card">
+                    <div class="card-header">
+                        <span class="card-dot red"></span>
+                        <span class="card-dot yellow"></span>
+                        <span class="card-dot green"></span>
+                        <span class="card-title">Aether Analysis</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="code-block">
+                            <div class="code-line"><span class="code-keyword">分析</span> <span class="code-string">"贵州茅台"</span></div>
+                            <div class="code-line code-comment"># AI 正在分析股票走势...</div>
+                            <div class="code-line"><span class="code-property">趋势</span>: <span class="code-value">上涨趋势</span></div>
+                            <div class="code-line"><span class="code-property">建议</span>: <span class="code-value">持有</span></div>
+                            <div class="code-line"><span class="code-property">风险等级</span>: <span class="code-value code-risk">中低</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="floating-card card-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+                    <span>实时分析</span>
+                </div>
+                <div class="floating-card card-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
+                    <span>智能推荐</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能特性 -->
+        <div class="features-section">
+            <h2 class="section-title">
+                <span class="title-text">核心能力</span>
+                <span class="title-line"></span>
+            </h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                    </div>
+                    <h3 class="feature-title">智能分析</h3>
+                    <p class="feature-desc">基于深度学习模型，深度分析股票走势，生成专业的投资建议和风险评估报告</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="current" fill="noneColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    </div>
+                    <h3 class="feature-title">技术指标</h3>
+                    <p class="feature-desc">自动计算 MACD、KDJ、RSI、布林带等常用技术指标，辅助精准决策</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
+                    <h3 class="feature-title">实时数据</h3>
+                    <p class="feature-desc">对接权威行情数据源，确保数据的准确性、完整性和时效性</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    </div>
+                    <h3 class="feature-title">自然对话</h3>
+                    <p class="feature-desc">通过自然语言与 AI 交互，快速获取所需的股票信息和分析结果</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="home-footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="logo-text">Aether</span>
+                <span class="footer-divider">|</span>
+                <span class="footer-tag">智能金融科技</span>
+            </div>
+            <div class="footer-links">
+                <a href="certificates/rootCA.crt" download="rootCA.crt" class="cert-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    下载根证书
+                </a>
+            </div>
+            <p class="footer-copyright">&copy; 2026 Aether. 基于 DeepSeek AI 构建。</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .home-container {
+        min-height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .bg-pattern {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: 
+            radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(147, 51, 234, 0.06) 0%, transparent 50%),
+            linear-gradient(180deg, #0a0a0f 0%, #0f1419 100%);
+        z-index: 0;
+    }
+
+    .bg-gradient {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 600px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, transparent 100%);
+        z-index: 1;
+    }
+
+    /* 顶部导航 */
+    .home-header {
+        position: relative;
+        z-index: 10;
+        padding: 20px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(10, 10, 15, 0.5);
+        backdrop-filter: blur(20px);
+    }
+
+    .header-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .logo-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .logo-text {
+        font-size: 20px;
+        font-weight: 700;
+        color: #f8fafc;
+        letter-spacing: -0.02em;
+    }
+
+    .logo-tag {
+        font-size: 12px;
+        color: rgba(148, 163, 184, 0.6);
+        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-login {
+        padding: 10px 28px;
+        background: transparent;
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-login:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.25);
+        transform: translateY(-1px);
+    }
+
+    .user-info {
+        color: #f8fafc;
+        font-weight: 500;
+    }
+
+    /* 主内容 */
+    .home-main {
+        position: relative;
+        z-index: 10;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 80px 40px;
+    }
+
+    /* Hero 区域 */
+    .hero-section {
+        display: flex;
+        align-items: center;
+        gap: 80px;
+        margin-bottom: 100px;
+    }
+
+    .hero-content {
+        flex: 1;
+    }
+
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 30px;
+        font-size: 13px;
+        color: #60a5fa;
+        margin-bottom: 24px;
+    }
+
+    .badge-dot {
+        width: 6px;
+        height: 6px;
+        background: #3b82f6;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .hero-title {
+        font-size: 64px;
+        font-weight: 700;
+        color: #f8fafc;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        margin-bottom: 24px;
+    }
+
+    .text-gradient {
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .hero-subtitle {
+        font-size: 18px;
+        color: #94a3b8;
+        line-height: 1.7;
+        margin-bottom: 40px;
+        max-width: 520px;
+    }
+
+    .hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+    }
+
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 32px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(37, 99, 235, 0.4);
+    }
+
+    .hero-stats {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+    }
+
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: #64748b;
+    }
+
+    .stat-divider {
+        width: 1px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Hero 视觉区域 */
+    .hero-visual {
+        flex: 1;
+        position: relative;
+    }
+
+    .visual-card {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        overflow: hidden;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 20px;
+        background: rgba(15, 23, 42, 0.6);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .card-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .card-dot.red { background: #ef4444; }
+    .card-dot.yellow { background: #eab308; }
+    .card-dot.green { background: #22c55e; }
+
+    .card-title {
+        margin-left: 12px;
+        font-size: 13px;
+        color: #64748b;
+    }
+
+    .card-body {
+        padding: 24px;
+    }
+
+    .code-block {
+        font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+        font-size: 14px;
+        line-height: 1.8;
+    }
+
+    .code-line {
+        color: #e2e8f0;
+    }
+
+    .code-keyword { color: #c084fc; }
+    .code-string { color: #86efac; }
+    .code-comment { color: #64748b; }
+    .code-property { color: #60a5fa; }
+    .code-value { color: #fcd34d; }
+    .code-risk { color: #22c55e; }
+
+    .floating-card {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #f8fafc;
+        font-size: 14px;
+        font-weight: 500;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        animation: float 3s ease-in-out infinite;
+    }
+
+    .floating-card svg {
+        color: #3b82f6;
+    }
+
+    .card-1 {
+        top: 20px;
+        right: -20px;
+        animation-delay: 0s;
+    }
+
+    .card-2 {
+        bottom: 40px;
+        left: -30px;
+        animation-delay: 1.5s;
+    }
+
+    @@keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+
+    /* 功能特性 */
+    .features-section {
+        margin-bottom: 60px;
+    }
+
+    .section-title {
+        text-align: center;
+        margin-bottom: 60px;
+    }
+
+    .title-text {
+        display: inline-block;
+        font-size: 32px;
+        font-weight: 700;
+        color: #f8fafc;
+        letter-spacing: -0.02em;
+    }
+
+    .title-line {
+        display: block;
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        margin: 16px auto 0;
+        border-radius: 2px;
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+    }
+
+    .feature-card {
+        background: rgba(30, 41, 59, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 32px 24px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+        background: rgba(30, 41, 59, 0.5);
+        border-color: rgba(59, 130, 246, 0.2);
+        transform: translateY(-4px);
+    }
+
+    .feature-icon {
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        color: #60a5fa;
+    }
+
+    .feature-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #f8fafc;
+        margin-bottom: 12px;
+    }
+
+    .feature-desc {
+        font-size: 14px;
+        color: #64748b;
+        line-height: 1.6;
+    }
+
+    /* 页脚 */
+    .home-footer {
+        position: relative;
+        z-index: 10;
+        padding: 32px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(10, 10, 15, 0.5);
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 40px;
+        text-align: center;
+    }
+
+    .footer-logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .footer-divider {
+        color: rgba(255, 255, 255, 0.2);
+    }
+
+    .footer-tag {
+        font-size: 12px;
+        color: #64748b;
+    }
+
+    .footer-copyright {
+        font-size: 13px;
+        color: #475569;
+    }
+
+    /* 响应式 */
+    @@media (max-width: 1024px) {
+        .hero-section {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .hero-content {
+            order: 1;
+        }
+
+        .hero-visual {
+            order: 0;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .hero-title {
+            font-size: 42px;
+        }
+
+        .hero-subtitle {
+            max-width: none;
+        }
+
+        .hero-actions {
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .hero-stats {
+            justify-content: center;
+        }
+
+        .features-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .floating-card {
+            display: none;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .header-content,
+        .home-main,
+        .footer-content {
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .hero-title {
+            font-size: 32px;
+        }
+
+        .features-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* 证书下载链接 */
+    .footer-links {
+        margin: 16px 0;
+    }
+
+    .cert-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        color: rgba(148, 163, 184, 0.8);
+        text-decoration: none;
+        font-size: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+
+    .cert-link:hover {
+        color: #f8fafc;
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .cert-link svg {
+        opacity: 0.7;
+    }
+</style>

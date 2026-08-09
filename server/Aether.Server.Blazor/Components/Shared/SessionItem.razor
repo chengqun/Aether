@@ -1,0 +1,135 @@
+@using Blazorise
+
+<div class="session-item @(IsActive ? "active" : "") @Type.ToLower()-session" @onclick="OnSelectSession">
+    <div class="session-avatar @Type.ToLower()-avatar">
+        @if (Type == "Device")
+        {
+            @if (Name.Contains("Web", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            }
+            else if (Name.Contains("Console", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+            }
+            else if (Name.Contains("Android", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+            }
+            else if (Name.Contains("iOS", StringComparison.OrdinalIgnoreCase) || Name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) || Name.Contains("iPad", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+            }
+            else if (Name.Contains("Windows", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            }
+            else if (Name.Contains("Mac", StringComparison.OrdinalIgnoreCase))
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            }
+            else
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            }
+        }
+        else if (Type == "User")
+        {
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        }
+        else if (Type == "Group")
+        {
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        }
+        else if (Type == "AI")
+        {
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        }
+    </div>
+    <div class="session-info">
+        <div class="session-name">@Name</div>
+        <div class="session-last-message">@LastMessage</div>
+    </div>
+    <div class="session-meta">
+        @if (Type == "Device" || Type == "User")
+        {
+            <Badge Color="@(IsOnline ? Color.Success : Color.Secondary)" Size="Size.Small">
+                @(IsOnline ? "在线" : "离线")
+            </Badge>
+        }
+        else if (Type == "Group")
+        {
+            <Badge Color="Color.Info" Size="Size.Small">群聊</Badge>
+        }
+        else if (Type == "AI")
+        {
+            <Badge Color="Color.Primary" Size="Size.Small">AI 助手</Badge>
+        }
+        @if (UnreadCount > 0)
+        {
+            <Badge Color="Color.Danger" Size="Size.Small" class="unread-badge">
+                @UnreadCount
+            </Badge>
+        }
+        @if (Type == "Group" && ShowManageButton)
+        {
+            <button class="session-action-btn" @onclick:stopPropagation @onclick="OnManageGroup">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Id { get; set; }
+    
+    [Parameter]
+    public string Name { get; set; }
+    
+    [Parameter]
+    public string Type { get; set; }
+    
+    [Parameter]
+    public string LastMessage { get; set; }
+    
+    [Parameter]
+    public DateTime LastMessageTime { get; set; }
+    
+    [Parameter]
+    public bool IsOnline { get; set; }
+    
+    [Parameter]
+    public int UnreadCount { get; set; }
+    
+    [Parameter]
+    public int MemberCount { get; set; }
+    
+    [Parameter]
+    public bool IsActive { get; set; }
+    
+    [Parameter]
+    public bool ShowManageButton { get; set; }
+    
+    [Parameter]
+    public EventCallback<string> OnSelect { get; set; }
+    
+    [Parameter]
+    public EventCallback<string> OnManage { get; set; }
+    
+    private async Task OnSelectSession()
+    {
+        if (OnSelect.HasDelegate)
+        {
+            await OnSelect.InvokeAsync(Id);
+        }
+    }
+    
+    private async Task OnManageGroup()
+    {
+        if (OnManage.HasDelegate)
+        {
+            await OnManage.InvokeAsync(Id);
+        }
+    }
+}
