@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.Moments.Domain;
-using Acme.Moments.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
 

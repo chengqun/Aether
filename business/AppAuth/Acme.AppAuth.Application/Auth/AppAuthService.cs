@@ -45,7 +45,7 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     public async Task<LoginResult> LoginAsync(string username, string password, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-            return new LoginResult { Error = "username and password are required" };
+            return new LoginResult { Error = "请输入用户名和密码" };
 
         var form = new Dictionary<string, string>
         {
@@ -59,7 +59,7 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
         if (!string.IsNullOrEmpty(_options.Tenant)) form["__tenant"] = _options.Tenant;
 
         if (string.IsNullOrWhiteSpace(_options.BaseUrl))
-            return new LoginResult { Error = "No APP_BASEURL configured (set the APP_BASEURL env var)." };
+            return new LoginResult { Error = "未配置服务器地址，请在登录页输入服务器地址" };
 
         HttpResponseMessage response;
         try
@@ -68,12 +68,12 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
         }
         catch (Exception ex)
         {
-            return new LoginResult { Error = $"network error: {ex.Message}" };
+            return new LoginResult { Error = $"登录请求失败（无响应，检查网络/证书/服务端）：{ex.Message}" };
         }
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
-            return new LoginResult { Error = $"login failed: {(int)response.StatusCode} {body}" };
+            return new LoginResult { Error = ParseLoginError(body, (int)response.StatusCode) };
         }
 
         var token = await ParseTokenAsync(response, username, ct);
@@ -150,6 +150,34 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
             Username = username,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresIn)
         };
+    }
+
+    /// <summary>解析 OpenIddict/ABP 登录错误体，给出可读的中文提示（对齐 AlphaAgent ParseLoginError）。</summary>
+    private static string ParseLoginError(string? errBody, int statusCode)
+    {
+        if (string.IsNullOrWhiteSpace(errBody))
+            return $"登录失败：服务端返回 {statusCode}";
+
+        // ABP/OpenIddict 错误体：{"error":"invalid_grant","error_description":"..."}
+        string? desc = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(errBody);
+            if (doc.RootElement.TryGetProperty("error_description", out var d))
+                desc = d.GetString();
+            else if (doc.RootElement.TryGetProperty("error", out var e))
+                desc = e.GetString();
+        }
+        catch { }
+
+        var lower = (desc ?? errBody).ToLowerInvariant();
+        if (lower.Contains("locked") || lower.Contains("锁定"))
+            return "账号已被锁定（多次密码错误），请等 15 分钟自动解锁，或联系管理员在后台解锁";
+        if (lower.Contains("invalid") && (lower.Contains("password") || lower.Contains("credential") || lower.Contains("username")))
+            return "用户名或密码错误";
+        if (lower.Contains("not_found") || lower.Contains("不存在"))
+            return "用户不存在";
+        return $"登录失败：{desc ?? errBody}";
     }
 
     /// <summary>POSTs a form to a relative endpoint on the plain (no-auth) client.

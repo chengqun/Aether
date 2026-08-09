@@ -4,5 +4,5 @@ namespace Acme.AppUpdate.Domain;
 
 public interface IUpdateService
 {
-    Task<CheckUpdateResult> CheckUpdateAsync(AppPlatform platform, int currentVersionCode);
+    Task<CheckUpdateResult?> CheckUpdateAsync(AppPlatform platform, int currentVersionCode);
 }

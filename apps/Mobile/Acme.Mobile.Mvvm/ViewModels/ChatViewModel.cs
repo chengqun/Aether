@@ -179,7 +179,7 @@ public partial class ChatViewModel : NavigableViewModelBase
             var versionCode = _platformInfo?.GetVersionCode() ?? 1;
 
             var result = await Task.Run(() => _updateService.CheckUpdateAsync(platform, versionCode));
-            if (result.HasUpdate && result.IsForce)
+            if (result != null && result.HasUpdate && result.IsForce)
             {
                 _uiThreadDispatcher?.Post(() => ForceUpdateRequired?.Invoke(this, result));
             }
