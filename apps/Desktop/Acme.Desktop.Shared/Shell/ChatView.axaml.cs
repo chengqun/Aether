@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;

@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Aether.AI.Core.Agents;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;

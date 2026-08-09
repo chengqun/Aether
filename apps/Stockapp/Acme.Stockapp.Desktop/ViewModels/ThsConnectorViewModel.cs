@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.StockTrading.Application;
 using Acme.StockTrading.Domain;
 using Avalonia.Threading;

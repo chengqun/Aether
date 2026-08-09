@@ -1,6 +1,6 @@
 using Aether.AI.Core.Agents;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 弹出工具审批对话框，返回用户的审批决定；用户关闭/取消返回 <c>null</c>。

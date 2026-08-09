@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.Trading.Application;
 using Acme.Trading.Domain;
 using Acme.Trading.Runtime.Domain;

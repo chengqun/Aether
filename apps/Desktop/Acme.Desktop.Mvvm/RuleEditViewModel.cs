@@ -6,7 +6,7 @@ using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 规则编辑器 ViewModel（独立于 <see cref="ExpertEditViewModel"/>）。规则不用 LLM，故无模型/采样/skill/

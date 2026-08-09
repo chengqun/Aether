@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 public partial class NoteNodeEditRow : ObservableObject
 {

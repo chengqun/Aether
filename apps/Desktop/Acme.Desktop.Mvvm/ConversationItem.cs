@@ -1,7 +1,7 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>最近会话列表行（侧边栏）。</summary>
 public sealed partial class ConversationItem : ObservableObject

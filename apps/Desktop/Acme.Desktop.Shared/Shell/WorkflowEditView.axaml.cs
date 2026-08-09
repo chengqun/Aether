@@ -1,5 +1,5 @@
 using System;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 

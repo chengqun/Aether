@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;

@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// UI 线程调度抽象，使本库的 ViewModel 不依赖任何具体 UI 框架

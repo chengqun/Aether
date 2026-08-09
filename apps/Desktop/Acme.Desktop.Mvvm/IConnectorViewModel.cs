@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 连接器 ViewModel 接口（UI 无关）。具体连接器（如 CTP / 毓数）由各租户宿主实现并注入；

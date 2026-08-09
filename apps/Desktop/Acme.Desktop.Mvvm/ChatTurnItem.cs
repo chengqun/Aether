@@ -2,7 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>一轮对话的分组容器：用户请求 + 其下所有 agent 产出（思考/工具/答案/审批）。</summary>
 public enum TurnStatus

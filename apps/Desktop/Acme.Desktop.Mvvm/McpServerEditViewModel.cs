@@ -3,7 +3,7 @@ using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// MCP server 编辑 ViewModel：单个 JSON 文本框，粘贴完整 server 配置即可。

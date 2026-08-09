@@ -6,7 +6,7 @@ using Acme.Automation.Domain.Interfaces;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 自动化页 ViewModel：管理定时任务（创建/编辑/删除/启停/立即运行）。

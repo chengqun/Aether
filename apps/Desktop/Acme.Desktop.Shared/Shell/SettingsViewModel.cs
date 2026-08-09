@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Acme.DeviceConnect.Domain;

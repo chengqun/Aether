@@ -19,7 +19,7 @@ using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Search;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Knowledge;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;

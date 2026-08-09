@@ -1,6 +1,6 @@
 using Acme.Notes.Domain.Knowledge;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>工作流转交图的不可变图模型（UI 无关）。</summary>
 public sealed record WorkflowGraphModel(IReadOnlyList<GraphNode> Nodes, IReadOnlyList<GraphEdge> Edges)

@@ -1,5 +1,5 @@
 using System.Globalization;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia.Data.Converters;
 
 namespace Acme.Desktop.Shared.Shell;

@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;

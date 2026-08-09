@@ -6,7 +6,7 @@ using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>参与者勾选项。</summary>
 public partial class ParticipantOption : ObservableObject

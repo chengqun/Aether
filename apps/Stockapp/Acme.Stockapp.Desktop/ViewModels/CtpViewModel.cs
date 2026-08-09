@@ -5,7 +5,7 @@ using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
 using Acme.Securities.Application;
 using Acme.Securities.Domain;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;

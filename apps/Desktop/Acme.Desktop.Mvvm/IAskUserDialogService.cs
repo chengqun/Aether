@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>单个待确认问题（问题文本 + 可选选项）。</summary>
 public sealed class AskUserQuestionInput

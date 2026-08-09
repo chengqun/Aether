@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Windows.Input;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

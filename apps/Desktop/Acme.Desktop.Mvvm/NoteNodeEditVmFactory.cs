@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Knowledge;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 创建表单编辑 VM 的上下文：工厂需要的三方依赖——选中节点、Notes VM（保存/解析/状态）、

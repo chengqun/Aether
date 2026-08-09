@@ -23,7 +23,7 @@ public sealed class MobileAskUserTool
     }
 }
 
-/// <summary>单个待确认问题（与桌面 Acme.Shell.AskUserQuestionInput 同构，手机端本地定义以免引 Acme.Shell）。</summary>
+/// <summary>单个待确认问题（与桌面 Acme.Desktop.Mvvm.AskUserQuestionInput 同构，手机端本地定义以免引 Acme.Desktop.Mvvm）。</summary>
 public sealed class AskUserQuestionInput
 {
     public string Question { get; set; } = string.Empty;

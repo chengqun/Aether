@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 连接器卡片 ViewModel 基类（UI 无关）。每张卡片 = 一个可连接服务的状态徽章 + 主操作（"+"）+ 可选「同步」。

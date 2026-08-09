@@ -1,6 +1,6 @@
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using Microsoft.Extensions.DependencyInjection;

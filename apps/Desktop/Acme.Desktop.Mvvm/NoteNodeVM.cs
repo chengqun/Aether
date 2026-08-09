@@ -3,7 +3,7 @@ using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 public sealed partial class NoteNodeVM : ObservableObject
 {

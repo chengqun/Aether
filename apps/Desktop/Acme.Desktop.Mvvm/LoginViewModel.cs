@@ -2,7 +2,7 @@ using Acme.AppAuth.Application.Auth;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 登录对话框 ViewModel：服务器地址/用户名/密码 → <see cref="IAppAuthService.LoginAsync"/>。

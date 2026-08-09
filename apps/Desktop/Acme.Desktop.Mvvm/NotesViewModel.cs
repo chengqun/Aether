@@ -11,7 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 public partial class NotesViewModel : ObservableObject
 {

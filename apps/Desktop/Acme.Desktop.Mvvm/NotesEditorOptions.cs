@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// Notes 编辑器运行时配置（由桌面组合根设置）。非 AI 选项，故不放 AetherAIOptions。

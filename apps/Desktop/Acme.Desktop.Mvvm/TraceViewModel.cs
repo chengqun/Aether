@@ -4,7 +4,7 @@ using Aether.AI.Harness.Telemetry;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 运行 Trace 查看 ViewModel：从 <see cref="TraceCollector"/> 实时收集最近 agent.run trace，

@@ -1,7 +1,7 @@
 using System.IO;
 using Acme.ApkParser.AI;
 using Acme.Agents.AI;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Scripting;
 using Aether.AI.Harness.Tools;
@@ -106,8 +106,8 @@ public static class DesktopCompositionExtensions
         services.AddAutomationInfrastructure(Path.Combine(tenantDir, "automation.db"));
         services.AddAutomationApplication();
         // IAgentExecutor 实现：复用聊天会话流程（ICustomAgentRunner + IConversationStore），
-        // 定时触发落库进「最近会话」并保留跨次记忆。实现住宿主 VM 库（Acme.Shell）。
-        services.AddSingleton<Acme.Automation.Domain.Interfaces.IAgentExecutor, Acme.Shell.ConversationBackedAgentExecutor>();
+        // 定时触发落库进「最近会话」并保留跨次记忆。实现住宿主 VM 库（Acme.Desktop.Mvvm）。
+        services.AddSingleton<Acme.Automation.Domain.Interfaces.IAgentExecutor, Acme.Desktop.Mvvm.ConversationBackedAgentExecutor>();
 
         services.AddChatSocialInfrastructure();
         services.AddChatSocialApplication();

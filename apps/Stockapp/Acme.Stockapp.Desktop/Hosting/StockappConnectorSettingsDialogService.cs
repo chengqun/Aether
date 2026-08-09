@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.Stockapp.Desktop.ViewModels;
 using Acme.Stockapp.Desktop.Views;
 using Avalonia;

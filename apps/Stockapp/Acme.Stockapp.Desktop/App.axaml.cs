@@ -4,7 +4,7 @@ using Acme.Ctp.AI;
 using Acme.Ctp.Application.DependencyInjection;
 using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.Desktop.Shared.Hosting;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.Desktop.Shared.Shell;
 using Acme.Quotes.AI;
 using Acme.Quotes.Application.DependencyInjection;

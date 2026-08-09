@@ -1,6 +1,6 @@
 using Acme.Notes.Domain;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 节点类型注册表：登记各类 <see cref="NoteNodeType"/> 的描述符。

@@ -1,6 +1,6 @@
 using Acme.Notes.Domain;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 节点类型描述符：聚合一个 <see cref="NoteNodeType"/> 的显示 + 创建 + 语法行为，

@@ -1,6 +1,6 @@
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

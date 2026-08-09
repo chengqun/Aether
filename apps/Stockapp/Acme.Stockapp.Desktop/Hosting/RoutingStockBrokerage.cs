@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.StockTrading.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;

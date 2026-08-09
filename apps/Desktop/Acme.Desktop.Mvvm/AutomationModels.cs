@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using Acme.Automation.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>agent 选择项（agent 目录里的一项）。</summary>
 public sealed class AgentOption : ObservableObject

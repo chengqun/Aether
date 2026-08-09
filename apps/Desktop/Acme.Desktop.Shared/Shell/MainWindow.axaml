@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="using:Acme.Desktop.Shared.Shell"
-        xmlns:nav="using:Acme.Shell"
+        xmlns:nav="using:Acme.Desktop.Mvvm"
         x:Class="Acme.Desktop.Shared.Shell.MainWindow"
         Title="Aether 桌面"
         Width="1200" Height="800"

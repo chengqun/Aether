@@ -6,7 +6,7 @@ using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>可选目标节点（任意笔记，下拉选择用）。</summary>
 public sealed record TargetOption(Guid Id, string Title);

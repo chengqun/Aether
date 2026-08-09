@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 启动期设备自动连接服务（加载设备配置并按需连接）。UI 无关接口；

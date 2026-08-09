@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>fire-and-forget Task 扩展：await + 吞异常，防 UnobservedTaskException 静默吞错误。</summary>
 public static class TaskExtensions

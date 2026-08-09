@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
-             xmlns:nav="using:Acme.Shell"
+             xmlns:nav="using:Acme.Desktop.Mvvm"
              xmlns:edit="using:AvaloniaEdit"
              xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              x:Class="Acme.Desktop.Shared.Shell.NotesView"

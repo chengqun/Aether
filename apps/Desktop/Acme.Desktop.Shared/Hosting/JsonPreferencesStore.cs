@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 
 namespace Acme.Desktop.Shared.Hosting;
 

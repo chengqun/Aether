@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using Avalonia;

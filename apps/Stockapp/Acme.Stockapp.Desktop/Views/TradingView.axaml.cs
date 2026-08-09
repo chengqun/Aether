@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Acme.Desktop.Shared.Shell;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Acme.Stockapp.Desktop.ViewModels;
 using Avalonia;
 using Avalonia.Controls;

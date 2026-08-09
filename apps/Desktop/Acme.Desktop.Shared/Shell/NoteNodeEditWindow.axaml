@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:shell="using:Acme.Shell"
+        xmlns:shell="using:Acme.Desktop.Mvvm"
         x:Class="Acme.Desktop.Shared.Shell.NoteNodeEditWindow"
         Title="节点属性"
         Width="460" Height="560" MinHeight="500"

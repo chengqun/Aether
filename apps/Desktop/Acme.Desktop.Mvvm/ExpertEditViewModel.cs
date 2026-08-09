@@ -6,7 +6,7 @@ using Aether.AI.Abstractions;
 using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>工具选项（工具池项，供自定义 Agent 勾选）。</summary>
 public partial class ToolOption : ObservableObject

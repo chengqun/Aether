@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Microsoft.Extensions.AI;
 
 namespace Acme.Desktop.Shared.Shell;

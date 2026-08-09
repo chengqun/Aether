@@ -1,4 +1,4 @@
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 侧边栏导航图标的矢量 path data（Lucide 图标，MIT；viewBox 24×24，stroke-based）。

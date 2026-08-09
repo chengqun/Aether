@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 笔记节点可选图标项。Key 为持久化标识（存入 NoteNode.Icon）；null 表示「跟随类型」默认。

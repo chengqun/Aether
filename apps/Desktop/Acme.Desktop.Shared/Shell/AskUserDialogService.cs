@@ -1,4 +1,4 @@
-using Acme.Shell;
+using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;

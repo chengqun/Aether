@@ -6,7 +6,7 @@ using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Messages;
 using Aether.AI.Memory;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// <see cref="IAgentExecutor"/> 的宿主实现：复用聊天页同一条会话流程触发专家。

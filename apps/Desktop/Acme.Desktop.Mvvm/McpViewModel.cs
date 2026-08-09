@@ -4,7 +4,7 @@ using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Acme.Shell;
+namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// MCP 工具服务器管理 ViewModel（Experts 页 MCP tab）：列出已配置 server + 连接状态 + 每个的工具，

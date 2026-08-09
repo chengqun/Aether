@@ -30,10 +30,8 @@
   <Folder Name="/apps/">
   </Folder>
   <Folder Name="/apps/Desktop/">
+    <Project Path="apps/Desktop/Acme.Desktop.Mvvm/Acme.Desktop.Mvvm.csproj" />
     <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />
-  </Folder>
-  <Folder Name="/apps/Acme.Shell/">
-    <Project Path="apps/Acme.Shell/Acme.Shell.csproj" />
   </Folder>
   <Folder Name="/apps/Mobile/">
     <Project Path="apps/Mobile/Acme.Mobile.Mvvm/Acme.Mobile.Mvvm.csproj" />
