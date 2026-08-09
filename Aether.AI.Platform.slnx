@@ -35,6 +35,9 @@
   <Folder Name="/apps/Acme.Shell/">
     <Project Path="apps/Acme.Shell/Acme.Shell.csproj" />
   </Folder>
+  <Folder Name="/apps/Mobile/">
+    <Project Path="apps/Mobile/Acme.Mobile.Mvvm/Acme.Mobile.Mvvm.csproj" />
+  </Folder>
   <Folder Name="/apps/Stockapp/">
     <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
   </Folder>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.AgentContactDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
+    Loaded="OnLoaded"
+    Title="AI 助手">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- 头部 -->
+            <HorizontalStackLayout Spacing="14" VerticalOptions="Start">
+                <Border WidthRequest="64" HeightRequest="64"
+                        BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 32" StrokeThickness="0">
+                    <Label Text="{Binding AgentInitial}" TextColor="White" FontSize="28" FontFamily="OpenSansSemibold"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                    <Label Text="{Binding AgentName}" FontSize="20" FontFamily="OpenSansSemibold" />
+                    <Label Text="{Binding Description}" FontSize="13"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
+
+            <!-- LLM 配置（仅非工作流） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsAgentKindAgent}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="LLM 配置" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Picker ItemsSource="{Binding AvailableLlmConfigs}"
+                            SelectedItem="{Binding SelectedLlmConfigItem}"
+                            ItemDisplayBinding="{Binding DisplayName}"
+                            Title="{Binding CurrentLlmConfigName}" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 工具开关（仅 LLM Agent） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsAgentKindAgent}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="工具" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <CollectionView ItemsSource="{Binding ToolCategories}" SelectionMode="None">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="model:ToolCategoryGroup">
+                                <VerticalStackLayout Spacing="6" Margin="0,4">
+                                    <HorizontalStackLayout Spacing="8">
+                                        <HorizontalStackLayout.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                        </HorizontalStackLayout.GestureRecognizers>
+                                        <Label Text="{Binding ExpandIndicator}" FontSize="12" VerticalOptions="Center" />
+                                        <Label Text="{Binding Category}" FontFamily="OpenSansSemibold" FontSize="14" VerticalOptions="Center" />
+                                        <Label Text="{Binding ToolCount, StringFormat='({0})'}" FontSize="12"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+
+                                    <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="4">
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Tools}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="model:ToolToggleItem">
+                                                    <HorizontalStackLayout Spacing="10" Padding="8,4">
+                                                        <Switch IsToggled="{Binding IsEnabled}" />
+                                                        <VerticalStackLayout Spacing="1">
+                                                            <Label Text="{Binding Name}" FontSize="14" />
+                                                            <Label Text="{Binding Description}" FontSize="11"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                                        </VerticalStackLayout>
+                                                    </HorizontalStackLayout>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <Button Text="发消息" Style="{StaticResource PrimaryButton}" Command="{Binding SendMessageCommand}" />
+            <Button Text="删除 Agent" Style="{StaticResource GhostButton}"
+                    IsVisible="{Binding CanDeleteAgent}" Clicked="OnDeleteClicked" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

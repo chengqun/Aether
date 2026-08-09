@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary
+    x:Class="Acme.Mobile.Shared.Resources.Styles.Colors"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- 主题色 token（Light/Dark 双值；手机需要暗色，与桌面 light-only 不同） -->
+    <Color x:Key="Primary">#2E7D32</Color>
+    <Color x:Key="PrimaryDark">#66BB6A</Color>
+    <Color x:Key="Accent">#1976D2</Color>
+
+    <Color x:Key="PageBackground">White</Color>
+    <Color x:Key="PageBackgroundDark">#121212</Color>
+
+    <Color x:Key="CardBackground">White</Color>
+    <Color x:Key="CardBackgroundDark">#1E1E1E</Color>
+
+    <Color x:Key="TextPrimary">#1A1A1A</Color>
+    <Color x:Key="TextPrimaryDark">#E8E8E8</Color>
+    <Color x:Key="TextSecondary">#666666</Color>
+    <Color x:Key="TextSecondaryDark">#9E9E9E</Color>
+
+    <Color x:Key="Divider">#E0E0E0</Color>
+    <Color x:Key="DividerDark">#2C2C2C</Color>
+
+    <!-- 聊天气泡 -->
+    <Color x:Key="BubbleMine">#95EC69</Color>
+    <Color x:Key="BubbleOther">White</Color>
+    <Color x:Key="BubbleOtherDark">#2A2A2A</Color>
+    <Color x:Key="BubbleThinking">#F5F5F5</Color>
+    <Color x:Key="BubbleThinkingDark">#262626</Color>
+    <Color x:Key="BubbleTool">#FFF8E1</Color>
+    <Color x:Key="BubbleToolDark">#322F1E</Color>
+
+    <Color x:Key="NavBackground">#F7F7F7</Color>
+    <Color x:Key="NavBackgroundDark">#1A1A1A</Color>
+</ResourceDictionary>

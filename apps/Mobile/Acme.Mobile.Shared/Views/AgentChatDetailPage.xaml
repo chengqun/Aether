@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="Acme.Mobile.Shared.Views.AgentChatDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:md="clr-namespace:Indiko.Maui.Controls.Markdown;assembly=Indiko.Maui.Controls.Markdown"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
+    xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
+    Title="AI 助手">
+
+    <ContentPage.Resources>
+        <!-- 用户消息：右侧绿色气泡 -->
+        <DataTemplate x:Key="UserTextTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
+                <Border BackgroundColor="{StaticResource BubbleMine}" StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8" MaximumWidthRequest="280">
+                    <Label Text="{Binding Content}" TextColor="#1A1A1A" FontSize="15" LineBreakMode="WordWrap" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 助手消息：左侧白色气泡 + Markdown -->
+        <DataTemplate x:Key="AssistantTextTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8" MaximumWidthRequest="300">
+                    <md:MarkdownView MarkdownText="{Binding Content}" Theme="{StaticResource AppMarkdownTheme}" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 工具调用：紧凑卡片 -->
+        <DataTemplate x:Key="ToolCallTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
+                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                        <Label Text="🔧" FontSize="13" />
+                        <Label Text="{Binding ToolName, StringFormat='调用 {0}'}" FontSize="13" FontFamily="OpenSansSemibold"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                    </HorizontalStackLayout>
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 工具结果：紧凑卡片 -->
+        <DataTemplate x:Key="ToolResultTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
+                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                        <Label Text="✅" FontSize="13" />
+                        <Label Text="{Binding ToolName, StringFormat='结果 {0}'}" FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </HorizontalStackLayout>
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 思考：斜体灰色 -->
+        <DataTemplate x:Key="ThinkingTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
+                    <Label Text="{Binding Content, StringFormat='💭 {0}'}" FontSize="13" FontAttributes="Italic"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <views:ChatMessageTemplateSelector x:Key="ChatMessageSelector"
+            UserTextTemplate="{StaticResource UserTextTemplate}"
+            AssistantTextTemplate="{StaticResource AssistantTextTemplate}"
+            ToolCallTemplate="{StaticResource ToolCallTemplate}"
+            ToolResultTemplate="{StaticResource ToolResultTemplate}"
+            ThinkingTemplate="{StaticResource ThinkingTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*,Auto">
+        <CollectionView x:Name="MessagesList"
+                        Grid.Row="0"
+                        ItemsSource="{Binding Messages}"
+                        ItemTemplate="{StaticResource ChatMessageSelector}"
+                        VerticalOptions="Fill">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" />
+            </CollectionView.ItemsLayout>
+        </CollectionView>
+
+        <!-- 输入栏 -->
+        <Border Grid.Row="1" Padding="8" BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Entry Grid.Column="0" x:Name="MessageEntry"
+                       Text="{Binding MessageText}"
+                       Placeholder="输入消息…"
+                       ReturnType="Send"
+                       ReturnCommand="{Binding SendMessageCommand}" />
+                <Button Grid.Column="1" Text="发送" Style="{StaticResource PrimaryButton}"
+                        Command="{Binding SendMessageCommand}"
+                        IsEnabled="{Binding CanSendMessage}" Padding="16,8" />
+            </Grid>
+        </Border>
+    </Grid>
+
+</ContentPage>

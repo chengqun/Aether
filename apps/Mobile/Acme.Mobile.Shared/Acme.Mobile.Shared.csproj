@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- MAUI class library (shared by Qifu.Mobile + Stockapp.Mobile tenant hosts).
+         Tenant hosts are the Exe projects; this lib holds Views/Services/Converters/Resources + AddMobileCommon. -->
+    <TargetFrameworks>net10.0-ios</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-android</TargetFrameworks>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.Mobile.Shared</RootNamespace>
+    <MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.9" />
+    <PackageReference Include="CommunityToolkit.Maui" Version="14.2.0" />
+    <PackageReference Include="Indiko.Maui.Controls.Markdown" Version="1.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Images / Fonts / Raw assets live in the shared lib; MAUI picks them up from referenced libs. -->
+    <MauiImage Include="Resources\Images\*" />
+    <MauiImage Update="Resources\Images\chat.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\contact.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\discovery.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\me.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\ai.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\microphone.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\keyboard.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\camera.svg" BaseSize="24,24" />
+    <MauiImage Update="Resources\Images\right_arrow.svg" BaseSize="24,24" />
+    <MauiFont Include="Resources\Fonts\*" />
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared VM layer (ported from AlphaAgent.Mvvm, Aether contracts) -->
+    <ProjectReference Include="..\Acme.Mobile.Mvvm\Acme.Mobile.Mvvm.csproj" />
+
+    <!-- Aether platform + agent-runtime (AddAetherAI / AddCustomAgents / IConversationStore Sqlite impl) -->
+    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\src\Aether.AI.Memory.Sqlite\Aether.AI.Memory.Sqlite.csproj" />
+    <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
+
+    <!-- 公共业务上下文（两租户共用；AddMobileCommon 注册 DI） -->
+    <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Infrastructure\Acme.Automation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\ChatSocial\Acme.ChatSocial.Application\Acme.ChatSocial.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\ChatSocial\Acme.ChatSocial.Infrastructure\Acme.ChatSocial.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceConnect\Acme.DeviceConnect.Application\Acme.DeviceConnect.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceConnect\Acme.DeviceConnect.Infrastructure\Acme.DeviceConnect.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Application\Acme.DeviceManagement.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Infrastructure\Acme.DeviceManagement.Infrastructure.csproj" />
+
+    <!-- 社交上下文（Stage 2 用；Mobile.Mvvm 已引 Application，此处补 Infrastructure 供 AddMobileCommon 注册 DI） -->
+    <ProjectReference Include="..\..\..\business\Moments\Acme.Moments.Application\Acme.Moments.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Moments\Acme.Moments.Infrastructure\Acme.Moments.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\ServiceAccount\Acme.ServiceAccount.Application\Acme.ServiceAccount.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\ServiceAccount\Acme.ServiceAccount.Infrastructure\Acme.ServiceAccount.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\business\Video\Acme.Video.Application\Acme.Video.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
+  </ItemGroup>
+
+</Project>
