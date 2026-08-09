@@ -762,17 +762,18 @@ public partial class ChatViewModel : NavigableViewModelBase
             }
             else
             {
-                Conversations.Clear();
                 if (_chatService != null)
                 {
                     var response = await Task.Run(() => _chatService.GetMyConversationsAsync());
                     if (response != null)
                     {
+                        Conversations.Clear();
                         foreach (var conv in response)
                         {
                             Conversations.Add(new ObservableConversation(conv));
                         }
                     }
+                    // response==null（HTTP 失败）→ 保留现有列表，不清空（避免失败导致会话列表变空）
                 }
             }
 

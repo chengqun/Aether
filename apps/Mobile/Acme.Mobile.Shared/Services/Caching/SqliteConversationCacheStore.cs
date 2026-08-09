@@ -64,14 +64,22 @@ public sealed class SqliteConversationCacheStore : SqliteStoreBase, IConversatio
         if (_chatService == null)
             return await GetCachedConversationsAsync(userId).ConfigureAwait(false);
 
-        List<Conversation> server;
+        List<Conversation>? server;
         try
         {
             server = await _chatService.GetMyConversationsAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[ConvSync] 拉取服务端会话失败，回退缓存: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ConvSync] 拉取服务端会话异常，回退缓存: {ex.Message}");
+            return await GetCachedConversationsAsync(userId).ConfigureAwait(false);
+        }
+
+        // null=HTTP 失败（GetAsync 返回 null，service 不兜底）→ 回退缓存，绝不执行下方差集删除
+        // （否则 serverIds 为空会把本地所有非 Agent 会话当"服务端已删"清掉 = 数据丢失）。
+        if (server == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[ConvSync] 服务端返回 null（HTTP 失败），回退缓存，不删除本地会话");
             return await GetCachedConversationsAsync(userId).ConfigureAwait(false);
         }
 

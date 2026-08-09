@@ -337,7 +337,9 @@ public partial class ContactsViewModel : NavigableViewModelBase
         if (_relationshipService == null) return;
 
         var contacts = await Task.Run(() => _relationshipService.GetAcceptedContactsAsync());
-        if (contacts != null && contacts.Count > 0)
+        // null=HTTP 失败 → 报"加载失败"；非null（哪怕空）= 成功 → 渲染通讯录（空数据也要渲染，
+        // 让"新的朋友"入口常驻，否则用户无法加好友 → 死循环没数据）。对齐 AlphaAgent 的 response.Success 语义。
+        if (contacts != null)
         {
             RenderContactBook(ContactBookBuilder.Build(contacts));
         }

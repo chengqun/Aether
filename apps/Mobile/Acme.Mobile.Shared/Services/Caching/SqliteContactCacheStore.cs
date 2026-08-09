@@ -54,14 +54,22 @@ public sealed class SqliteContactCacheStore : SqliteStoreBase, IContactSyncServi
         if (_relationshipService == null)
             return await GetCachedContactsAsync(userId).ConfigureAwait(false);
 
-        List<Relationship> server;
+        List<Relationship>? server;
         try
         {
             server = await _relationshipService.GetAcceptedContactsAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[ContactSync] 拉取服务端通讯录失败，回退缓存: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ContactSync] 拉取服务端通讯录异常，回退缓存: {ex.Message}");
+            return await GetCachedContactsAsync(userId).ConfigureAwait(false);
+        }
+
+        // null=HTTP 失败 → 回退缓存，绝不执行下方全量 DELETE+INSERT
+        // （否则先删全部再插 0 条 = 本地通讯录缓存被清空 = 数据丢失）。
+        if (server == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[ContactSync] 服务端返回 null（HTTP 失败），回退缓存，不清空本地通讯录");
             return await GetCachedContactsAsync(userId).ConfigureAwait(false);
         }
 

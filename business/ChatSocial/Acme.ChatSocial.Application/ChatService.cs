@@ -19,29 +19,30 @@ public class ChatService : IChatService
         _httpClient = httpClient;
     }
 
-    public async Task<Conversation> GetOrCreateDirectConversationAsync(Guid targetUserId, CancellationToken ct = default)
+    public async Task<Conversation?> GetOrCreateDirectConversationAsync(Guid targetUserId, CancellationToken ct = default)
     {
         var response = await _httpClient.PostRawAsync($"api/app/chat/get-or-create-direct-conversation/{targetUserId}", new object(), ct);
         return await ParseResponseAsync<Conversation>(response, ct);
     }
 
-    public async Task<Conversation> GetOrCreateGroupConversationAsync(Guid groupId, CancellationToken ct = default)
+    public async Task<Conversation?> GetOrCreateGroupConversationAsync(Guid groupId, CancellationToken ct = default)
     {
         var response = await _httpClient.PostRawAsync($"api/app/chat/get-or-create-group-conversation/{groupId}", new object(), ct);
         return await ParseResponseAsync<Conversation>(response, ct);
     }
 
-    public async Task<List<Conversation>> GetMyConversationsAsync(CancellationToken ct = default)
+    public async Task<List<Conversation>?> GetMyConversationsAsync(CancellationToken ct = default)
     {
-        return await _httpClient.GetAsync<List<Conversation>>("api/app/chat/my-conversations", ct) ?? new List<Conversation>();
+        // 不兜底 ?? new——null=HTTP 失败，空列表=成功无数据。调用方（缓存同步）必须能区分，否则失败时会误清空本地缓存。
+        return await _httpClient.GetAsync<List<Conversation>>("api/app/chat/my-conversations", ct);
     }
 
-    public async Task<List<ChatMessage>> GetMessagesAsync(Guid conversationId, int skipCount = 0, int maxResultCount = 50, CancellationToken ct = default)
+    public async Task<List<ChatMessage>?> GetMessagesAsync(Guid conversationId, int skipCount = 0, int maxResultCount = 50, CancellationToken ct = default)
     {
-        return await _httpClient.GetAsync<List<ChatMessage>>($"api/app/chat/messages/{conversationId}?skipCount={skipCount}&maxResultCount={maxResultCount}", ct) ?? new List<ChatMessage>();
+        return await _httpClient.GetAsync<List<ChatMessage>>($"api/app/chat/messages/{conversationId}?skipCount={skipCount}&maxResultCount={maxResultCount}", ct);
     }
 
-    public async Task<ChatMessage> SendMessageAsync(Guid conversationId, string content, string messageType = "Text", CancellationToken ct = default)
+    public async Task<ChatMessage?> SendMessageAsync(Guid conversationId, string content, string messageType = "Text", CancellationToken ct = default)
     {
         var response = await _httpClient.PostRawAsync($"api/app/chat/send-message/{conversationId}", new { Content = content, MessageType = messageType }, ct);
         return await ParseResponseAsync<ChatMessage>(response, ct);
@@ -63,13 +64,15 @@ public class ChatService : IChatService
         return result?.Count ?? 0;
     }
 
-    private static async Task<T> ParseResponseAsync<T>(HttpResponseMessage? response, CancellationToken ct) where T : new()
+    private static async Task<T?> ParseResponseAsync<T>(HttpResponseMessage? response, CancellationToken ct) where T : class
     {
+        // 失败（null 响应/非 2xx/反序列化失败）返回 null——不兜底 new T()。
+        // 调用方据此判断失败：null=失败报错，非null=成功。兜底 new T() 会把失败伪装成空对象，使 VM 的 null 检查变死代码。
         if (response == null || !response.IsSuccessStatusCode)
-            return new T();
+            return null;
 
         var json = await response.Content.ReadAsStringAsync(ct);
-        return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new T();
+        return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 
     private record UnreadCountResult(int Count);
