@@ -341,4 +341,32 @@
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
+  <!-- Markdown.Avalonia 表格主题化（修 dark 主题表格白块 bug）。
+       GithubLike 主题对表格元素硬编码浅色（Border.Table 边框 #DFE2E5、单元格边框 #DFE2E5、
+       表头 #FFFFFF、奇行 White、偶行 #F6F8FA）→ 非 light 主题下表格仍是白底浅框，与深色气泡冲突。
+       此处用 token 覆盖（同 Border.CodeBlock/Blockquote 机制），表格跟随主题——
+       不让 GithubLike 自行决定颜色。selector 与 GithubLike 一一对应（bare selector 应用级覆盖控件级主题）：
+       Border.Table / Grid.Table>Border / Border.TableHeader cb|CTextBlock / Border.OddTableRow / Border.EvenTableRow。 -->
+  <Style Selector="Border.Table">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+    <Setter Property="Margin" Value="5"/>
+  </Style>
+  <Style Selector="Grid.Table > Border">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1,1,0,0"/>
+    <Setter Property="Padding" Value="13,6"/>
+  </Style>
+  <Style Selector="Border.TableHeader cb|CTextBlock">
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  </Style>
+  <Style Selector="Border.OddTableRow">
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+  </Style>
+  <Style Selector="Border.EvenTableRow">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+
 </Styles>
