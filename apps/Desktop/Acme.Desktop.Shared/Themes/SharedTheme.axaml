@@ -305,4 +305,20 @@
        原因：GithubLike 主题由 MarkdownScrollViewer ctor Styles.Insert(0,…) 挂进【控件自身】Styles 集合，
        控件级优先级 > app 级 → 此处（app 级）的 markdown 覆盖不生效。见 MarkdownThemeStyles.axaml。 -->
 
+  <!-- 表单字段布局：4 个 EditView（Expert/Rule/Workflow/Knowledge）共用，
+       根 UserControl 标 Classes="form-fields" 即生效，免去各文件重复 UserControl.Styles。 -->
+  <Style Selector="UserControl.form-fields Expander">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Margin" Value="0,0,0,2"/>
+  </Style>
+  <Style Selector="UserControl.form-fields TextBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="UserControl.form-fields ComboBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+  <Style Selector="UserControl.form-fields NumericUpDown">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+
 </Styles>

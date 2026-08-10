@@ -35,6 +35,13 @@
 
     <ScrollViewer Padding="20,12" HorizontalScrollBarVisibility="Disabled">
       <Panel>
+        <!-- 加载态：连接 MCP 服务器时显示 -->
+        <StackPanel IsVisible="{Binding IsLoading}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+          <ProgressBar IsIndeterminate="True" Width="140" Height="3"/>
+          <TextBlock Text="正在连接 MCP 服务器…" FontSize="12" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
         <!-- 空态 -->
         <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="{DynamicResource CardBgBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"

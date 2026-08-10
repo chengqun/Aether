@@ -166,6 +166,21 @@ public sealed partial class AutomationTaskRow : ObservableObject
         AgentName = Guid.TryParse(AgentId, out var id) && agentNames.TryGetValue(id, out var n) ? n : "(已删除专家)";
     }
 
+    /// <summary>就地刷新执行状态字段（保留列表选中/滚动位置），用于 TaskCompleted 局部更新。</summary>
+    public void RefreshExecution(AutomationTask t)
+    {
+        LastExecutionTime = t.LastExecutionTime;
+        LastExecutionStatus = t.LastExecutionStatus;
+        LastExecutionResult = t.LastExecutionResult;
+        NextExecutionTime = t.NextExecutionTime;
+        IsEnabled = t.Enabled;
+        // 上述为普通属性（非 [ObservableProperty]），手动 raise 派生显示属性以刷新 UI。
+        OnPropertyChanged(nameof(NextRunDisplay));
+        OnPropertyChanged(nameof(LastRunDisplay));
+        OnPropertyChanged(nameof(LastResultDisplay));
+        OnPropertyChanged(nameof(StatusBadge));
+    }
+
     /// <summary>把行映射回领域实体（不含 Id/CreatedAt，由服务层补）。</summary>
     public AutomationTask ToTask()
     {

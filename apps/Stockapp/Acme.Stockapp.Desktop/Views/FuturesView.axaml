@@ -23,7 +23,7 @@
       <Setter Property="MinHeight" Value="0" />
     </Style>
     <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-      <Setter Property="Background" Value="#334A90E2" />
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}" />
     </Style>
   </UserControl.Styles>
 

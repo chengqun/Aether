@@ -46,60 +46,71 @@
 
       <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="0,0,1,0">
-        <TreeView x:Name="NotesTree" Margin="4,4"
-                  ItemsSource="{Binding Roots}"
-                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
-          <TreeView.ContextMenu>
-            <ContextMenu>
-              <MenuItem Header="新建节点（同级）" Click="OnCreateSiblingClick" />
-              <MenuItem Header="新建子节点" Click="OnCreateChildClick"
-                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-              <Separator />
-              <MenuItem Header="修改节点属性" Click="OnEditPropertiesClick"
-                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-              <MenuItem Header="删除" Click="OnDeleteClick"
-                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-              <Separator />
-              <MenuItem Header="上移" Command="{Binding MoveNodeUpCommand}"
-                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-              <MenuItem Header="下移" Command="{Binding MoveNodeDownCommand}"
-                        IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
-            </ContextMenu>
-          </TreeView.ContextMenu>
-          <TreeView.ItemTemplate>
-            <TreeDataTemplate ItemsSource="{Binding Children}">
-              <Grid HorizontalAlignment="Stretch">
-                <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
-                        CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                        Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}" VerticalAlignment="Center"/>
-                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                        StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                        Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}" VerticalAlignment="Center"/>
-                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
-                </StackPanel>
-              </Grid>
-            </TreeDataTemplate>
-          </TreeView.ItemTemplate>
-          <TreeView.Styles>
-            <Style Selector="TreeViewItem">
-              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-              <Setter Property="Padding" Value="2,1"/>
-            </Style>
-            <!-- 箭头三角大小不变，只压缩容器空白让其紧贴节点 -->
-            <Style Selector="TreeViewItem /template/ ToggleButton">
-              <Setter Property="Width" Value="12"/>
-              <Setter Property="MinWidth" Value="0"/>
-              <Setter Property="Padding" Value="0"/>
-              <Setter Property="Margin" Value="0"/>
-            </Style>
-            <!-- 选中后背景变深，文字转白保证可读 -->
-            <Style Selector="TreeViewItem:selected">
-              <Setter Property="Foreground" Value="White"/>
-            </Style>
-          </TreeView.Styles>
-        </TreeView>
+        <Grid>
+          <TreeView x:Name="NotesTree" Margin="4,4"
+                    ItemsSource="{Binding Roots}"
+                    SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+            <TreeView.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="新建节点（同级）" Click="OnCreateSiblingClick" />
+                <MenuItem Header="新建子节点" Click="OnCreateChildClick"
+                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+                <Separator />
+                <MenuItem Header="修改节点属性" Click="OnEditPropertiesClick"
+                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+                <MenuItem Header="删除" Click="OnDeleteClick"
+                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+                <Separator />
+                <MenuItem Header="上移" Command="{Binding MoveNodeUpCommand}"
+                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+                <MenuItem Header="下移" Command="{Binding MoveNodeDownCommand}"
+                          IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}" />
+              </ContextMenu>
+            </TreeView.ContextMenu>
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate ItemsSource="{Binding Children}">
+                <Grid HorizontalAlignment="Stretch">
+                  <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
+                          CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
+                          Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}" VerticalAlignment="Center"/>
+                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
+                          StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                          Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+            <TreeView.Styles>
+              <Style Selector="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="Padding" Value="2,1"/>
+              </Style>
+              <!-- 箭头三角大小不变，只压缩容器空白让其紧贴节点 -->
+              <Style Selector="TreeViewItem /template/ ToggleButton">
+                <Setter Property="Width" Value="12"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+              </Style>
+              <!-- 选中后背景变深，文字转白保证可读 -->
+              <Style Selector="TreeViewItem:selected">
+                <Setter Property="Foreground" Value="White"/>
+              </Style>
+            </TreeView.Styles>
+          </TreeView>
+          <!-- 空态：无笔记时提示（TreeView 空集合不渲染，此 TextBlock 占位） -->
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                      IsVisible="{Binding !Roots.Count}" Spacing="6">
+            <TextBlock Text="📝" FontSize="32" HorizontalAlignment="Center" Opacity="0.5" />
+            <TextBlock Text="暂无笔记" FontSize="13" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBlock Text="右键根节点或点上方「+」新建" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </Grid>
       </Border>
 
       <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"

@@ -383,7 +383,7 @@
                         <TextBlock Text="{Binding DisplayIcon}" FontSize="13" VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                           <TextBlock Text="{Binding Name}" FontSize="13" />
-                          <TextBlock Text="{Binding Description}" FontSize="10" Foreground="Gray" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                       </StackPanel>
                     </DataTemplate>

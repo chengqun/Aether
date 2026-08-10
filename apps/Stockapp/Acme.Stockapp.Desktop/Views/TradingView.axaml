@@ -5,7 +5,7 @@
 
   <UserControl.Styles>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="White"/>
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="10"/>
@@ -183,7 +183,7 @@
               <TextBlock Text="权益曲线" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
               <Viewbox Stretch="Fill" Width="800" Height="240">
                 <Canvas Width="1000" Height="300">
-                  <Polyline Points="{Binding EquityPoints}" Stroke="#3B82F6" StrokeThickness="3" />
+                  <Polyline Points="{Binding EquityPoints}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="3" />
                 </Canvas>
               </Viewbox>
             </StackPanel>

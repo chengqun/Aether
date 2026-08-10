@@ -43,7 +43,28 @@ public partial class AutomationViewModel : ObservableObject
     }
 
     private void OnTaskCompleted(int taskId)
-        => _dispatcher.Post(async () => await LoadAsync());
+        => _dispatcher.Post(async () => await RefreshTaskAsync(taskId));
+
+    /// <summary>TaskCompleted 局部刷新：只取单条任务就地更新对应行，保留列表选中/滚动位置。</summary>
+    private async Task RefreshTaskAsync(int taskId)
+    {
+        try
+        {
+            var task = await _service.GetTaskByIdAsync(taskId, CancellationToken.None);
+            if (task is null) return;
+            await _dispatcher.InvokeAsync(() =>
+            {
+                var row = Tasks.FirstOrDefault(r => r.Id == taskId);
+                if (row is null) return; // 不在列表中（已删）→ 不刷
+                row.RefreshExecution(task);
+                StatusMessage = $"「{row.TaskName}」运行完成";
+            });
+        }
+        catch
+        {
+            // 局部刷新失败静默——不影响 UI；下次 LoadAsync 会自愈
+        }
+    }
 
     /// <summary>加载专家目录 + 任务列表到 UI。</summary>
     public async Task LoadAsync()

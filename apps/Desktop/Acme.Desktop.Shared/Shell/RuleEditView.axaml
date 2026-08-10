@@ -1,23 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Desktop.Mvvm"
-             x:Class="Acme.Desktop.Shared.Shell.RuleEditView">
-
-  <UserControl.Styles>
-    <Style Selector="Expander">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-      <Setter Property="Margin" Value="0,0,0,2"/>
-    </Style>
-    <Style Selector="TextBox">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    </Style>
-    <Style Selector="NumericUpDown">
-      <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    </Style>
-  </UserControl.Styles>
+             x:Class="Acme.Desktop.Shared.Shell.RuleEditView"
+             Classes="form-fields">
 
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
