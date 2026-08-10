@@ -55,7 +55,7 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="dm:MyDevice">
-                        <Border Style="{StaticResource CardFrame}" Margin="16,6">
+                        <Border Style="{StaticResource BorderCardFrame}" Margin="16,6">
                             <Grid RowDefinitions="Auto,Auto,Auto,Auto" Padding="12" RowSpacing="6">
 
                                 <!-- Row 0: name + relationship status -->

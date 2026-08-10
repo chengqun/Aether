@@ -31,7 +31,7 @@
             <CollectionView ItemsSource="{Binding Moments}" SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="vm:MomentItem">
-                        <Border Style="{StaticResource CardFrame}" Margin="16,6">
+                        <Border Style="{StaticResource BorderCardFrame}" Margin="16,6">
                             <Grid RowDefinitions="Auto,Auto,Auto,Auto" Padding="12" RowSpacing="8">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer

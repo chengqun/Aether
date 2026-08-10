@@ -68,6 +68,17 @@
         <Setter Property="Padding" Value="14" />
     </Style>
 
+    <!-- Border 版卡片框：CardFrame 是 Frame 样式（BorderColor/CornerRadius/HasShadow 是 Frame 属性），
+         不能套到 Border 上——Border 走 BorderElement.OnBorderColorPropertyChanged 在 AppThemeBinding
+         下会抛 InvalidCastException（CollectionView ItemTemplate 实例化时崩 → 卡片不渲染 = 页面"没数据"）。
+         Border 用 Stroke/StrokeShape/StrokeThickness。Background AppThemeBinding 已验证可用。 -->
+    <Style TargetType="Border" x:Key="BorderCardFrame">
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="14" />
+    </Style>
+
     <Style TargetType="BoxView" x:Key="Divider">
         <Setter Property="HeightRequest" Value="1" />
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
