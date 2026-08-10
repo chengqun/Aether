@@ -7,8 +7,8 @@ namespace Acme.Stockapp.Desktop;
 
 /// <summary>
 /// Stockapp 租户专属 panel 注册：期货/回测/股票页视图经 <see cref="IViewRegistryContributor"/> 注入工作台 view registry，
-/// 让 Workbench 库不依赖租户程序集。VM 从 <see cref="StockappMainViewModel"/> 的 Futures/Trading/StockTrade slot 取
-/// （slot 在基类 MainViewModelBase 上 public-get，ctor 里赋值）。替代旧 App.axaml DataTemplate 映射。
+/// 让 Workbench 库不依赖租户程序集。VM 从 <see cref="StockappMainViewModel"/> 的类型化 Futures/Trading/StockTrade 属性取
+/// （租户 shell VM 自持，不污染共享基类）。替代旧 App.axaml DataTemplate 映射。
 /// </summary>
 public sealed class StockappViewContributor : IViewRegistryContributor
 {

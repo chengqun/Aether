@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-using System.Windows.Input;
 using Acme.Agents.AI;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
@@ -16,10 +14,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Acme.Desktop.Mvvm;
 
 /// <summary>
-/// 桌面 shell 主 ViewModel 基类：可收起侧边栏 + 导航 + 账户/登录态（Codex/ChatGPT 风）。
-/// 租户子类在构造里 Populate <see cref="NavItems"/>。内容区使用 ChatView。
-/// 聊天引擎已抽出到 <see cref="ChatWorkspaceViewModel"/>（<see cref="Chat"/>），本类仅持有 shell/nav/账号 +
-/// 同级业务 VM（<see cref="IShellHost"/>）。ChatView 绑定 <c>{Binding Chat}</c>，不经本类透传聊天属性。
+/// 桌面 shell 主 ViewModel 基类：可收起侧边栏 + 账户/登录态 + 同级业务 VM（<see cref="IShellHost"/>）。
+/// 导航由 <c>WorkbenchShellViewModel</c> 的工作台布局数据驱动（<c>WorkbenchNavItems</c>），不在本类——
+/// 本类只持 shell/账号/业务 VM + 聊天引擎（<see cref="Chat"/>）。ChatView 绑定 <c>{Binding Chat}</c>，不经本类透传聊天属性。
+/// 租户专属页 VM（期货/回测/股票）不在本类——由租户 shell VM 自持，经 IViewRegistryContributor 注入工作台。
 /// </summary>
 public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 {
@@ -120,33 +118,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     {
         IsSidebarExpanded = !IsSidebarExpanded;
         SidebarWidth = IsSidebarExpanded ? 220 : 48;
-        _sidebarCollapsedForNotes = false;
     }
-
-    private bool _sidebarCollapsedForNotes;
-
-    // —— 导航 ——
-    [ObservableProperty]
-    private string _currentPage = "notes";
-
-    /// <summary>是否是笔记页</summary>
-    public bool IsNotesPage => CurrentPage == "notes";
-
-    /// <summary>是否是专家页</summary>
-    public bool IsExpertsPage => CurrentPage == "experts";
-
-    /// <summary>是否是自动化页</summary>
-    public bool IsAutomationPage => CurrentPage == "automation";
-
-    /// <summary>是否是期货页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
-    public bool IsFuturesPage => CurrentPage == "ctp";
-
-    /// <summary>是否是回测/实盘页（Stockapp 租户专属；Qifu 无此导航，恒 false）</summary>
-    public bool IsTradingPage => CurrentPage == "backtest";
-
-    /// <summary>是否是股票交易页（Stockapp 租户专属；Qifu 无此导航，恒 false）。
-    /// FlaUI 操控同花顺下单客户端（区别于 backtest 的 Lean 引擎）。</summary>
-    public bool IsStockTradePage => CurrentPage == "stocktrade";
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
@@ -160,68 +132,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     /// <summary>规则页 ViewModel</summary>
     public RulesViewModel Rules { get; }
 
-    /// <summary>期货页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
-    /// 类型为 object 以免共享层依赖 CTP。视图经 App.axaml DataTemplate 解析。</summary>
-    public object? Futures { get; protected set; }
-
-    /// <summary>回测/实盘页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
-    /// 类型为 object 以免共享层依赖 Trading。视图经 App.axaml DataTemplate 解析。</summary>
-    public object? Trading { get; protected set; }
-
-    /// <summary>股票交易页 ViewModel（租户专属；由租户 MainViewModel 赋值，Qifu 为 null）。
-    /// 类型为 object 以免共享层依赖 StockTrading。视图经 App.axaml DataTemplate 解析。</summary>
-    public object? StockTrade { get; protected set; }
-
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
-
-    /// <summary>导航项集合（租户填充）。</summary>
-    public ObservableCollection<NavItem> NavItems { get; } = new();
-
-    partial void OnCurrentPageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(IsNotesPage));
-        OnPropertyChanged(nameof(IsExpertsPage));
-        OnPropertyChanged(nameof(IsAutomationPage));
-        OnPropertyChanged(nameof(IsFuturesPage));
-        OnPropertyChanged(nameof(IsTradingPage));
-        OnPropertyChanged(nameof(IsStockTradePage));
-    }
-
-    [RelayCommand]
-    private void NavigateTo(string pageKey)
-    {
-        // 离开笔记页时恢复侧边栏
-        if (CurrentPage == "notes" && pageKey != "notes" && _sidebarCollapsedForNotes)
-        {
-            IsSidebarExpanded = true;
-            SidebarWidth = 220;
-            _sidebarCollapsedForNotes = false;
-        }
-
-        // 进入笔记页：自动收起侧边栏给笔记更大空间
-        if (pageKey == "notes" && IsSidebarExpanded)
-        {
-            IsSidebarExpanded = false;
-            SidebarWidth = 48;
-            _sidebarCollapsedForNotes = true;
-        }
-
-        CurrentPage = pageKey;
-        foreach (var item in NavItems)
-            item.IsCurrent = item.Key == pageKey;
-    }
-
-    protected void AddNav(string key, string icon, string title)
-    {
-        NavItems.Add(new NavItem
-        {
-            Key = key,
-            Icon = icon,
-            Title = title,
-            Command = NavigateToCommand,
-        });
-    }
 
     // —— 账户 / 登录态 ——
     [ObservableProperty]

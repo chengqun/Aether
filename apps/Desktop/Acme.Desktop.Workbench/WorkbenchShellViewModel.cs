@@ -48,7 +48,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
     }
 
     /// <summary>工作台导航 rail 项（数据驱动：从活动工作台的首个 LayoutTabbed 派生，覆盖租户 panel 差异）。
-    /// 独立于基类 NavItems——本 shell 用工作台布局，不用 NavItems 切中间内容。</summary>
+    /// 本 shell 用工作台布局切中间内容——基类已无 nav 系统，nav 完全由此属性驱动。</summary>
     public ObservableCollection<NavItem> WorkbenchNavItems { get; } = new();
 
     /// <summary>活动工作台（Window 主区 ContentControl 绑此 → DataTemplate → WorkspaceView）。</summary>

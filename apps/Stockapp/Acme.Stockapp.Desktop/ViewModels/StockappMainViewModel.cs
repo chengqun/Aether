@@ -13,11 +13,21 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 /// <summary>
 /// Stockapp 租户 shell 主 ViewModel：复用 MainViewModelBase（账号/业务 VM/Chat/调度器/MCP）+ 工作台层。
 /// nav 6 项（笔记/专家/自动化/期货/回测/股票）数据驱动自 <see cref="StockappWorkspace"/> 的 LayoutTabbed——
-/// 比 Qifu 多 CTP 期货 + 回测 + 股票。租户页视图经 <see cref="StockappViewContributor"/> 注册。
+/// 比 Qifu 多 CTP 期货 + 回测 + 股票。租户专属页 VM（Futures/Trading/StockTrade）由本类自持（类型化），
+/// 经 <see cref="StockappViewContributor"/> 注入工作台 view registry——不污染共享基类。
 /// </summary>
 public sealed class StockappMainViewModel : WorkbenchShellViewModel
 {
     private readonly CtpViewModel _ctpVm;
+
+    /// <summary>期货页 VM（contributor 注册 FuturesView，DataContext 绑此）。类型化，不暴露为 object。</summary>
+    public CtpViewModel Futures { get; }
+
+    /// <summary>回测/实盘页 VM（TradingView）。</summary>
+    public TradingViewModel Trading { get; }
+
+    /// <summary>股票交易页 VM（StockTradingView，FlaUI/MCP 路由）。</summary>
+    public StockTradingViewModel StockTrade { get; }
 
     public StockappMainViewModel(
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore,
@@ -28,9 +38,9 @@ public sealed class StockappMainViewModel : WorkbenchShellViewModel
                workspaceManager, regionManager, defaultWorkspace, "stockapp")
     {
         _ctpVm = ctpVm;
-        Futures = ctpVm;          // 期货页 VM（contributor 注册 FuturesView，DataContext 绑此）
-        Trading = tradingVm;      // 回测/实盘页 VM（TradingView）
-        StockTrade = stockTradingVm; // 股票交易页 VM（StockTradingView，FlaUI/MCP 路由）
+        Futures = ctpVm;
+        Trading = tradingVm;
+        StockTrade = stockTradingVm;
     }
 
     public override async Task InitializeAsync()
