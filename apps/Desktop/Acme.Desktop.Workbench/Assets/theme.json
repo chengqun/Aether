@@ -1,0 +1,26 @@
+{
+  "$note": "示例自定义主题（dark / Catppuccin Mocha 风）。Codex host 可读此 JSON 经 ThemeLoader 叠加到 WorkbenchTheme 之上，换 JSON 即换肤，无需重编。",
+  "colors": {
+    "AccentColor": "#89b4fa",
+    "AccentBrush": "#89b4fa",
+    "SidebarBgBrush": "#1e1e2e",
+    "ContentBgBrush": "#181825",
+    "BorderBrush": "#313244",
+    "TextPrimaryBrush": "#cdd6f4",
+    "TextSecondaryBrush": "#a6adc8",
+    "NavHoverBrush": "#313244",
+    "WorkspaceBackground": "#181825"
+  },
+  "fonts": {
+    "UiFont": "JetBrains Mono, Menlo, monospace"
+  },
+  "radius": {
+    "CornerRadiusMd": "6"
+  },
+  "spacing": {
+    "SpaceMd": "10"
+  },
+  "background": {
+    "color": "#181825"
+  }
+}

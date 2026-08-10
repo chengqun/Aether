@@ -19,7 +19,7 @@ public partial class ChatView : UserControl
     /// <summary>距顶部小于此值（逻辑像素）时触发加载更早的历史轮。</summary>
     private const double HistoryLoadThreshold = 120;
 
-    private MainViewModelBase? _vm;
+    private IChatViewHost? _vm;
     private ChatTurnItem? _trackedTurn;
     private ChatMessageItem? _trackedChild;
 
@@ -80,7 +80,7 @@ public partial class ChatView : UserControl
             }
         }
         UntrackAll();
-        _vm = DataContext as MainViewModelBase;
+        _vm = DataContext as IChatViewHost;
         if (_vm != null)
         {
             var chatVm = _vm as IChatViewModel;

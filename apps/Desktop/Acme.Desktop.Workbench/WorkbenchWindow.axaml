@@ -1,22 +1,37 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         xmlns:nav="using:Acme.Desktop.Mvvm"
-        x:Class="Acme.Desktop.Shared.Shell.MainWindow"
-        Title="Aether 桌面"
-        Width="1200" Height="800"
+        x:Class="Acme.Desktop.Workbench.WorkbenchWindow"
+        Title="Aether"
+        Width="1280" Height="820"
         MinWidth="900" MinHeight="600"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WorkspaceBackground}"
+        FontFamily="{DynamicResource UiFont}">
 
-  <Grid x:Name="RootGrid">
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="Auto"/>
-      <ColumnDefinition Width="*" MinWidth="240"/>
-      <ColumnDefinition Width="420" MinWidth="300"/>
-    </Grid.ColumnDefinitions>
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- 内置 light 主题 + 设计 token 层（颜色/字体/圆角/间距/背景）。JSON theme 经 ThemeLoader 叠加覆盖。 -->
+        <ResourceInclude Source="avares://Acme.Desktop.Workbench/Themes/WorkbenchTheme.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <DockPanel>
+    <!-- ═══ 插件注入区（底栏，命名 region "inject"——验证 RegionManager） ═══ -->
+    <Border DockPanel.Dock="Bottom" Height="36"
+            Background="{DynamicResource SidebarBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="nav-rail" Command="{Binding InjectTestPanelCommand}"
+                ToolTip.Tip="测试插件面板注入" Margin="4" Content="+"/>
+        <ContentControl x:Name="InjectRegion" VerticalContentAlignment="Center" Margin="8,0,0,0"/>
+      </DockPanel>
+    </Border>
 
     <!-- ═══ 展开态侧边栏（200px） ═══ -->
-    <Border Grid.Column="0" Width="200" IsVisible="{Binding IsSidebarExpanded}"
+    <Border DockPanel.Dock="Left" Width="200" IsVisible="{Binding IsSidebarExpanded}"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <DockPanel>
@@ -31,7 +46,7 @@
             </MenuFlyout>
           </Button.Flyout>
           <StackPanel Orientation="Horizontal" Spacing="10">
-            <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentBrush}">
+            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
               <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
@@ -51,7 +66,7 @@
                     Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
             </Button>
           </DockPanel>
-          <ItemsControl ItemsSource="{Binding NavItems}" Margin="0,6,0,0">
+          <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="settings-nav" Command="{Binding Command}" CommandParameter="{Binding Key}"
@@ -69,13 +84,12 @@
           </ItemsControl>
         </StackPanel>
 
-        <!-- 最近会话已移至聊天区头部 -->
         <Border/>
       </DockPanel>
     </Border>
 
     <!-- ═══ 收起态侧边栏（48px） ═══ -->
-    <Border Grid.Column="0" Width="48" IsVisible="{Binding !IsSidebarExpanded}"
+    <Border DockPanel.Dock="Left" Width="48" IsVisible="{Binding !IsSidebarExpanded}"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*,Auto">
@@ -85,7 +99,7 @@
                   StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
           </Button>
-          <ItemsControl ItemsSource="{Binding NavItems}" Margin="0,6,0,0">
+          <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
@@ -109,7 +123,7 @@
               <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
             </MenuFlyout>
           </Button.Flyout>
-          <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentBrush}">
+          <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
             <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
@@ -117,37 +131,9 @@
       </Grid>
     </Border>
 
-    <!-- ═══ 中间内容区（功能页，不含聊天） ═══ -->
-    <Grid Grid.Column="1" Background="{DynamicResource ContentBgBrush}">
-      <shell:NotesView x:Name="NotesViewInstance" DataContext="{Binding Notes}"
-          IsVisible="{Binding DataContext.IsNotesPage, RelativeSource={RelativeSource AncestorType=Window}}" />
-      <shell:ExpertsView x:Name="ExpertsViewInstance" DataContext="{Binding Experts}"
-          IsVisible="{Binding DataContext.IsExpertsPage, RelativeSource={RelativeSource AncestorType=Window}}" />
-      <shell:AutomationView x:Name="AutomationViewInstance" DataContext="{Binding Automation}"
-          IsVisible="{Binding DataContext.IsAutomationPage, RelativeSource={RelativeSource AncestorType=Window}}" />
-      <ContentControl Content="{Binding Futures}"
-          IsVisible="{Binding IsFuturesPage}" />
-      <ContentControl Content="{Binding Trading}"
-          IsVisible="{Binding IsTradingPage}" />
-      <ContentControl Content="{Binding StockTrade}"
-          IsVisible="{Binding IsStockTradePage}" />
-    </Grid>
-
-    <!-- ═══ 分隔条（拖动调整聊天宽度） ═══ -->
-    <GridSplitter Grid.Column="1" ResizeDirection="Columns" Width="6" Background="{DynamicResource BorderBrush}"
-                  HorizontalAlignment="Right" Margin="0,0,-3,0"/>
-
-    <!-- ═══ 聊天区（右侧外挂，可收起，可拖宽） ═══ -->
-    <Grid Grid.Column="2" Background="{DynamicResource ContentBgBrush}">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="1"/>
-        <ColumnDefinition Width="*"/>
-      </Grid.ColumnDefinitions>
-      <Border Grid.Column="0" Background="{DynamicResource BorderBrush}"/>
-
-      <!-- 聊天面板（顶栏：连接状态/历史会话/新聊天 统一在 ChatView 头部一行） -->
-      <shell:ChatView Grid.Column="1" DataContext="{Binding}"/>
-    </Grid>
-
-  </Grid>
+    <!-- ═══ 工作台主区（Workspace 决定布局，非 Window） ═══ -->
+    <ContentControl Content="{Binding ActiveWorkspace}"
+                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                    Background="{DynamicResource ContentBgBrush}"/>
+  </DockPanel>
 </Window>

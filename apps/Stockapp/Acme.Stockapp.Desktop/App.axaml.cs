@@ -6,6 +6,8 @@ using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.Desktop.Shared.Hosting;
 using Acme.Desktop.Mvvm;
 using Acme.Desktop.Shared.Shell;
+using Acme.Desktop.Workbench;
+using Acme.Desktop.Workbench.Abstractions;
 using Acme.Quotes.AI;
 using Acme.Quotes.Application.DependencyInjection;
 using Acme.Quotes.Infrastructure.DependencyInjection;
@@ -59,7 +61,7 @@ public partial class App : global::Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var vm = Services.GetRequiredService<StockappMainViewModel>();
-            desktop.MainWindow = new MainWindow { DataContext = vm };
+            desktop.MainWindow = new WorkbenchWindow { DataContext = vm };
             // 退出时释放 DI 容器（含 MCP server 连接等 IAsyncDisposable 单例，关闭 stdio 子进程）。
             desktop.ShutdownRequested += (_, _) =>
             {
@@ -130,6 +132,11 @@ public partial class App : global::Avalonia.Application
         aether.AddQuotesTools().AddCtpTools().AddTradingTools().AddStockTradingTools();   // stockapp 租户专属 AI 工具
         services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
+
+        // 工作台引擎（view registry / region manager / workspace manager + Stockapp 工作台定义）。
+        // 租户专属页（期货/回测/股票）经 contributor 注入 view registry——Workbench 库不依赖租户程序集。
+        services.AddWorkbench(StockappWorkspace.Definition);
+        services.AddSingleton<IViewRegistryContributor, StockappViewContributor>();
 
         // 连接器子面板（CTP 期货 + 同花顺股票，并列在连接器 tab）
         services.AddSingleton<IConnectorSettingsDialogService, StockappConnectorSettingsDialogService>();

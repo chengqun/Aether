@@ -1,7 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Acme.Stockapp.Desktop.ViewModels"
-             xmlns:views="using:Acme.Stockapp.Desktop.Views"
+             xmlns:wb="using:Acme.Desktop.Workbench"
+             xmlns:wsw="using:Acme.Desktop.Workbench.Workspace"
              x:Class="Acme.Stockapp.Desktop.App"
              RequestedThemeVariant="Light">
 
@@ -12,14 +12,10 @@
     </Application.Styles>
 
     <Application.DataTemplates>
-        <DataTemplate DataType="vm:CtpViewModel">
-            <views:FuturesView />
-        </DataTemplate>
-        <DataTemplate DataType="vm:TradingViewModel">
-            <views:TradingView />
-        </DataTemplate>
-        <DataTemplate DataType="vm:StockTradingViewModel">
-            <views:StockTradingView />
+        <!-- Workspace 决定布局：ActiveWorkspace(WorkspaceViewModel) → WorkspaceView 遍历 LayoutNode 建视觉树。
+             租户页（期货/回测/股票）视图改由 StockappViewContributor 经 IViewRegistry 注册，不再用 DataTemplate 映射。 -->
+        <DataTemplate DataType="wsw:WorkspaceViewModel">
+            <wb:WorkspaceView />
         </DataTemplate>
     </Application.DataTemplates>
 

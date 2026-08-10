@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ═══ NavHoverBrush（SharedTheme 缺失键，补齐——nav-rail 悬停底色）═══ -->
+  <Color x:Key="NavHoverColor">#E8EDF3</Color>
+  <SolidColorBrush x:Key="NavHoverBrush" Color="{DynamicResource NavHoverColor}"/>
+
+  <!-- ═══ 设计 token 层：字体（FontFamily Resource） ═══ -->
+  <FontFamily x:Key="UiFont">Segoe UI, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif</FontFamily>
+  <FontFamily x:Key="MonoFont">JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace</FontFamily>
+  <FontFamily x:Key="CodeFont">JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace</FontFamily>
+
+  <!-- ═══ 设计 token 层：圆角（CornerRadius Resource） ═══ -->
+  <CornerRadius x:Key="CornerRadiusSm">4</CornerRadius>
+  <CornerRadius x:Key="CornerRadiusMd">8</CornerRadius>
+  <CornerRadius x:Key="CornerRadiusLg">12</CornerRadius>
+
+  <!-- ═══ 设计 token 层：间距（Thickness Resource） ═══ -->
+  <Thickness x:Key="SpaceXs">4</Thickness>
+  <Thickness x:Key="SpaceSm">8</Thickness>
+  <Thickness x:Key="SpaceMd">12</Thickness>
+  <Thickness x:Key="SpaceLg">16</Thickness>
+  <Thickness x:Key="SpaceXl">24</Thickness>
+
+  <!-- ═══ 背景 token（ImageBrush / 纯色 fallback）——WorkbenchWindow 背景 {DynamicResource WorkspaceBackground} ═══ -->
+  <Color x:Key="WorkspaceBackgroundColor">#FFFFFF</Color>
+  <SolidColorBrush x:Key="WorkspaceBackground" Color="{DynamicResource WorkspaceBackgroundColor}"/>
+
+</ResourceDictionary>

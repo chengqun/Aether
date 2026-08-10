@@ -55,7 +55,46 @@ public partial class NotesView : UserControl
             RoutingStrategies.Bubble, handledEventsToo: true);
         this.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
-        this.Loaded += (_, _) => RestoreLayout();
+        this.Loaded += OnLoaded;
+    }
+
+    private bool _layoutPersistWired;
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        RestoreLayout();
+        WireHostWindowClosing();
+    }
+
+    /// <summary>订阅宿主窗口（WorkbenchWindow / MainWindow）的 Closing 事件，关闭时自持久化分隔位置。
+    /// 解与 MainWindow.PersistLayout 的耦合——WorkbenchWindow 不持有 NotesView 引用，NotesView 自管落盘。
+    /// 双订阅守卫防 Loaded 多次触发重复挂事件。</summary>
+    private void WireHostWindowClosing()
+    {
+        if (_layoutPersistWired) return;
+        if (TopLevel.GetTopLevel(this) is Window host)
+        {
+            host.Closing += (_, _) => PersistLayout();
+            _layoutPersistWired = true;
+        }
+    }
+
+    /// <summary>持久化分隔位置（目录树宽 + 上下预览/编辑比例）。后台线程写文件，Wait 确保关闭前落盘。</summary>
+    private void PersistLayout()
+    {
+        var store = DesktopApp.Services.GetService<IPreferencesStore>();
+        if (store is null) return;
+        var (treeW, previewStar, editorStar) = CollectLayout();
+        try
+        {
+            Task.Run(async () =>
+            {
+                await store.SetAsync("notes.treeW", treeW.ToString("0.#"));
+                await store.SetAsync("notes.previewStar", previewStar.ToString("0.###"));
+                await store.SetAsync("notes.editorStar", editorStar.ToString("0.###"));
+            }).Wait();
+        }
+        catch { /* 关闭期写入失败忽略 */ }
     }
 
     // —— 分隔条位置持久化（目录树宽度 + 上下预览/编辑比例）——
@@ -115,7 +154,7 @@ public partial class NotesView : UserControl
         }
     }
 
-    private MainViewModelBase? MainVm => (TopLevel.GetTopLevel(this)?.DataContext) as MainViewModelBase;
+    private IShellHost? MainVm => (TopLevel.GetTopLevel(this)?.DataContext) as IShellHost;
 
     /// <summary>选中 form 节点时经工厂注册表创建对应表单 VM；工厂封装查同级 VM + 建编辑 VM + 接
     /// Save/AutoSave/Cancel 事件（含 CodeRule 的 C# body 回填、Knowledge 的 body 重解析）。Note/策略族

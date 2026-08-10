@@ -32,6 +32,7 @@
   <Folder Name="/apps/Desktop/">
     <Project Path="apps/Desktop/Acme.Desktop.Mvvm/Acme.Desktop.Mvvm.csproj" />
     <Project Path="apps/Desktop/Acme.Desktop.Shared/Acme.Desktop.Shared.csproj" />
+    <Project Path="apps/Desktop/Acme.Desktop.Workbench/Acme.Desktop.Workbench.csproj" />
   </Folder>
   <Folder Name="/apps/Mobile/">
     <Project Path="apps/Mobile/Acme.Mobile.Mvvm/Acme.Mobile.Mvvm.csproj" />

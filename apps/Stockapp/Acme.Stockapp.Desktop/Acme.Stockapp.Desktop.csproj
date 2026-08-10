@@ -25,8 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 共享 shell + 公共组合；stockapp 租户专属上下文（不含 qifu）+ AI 工具 -->
+    <!-- 共享 shell + 公共组合；工作台引擎；stockapp 租户专属上下文（不含 qifu）+ AI 工具 -->
     <ProjectReference Include="..\..\Desktop\Acme.Desktop.Shared\Acme.Desktop.Shared.csproj" />
+    <ProjectReference Include="..\..\Desktop\Acme.Desktop.Workbench\Acme.Desktop.Workbench.csproj" />
     <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Application\Acme.Ctp.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />

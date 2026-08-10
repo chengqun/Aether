@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>Acme.Desktop.Workbench</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 复用 UI 无关 shell VM 库 + 共享 Avalonia 视图（ChatView/NotesView/ExpertsView/SharedTheme，不复制 XAML）。 -->
+    <ProjectReference Include="..\Acme.Desktop.Mvvm\Acme.Desktop.Mvvm.csproj" />
+    <ProjectReference Include="..\Acme.Desktop.Shared\Acme.Desktop.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- 图标/主题 asset 经 Avalonia IAssetLoader 按 avares:// 加载（Asset Loader 技术）。 -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**\*" />
+  </ItemGroup>
+
+</Project>

@@ -12,7 +12,7 @@ namespace Acme.Desktop.Mvvm;
 public readonly record struct EditVmContext(
     NoteNodeVM Node,
     NotesViewModel Notes,
-    MainViewModelBase Main,
+    IShellHost Main,
     System.Action SyncCodeEditor);
 
 /// <summary>
