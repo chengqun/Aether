@@ -12,7 +12,7 @@
   <Window.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <!-- 内置 light 主题 + 设计 token 层（颜色/字体/圆角/间距/背景）。JSON theme 经 ThemeLoader 叠加覆盖。 -->
+        <!-- 设计 token 基线层（字体/圆角/间距/背景）。内置 light/dark 均为 JSON overlay 经 ThemeLoader 叠加覆盖颜色 token。 -->
         <ResourceInclude Source="avares://Acme.Desktop.Workbench/Themes/WorkbenchTheme.axaml"/>
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>

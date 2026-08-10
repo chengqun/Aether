@@ -245,7 +245,7 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="把主题 JSON 文件放到 themes/ 目录即可在列表新增（重启后生效）。schema 见内置 theme.json：colors/fonts/radius/spacing/background 五段，key 须匹配 token 名（AccentBrush/SidebarBgBrush/ContentBgBrush…）。"
+            <TextBlock Text="把主题 JSON 文件放到 themes/ 目录即可在列表新增（重启后生效）。schema 见内置 dark.json：colors/fonts/radius/spacing/background 五段，key 须匹配 token 名（AccentBrush/SidebarBgBrush/ContentBgBrush…）。"
                        FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
                        Margin="0,12,0,0" TextWrapping="Wrap"/>
           </StackPanel>

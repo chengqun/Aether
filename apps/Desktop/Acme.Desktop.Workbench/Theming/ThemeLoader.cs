@@ -14,7 +14,8 @@ namespace Acme.Desktop.Workbench.Theming;
 
 /// <summary>
 /// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
-/// 叠加在 WorkbenchTheme.axaml（编译期内置 light 主题）之上，换 JSON 即换肤，无需重编。
+/// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置 light（light.json）与 dark（dark.json）同为 JSON overlay——
+/// 换 JSON 即换肤，无需重编；用户可在 &lt;tenantDir&gt;/themes/*.json 放自定义主题，或同名 light.json/dark.json 覆盖内置。
 /// 全部经 {DynamicResource} 消费 → overlay merge 后全量重染（颜色/字体/圆角/间距/背景）。
 /// </summary>
 public static class ThemeLoader
@@ -30,10 +31,21 @@ public static class ThemeLoader
         catch { return null; }
     }
 
-    /// <summary>读内嵌示例 theme.json（Assets/theme.json）为字符串，供冒烟/默认自定义主题。</summary>
-    public static string? GetSampleJson()
+    /// <summary>读内嵌 dark 主题（Assets/dark.json，Catppuccin Mocha）为字符串。内置 dark = 此 JSON overlay（与 <see cref="GetLightJson"/> 对称）。</summary>
+    public static string? GetDarkJson()
     {
-        var uri = new Uri("avares://Acme.Desktop.Workbench/Assets/theme.json");
+        var uri = new Uri("avares://Acme.Desktop.Workbench/Assets/dark.json");
+        if (!AssetLoader.Exists(uri)) return null;
+        using var s = AssetLoader.Open(uri);
+        using var r = new StreamReader(s);
+        return r.ReadToEnd();
+    }
+
+    /// <summary>读内嵌 light 主题（Assets/light.json）为字符串。内置 light 也是 JSON overlay（与 dark 对称），
+    /// 不再是「无 overlay」——值与 SharedTheme.axaml 基线一致，此处显式化使其可被用户 themes/light.json 覆盖。</summary>
+    public static string? GetLightJson()
+    {
+        var uri = new Uri("avares://Acme.Desktop.Workbench/Assets/light.json");
         if (!AssetLoader.Exists(uri)) return null;
         using var s = AssetLoader.Open(uri);
         using var r = new StreamReader(s);

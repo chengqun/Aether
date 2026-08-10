@@ -16,8 +16,8 @@
       <Setter Property="Margin" Value="0,0,0,8"/>
     </Style>
     <Style Selector="Border.trace-card.error">
-      <Setter Property="BorderBrush" Value="#FF5252"/>
-      <Setter Property="Background" Value="#FFF8F8"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource DangerBgBrush}"/>
     </Style>
     <Style Selector="ToggleButton.compact">
       <Setter Property="Padding" Value="10,4"/>

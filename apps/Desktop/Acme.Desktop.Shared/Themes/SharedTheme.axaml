@@ -58,6 +58,7 @@
       <Color x:Key="WarningBgColor">#FFF3E0</Color>
       <Color x:Key="AccentTintBgColor">#EEF0FB</Color>
       <Color x:Key="OnAccentColor">#FFFFFF</Color>
+      <Color x:Key="OnDangerColor">#FFFFFF</Color>
       <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
       <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource SurfaceHoverColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
@@ -67,6 +68,7 @@
       <SolidColorBrush x:Key="WarningBgBrush" Color="{StaticResource WarningBgColor}"/>
       <SolidColorBrush x:Key="AccentTintBgBrush" Color="{StaticResource AccentTintBgColor}"/>
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}"/>
+      <SolidColorBrush x:Key="OnDangerBrush" Color="{StaticResource OnDangerColor}"/>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -78,7 +80,7 @@
   <!-- 主按钮 -->
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="20,8"/>
@@ -92,7 +94,7 @@
   <!-- 危险按钮 -->
   <Style Selector="Button.danger">
     <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnDangerBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="20,8"/>
@@ -125,7 +127,7 @@
   </Style>
   <Style Selector="Button.settings-nav:disabled">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
@@ -143,7 +145,7 @@
   </Style>
   <Style Selector="Button.nav-rail:disabled">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
@@ -189,7 +191,7 @@
   </Style>
   <Style Selector="Button.top-tab:disabled">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
@@ -245,7 +247,7 @@
   <!-- 发送按钮 -->
   <Style Selector="Button.send-btn">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="16"/>
     <Setter Property="Width" Value="34"/>
