@@ -30,6 +30,16 @@
               <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
+              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}">
+                <MenuItem.ItemTemplate>
+                  <DataTemplate>
+                    <MenuItem Header="{Binding Name}"
+                              Command="{Binding $parent[MenuItem].DataContext.SelectThemeCommand}"
+                              CommandParameter="{Binding Name}"
+                              IsEnabled="{Binding !IsCurrent}"/>
+                  </DataTemplate>
+                </MenuItem.ItemTemplate>
+              </MenuItem>
               <MenuItem Header="━" IsEnabled="False"/>
               <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
@@ -109,6 +119,16 @@
               <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
+              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}">
+                <MenuItem.ItemTemplate>
+                  <DataTemplate>
+                    <MenuItem Header="{Binding Name}"
+                              Command="{Binding $parent[MenuItem].DataContext.SelectThemeCommand}"
+                              CommandParameter="{Binding Name}"
+                              IsEnabled="{Binding !IsCurrent}"/>
+                  </DataTemplate>
+                </MenuItem.ItemTemplate>
+              </MenuItem>
               <MenuItem Header="━" IsEnabled="False"/>
               <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
               <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>

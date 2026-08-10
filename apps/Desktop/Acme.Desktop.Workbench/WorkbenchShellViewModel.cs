@@ -1,35 +1,45 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Desktop.Mvvm;
 using Acme.Desktop.Workbench.Abstractions;
+using Acme.Desktop.Workbench.Theming;
 using Acme.Desktop.Workbench.Workspace;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Acme.Desktop.Workbench;
 
 /// <summary>
-/// Codex 工作台 shell ViewModel：复用 <see cref="MainViewModelBase"/>（账号/登录/业务 VM/Chat 引擎/调度器/MCP），
+/// 工作台 shell ViewModel：复用 <see cref="MainViewModelBase"/>（账号/登录/业务 VM/Chat 引擎/调度器/MCP），
 /// 叠加工作台层——<see cref="ActiveWorkspace"/>（Workspace 决定布局，非 Window）+ 主题钩子 + 工作台导航 rail。
+/// 实现 <see cref="IThemeHost"/>：主题状态（<see cref="Theme"/>/<see cref="CustomThemeJson"/>）在此，
+/// 设置层 SettingsVM 经接口跨层访问（不引 Workbench）；账号菜单 flyout 直接绑此 VM。
 /// </summary>
-public partial class WorkbenchShellViewModel : MainViewModelBase
+public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
 {
     private readonly IWorkspaceManager _workspaceManager;
     private readonly WorkspaceDefinition _defaultWorkspace;
     private readonly IPreferencesStore _preferences;
+    private readonly IServiceProvider _serviceProvider;
     private INotifyPropertyChanged? _navWorkspace;
 
     /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
     private const string LayoutPrefKey = "workbench.layout";
+
+    /// <summary>主题选择持久化键（存主题名：light/dark/用户文件名）。</summary>
+    private const string ThemePrefKey = "ui.theme";
 
     public WorkbenchShellViewModel(
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog,
@@ -42,6 +52,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
         _workspaceManager = workspaceManager;
         _defaultWorkspace = defaultWorkspace;
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
+        _serviceProvider = serviceProvider;
         _workspaceManager.WorkspaceActivated += OnWorkspaceActivated;
     }
 
@@ -53,13 +64,24 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
     [ObservableProperty]
     private IWorkspace? _activeWorkspace;
 
-    /// <summary>主题名（"light" 内置；dark 留后续）。</summary>
+    /// <summary>可选主题列表（内置 light/dark + &lt;tenantDir&gt;/themes/*.json）。两 UI 绑此。</summary>
+    public ObservableCollection<ThemeOption> Themes { get; } = new();
+
+    // C# 属性无返回类型协变：ObservableCollection 不能隐式实现 IReadOnlyList 接口属性，须显式实现。
+    IReadOnlyList<ThemeOption> IThemeHost.Themes => Themes;
+
+    /// <summary>当前主题名（light/dark/用户文件名）。设此属性 + <see cref="CustomThemeJson"/> 触发窗口换肤。</summary>
     [ObservableProperty]
     private string _theme = "light";
 
     /// <summary>自定义主题 JSON（null = 仅内置 light；非空 = ThemeLoader 叠加 overlay）。</summary>
     [ObservableProperty]
     private string? _customThemeJson;
+
+    private DesktopOptions? _desktopOptions;
+    /// <summary>桌面路径选项（惰性从 DI 取，同 NotesViewModel 的 NotesEditorOptions 模式）。</summary>
+    private DesktopOptions DesktopOptions
+        => _desktopOptions ??= _serviceProvider.GetService<IOptions<DesktopOptions>>()?.Value ?? new();
 
     private void OnWorkspaceActivated(object? sender, IWorkspace ws)
     {
@@ -138,13 +160,75 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
 
     /// <summary>启动期：base 初始化（账号/业务 VM/Chat/调度器/MCP）后激活工作台。
     /// 激活前合并已持久化的布局（用户拖动后的 GridSplitter 位置 + tab 选择）——IWorkspace.Layout 只读，
-    /// 必须在建工作台前合并进 definition，不能改已建工作台。</summary>
+    /// 必须在建工作台前合并进 definition，不能改已建工作台。
+    /// 主题恢复也在激活前——窗口打开时已应用正确主题（设 CustomThemeJson → 窗口订阅 → ThemeLoader.Apply）。</summary>
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
+        await LoadThemesAsync();
+        var savedTheme = await _preferences.GetAsync(ThemePrefKey);
+        await SelectThemeCoreAsync(savedTheme ?? "light", default);
         var def = await RestoreLayoutAsync(_defaultWorkspace);
         await _workspaceManager.ActivateAsync(def);
     }
+
+    // ── 主题（IThemeHost 实现） ──
+
+    /// <summary>扫描主题列表：内置 light/dark + &lt;tenantDir&gt;/themes/*.json。启动调一次，不热重载。</summary>
+    private Task LoadThemesAsync()
+    {
+        Themes.Clear();
+        Themes.Add(new ThemeOption("light", "内置浅色", true));
+        Themes.Add(new ThemeOption("dark", "内置深色（Catppuccin Mocha）", true));
+        var dir = DesktopOptions.ThemesDirectory;
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+        {
+            foreach (var f in Directory.EnumerateFiles(dir, "*.json"))
+            {
+                var name = Path.GetFileNameWithoutExtension(f);
+                if (name is "light" or "dark") continue; // 不覆盖内置名
+                Themes.Add(new ThemeOption(name, Path.GetFileName(f), false));
+            }
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>选中主题：设 overlay JSON + 当前名 + IsCurrent 高亮 + 持久化。供 RelayCommand 与 IThemeHost.SelectThemeAsync 共用。</summary>
+    private async Task SelectThemeCoreAsync(string name, CancellationToken ct)
+    {
+        var json = name switch
+        {
+            "light" => null,                        // 内置 light = 无 overlay
+            "dark" => ThemeLoader.GetSampleJson(),  // 内置 dark = 内嵌 Catppuccin Mocha
+            _ => await ReadUserThemeJsonAsync(name, ct), // 用户文件
+        };
+        // 用户文件缺失/非法 → 回退 light（视觉与名一致，免残留指向不存在的主题）。
+        if (json is null && name != "light")
+            name = "light";
+        CustomThemeJson = json;   // 触发 ThemeLoader.Apply（窗口订阅 CustomThemeJson 变化）
+        Theme = name;             // 当前名（高亮）
+        foreach (var t in Themes)
+            t.IsCurrent = t.Name == name;
+        await _preferences.SetAsync(ThemePrefKey, name, ct);
+    }
+
+    /// <summary>读用户主题 JSON 文件。文件不存在返 null（调用方回退 light）。</summary>
+    private async Task<string?> ReadUserThemeJsonAsync(string name, CancellationToken ct)
+    {
+        var dir = DesktopOptions.ThemesDirectory;
+        if (string.IsNullOrEmpty(dir)) return null;
+        var path = Path.Combine(dir, name + ".json");
+        return File.Exists(path) ? await File.ReadAllTextAsync(path, ct) : null;
+    }
+
+    /// <summary>UI 绑定的选择命令（账号菜单 flyout + 设置「外观」tab）。</summary>
+    [RelayCommand]
+    private async Task SelectTheme(string name)
+        => await SelectThemeCoreAsync(name ?? "light", default);
+
+    /// <inheritdoc/>
+    Task IThemeHost.SelectThemeAsync(string name, CancellationToken cancellationToken)
+        => SelectThemeCoreAsync(name, cancellationToken);
 
     /// <summary>从偏好存储恢复用户自定义布局。校验区域集与 definition 一致（面板增删则回退默认），反序列化失败也回退（不崩）。</summary>
     private async Task<WorkspaceDefinition> RestoreLayoutAsync(WorkspaceDefinition def)

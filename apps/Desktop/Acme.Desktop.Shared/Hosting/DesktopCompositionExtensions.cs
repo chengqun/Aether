@@ -77,6 +77,9 @@ public static class DesktopCompositionExtensions
         // Notes 编辑器：粘贴图片保存根目录（markdown 引用相对文件名，预览通过 AssetPathRoot 解析）
         services.Configure<NotesEditorOptions>(o => o.ImageRoot = Path.Combine(tenantDir, "notes-media"));
 
+        // 主题：用户主题 JSON 目录（<tenantDir>/themes/*.json）。内置 light/dark 不依赖此目录。
+        services.Configure<DesktopOptions>(o => o.ThemesDirectory = Path.Combine(tenantDir, "themes"));
+
         // —— 公共业务上下文（两租户共用）——
         services.AddAppAuthInfrastructure(o =>
         {
