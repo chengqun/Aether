@@ -39,6 +39,15 @@
     "ToolResultBorderBrush": "#C2E8CF",
     "ToolResultTextBrush": "#1F8A4C"
   },
+  "fonts": {
+    "UiFont": "Segoe UI, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
+  },
+  "radius": {
+    "CornerRadiusMd": "8"
+  },
+  "spacing": {
+    "SpaceMd": "12"
+  },
   "background": {
     "color": "#FFFFFF"
   }
