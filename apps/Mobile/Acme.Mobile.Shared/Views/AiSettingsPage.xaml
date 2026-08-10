@@ -16,8 +16,8 @@
     <ScrollView>
         <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
 
-            <!-- Agent picker section -->
-            <Frame Style="{StaticResource CardFrame}">
+            <!-- Agent picker section（仅 Stockapp：股票模式默认 Agent 选择；Qifu 不串股票功能） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStockTenant}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="股票模式 AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
@@ -35,8 +35,8 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- Yushu auth card -->
-            <Frame Style="{StaticResource CardFrame}">
+            <!-- Yushu auth card（仅接入了毓数认证服务的租户显示——Stockapp 不注册毓数适配器，故隐藏；与 HasCloudDocs 同模式） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding HasYushu}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="毓数平台" FontSize="16" FontFamily="OpenSansSemibold"
                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />

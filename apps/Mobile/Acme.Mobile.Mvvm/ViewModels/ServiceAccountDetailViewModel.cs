@@ -81,21 +81,14 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
 
     public void SetParameters(IDictionary<string, object> query)
     {
-        DiagLog.Log($"[SADetail] SetParameters called; keys=[{string.Join(",", query.Keys)}]");
         if (query.TryGetValue("id", out var id) && Guid.TryParse(id?.ToString(), out var guid))
         {
             ServiceAccountId = guid;
-            DiagLog.Log($"[SADetail] id parsed → ServiceAccountId={guid}");
-        }
-        else
-        {
-            DiagLog.Log($"[SADetail] id MISSING/unparseable: raw={id}");
         }
     }
 
     public override async Task OnActivatedAsync()
     {
-        DiagLog.Log("[SADetail] OnActivatedAsync entry");
         await base.OnActivatedAsync();
         await LoadAsync();
     }
@@ -106,10 +99,8 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
     /// </summary>
     private async Task LoadAsync()
     {
-        DiagLog.Log($"[SADetail] LoadAsync entry; svcNull={_serviceAccountService == null}, cacheNull={_cacheService == null}, dispNull={_uiThreadDispatcher == null}, id={ServiceAccountId}");
         if (_serviceAccountService == null || ServiceAccountId == Guid.Empty)
         {
-            DiagLog.Log("[SADetail] LoadAsync EARLY-RETURN (guard)");
             return;
         }
 
@@ -118,7 +109,6 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         {
             // 1. 先从缓存加载文章列表（秒开）
             await LoadCachedPostsAsync();
-            DiagLog.Log($"[SADetail] after LoadCachedPostsAsync, Posts.Count={Posts.Count}");
 
             // 2. 从缓存文章中提取服务号名称（首次打开即可显示）
             if (string.IsNullOrEmpty(Name) && Posts.Count > 0)
@@ -128,12 +118,10 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
             }
 
             StatusMessage = Posts.Count == 0 ? "暂无内容" : string.Empty;
-            DiagLog.Log($"[SADetail] StatusMessage={StatusMessage}");
         }
         catch (Exception ex)
         {
             StatusMessage = $"加载失败: {ex.Message}";
-            DiagLog.Log($"[SADetail] LoadAsync EXCEPTION: {ex}");
             Debug.WriteLine($"[ServiceAccountDetailViewModel] 缓存加载失败: {ex.Message}");
         }
         finally
@@ -154,7 +142,6 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         try
         {
             var info = await Task.Run(() => _serviceAccountService!.GetAsync(ServiceAccountId));
-            DiagLog.Log($"[SADetail] SyncInfo GetAsync({ServiceAccountId}) → {(info == null ? "NULL" : info.Name)}");
             if (info != null)
             {
                 _uiThreadDispatcher?.Post(() =>
@@ -173,7 +160,6 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         }
         catch (Exception ex)
         {
-            DiagLog.Log($"[SADetail] SyncInfo EXCEPTION: {ex}");
             Debug.WriteLine($"[ServiceAccountDetailViewModel] 后台获取服务号信息失败: {ex.Message}");
         }
     }
@@ -183,10 +169,9 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
     /// </summary>
     private async Task LoadCachedPostsAsync()
     {
-        if (_cacheService == null) { DiagLog.Log("[SADetail] LoadCachedPostsAsync: cacheService NULL, return"); return; }
+        if (_cacheService == null) return;
 
         var cached = await Task.Run(() => _cacheService.GetCachedPostsAsync(ServiceAccountId));
-        DiagLog.Log($"[SADetail] GetCachedPostsAsync({ServiceAccountId}) → {cached?.Count ?? -1} items");
         _uiThreadDispatcher?.Post(() =>
         {
             foreach (var post in cached)
@@ -222,7 +207,6 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         }
         catch (Exception ex)
         {
-            DiagLog.Log($"[SADetail] SyncInBackground EXCEPTION: {ex}");
             Debug.WriteLine($"[ServiceAccountDetailViewModel] 后台同步失败: {ex.Message}");
         }
     }
@@ -246,7 +230,6 @@ public partial class ServiceAccountDetailViewModel : NavigableViewModelBase
         await Task.Run(async () =>
         {
             var response = await _serviceAccountService.GetPostsAsync(ServiceAccountId, 50, 0, since);
-            DiagLog.Log($"[SADetail] GetPostsAsync({ServiceAccountId}, since={since}) → {(response == null ? "NULL" : response.Count.ToString())} items");
             if (response != null && response.Count > 0)
             {
                 foreach (var post in response)

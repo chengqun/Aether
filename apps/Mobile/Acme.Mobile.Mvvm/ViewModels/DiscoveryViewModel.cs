@@ -13,7 +13,7 @@ public partial class DiscoveryViewModel : NavigableViewModelBase
     private string _title = "发现";
 
     [ObservableProperty]
-    private string _statusMessage = "加载中...";
+    private string _statusMessage = string.Empty;
 
     /// <summary>
     /// 导航请求事件
@@ -23,19 +23,6 @@ public partial class DiscoveryViewModel : NavigableViewModelBase
     public DiscoveryViewModel(IUIThreadDispatcher? uiThreadDispatcher = null)
     {
         _uiThreadDispatcher = uiThreadDispatcher;
-        LoadData();
-    }
-
-    private async void LoadData()
-    {
-        try
-        {
-            StatusMessage = "发现页面加载完成";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"加载失败: {ex.Message}";
-        }
     }
 
     [RelayCommand]

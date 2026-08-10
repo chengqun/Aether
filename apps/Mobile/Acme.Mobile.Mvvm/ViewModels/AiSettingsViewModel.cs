@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.Agents.AI;
+using Acme.AppAuth.Domain;
 using Acme.Notes.Domain;
 using Acme.Mobile.Mvvm.Models;
 using Acme.AppUpdate.Domain;
@@ -39,6 +40,7 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
 
     private readonly ICustomAgentCatalog? _agentCatalog;
     private readonly IAppSettings? _appSettings;
+    private readonly AppServerOptions? _serverOptions;
     private readonly IYushuAuthService? _yushuAuthService;
     private readonly IYushuTokenSyncService? _yushuTokenSyncService;
     private readonly ICloudDocsAuthService? _cloudDocsAuthService;
@@ -82,6 +84,12 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     /// <summary>是否接入了云文档认证服务（未接入时隐藏云文档卡片，如 MAUI）</summary>
     public bool HasCloudDocs => _cloudDocsAuthService != null;
 
+    /// <summary>是否接入了毓数认证服务（未接入时隐藏毓数卡片——Stockapp 不注册毓数适配器）</summary>
+    public bool HasYushu => _yushuAuthService != null;
+
+    /// <summary>是否为股票租户（Stockapp）。股票模式 AI 助手选择仅 Stockapp 显示；Qifu 不串股票功能。</summary>
+    public bool IsStockTenant => _serverOptions?.Tenant == "stockapp";
+
     /// <summary>所有可用的 Agent/Workflow 列表</summary>
     public ObservableCollection<AgentInfoDto> AvailableAgents { get; } = new();
 
@@ -102,6 +110,7 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     public AiSettingsViewModel(ICustomAgentCatalog? agentCatalog = null,
                                IAppSettings? appSettings = null,
                                IUIThreadDispatcher? uiThreadDispatcher = null,
+                               AppServerOptions? serverOptions = null,
                                IYushuAuthService? yushuAuthService = null,
                                IYushuTokenSyncService? yushuTokenSyncService = null,
                                ICloudDocsAuthService? cloudDocsAuthService = null,
@@ -111,6 +120,7 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     {
         _agentCatalog = agentCatalog;
         _appSettings = appSettings;
+        _serverOptions = serverOptions;
         _yushuAuthService = yushuAuthService;
         _yushuTokenSyncService = yushuTokenSyncService;
         _cloudDocsAuthService = cloudDocsAuthService;
