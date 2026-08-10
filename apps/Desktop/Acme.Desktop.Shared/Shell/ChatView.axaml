@@ -24,13 +24,13 @@
         <!-- 流式答案（TextContent）：全宽 markdown，无气泡 -->
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentStreamingAnswer}" Spacing="4">
           <TextBlock Text="回答中…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <ctl:SelectableMarkdownViewer Markdown="{Binding MarkdownContent}" MarkdownStyleName="GithubLike"
+          <ctl:SelectableMarkdownViewer Markdown="{Binding MarkdownContent}"
                                         SelectionEnabled="True" SelectionBrush="#3300A2ED" />
         </StackPanel>
 
         <!-- agent markdown 回答（完成）：全宽无框 + 元信息/复制 -->
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentMarkdownText}" Spacing="4">
-          <ctl:SelectableMarkdownViewer Markdown="{Binding Content}" MarkdownStyleName="GithubLike"
+          <ctl:SelectableMarkdownViewer Markdown="{Binding Content}"
                                         SelectionEnabled="True" SelectionBrush="#3300A2ED" />
           <DockPanel>
             <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9" VerticalAlignment="Center">

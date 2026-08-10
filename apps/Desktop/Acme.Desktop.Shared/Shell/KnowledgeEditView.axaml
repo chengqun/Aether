@@ -59,7 +59,7 @@
           </StackPanel>
         </Expander>
 
-        <ctl:SelectableMarkdownViewer Markdown="{Binding Body}" MarkdownStyleName="GithubLike"
+        <ctl:SelectableMarkdownViewer Markdown="{Binding Body}"
                                       MinHeight="200" Margin="0,2"/>
 
       </StackPanel>
