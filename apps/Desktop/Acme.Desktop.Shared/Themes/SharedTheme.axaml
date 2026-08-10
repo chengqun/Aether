@@ -21,6 +21,12 @@
       <Color x:Key="TextSecondary">#6B6B70</Color>
       <Color x:Key="UserBubbleBg">#5B5FC7</Color>
       <Color x:Key="AgentBubbleBg">#F7F7F8</Color>
+      <Color x:Key="ToolCallColor">#EEF0FB</Color>
+      <Color x:Key="ToolCallBorderColor">#D1D5F0</Color>
+      <Color x:Key="ToolCallTextColor">#3D40B5</Color>
+      <Color x:Key="ToolResultColor">#ECF8F0</Color>
+      <Color x:Key="ToolResultBorderColor">#C2E8CF</Color>
+      <Color x:Key="ToolResultTextColor">#1F8A4C</Color>
 
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
       <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}"/>
@@ -38,12 +44,12 @@
       <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
       <SolidColorBrush x:Key="UserBubbleBrush" Color="{StaticResource UserBubbleBg}"/>
       <SolidColorBrush x:Key="AgentBubbleBrush" Color="{StaticResource AgentBubbleBg}"/>
-      <SolidColorBrush x:Key="ToolCallBrush" Color="#EEF0FB"/>
-      <SolidColorBrush x:Key="ToolCallBorderBrush" Color="#D1D5F0"/>
-      <SolidColorBrush x:Key="ToolCallTextBrush" Color="#3D40B5"/>
-      <SolidColorBrush x:Key="ToolResultBrush" Color="#ECF8F0"/>
-      <SolidColorBrush x:Key="ToolResultBorderBrush" Color="#C2E8CF"/>
-      <SolidColorBrush x:Key="ToolResultTextBrush" Color="#1F8A4C"/>
+      <SolidColorBrush x:Key="ToolCallBrush" Color="{StaticResource ToolCallColor}"/>
+      <SolidColorBrush x:Key="ToolCallBorderBrush" Color="{StaticResource ToolCallBorderColor}"/>
+      <SolidColorBrush x:Key="ToolCallTextBrush" Color="{StaticResource ToolCallTextColor}"/>
+      <SolidColorBrush x:Key="ToolResultBrush" Color="{StaticResource ToolResultColor}"/>
+      <SolidColorBrush x:Key="ToolResultBorderBrush" Color="{StaticResource ToolResultBorderColor}"/>
+      <SolidColorBrush x:Key="ToolResultTextBrush" Color="{StaticResource ToolResultTextColor}"/>
 
       <!-- 语义/表面 token（dark 主题覆盖这些键即换肤）。
            Surface=次级表面（chip/代码块底，比 CardBg 略深/略浅以区分）；

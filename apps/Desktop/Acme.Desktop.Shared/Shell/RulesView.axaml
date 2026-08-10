@@ -4,18 +4,6 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <UserControl.Styles>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
-    </Style>
-    <Style Selector="Button.danger">
-      <Setter Property="Background" Value="#FF5252"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
-    </Style>
   </UserControl.Styles>
 
   <DockPanel>

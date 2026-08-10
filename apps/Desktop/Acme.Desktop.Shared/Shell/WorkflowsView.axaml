@@ -4,12 +4,6 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <UserControl.Styles>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
-    </Style>
     <Style Selector="Button.tool">
       <Setter Property="Padding" Value="12,4"/>
       <Setter Property="FontSize" Value="12"/>

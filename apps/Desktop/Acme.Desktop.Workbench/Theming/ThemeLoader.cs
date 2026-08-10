@@ -64,6 +64,10 @@ public static class ThemeLoader
                 if (key.EndsWith("Brush", StringComparison.Ordinal))
                 {
                     dict[key] = new SolidColorBrush(color);
+                    // Brush 键反向派生 Color（AccentBrush → AccentColor），让直接消费 Color 资源的 XAML 也跟随主题。
+                    var colorKey = key[..^"Brush".Length] + "Color";
+                    if (!def.Colors.ContainsKey(colorKey))
+                        dict[colorKey] = color;
                 }
                 else
                 {

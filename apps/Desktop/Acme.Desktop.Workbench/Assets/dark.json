@@ -40,13 +40,21 @@
     "ToolResultTextBrush": "#a6e3a1"
   },
   "fonts": {
-    "UiFont": "JetBrains Mono, Menlo, monospace"
+    "UiFont": "JetBrains Mono, Menlo, monospace",
+    "MonoFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace",
+    "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
   },
   "radius": {
-    "CornerRadiusMd": "6"
+    "CornerRadiusSm": "4",
+    "CornerRadiusMd": "6",
+    "CornerRadiusLg": "12"
   },
   "spacing": {
-    "SpaceMd": "10"
+    "SpaceXs": "4",
+    "SpaceSm": "8",
+    "SpaceMd": "10",
+    "SpaceLg": "16",
+    "SpaceXl": "24"
   },
   "background": {
     "color": "#181825"
