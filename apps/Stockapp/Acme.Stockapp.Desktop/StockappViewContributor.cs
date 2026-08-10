@@ -14,11 +14,11 @@ public sealed class StockappViewContributor : IViewRegistryContributor
 {
     public void Contribute(IViewRegistry registry, IServiceProvider services)
     {
-        registry.Register("ctp", () => new FuturesView(),
+        registry.Register(PanelKeys.Ctp, () => new FuturesView(),
             () => services.GetRequiredService<StockappMainViewModel>().Futures);
-        registry.Register("backtest", () => new TradingView(),
+        registry.Register(PanelKeys.Backtest, () => new TradingView(),
             () => services.GetRequiredService<StockappMainViewModel>().Trading);
-        registry.Register("stocktrade", () => new StockTradingView(),
+        registry.Register(PanelKeys.StockTrade, () => new StockTradingView(),
             () => services.GetRequiredService<StockappMainViewModel>().StockTrade);
     }
 }

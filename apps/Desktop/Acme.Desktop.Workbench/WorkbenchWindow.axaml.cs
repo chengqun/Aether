@@ -72,7 +72,7 @@ public partial class WorkbenchWindow : Window
         var rm = DesktopApp.Services?.GetService<IRegionManager>();
         if (rm is not null && InjectRegion is not null)
         {
-            rm.RegisterRegion("inject", InjectRegion);
+            rm.RegisterRegion(PanelKeys.Inject, InjectRegion);
             _injectRegionRegistered = true;
         }
     }

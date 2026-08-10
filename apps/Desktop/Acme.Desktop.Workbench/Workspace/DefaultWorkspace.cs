@@ -14,16 +14,16 @@ public static class DefaultWorkspace
         Title: "默认工作台",
         Panels: new List<PanelDescriptor>
         {
-            new("notes", "notes", "笔记", "notes"),
-            new("experts", "experts", "专家", "experts"),
-            new("chat", "chat", "聊天", "chat"),
+            new(PanelKeys.Notes, PanelKeys.Notes, "笔记", "notes"),
+            new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
+            new(PanelKeys.Chat, PanelKeys.Chat, "聊天", "chat"),
         },
         Layout: new LayoutSplit(
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { "notes", "experts" }, SelectedIndex: 0),
-                new LayoutRegion(RegionId: "chat"),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.Notes, PanelKeys.Experts }, SelectedIndex: 0),
+                new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 固定（可拖 GridSplitter 改，不跨重启持久）。
             Pixels: new double[] { 0, 420 }));

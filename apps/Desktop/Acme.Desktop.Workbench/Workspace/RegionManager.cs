@@ -10,6 +10,7 @@ namespace Acme.Desktop.Workbench.Workspace;
 /// IRegionManager 默认实现：命名 region → ContentControl 宿主字典。
 /// MVP 单 panel/region：AddToRegion 设宿主 Content（last wins）；RemoveFromRegion 清空。
 /// 多 panel/region（ItemsControl 宿主）留后续。
+/// 内容变更契约见 <see cref="IRegionManager"/>：RegisterRegion 不碰 Content，AddToRegion/RemoveFromRegion 才改。
 /// </summary>
 public sealed class RegionManager : IRegionManager
 {
@@ -23,8 +24,8 @@ public sealed class RegionManager : IRegionManager
 
     public void RegisterRegion(string name, ContentControl host)
     {
-        // 不清空 host.Content——BuildRegion 先登记 region 再设 panel 视图，若此处清空会抹掉已设的视图
-        // （chat 面板被清空即此 bug）。region 起始内容由调用方决定；AddToRegion/RemoveFromRegion 才改 Content。
+        // 仅登记宿主——绝不触碰 host.Content（曾因清空抹掉 BuildRegion 已设的 ChatView 致 chat 空白）。
+        // 内容由 AddToRegion 设置。重复登记同一 name 覆盖宿主引用（last wins）。
         _regions[name] = host;
     }
 
@@ -32,7 +33,7 @@ public sealed class RegionManager : IRegionManager
     {
         if (_regions.TryGetValue(name, out var host))
         {
-            host.Content = null;
+            host.Content = null; // 拆除 region 时清空（与 RemoveFromRegion 的"清内容但保留 region"区分）
             _regions.Remove(name);
         }
     }
@@ -41,12 +42,13 @@ public sealed class RegionManager : IRegionManager
     {
         if (!_regions.TryGetValue(name, out var host)) return false;
         var view = _viewRegistry.CreateView(panel.Key);
-        if (view is not null) view.DataContext = panel.ViewModel;
+        if (view is null) return false; // key 未注册 → 不改 Content
+        view.DataContext = panel.ViewModel;
         host.Content = view;
         return true;
     }
 
-    public void RemoveFromRegion(string name, string panelId)
+    public void RemoveFromRegion(string name)
     {
         if (_regions.TryGetValue(name, out var host))
             host.Content = null;

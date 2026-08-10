@@ -78,7 +78,9 @@ public partial class WorkspaceView : UserControl
         _ => new TextBlock { Text = "未知布局节点：" + node.GetType().Name }
     };
 
-    /// <summary>单 panel 叶子 + 命名 region 登记。插件可经 RegionManager 往此 region 注入 panel。</summary>
+    /// <summary>单 panel 叶子 + 命名 region 登记。插件可经 RegionManager 往此 region 注入 panel。
+    /// 内容变更契约：先 RegisterRegion（仅登记宿主、不碰 Content），再 AddToRegion 设初始内容——
+    /// 内容设置集中在 AddToRegion，RegisterRegion 无副作用，故调换顺序或误加 Content 清空都不会抹掉已设视图（防 chat 空白 bug 复发）。</summary>
     private Control BuildRegion(LayoutRegion r, IWorkspace ws)
     {
         var cc = new ContentControl
@@ -86,19 +88,10 @@ public partial class WorkspaceView : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Stretch,
         };
-        // 先登记 region 再设 Content——RegisterRegion 会清空宿主 Content（确保 region 起始为空），
-        // 若先设 Content 再登记，ChatView 会被 RegisterRegion 的 host.Content=null 抹掉 → 聊天面板空白。
         _regionManager?.RegisterRegion(r.RegionId, cc);
         var panel = ws.Panels.FirstOrDefault(p => p.RegionId == r.RegionId);
-        if (panel is not null && _viewRegistry is not null)
-        {
-            var view = _viewRegistry.CreateView(panel.Key);
-            if (view is not null)
-            {
-                view.DataContext = panel.ViewModel;
-                cc.Content = view;
-            }
-        }
+        if (panel is not null)
+            _regionManager?.AddToRegion(r.RegionId, panel); // 初始内容走与插件注入相同的路径
         return cc;
     }
 

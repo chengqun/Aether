@@ -15,20 +15,20 @@ public static class StockappWorkspace
         Title: "Stockapp 工作台",
         Panels: new List<PanelDescriptor>
         {
-            new("notes", "notes", "笔记", "notes"),
-            new("experts", "experts", "专家", "experts"),
-            new("automation", "automation", "自动化", "automation"),
-            new("ctp", "ctp", "期货", "futures"),
-            new("backtest", "backtest", "回测", "backtest"),
-            new("stocktrade", "stocktrade", "股票", "activity"),
-            new("chat", "chat", "聊天", "chat"),
+            new(PanelKeys.Notes, PanelKeys.Notes, "笔记", "notes"),
+            new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
+            new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation"),
+            new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures"),
+            new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest"),
+            new(PanelKeys.StockTrade, PanelKeys.StockTrade, "股票", "activity"),
+            new(PanelKeys.Chat, PanelKeys.Chat, "聊天", "chat"),
         },
         Layout: new LayoutSplit(
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { "notes", "experts", "automation", "ctp", "backtest", "stocktrade" }, SelectedIndex: 0),
-                new LayoutRegion(RegionId: "chat"),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 固定。
             Pixels: new double[] { 0, 420 }));

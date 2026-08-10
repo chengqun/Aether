@@ -18,27 +18,27 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
     public WorkbenchViewRegistry(IServiceProvider serviceProvider, IEnumerable<IViewRegistryContributor> contributors)
     {
         // 聊天：共享 ChatView，DataContext 绑 ChatWorkspaceViewModel（行为与 Stockapp 一致）。
-        Register("chat",
+        Register(PanelKeys.Chat,
             () => new ChatView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
 
         // 笔记：共享 NotesView（含 AvaloniaEdit + form 节点两栏）。
-        Register("notes",
+        Register(PanelKeys.Notes,
             () => new NotesView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Notes);
 
         // 专家：共享 ExpertsView（6 tab）。
-        Register("experts",
+        Register(PanelKeys.Experts,
             () => new ExpertsView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Experts);
 
         // 自动化：共享 AutomationView（所有租户都有此页）。
-        Register("automation",
+        Register(PanelKeys.Automation,
             () => new AutomationView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Automation);
 
         // 测试 panel（验证 IRegionManager 注入路径）。
-        Register("test",
+        Register(PanelKeys.Test,
             () => new TextBlock
             {
                 Text = "✅ 插件面板注入成功",
