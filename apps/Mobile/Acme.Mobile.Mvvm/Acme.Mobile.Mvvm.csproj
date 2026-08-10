@@ -34,9 +34,10 @@
 
   <!-- Aether platform + agent-runtime contracts -->
   <ItemGroup>
+    <!-- VM 库只消费 Core（ToolStreamEvent/agent DTO）+ Memory（IConversationStore/Conversation）+ Agents.AI
+         （ICustomAgentCatalog/ICustomAgentRunner）。Harness（AgentFactory/HarnessRuntime）与 Hosting
+         （services.AddAetherAI/AetherAIOptions）是宿主组合根职责，由 Mobile.Shared/租户持有——VM 库不引。 -->
     <ProjectReference Include="..\..\..\src\Aether.AI.Core\Aether.AI.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
-    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
   </ItemGroup>
