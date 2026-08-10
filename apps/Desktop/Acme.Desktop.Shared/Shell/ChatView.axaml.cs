@@ -258,7 +258,7 @@ public partial class ChatView : UserControl
         if (_vm == null) return;
         var settingsDialog = _vm.SettingsDialog;
         if (settingsDialog == null) return;
-        _ = settingsDialog.ShowSettingsAsync();
+        settingsDialog.ShowSettingsAsync().SafeFireAndForget();
     }
 
     /// <summary>点击历史会话行后收起下拉。

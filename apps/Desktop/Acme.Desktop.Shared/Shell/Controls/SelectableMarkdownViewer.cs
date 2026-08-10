@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -43,7 +44,7 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
                 e.Handled = true; // 抑制内置 OnKeyDown 的原始复制
                 var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
                 if (clipboard != null)
-                    _ = ClipboardExtensions.SetTextAsync(clipboard, text);
+                    ClipboardExtensions.SetTextAsync(clipboard, text).SafeFireAndForget();
                 return;
             }
         }

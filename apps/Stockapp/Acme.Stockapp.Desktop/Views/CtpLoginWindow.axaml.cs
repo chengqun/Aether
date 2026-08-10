@@ -1,10 +1,11 @@
+using Acme.Desktop.Shared.Shell;
 using Acme.Stockapp.Desktop.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
 namespace Acme.Stockapp.Desktop.Views;
 
-public partial class CtpLoginWindow : Window
+public partial class CtpLoginWindow : ThemedWindow
 {
     public CtpLoginWindow()
     {

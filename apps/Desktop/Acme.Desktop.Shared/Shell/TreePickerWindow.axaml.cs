@@ -7,7 +7,7 @@ using Avalonia.Interactivity;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>树形选择弹窗：按层级展开选一个目标节点，确定返回 TargetOption，取消返回 null。</summary>
-public partial class TreePickerWindow : Window
+public partial class TreePickerWindow : ThemedWindow
 {
     private TargetTreeNode? _selected;
     private TaskCompletionSource<TargetOption?>? _tcs;

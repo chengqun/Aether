@@ -37,7 +37,7 @@ public partial class ExpertsViewModel : ObservableObject
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
         Connector = connector;
-        _ = RefreshLoginStateAsync();
+        RefreshLoginStateAsync().SafeFireAndForget();
     }
 
     /// <summary>是否已登录 App（门控市场 tab 可见 + 市场调用鉴权）。</summary>
@@ -90,16 +90,16 @@ public partial class ExpertsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsMarketTab));
         OnPropertyChanged(nameof(IsMcpTab));
         if (value == ExpertsTab.Rule)
-            _ = Rules.LoadAsync();
+            Rules.LoadAsync().SafeFireAndForget();
         if (value == ExpertsTab.Connector && Connector is not null)
-            _ = Connector.RefreshAsync();
+            Connector.RefreshAsync().SafeFireAndForget();
         if (value == ExpertsTab.Market)
         {
-            _ = RefreshLoginStateAsync();
-            _ = LoadMarketplaceAsync();
+            RefreshLoginStateAsync().SafeFireAndForget();
+            LoadMarketplaceAsync().SafeFireAndForget();
         }
         if (value == ExpertsTab.Mcp)
-            _ = Mcp.LoadAsync();
+            Mcp.LoadAsync().SafeFireAndForget();
     }
 
     [RelayCommand] private void ShowAgentTab() => CurrentTab = ExpertsTab.Agent;

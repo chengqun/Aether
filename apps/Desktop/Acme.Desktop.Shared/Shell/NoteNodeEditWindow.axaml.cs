@@ -3,7 +3,7 @@ using Avalonia.Interactivity;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class NoteNodeEditWindow : Window
+public partial class NoteNodeEditWindow : ThemedWindow
 {
     public NoteNodeEditWindow()
     {

@@ -4,36 +4,14 @@ using Acme.Desktop.Mvvm;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class TraceWindow : Window
+public partial class TraceWindow : ThemedWindow
 {
-    private IThemeApplier? _themeApplier;
-
     public TraceWindow()
     {
         InitializeComponent();
-        // 同 SettingsWindow——经 IThemeApplier 叠加 overlay，dark 下 Trace 窗跟随主题。
-        _themeApplier = DesktopApp.Services.GetService<IThemeApplier>();
-        if (_themeApplier is not null)
-            _themeApplier.ThemeChanged += OnThemeChanged;
-    }
-
-    protected override void OnOpened(EventArgs e)
-    {
-        base.OnOpened(e);
-        _themeApplier?.ApplyTheme(this);
-    }
-
-    private void OnThemeChanged(object? sender, EventArgs e) => _themeApplier?.ApplyTheme(this);
-
-    protected override void OnClosed(EventArgs e)
-    {
-        if (_themeApplier is not null)
-            _themeApplier.ThemeChanged -= OnThemeChanged;
-        base.OnClosed(e);
     }
 
     private async void OnExportClick(object? sender, RoutedEventArgs e)

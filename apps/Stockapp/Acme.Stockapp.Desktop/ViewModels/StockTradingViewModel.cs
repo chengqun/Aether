@@ -32,7 +32,7 @@ public partial class StockTradingViewModel : ObservableObject
         // 启动期若当前后端未连接，自动确认一次（确认同花顺窗口在不在）——免得用户第一次开股票页
         // 看到「未连接」、还得手动切到连接器 tab 触发重连。连接器 tab 的 RefreshAsync 也会在切过去时兜底。
         if (!_router.IsConnectedByMethod(router.Method))
-            _ = ConnectCurrentAsync();
+            ConnectCurrentAsync().SafeFireAndForget();
     }
 
     // —— 下单方式（FlaUI / MCP 运行时切换）——
@@ -46,7 +46,7 @@ public partial class StockTradingViewModel : ObservableObject
         // 因为 IsConnected 是「任一连接」，FlaUI 连着时不能据此跳过 MCP 的连接确认）。
         var target = value ? OrderMethod.Mcp : OrderMethod.FlaUI;
         if (!_router.IsConnectedByMethod(target))
-            _ = ConnectCurrentAsync();
+            ConnectCurrentAsync().SafeFireAndForget();
     }
 
     /// <summary>对当前选中的后端发起一次连接确认（异步、不阻塞 UI；结果经日志事件刷新状态）。</summary>

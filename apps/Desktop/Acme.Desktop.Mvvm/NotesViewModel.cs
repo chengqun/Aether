@@ -57,7 +57,7 @@ public partial class NotesViewModel : ObservableObject
         _dirty = true;
         _saveCts?.Cancel();
         _saveCts = new CancellationTokenSource();
-        _ = DebouncedSaveAsync(_saveCts.Token);
+        DebouncedSaveAsync(_saveCts.Token).SafeFireAndForget();
     }
 
     private async Task DebouncedSaveAsync(CancellationToken ct)
@@ -145,7 +145,7 @@ public partial class NotesViewModel : ObservableObject
 
     partial void OnEditorFontSizeChanged(double value)
     {
-        if (!_loadingPref) _ = PersistFontSizeAsync(value);
+        if (!_loadingPref) PersistFontSizeAsync(value).SafeFireAndForget();
     }
 
     private async Task PersistFontSizeAsync(double value)
@@ -261,7 +261,7 @@ public partial class NotesViewModel : ObservableObject
         if (_dirty && _previousSelected is not null)
         {
             _saveCts?.Cancel();
-            _ = SaveNodeInternalAsync(_previousSelected);
+            SaveNodeInternalAsync(_previousSelected).SafeFireAndForget();
             _dirty = false;
         }
         _previousSelected = value;
@@ -278,7 +278,7 @@ public partial class NotesViewModel : ObservableObject
     {
         _serviceProvider = serviceProvider;
         _dispatcher = dispatcher;
-        _ = LoadFontSizeAsync();
+        LoadFontSizeAsync().SafeFireAndForget();
         NoteNodeVM.AnyExpandChanged += OnAnyExpandChanged;
     }
 

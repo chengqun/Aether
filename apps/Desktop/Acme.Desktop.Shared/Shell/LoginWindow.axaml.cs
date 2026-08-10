@@ -7,7 +7,7 @@ using Avalonia.Markup.Xaml;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>登录对话框。登录成功由 <see cref="LoginViewModel.LoggedIn"/> 触发关闭；取消按钮关闭。</summary>
-public partial class LoginWindow : Window
+public partial class LoginWindow : ThemedWindow
 {
     public LoginWindow()
     {

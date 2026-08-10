@@ -153,7 +153,7 @@ public partial class NotesView : UserControl
             if (_subscribedNode != null) _subscribedNode.PropertyChanged -= OnNodePropertyChanged;
             _subscribedNode = _vm.SelectedNode;
             if (_subscribedNode != null) _subscribedNode.PropertyChanged += OnNodePropertyChanged;
-            _ = CreateEditVmForNodeAsync();
+            CreateEditVmForNodeAsync().SafeFireAndForget();
             SyncCodeEditor();
         }
         else if (e.PropertyName == nameof(NotesViewModel.IsCodeEdit) && _vm.IsCodeEdit)
@@ -388,7 +388,7 @@ public partial class NotesView : UserControl
         if (_vm?.IsMarkdownNode != true || _pasting) return;
         if (e.Key != Key.V || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
         e.Handled = true; // 阻断 AvaloniaEdit 默认粘贴，由我们 async 处理
-        _ = HandlePasteAsync();
+        HandlePasteAsync().SafeFireAndForget();
     }
 
     private async Task HandlePasteAsync()

@@ -6,7 +6,7 @@ using Avalonia.Markup.Xaml;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class WorkflowEditWindow : Window
+public partial class WorkflowEditWindow : ThemedWindow
 {
     public WorkflowEditWindow() { InitializeComponent(); }
 

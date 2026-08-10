@@ -5,7 +5,7 @@ using Avalonia.Markup.Xaml;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class ExpertEditWindow : Window
+public partial class ExpertEditWindow : ThemedWindow
 {
     public ExpertEditWindow()
     {

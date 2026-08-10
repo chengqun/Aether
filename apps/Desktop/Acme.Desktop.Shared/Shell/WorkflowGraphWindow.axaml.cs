@@ -13,7 +13,7 @@ using Path = Avalonia.Controls.Shapes.Path;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class WorkflowGraphWindow : Window
+public partial class WorkflowGraphWindow : ThemedWindow
 {
     private readonly LaidOutGraph _graph;
     private readonly string _mermaid;

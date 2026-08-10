@@ -5,7 +5,7 @@ using Avalonia.Markup.Xaml;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class LlmConfigEditWindow : Window
+public partial class LlmConfigEditWindow : ThemedWindow
 {
     public LlmConfigEditWindow()
     {

@@ -86,13 +86,13 @@ public partial class ThsConnectorViewModel : ConnectorCardViewModel
     partial void OnClientExecutablePathChanged(string value)
     {
         _options.ClientExecutablePath = value;
-        _ = _preferences.SetAsync(KeyExePath, string.IsNullOrEmpty(value) ? null : value);
+        _preferences.SetAsync(KeyExePath, string.IsNullOrEmpty(value) ? null : value).SafeFireAndForget();
     }
 
     partial void OnClientWindowTitleChanged(string value)
     {
         _options.ClientWindowTitle = value;
-        _ = _preferences.SetAsync(KeyWindowTitle, string.IsNullOrEmpty(value) ? null : value);
+        _preferences.SetAsync(KeyWindowTitle, string.IsNullOrEmpty(value) ? null : value).SafeFireAndForget();
     }
 
     private void OnLogReceived(object? sender, string msg)
@@ -142,7 +142,7 @@ public partial class ThsConnectorViewModel : ConnectorCardViewModel
                 if (!_configured)
                 {
                     _configured = true;   // 首次成功连接 → 标记配置就绪并持久化
-                    _ = _preferences.SetAsync(KeyConfigured, "true");
+                    _preferences.SetAsync(KeyConfigured, "true").SafeFireAndForget();
                 }
             }
             else

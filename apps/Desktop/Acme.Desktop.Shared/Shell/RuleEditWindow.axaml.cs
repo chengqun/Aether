@@ -5,7 +5,7 @@ using Avalonia.Markup.Xaml;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class RuleEditWindow : Window
+public partial class RuleEditWindow : ThemedWindow
 {
     public RuleEditWindow()
     {

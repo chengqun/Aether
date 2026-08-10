@@ -1,3 +1,4 @@
+using Acme.Desktop.Mvvm;
 using Acme.Notes.Application;
 using Aether.AI.Harness.Scripting;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +19,7 @@ public static class CodeRuleHost
             if (scripting is null) return;
             var notes = services.GetRequiredService<INoteService>();
             notes.NotesChanged += () => scripting.Reload(); // 笔记变更 → 防抖重编译注册代码大脑
-            _ = scripting.LoadAsync();
+            scripting.LoadAsync().SafeFireAndForget();
         }
         catch
         {

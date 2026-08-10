@@ -3,7 +3,7 @@ using Avalonia.Interactivity;
 
 namespace Acme.Desktop.Shared.Shell;
 
-public partial class AutomationEditWindow : Window
+public partial class AutomationEditWindow : ThemedWindow
 {
     public AutomationEditWindow()
     {

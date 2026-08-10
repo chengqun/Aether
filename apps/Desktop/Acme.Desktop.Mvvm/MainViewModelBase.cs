@@ -29,6 +29,10 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     private readonly IServiceProvider _serviceProvider;
     private readonly IUiDispatcher _dispatcher;
 
+    /// <summary>初始化期守卫：InitializeAsync 并行加载业务 VM 时，抑制 NotesChanged/WorkflowsChanged/RulesChanged
+    /// 的回流重复加载（初始化里已显式加载全部列表，回流是多余的，且并发改 ObservableCollection 不安全）。</summary>
+    private volatile bool _initializing;
+
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
     {
         _auth = auth;
@@ -55,16 +59,18 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             workflowRunner,
             _dispatcher);
-        Workflows.WorkflowsChanged += async () => await Notes.LoadAsync();
+        Workflows.WorkflowsChanged += async () => { if (!_initializing) await Notes.LoadAsync(); };
         Rules = new RulesViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             agentRunner,
             _dispatcher,
             serviceProvider.GetRequiredService<McpViewModel>());
-        Rules.RulesChanged += async () => await Notes.LoadAsync();
+        Rules.RulesChanged += async () => { if (!_initializing) await Notes.LoadAsync(); };
         // Notes 的增删改会影响同源的 Experts（agent 笔记）、Workflows（workflow 笔记）与 Rules（规则笔记），需双向刷新。
+        // 初始化期跳过——InitializeAsync 已并行加载全部列表，回流会重复加载且与并行加载并发改集合不安全。
         Notes.NotesChanged += async () =>
         {
+            if (_initializing) return;
             await Experts.LoadAsync();
             await Workflows.LoadAsync();
             await Rules.LoadAsync();
@@ -173,12 +179,20 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             UserName = "未登录";
         }
 
-        // 业务 VM 加载（Chat 恢复召唤/选中态依赖 Experts/Workflows/Rules 列表已就绪）
-        await Notes.LoadAsync();
-        await Experts.LoadAsync();
-        await Automation.LoadAsync();
-        await Workflows.LoadAsync();
-        await Rules.LoadAsync();
+        // 业务 VM 加载（Chat 恢复召唤/选中态依赖 Experts/Workflows/Rules 列表已就绪）。
+        // 五个相互独立——并行加载缩短「窗口出现到可用」间隔（每个内部 I/O 并行、集合操作仍经 UI 线程序列化）。
+        // _initializing 守卫抑制此期间的 NotesChanged/WorkflowsChanged/RulesChanged 回流（避免与并行加载重复 + 并发改集合）。
+        _initializing = true;
+        try
+        {
+            await Task.WhenAll(
+                Notes.LoadAsync(),
+                Experts.LoadAsync(),
+                Automation.LoadAsync(),
+                Workflows.LoadAsync(),
+                Rules.LoadAsync());
+        }
+        finally { _initializing = false; }
 
         // 聊天引擎初始化：LLM 配置 + 召唤/选中恢复 + 最近会话 + 连接态 + 自动连接（自管 _isInitializing）
         await Chat.InitializeAsync();

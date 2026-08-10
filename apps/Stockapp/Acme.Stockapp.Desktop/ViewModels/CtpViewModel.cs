@@ -125,7 +125,7 @@ public partial class CtpViewModel : ObservableObject
         catch { /* 连接器刷新失败不阻塞 */ }
         CheckConnectionStatus();
         await LoadMainFuturesAsync();   // 先用本地已有数据展示（上次同步的）
-        _ = SyncAndReloadAsync();       // 后台增量同步服务端证券，完成后刷新看板
+        SyncAndReloadAsync().SafeFireAndForget();       // 后台增量同步服务端证券，完成后刷新看板
     }
 
     /// <summary>后台从服务端同步证券（增量），完成后在 UI 线程刷新主力合约看板。fire-and-forget。</summary>
@@ -167,7 +167,7 @@ public partial class CtpViewModel : ObservableObject
             }
             StatusMessage = mains.Count > 0 ? $"主力合约 {mains.Count} 个" : "无主力合约（请先同步期货数据）";
             ApplySort();
-            _ = TryAutoSubscribeAsync();
+            TryAutoSubscribeAsync().SafeFireAndForget();
         }
         catch (Exception ex) { StatusMessage = $"加载主力合约失败: {ex.Message}"; }
     }
@@ -219,7 +219,7 @@ public partial class CtpViewModel : ObservableObject
                 StatusMessage = "已连接";
                 var r = _trading.LoginResult;
                 LoginInfo = $"交易日={r?.TradingDay} FrontID={r?.FrontId} SessionID={r?.SessionId}";
-                if (!_autoSubscribed) _ = TryAutoSubscribeAsync();
+                if (!_autoSubscribed) TryAutoSubscribeAsync().SafeFireAndForget();
                 break;
             case CtpConnectionStatus.Reconnecting:
                 StatusMessage = "重连中…";
@@ -254,7 +254,7 @@ public partial class CtpViewModel : ObservableObject
     [RelayCommand]
     private void Logout()
     {
-        _ = _trading.LogoutAsync();
+        _trading.LogoutAsync().SafeFireAndForget();
         IsConnected = false; IsMdSubscribed = false; _pendingTicks.Clear(); _autoSubscribed = false;
         Account = null; Positions.Clear(); Orders.Clear(); Trades.Clear();
         IsConfirmingOrder = false; IsConfirmingCancel = false;

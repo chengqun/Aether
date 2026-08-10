@@ -69,12 +69,12 @@ public partial class App : global::Avalonia.Application
                 catch { /* 退出期释放失败忽略 */ }
             };
             // 窗口打开后异步初始化登录态（检查已缓存 token，刷新账户显示），不阻塞 UI
-            _ = vm.InitializeAsync();
+            vm.InitializeAsync().SafeFireAndForget();
             // 启动加载策略脚本笔记 → 编译 → StrategyRegistry（NotesChanged 时自动重加载）
             var scripting = Services.GetRequiredService<IStrategyScriptingService>();
             var notes = Services.GetRequiredService<INoteService>();
             notes.NotesChanged += () => scripting.Reload(); // 笔记变更 → 防抖重编译注册策略
-            _ = scripting.LoadAsync();
+            scripting.LoadAsync().SafeFireAndForget();
             // 启动加载代码规则脚本笔记 → Roslyn 编译 → ICodeBrainRegistry（NotesChanged 时自动重加载）
             CodeRuleHost.Start(Services);
         }
