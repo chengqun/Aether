@@ -14,8 +14,8 @@ namespace Acme.Desktop.Workbench.Theming;
 
 /// <summary>
 /// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
-/// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置 light（light.json）与 dark（dark.json）同为 JSON overlay——
-/// 换 JSON 即换肤，无需重编；用户可在 &lt;tenantDir&gt;/themes/*.json 放自定义主题，或同名 light.json/dark.json 覆盖内置。
+/// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置主题（light/dark + Catppuccin Latte/Frappé/Macchiato + Nord/Dracula/Tokyo Night）
+/// 同为 JSON overlay——换 JSON 即换肤，无需重编；用户可在 &lt;tenantDir&gt;/themes/*.json 放自定义主题，或同名 JSON 覆盖内置。
 /// 全部经 {DynamicResource} 消费 → overlay merge 后全量重染（颜色/字体/圆角/间距/背景）。
 /// </summary>
 public static class ThemeLoader
@@ -24,6 +24,24 @@ public static class ThemeLoader
 
     private static readonly ConditionalWeakTable<StyledElement, ResourceDictionary> _overlays = new();
 
+    /// <summary>内置主题清单（name→显示描述）。每个 name 对应内嵌资源 Assets/{name}.json。
+    /// 新增内置主题 = 把 JSON 放进 Assets/ + 在此加一行（csproj 的 Assets\**\* glob 自动纳入资源）。</summary>
+    public static readonly (string Name, string Description)[] BuiltInThemes =
+    {
+        ("light", "内置浅色"),
+        ("dark", "Catppuccin Mocha"),
+        ("latte", "Catppuccin Latte（浅）"),
+        ("frappe", "Catppuccin Frappé"),
+        ("macchiato", "Catppuccin Macchiato"),
+        ("nord", "Nord"),
+        ("dracula", "Dracula"),
+        ("tokyo-night", "Tokyo Night"),
+    };
+
+    /// <summary>判断 name 是否为内置主题名。</summary>
+    public static bool IsBuiltIn(string name)
+        => Array.Exists(BuiltInThemes, t => t.Name == name);
+
     /// <summary>反序列化 JSON。失败返回 null。</summary>
     public static ThemeDefinition? Deserialize(string json)
     {
@@ -31,26 +49,22 @@ public static class ThemeLoader
         catch { return null; }
     }
 
-    /// <summary>读内嵌 dark 主题（Assets/dark.json，Catppuccin Mocha）为字符串。内置 dark = 此 JSON overlay（与 <see cref="GetLightJson"/> 对称）。</summary>
-    public static string? GetDarkJson()
+    /// <summary>读内嵌主题 JSON（Assets/{name}.json）为字符串。资源不存在返 null。</summary>
+    public static string? GetBuiltInJson(string name)
     {
-        var uri = new Uri("avares://Acme.Desktop.Workbench/Assets/dark.json");
+        var uri = new Uri($"avares://Acme.Desktop.Workbench/Assets/{name}.json");
         if (!AssetLoader.Exists(uri)) return null;
         using var s = AssetLoader.Open(uri);
         using var r = new StreamReader(s);
         return r.ReadToEnd();
     }
 
-    /// <summary>读内嵌 light 主题（Assets/light.json）为字符串。内置 light 也是 JSON overlay（与 dark 对称），
-    /// 不再是「无 overlay」——值与 SharedTheme.axaml 基线一致，此处显式化使其可被用户 themes/light.json 覆盖。</summary>
-    public static string? GetLightJson()
-    {
-        var uri = new Uri("avares://Acme.Desktop.Workbench/Assets/light.json");
-        if (!AssetLoader.Exists(uri)) return null;
-        using var s = AssetLoader.Open(uri);
-        using var r = new StreamReader(s);
-        return r.ReadToEnd();
-    }
+    /// <summary>读内嵌 dark 主题（Assets/dark.json，Catppuccin Mocha）。委托 <see cref="GetBuiltInJson"/>。</summary>
+    public static string? GetDarkJson() => GetBuiltInJson("dark");
+
+    /// <summary>读内嵌 light 主题（Assets/light.json）。委托 <see cref="GetBuiltInJson"/>。
+    /// 内置 light 也是 JSON overlay（与 dark 对称），值与 SharedTheme.axaml 基线一致——显式化使其可被用户 themes/light.json 覆盖。</summary>
+    public static string? GetLightJson() => GetBuiltInJson("light");
 
     /// <summary>把定义转成 ResourceDictionary（每种 token 转成对应 Avalonia 资源类型）。</summary>
     public static ResourceDictionary ToResourceDictionary(ThemeDefinition def)

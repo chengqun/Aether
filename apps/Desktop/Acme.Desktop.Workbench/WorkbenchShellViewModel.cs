@@ -197,15 +197,16 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private Task LoadThemesAsync()
     {
         Themes.Clear();
-        Themes.Add(new ThemeOption("light", "内置浅色", true) { SelectCommand = SelectThemeCommand });
-        Themes.Add(new ThemeOption("dark", "内置深色（Catppuccin Mocha）", true) { SelectCommand = SelectThemeCommand });
+        // 内置主题从 ThemeLoader.BuiltInThemes 清单驱动（新增内置主题只需在清单加一行）。
+        foreach (var (name, desc) in ThemeLoader.BuiltInThemes)
+            Themes.Add(new ThemeOption(name, desc, true) { SelectCommand = SelectThemeCommand });
         var dir = DesktopOptions.ThemesDirectory;
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
             foreach (var f in Directory.EnumerateFiles(dir, "*.json"))
             {
                 var name = Path.GetFileNameWithoutExtension(f);
-                if (name is "light" or "dark") continue; // 不覆盖内置名
+                if (ThemeLoader.IsBuiltIn(name)) continue; // 同名文件不覆盖内置
                 Themes.Add(new ThemeOption(name, Path.GetFileName(f), false) { SelectCommand = SelectThemeCommand });
             }
         }
@@ -213,31 +214,23 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     }
 
     /// <summary>选中主题：设 overlay JSON + 当前名 + IsCurrent 高亮 + IsDarkVariant + 持久化。供 RelayCommand 与 IThemeHost.SelectThemeAsync 共用。
-    /// light/dark 同为 JSON overlay（与 dark 对称）——内置 light = 内嵌 light.json，内置 dark = 内嵌 dark.json。
-    /// 用户可在 &lt;tenantDir&gt;/themes/light.json 或 dark.json 放同名文件覆盖自定义（免重编）。</summary>
+    /// 内置主题（light/dark/latte/frappe/macchiato/nord/dracula/tokyo-night）= 内嵌 Assets/{name}.json 的 JSON overlay；
+    /// 用户可在 &lt;tenantDir&gt;/themes/{name}.json 放同名文件覆盖内置（免重编）。用户自定义主题 = 读文件。</summary>
     private async Task SelectThemeCoreAsync(string name, CancellationToken ct)
     {
-        // 内置 light/dark：优先用户同名文件（自定义覆盖），缺则内嵌 JSON。用户主题：读文件。
-        var json = name switch
-        {
-            "light" => (await ReadUserThemeJsonAsync("light", ct)) ?? ThemeLoader.GetLightJson(),
-            "dark" => (await ReadUserThemeJsonAsync("dark", ct)) ?? ThemeLoader.GetDarkJson(),
-            _ => await ReadUserThemeJsonAsync(name, ct),
-        };
+        // 内置主题：优先用户同名文件（自定义覆盖），缺则内嵌 JSON。用户主题：读文件。
+        var json = ThemeLoader.IsBuiltIn(name)
+            ? (await ReadUserThemeJsonAsync(name, ct)) ?? ThemeLoader.GetBuiltInJson(name)
+            : await ReadUserThemeJsonAsync(name, ct);
         // 用户主题文件缺失/非法 → 回退内置 light（加载 light.json，免残留指向不存在的主题）。
         if (json is null)
         {
             name = "light";
             json = ThemeLoader.GetLightJson();
         }
-        // 深色倾向：light→false，dark→true，用户主题读 JSON variant 字段（缺省 dark）。
-        // 驱动 Avalonia 原生控件 ThemeVariant——overlay 不覆盖原生控件，须靠 variant 翻转。
-        IsDarkVariant = name switch
-        {
-            "light" => false,
-            "dark" => true,
-            _ => !string.Equals(ThemeLoader.Deserialize(json ?? "")?.Variant, "light", StringComparison.OrdinalIgnoreCase),
-        };
+        // 深色倾向：读 JSON variant 字段（"light"→false，缺省/其它→true）。
+        // 所有内置主题 JSON 均带 variant 字段；驱动 Avalonia 原生控件 ThemeVariant——overlay 不覆盖原生控件，须靠 variant 翻转。
+        IsDarkVariant = !string.Equals(ThemeLoader.Deserialize(json ?? "")?.Variant, "light", StringComparison.OrdinalIgnoreCase);
         CustomThemeJson = json;   // 触发 ThemeLoader.Apply（窗口订阅 CustomThemeJson 变化）
         Theme = name;             // 当前名（高亮）
         foreach (var t in Themes)

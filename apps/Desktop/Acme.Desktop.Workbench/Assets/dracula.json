@@ -1,0 +1,62 @@
+{
+  "$note": "Dracula（经典深色配色）。同为 JSON overlay 经 ThemeLoader 叠加到 WorkbenchTheme 之上。",
+  "variant": "dark",
+  "colors": {
+    "AccentColor": "#bd93f9",
+    "AccentBrush": "#bd93f9",
+    "AccentHoverBrush": "#d4b5fc",
+    "AccentLightBrush": "#d4b5fc",
+    "SidebarBgBrush": "#21222c",
+    "SidebarHoverBrush": "#44475a",
+    "SidebarActiveBrush": "#bd93f9",
+    "SidebarIconBrush": "#6272a4",
+    "SidebarTextBrush": "#f8f8f2",
+    "ContentBgBrush": "#282a36",
+    "CardBgBrush": "#21222c",
+    "BorderBrush": "#44475a",
+    "TextPrimaryBrush": "#f8f8f2",
+    "TextSecondaryBrush": "#6272a4",
+    "NavHoverBrush": "#44475a",
+    "WorkspaceBackground": "#282a36",
+    "SurfaceBrush": "#44475a",
+    "SurfaceHoverBrush": "#505468",
+    "SuccessBrush": "#50fa7b",
+    "SuccessBgBrush": "#1e3a28",
+    "DangerColor": "#ff5555",
+    "DangerBrush": "#ff5555",
+    "DangerBgBrush": "#3a1e22",
+    "WarningBrush": "#f1fa8c",
+    "WarningBgBrush": "#383a22",
+    "AccentTintBgBrush": "#322a45",
+    "OnAccentColor": "#282a36",
+    "OnDangerColor": "#282a36",
+    "UserBubbleBrush": "#bd93f9",
+    "AgentBubbleBrush": "#44475a",
+    "ToolCallBrush": "#322a45",
+    "ToolCallBorderBrush": "#44475a",
+    "ToolCallTextBrush": "#bd93f9",
+    "ToolResultBrush": "#1e3a28",
+    "ToolResultBorderBrush": "#44475a",
+    "ToolResultTextBrush": "#50fa7b"
+  },
+  "fonts": {
+    "UiFont": "Segoe UI, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif",
+    "MonoFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace",
+    "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
+  },
+  "radius": {
+    "CornerRadiusSm": "4",
+    "CornerRadiusMd": "8",
+    "CornerRadiusLg": "12"
+  },
+  "spacing": {
+    "SpaceXs": "4",
+    "SpaceSm": "8",
+    "SpaceMd": "12",
+    "SpaceLg": "16",
+    "SpaceXl": "24"
+  },
+  "background": {
+    "color": "#282a36"
+  }
+}
