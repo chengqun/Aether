@@ -135,7 +135,7 @@
         <StackPanel Spacing="12">
           <Border Classes="card" IsVisible="{Binding HasError}">
             <StackPanel Spacing="6">
-              <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="#C62828" />
+              <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
               <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
             </StackPanel>
           </Border>

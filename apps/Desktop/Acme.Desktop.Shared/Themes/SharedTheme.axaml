@@ -44,6 +44,29 @@
       <SolidColorBrush x:Key="ToolResultBrush" Color="#ECF8F0"/>
       <SolidColorBrush x:Key="ToolResultBorderBrush" Color="#C2E8CF"/>
       <SolidColorBrush x:Key="ToolResultTextBrush" Color="#1F8A4C"/>
+
+      <!-- 语义/表面 token（dark 主题覆盖这些键即换肤）。
+           Surface=次级表面（chip/代码块底，比 CardBg 略深/略浅以区分）；
+           Success/Danger/Warning/AccentTint=状态徽章 bg(浅 tint 底)+fg(深字色) 成对，
+           dark 主题覆盖为深 tint 底+浅字色。DangerBrush 已存在（按钮用），此处 Danger 指徽章 fg 复用它。 -->
+      <Color x:Key="SurfaceColor">#F3F4F6</Color>
+      <Color x:Key="SurfaceHoverColor">#E5E7EB</Color>
+      <Color x:Key="SuccessColor">#2E7D32</Color>
+      <Color x:Key="SuccessBgColor">#E8F5E9</Color>
+      <Color x:Key="DangerBgColor">#FFEBEE</Color>
+      <Color x:Key="WarningColor">#B45309</Color>
+      <Color x:Key="WarningBgColor">#FFF3E0</Color>
+      <Color x:Key="AccentTintBgColor">#EEF0FB</Color>
+      <Color x:Key="OnAccentColor">#FFFFFF</Color>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource SurfaceHoverColor}"/>
+      <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
+      <SolidColorBrush x:Key="SuccessBgBrush" Color="{StaticResource SuccessBgColor}"/>
+      <SolidColorBrush x:Key="DangerBgBrush" Color="{StaticResource DangerBgColor}"/>
+      <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
+      <SolidColorBrush x:Key="WarningBgBrush" Color="{StaticResource WarningBgColor}"/>
+      <SolidColorBrush x:Key="AccentTintBgBrush" Color="{StaticResource AccentTintBgColor}"/>
+      <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}"/>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -210,13 +233,13 @@
 
   <!-- 工具条芯片容器 -->
   <Style Selector="Border.chip">
-    <Setter Property="Background" Value="#F3F4F6"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
     <Setter Property="CornerRadius" Value="13"/>
     <Setter Property="Padding" Value="10,4"/>
     <Setter Property="Height" Value="26"/>
   </Style>
   <Style Selector="Border.chip:pointerover">
-    <Setter Property="Background" Value="#E5E7EB"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
   </Style>
 
   <!-- 发送按钮 -->
@@ -232,7 +255,7 @@
     <Setter Property="FontSize" Value="16"/>
   </Style>
   <Style Selector="Button.send-btn:disabled">
-    <Setter Property="Background" Value="#D1D5DB"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
@@ -254,7 +277,7 @@
 
   <!-- 通用卡片外框：专家/专家团/市场/MCP/连接器 各 tab 共用，容器用 ItemsControl+WrapPanel 换行。 -->
   <Style Selector="Border.card">
-    <Setter Property="Background" Value="White"/>
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="14"/>
@@ -282,32 +305,32 @@
     <Setter Property="MonospaceFontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Courier New,monospace"/>
   </Style>
 
-  <!-- Markdown.Avalonia (GithubLike 主题) 视觉增强：统一 #00A2ED 品牌色。
-       代码块圆角 + 品牌色左竖条，引用块品牌色竖线 + 浅底，链接/行内代码品牌色。
+  <!-- Markdown.Avalonia (GithubLike 主题) 视觉增强：统一品牌色（经 AccentBrush token，dark 主题自动跟随）。
+       代码块圆角 + 品牌色左竖条，引用块品牌色竖线 + 表面底，链接/行内代码品牌色。
        selector 取自 MarkdownStyleGithubLike 主题（Border.CodeBlock/Border.Blockquote/cb|CCode/cb|CHyperlink 等），
        应用级样式覆盖控件级主题（同 TextBlock.CodeBlock 字体 fallback 机制）。 -->
   <Style Selector="Border.CodeBlock">
-    <Setter Property="Background" Value="#F6F8FA"/>
-    <Setter Property="BorderBrush" Value="#00A2ED"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="4,0,0,0"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="16,10"/>
   </Style>
   <Style Selector="TextBlock.CodeBlock">
-    <Setter Property="Foreground" Value="#1F2328"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
   </Style>
   <Style Selector="cb|CCode">
-    <Setter Property="Foreground" Value="#0B6FB8"/>
-    <Setter Property="Background" Value="#E5F4FC"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
   </Style>
   <Style Selector="Border.Blockquote">
-    <Setter Property="BorderBrush" Value="#00A2ED"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="BorderThickness" Value="4,0,0,0"/>
-    <Setter Property="Background" Value="#F6F8FA"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
     <Setter Property="CornerRadius" Value="0,6,6,0"/>
   </Style>
   <Style Selector="cb|CHyperlink">
-    <Setter Property="Foreground" Value="#00A2ED"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
 </Styles>

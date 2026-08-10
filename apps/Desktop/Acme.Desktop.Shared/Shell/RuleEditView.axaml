@@ -21,7 +21,7 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="#16A34A"
+      <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
                  VerticalAlignment="Center"
                  IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </Border>
@@ -101,8 +101,8 @@
                                 </DataTemplate>
                               </ComboBox.SelectionBoxItemTemplate>
                             </ComboBox>
-                            <Border Background="#FFB3B3" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
-                              <TextBlock Text="危险" FontSize="9" Foreground="White"/>
+                            <Border Background="{DynamicResource DangerBgBrush}" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
+                              <TextBlock Text="危险" FontSize="9" Foreground="{DynamicResource DangerBrush}"/>
                             </Border>
                           </StackPanel>
                         </CheckBox>
@@ -155,8 +155,8 @@
                                     </DataTemplate>
                                   </ComboBox.SelectionBoxItemTemplate>
                                 </ComboBox>
-                                <Border Background="#FFB3B3" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
-                                  <TextBlock Text="危险" FontSize="9" Foreground="White"/>
+                                <Border Background="{DynamicResource DangerBgBrush}" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
+                                  <TextBlock Text="危险" FontSize="9" Foreground="{DynamicResource DangerBrush}"/>
                                 </Border>
                               </StackPanel>
                             </CheckBox>

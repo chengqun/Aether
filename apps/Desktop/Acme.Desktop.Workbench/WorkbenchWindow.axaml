@@ -47,7 +47,7 @@
           </Button.Flyout>
           <StackPanel Orientation="Horizontal" Spacing="10">
             <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
-              <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
+              <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <StackPanel Orientation="Vertical" Spacing="1">
@@ -135,7 +135,7 @@
             </MenuFlyout>
           </Button.Flyout>
           <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
-            <TextBlock Text="{Binding UserInitial}" Foreground="White" FontSize="13" FontWeight="SemiBold"
+            <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
         </Button>

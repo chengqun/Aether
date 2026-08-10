@@ -12,7 +12,7 @@
         <Button Content="复制 Mermaid" Classes="tool" Click="OnCopyMermaidClick" Padding="10,4" FontSize="11"/>
       </StackPanel>
     </Border>
-    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#FAFAFA">
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="{DynamicResource CardBgBrush}">
       <Canvas x:Name="GraphCanvas" Background="Transparent"/>
     </ScrollViewer>
   </DockPanel>

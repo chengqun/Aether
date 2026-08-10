@@ -28,7 +28,7 @@
 
   <DockPanel>
     <!-- 顶部工具栏 -->
-    <Border DockPanel.Dock="Top" Padding="16,10" Background="White"
+    <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -48,7 +48,7 @@
       <Panel>
         <!-- 空状态 -->
         <Border IsVisible="{Binding !VisibleTraces.Count}" Padding="40" CornerRadius="12"
-                Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,40,0,0">
           <StackPanel Spacing="6" HorizontalAlignment="Center">
             <TextBlock Text="📭" FontSize="28" HorizontalAlignment="Center"/>

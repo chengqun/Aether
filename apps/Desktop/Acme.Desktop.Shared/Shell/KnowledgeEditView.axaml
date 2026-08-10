@@ -15,7 +15,7 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Padding="12,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <TextBlock Text="{Binding Error}" Foreground="#D9534F" VerticalAlignment="Center" IsVisible="{Binding HasError}"/>
+      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" IsVisible="{Binding HasError}"/>
     </Border>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

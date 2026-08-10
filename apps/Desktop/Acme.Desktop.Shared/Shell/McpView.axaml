@@ -24,7 +24,7 @@
 
   <DockPanel>
     <!-- 顶部操作栏 -->
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -42,7 +42,7 @@
     <ScrollViewer Padding="20,12" HorizontalScrollBarVisibility="Disabled">
       <Panel>
         <!-- 空态 -->
-        <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="White"
+        <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="{DynamicResource CardBgBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"
                 VerticalAlignment="Top" Margin="0,30,0,0">
           <StackPanel Spacing="6" HorizontalAlignment="Center">
@@ -68,8 +68,8 @@
                   <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                      <TextBlock Text="● 已连接" Foreground="#52C41A" FontSize="10" IsVisible="{Binding IsConnected}"/>
-                      <TextBlock Text="● 未连接" Foreground="#FF5252" FontSize="10" IsVisible="{Binding !IsConnected}"/>
+                      <TextBlock Text="● 已连接" Foreground="{DynamicResource SuccessBrush}" FontSize="10" IsVisible="{Binding IsConnected}"/>
+                      <TextBlock Text="● 未连接" Foreground="{DynamicResource DangerBrush}" FontSize="10" IsVisible="{Binding !IsConnected}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                       <Button Content="编辑" Classes="ghost" Click="OnEditClick" Tag="{Binding}" Padding="10,3" FontSize="11"/>
@@ -79,7 +79,7 @@
 
                   <!-- transport + 错误 -->
                   <TextBlock Text="{Binding Transport}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"/>
-                  <TextBlock Text="{Binding Error}" Foreground="#FF5252" FontSize="11" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="11" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                              TextWrapping="Wrap"/>
 
                   <!-- 工具列表 -->

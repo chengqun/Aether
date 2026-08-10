@@ -43,7 +43,7 @@
             <ItemsControl ItemsSource="{Binding LlmConfigs}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                  <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
                           BorderThickness="1" CornerRadius="10" Padding="16,14"
                           HorizontalAlignment="Stretch" Margin="0,0,0,12">
                     <StackPanel Spacing="10">
@@ -52,13 +52,13 @@
                         <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                        <Border CornerRadius="4" Padding="5,1" Background="#EEF0FB"
+                        <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource AccentTintBgBrush}"
                                 VerticalAlignment="Center" IsVisible="{Binding IsSystem}">
                           <TextBlock Text="系统" FontSize="9" Foreground="{DynamicResource AccentBrush}"/>
                         </Border>
-                        <Border CornerRadius="4" Padding="5,1" Background="#E8F5E9"
+                        <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource SuccessBgBrush}"
                                 VerticalAlignment="Center" IsVisible="{Binding IsDefault}">
-                          <TextBlock Text="默认" FontSize="9" Foreground="#2E7D32"/>
+                          <TextBlock Text="默认" FontSize="9" Foreground="{DynamicResource SuccessBrush}"/>
                         </Border>
                       </StackPanel>
 
@@ -137,7 +137,7 @@
           <StackPanel>
             <TextBlock Text="设备连接" FontSize="16" FontWeight="Bold" Margin="0,0,0,16"/>
 
-            <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+            <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1" CornerRadius="12" Padding="16,14"
                     HorizontalAlignment="Stretch" Margin="0,0,0,8">
               <StackPanel Spacing="10">
@@ -185,7 +185,7 @@
                 </Grid>
 
                 <!-- 自动连接 -->
-                <Border Background="#FFF3CD" BorderBrush="#FFE69C" BorderThickness="1"
+                <Border Background="{DynamicResource WarningBgBrush}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
                         CornerRadius="6" Padding="12">
                   <StackPanel Orientation="Horizontal" Spacing="10">
                     <CheckBox IsChecked="{Binding AutoConnect}" FontSize="13" VerticalAlignment="Center"/>
@@ -222,7 +222,7 @@
             <ItemsControl ItemsSource="{Binding Themes}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Background="White" BorderBrush="{DynamicResource BorderBrush}"
+                  <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
                           BorderThickness="1" CornerRadius="8" Padding="14,10"
                           HorizontalAlignment="Stretch" Margin="0,0,0,8">
                     <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch"

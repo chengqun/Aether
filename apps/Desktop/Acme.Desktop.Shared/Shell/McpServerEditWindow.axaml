@@ -24,14 +24,14 @@
 
   <DockPanel LastChildFill="True">
     <!-- 顶部说明 -->
-    <Border DockPanel.Dock="Top" Padding="16,10" Background="White"
+    <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <TextBlock Text="粘贴一个 MCP server 的 JSON 配置（stdio 用 command/args/env，http 用 url/headers）。"
                  Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"/>
     </Border>
 
     <!-- 底部按钮 -->
-    <Border DockPanel.Dock="Bottom" Padding="16,10" Background="White"
+    <Border DockPanel.Dock="Bottom" Padding="16,10" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
         <Button Content="取消" Classes="ghost" Command="{Binding CancelCommand}" Padding="16,6"/>
@@ -49,7 +49,7 @@
                FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
                IsReadOnly="False" Watermark="在此粘贴 JSON…" />
 
-      <TextBlock Grid.Row="1" Text="{Binding Error}" Foreground="#FF5252" FontSize="11"
+      <TextBlock Grid.Row="1" Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="11"
                  Margin="0,8,0,0" TextWrapping="Wrap"
                  IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </Grid>

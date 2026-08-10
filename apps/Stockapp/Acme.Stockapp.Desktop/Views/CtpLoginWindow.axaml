@@ -8,7 +8,7 @@
   <Grid RowDefinitions="Auto,*,Auto">
     <!-- 标题 -->
     <Border Grid.Row="0" Padding="20,16" Background="{DynamicResource AccentBrush}">
-      <TextBlock Text="📈 CTP 期货连接" Foreground="White" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Text="📈 CTP 期货连接" Foreground="{DynamicResource OnAccentBrush}" FontSize="16" FontWeight="SemiBold" />
     </Border>
 
     <!-- 表单 -->

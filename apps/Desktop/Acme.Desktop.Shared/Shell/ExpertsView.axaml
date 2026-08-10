@@ -36,7 +36,7 @@
 
   <DockPanel>
     <!-- 顶部标题栏 + tab -->
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="White"
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
@@ -76,7 +76,7 @@
     <Panel IsVisible="{Binding IsAgentTab}">
       <DockPanel>
         <!-- 类别 Tab -->
-        <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="White">
+        <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="{DynamicResource CardBgBrush}">
           <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
                    SelectedItem="{Binding SelectedCategory}">
             <ListBox.ItemsPanel>
@@ -101,7 +101,7 @@
           <StackPanel>
             <!-- 空状态 -->
             <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"
-                    Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     HorizontalAlignment="Center" Margin="0,40">
               <StackPanel Spacing="8" HorizontalAlignment="Center">
                 <TextBlock Text="🧩" FontSize="40" HorizontalAlignment="Center" />
@@ -129,15 +129,15 @@
                         <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
-                        <Border CornerRadius="4" Padding="5,1" Background="#FFF3E0" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="#E65100" />
+                        <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource WarningBgBrush}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="{DynamicResource WarningBrush}" />
                         </Border>
                       </StackPanel>
                       <!-- 描述 -->
                       <TextBlock Text="{Binding Description}" FontSize="12"
                                  Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
                       <!-- 类别 -->
-                      <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB" HorizontalAlignment="Left" Margin="0,2,0,0">
+                      <Border CornerRadius="4" Padding="6,1" Background="{DynamicResource AccentTintBgBrush}" HorizontalAlignment="Left" Margin="0,2,0,0">
                         <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
                       </Border>
                       <!-- 记忆模式 + 工具数 -->
@@ -205,7 +205,7 @@
                     </Grid>
 
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Border CornerRadius="6" Padding="10,6" Background="#FFF3E0">
+                      <Border CornerRadius="6" Padding="10,6" Background="{DynamicResource WarningBgBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <Ellipse Width="8" Height="8"
                                    Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
@@ -221,10 +221,10 @@
                   <StackPanel Grid.Column="1" VerticalAlignment="Top">
                     <Button Command="{Binding PrimaryCommand}" IsEnabled="{Binding IsPrimaryEnabled}"
                             Width="32" Height="32" CornerRadius="16"
-                            Background="{DynamicResource AccentBrush}" Foreground="White" BorderThickness="0"
+                            Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}" BorderThickness="0"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                             HorizontalAlignment="Right">
-                      <TextBlock Text="+" Foreground="White" FontSize="20" />
+                      <TextBlock Text="+" Foreground="{DynamicResource OnAccentBrush}" FontSize="20" />
                     </Button>
                   </StackPanel>
                 </Grid>
@@ -246,7 +246,7 @@
 
           <!-- 空状态 -->
           <Border IsVisible="{Binding !MarketplaceAgents.Count}" Padding="40" CornerRadius="12"
-                  Background="White" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                  Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                   HorizontalAlignment="Center" Margin="0,40">
             <StackPanel Spacing="8" HorizontalAlignment="Center">
               <TextBlock Text="🛒" FontSize="40" HorizontalAlignment="Center" />
@@ -273,19 +273,19 @@
                       <TextBlock Text="{Binding AgentName}" FontSize="15" FontWeight="SemiBold"
                                  Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis" />
-                      <Border CornerRadius="4" Padding="5,1" Background="#E8F5E9" VerticalAlignment="Center"
+                      <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource SuccessBgBrush}" VerticalAlignment="Center"
                               IsVisible="{Binding IsSummoned}">
-                        <TextBlock Text="已召唤" FontSize="9" Foreground="#2E7D32" />
+                        <TextBlock Text="已召唤" FontSize="9" Foreground="{DynamicResource SuccessBrush}" />
                       </Border>
-                      <Border CornerRadius="4" Padding="5,1" Background="#FFEBEE" VerticalAlignment="Center"
+                      <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource DangerBgBrush}" VerticalAlignment="Center"
                               IsVisible="{Binding HasUpdate}">
-                        <TextBlock Text="有更新" FontSize="9" Foreground="#C62828" />
+                        <TextBlock Text="有更新" FontSize="9" Foreground="{DynamicResource DangerBrush}" />
                       </Border>
                     </StackPanel>
                     <TextBlock Text="{Binding Description}" FontSize="12"
                                Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Border CornerRadius="4" Padding="6,1" Background="#EEF0FB">
+                      <Border CornerRadius="4" Padding="6,1" Background="{DynamicResource AccentTintBgBrush}">
                         <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
                       </Border>
                       <TextBlock Text="{Binding CreatorUserName}" FontSize="10"

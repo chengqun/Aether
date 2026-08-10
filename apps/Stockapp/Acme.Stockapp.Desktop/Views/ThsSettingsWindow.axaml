@@ -10,7 +10,7 @@
   <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
 
     <!-- 状态条 -->
-    <Border Grid.Row="0" CornerRadius="6" Padding="12,8" Background="#FFF3E0" Margin="0,0,0,16">
+    <Border Grid.Row="0" CornerRadius="6" Padding="12,8" Background="{DynamicResource WarningBgBrush}" Margin="0,0,0,16">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Ellipse Width="9" Height="9" VerticalAlignment="Center"
                  Fill="{Binding IsConnected, Converter={x:Static conv:BoolToConnectionBrushConverter.Instance}}" />
