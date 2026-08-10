@@ -5,8 +5,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.ChatSocial.Domain;
 using Acme.Securities.Application;
-using Acme.ServiceAccount.Application;
-using Acme.ServiceAccount.Domain;
 using Acme.AppUpdate.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
@@ -21,7 +19,6 @@ public partial class AddFriendViewModel : NavigableViewModelBase
     private readonly IRelationshipService? _relationshipService;
     private readonly IEventBusService? _eventBusService;
     private readonly ISecurityService? _securityService;
-    private readonly IServiceAccountService? _serviceAccountService;
     private readonly ILogger<AddFriendViewModel>? _logger;
 
     [ObservableProperty]
@@ -43,14 +40,12 @@ public partial class AddFriendViewModel : NavigableViewModelBase
     public AddFriendViewModel(IRelationshipService? relationshipService = null,
                               IEventBusService? eventBusService = null,
                               ISecurityService? securityService = null,
-                              IServiceAccountService? serviceAccountService = null,
                               ILogger<AddFriendViewModel>? logger = null,
                               IUIThreadDispatcher? uiThreadDispatcher = null)
     {
         _relationshipService = relationshipService;
         _eventBusService = eventBusService;
         _securityService = securityService;
-        _serviceAccountService = serviceAccountService;
         _logger = logger;
         _uiThreadDispatcher = uiThreadDispatcher;
     }
@@ -70,57 +65,64 @@ public partial class AddFriendViewModel : NavigableViewModelBase
 
         try
         {
-            // Aether 契约无统一 SearchAllTargetsAsync——按可搜类型分别查：
-            // 股票（ISecurityService.SearchSecuritiesAsync）+ 服务号（IServiceAccountService.SearchAsync）。
-            // 用户/群搜索 Aether 契约未提供，暂不支持。
-            var keyword = SearchText.Trim();
-
-            // 股票
-            if (_securityService != null)
+            if (_relationshipService == null)
             {
-                var securities = await Task.Run(() => _securityService.SearchSecuritiesAsync(keyword));
-                if (securities != null)
-                {
-                    foreach (var s in securities)
-                    {
-                        SearchResults.Add(new SearchResultItem
-                        {
-                            Id = s.Code,
-                            Name = s.Name,
-                            Initial = GetInitial(s.Name),
-                            Type = "股票",
-                            RelationshipType = RelationshipType.Stock,
-                            SecurityInfo = new TargetSecurityInfo
-                            {
-                                Code = s.Code,
-                                Name = s.Name,
-                                SecurityType = s.Type,
-                                Exchange = s.Exchange,
-                                BaseCode = s.BaseCode
-                            }
-                        });
-                    }
-                }
+                StatusMessage = "服务未初始化";
+                return;
             }
 
-            // 服务号
-            if (_serviceAccountService != null)
+            // 服务端统一搜索（用户/群/股票/设备/服务号）——镜像 AlphaAgent SearchAllTargetsAsync。
+            // 之前移植时去掉了此调用、改 client 端分类型搜（只覆盖股票+服务号），导致搜用户/群无结果——本次恢复服务端搜索。
+            var keyword = SearchText.Trim();
+            var results = await Task.Run(() => _relationshipService.SearchAllTargetsAsync(keyword));
+
+            // null=HTTP 失败（未登录/网络/服务器异常）；空列表=成功无匹配——二者必须区分。
+            if (results == null)
             {
-                var accounts = await Task.Run(() => _serviceAccountService.SearchAsync(keyword));
-                if (accounts != null)
+                StatusMessage = "搜索失败，请检查网络或重新登录后重试";
+                return;
+            }
+
+            foreach (var target in results)
+            {
+                var relationshipType = target.Type switch
                 {
-                    foreach (var a in accounts)
-                    {
-                        SearchResults.Add(new SearchResultItem
+                    "User" => RelationshipType.Friendship,
+                    "Group" => RelationshipType.Group,
+                    "Stock" => RelationshipType.Stock,
+                    "Device" => RelationshipType.Device,
+                    "ServiceAccount" => RelationshipType.ServiceAccount,
+                    _ => RelationshipType.Friendship
+                };
+
+                var displayType = target.Type switch
+                {
+                    "User" => "用户",
+                    "Group" => "群组",
+                    "Stock" => "股票",
+                    "Device" => "设备",
+                    "ServiceAccount" => "服务号",
+                    _ => target.Type
+                };
+
+                SearchResults.Add(new SearchResultItem
+                {
+                    Id = target.Id,
+                    Name = target.Name,
+                    Initial = GetInitial(target.Name),
+                    Type = displayType,
+                    RelationshipType = relationshipType,
+                    SecurityInfo = target.SecurityInfo != null
+                        ? new TargetSecurityInfo
                         {
-                            Id = a.Id.ToString(),
-                            Name = a.Name,
-                            Initial = GetInitial(a.Name),
-                            Type = "服务号",
-                            RelationshipType = RelationshipType.ServiceAccount
-                        });
-                    }
-                }
+                            Code = target.SecurityInfo.Code,
+                            Name = target.Name,
+                            SecurityType = target.SecurityInfo.SecurityType,
+                            Exchange = target.SecurityInfo.Exchange,
+                            BaseCode = target.SecurityInfo.BaseCode
+                        }
+                        : null
+                });
             }
 
             if (SearchResults.Count == 0)

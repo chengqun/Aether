@@ -60,6 +60,14 @@ public class RelationshipService : IRelationshipService
         return FlattenBook(book);
     }
 
+    public async Task<List<SearchTarget>?> SearchAllTargetsAsync(string keyword)
+    {
+        // 服务端 search-all-targets 统一搜用户/群/股票/设备/服务号（股票受 StockApp.Quote feature 门控）。
+        // null=HTTP 失败（与读操作约定一致）；空列表=成功无匹配。keyword 经 URL 编码。
+        return await _httpClient.GetAsync<List<SearchTarget>>(
+            $"api/app/relationship/search-all-targets?keyword={Uri.EscapeDataString(keyword)}");
+    }
+
     /// <summary>把 ContactBookDto 各分组展平为单一 Relationship 列表。book==null（HTTP 失败）时返回 null，让调用方区分失败与空数据。</summary>
     private static List<Relationship>? FlattenBook(ContactBookDto? book)
     {
