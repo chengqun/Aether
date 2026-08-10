@@ -7,8 +7,7 @@ namespace Acme.Desktop.Workbench.Abstractions;
 /// </summary>
 /// <remarks>
 /// workspace 定义里 <see cref="PanelDescriptor"/> 的 RegionId 与 Key 通常相同（panel 既是某 region 的初始内容、又按 key 解析视图）；
-/// 但概念上二者不同——注入插件的 panel 的 Key 决定渲染什么、RegionId 无意义（它被 <see cref="IRegionManager.AddToRegion"/> 的 name 参数定位宿主）。
-/// 故 catalog 同时含 panel key（Chat/Notes/…）与专用 region 名（Inject）。
+/// 但概念上二者不同——经 <see cref="IRegionManager.AddToRegion"/> 注入的 panel，其 Key 决定渲染什么、RegionId 由注入方选定的 region 名定位宿主。
 /// </remarks>
 public static class PanelKeys
 {
@@ -24,9 +23,6 @@ public static class PanelKeys
     /// <summary>自动化面板（AutomationView，定时任务）。</summary>
     public const string Automation = "automation";
 
-    /// <summary>测试面板（验证 IRegionManager 注入路径的占位 TextBlock）。</summary>
-    public const string Test = "test";
-
     /// <summary>Stockapp 期货面板（FuturesView，CTP 行情/交易）。</summary>
     public const string Ctp = "ctp";
 
@@ -35,7 +31,4 @@ public static class PanelKeys
 
     /// <summary>Stockapp 股票交易面板（StockTradingView，FlaUI/MCP 路由）。</summary>
     public const string StockTrade = "stocktrade";
-
-    /// <summary>插件注入演示 region 名（窗口底栏 ContentControl，经 IRegionManager.RegisterRegion 登记，接收 Test 面板）。</summary>
-    public const string Inject = "inject";
 }

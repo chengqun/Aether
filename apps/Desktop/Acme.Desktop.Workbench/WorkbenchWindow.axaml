@@ -19,17 +19,6 @@
   </Window.Resources>
 
   <DockPanel>
-    <!-- ═══ 插件注入区（底栏，命名 region "inject"——验证 RegionManager） ═══ -->
-    <Border DockPanel.Dock="Bottom" Height="36"
-            Background="{DynamicResource SidebarBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <DockPanel>
-        <Button DockPanel.Dock="Right" Classes="nav-rail" Command="{Binding InjectTestPanelCommand}"
-                ToolTip.Tip="测试插件面板注入" Margin="4" Content="+"/>
-        <ContentControl x:Name="InjectRegion" VerticalContentAlignment="Center" Margin="8,0,0,0"/>
-      </DockPanel>
-    </Border>
-
     <!-- ═══ 展开态侧边栏（200px） ═══ -->
     <Border DockPanel.Dock="Left" Width="200" IsVisible="{Binding IsSidebarExpanded}"
             Background="{DynamicResource SidebarBgBrush}"

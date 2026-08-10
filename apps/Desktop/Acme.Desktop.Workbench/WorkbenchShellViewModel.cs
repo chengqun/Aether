@@ -24,7 +24,6 @@ namespace Acme.Desktop.Workbench;
 public partial class WorkbenchShellViewModel : MainViewModelBase
 {
     private readonly IWorkspaceManager _workspaceManager;
-    private readonly IRegionManager _regionManager;
     private readonly WorkspaceDefinition _defaultWorkspace;
     private readonly IPreferencesStore _preferences;
     private INotifyPropertyChanged? _navWorkspace;
@@ -36,12 +35,11 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog,
         IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider,
         IDeviceChatClient deviceChatClient, ILlmConfigService llmService,
-        IWorkspaceManager workspaceManager, IRegionManager regionManager, WorkspaceDefinition defaultWorkspace,
+        IWorkspaceManager workspaceManager, WorkspaceDefinition defaultWorkspace,
         string tenant = "codex")
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService, tenant)
     {
         _workspaceManager = workspaceManager;
-        _regionManager = regionManager;
         _defaultWorkspace = defaultWorkspace;
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _workspaceManager.WorkspaceActivated += OnWorkspaceActivated;
@@ -137,11 +135,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
         foreach (var item in WorkbenchNavItems)
             item.IsCurrent = item.Key == currentKey;
     }
-
-    /// <summary>测试插件面板注入（Phase 3 验证）：往命名 region "inject" 塞一个 test panel，验证 RegionManager 路径。</summary>
-    [RelayCommand]
-    private void InjectTestPanel()
-        => _regionManager.AddToRegion(PanelKeys.Inject, new PanelViewModel(PanelKeys.Inject, PanelKeys.Test, "插件测试", "test", null));
 
     /// <summary>启动期：base 初始化（账号/业务 VM/Chat/调度器/MCP）后激活工作台。
     /// 激活前合并已持久化的布局（用户拖动后的 GridSplitter 位置 + tab 选择）——IWorkspace.Layout 只读，

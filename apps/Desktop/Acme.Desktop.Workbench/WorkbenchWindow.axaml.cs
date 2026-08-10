@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Acme.Desktop.Workbench;
 
 /// <summary>
-/// 工作台薄 host：可展开侧栏 + 插件注入底栏 + 工作台主区 ContentControl。
+/// 工作台薄 host：可展开侧栏 + 工作台主区 ContentControl。
 /// 不决定布局——布局由 <see cref="WorkspaceView"/> 按 ActiveWorkspace.Layout 构建。
 /// 主题：订阅 VM 的 Theme/CustomThemeJson 变化 → <see cref="ThemeLoader.Apply"/> 叠加 JSON overlay。
 /// 窗口尺寸持久化到 IPreferencesStore（ui.winW/winH），跨重启恢复；Trace 窗经 account flyout 打开。
@@ -21,7 +21,6 @@ namespace Acme.Desktop.Workbench;
 public partial class WorkbenchWindow : Window
 {
     private WorkbenchShellViewModel? _vm;
-    private bool _injectRegionRegistered;
 
     public WorkbenchWindow()
     {
@@ -44,7 +43,6 @@ public partial class WorkbenchWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        RegisterInjectRegion();
         // 初始主题应用（若有自定义 JSON）。
         ThemeLoader.Apply(this, _vm?.CustomThemeJson);
     }
@@ -65,18 +63,6 @@ public partial class WorkbenchWindow : Window
         }
     }
 
-    /// <summary>登记底栏 "inject" 命名 region（插件面板注入入口）。须在窗口打开后调（控件已就绪）。</summary>
-    private void RegisterInjectRegion()
-    {
-        if (_injectRegionRegistered) return;
-        var rm = DesktopApp.Services?.GetService<IRegionManager>();
-        if (rm is not null && InjectRegion is not null)
-        {
-            rm.RegisterRegion(PanelKeys.Inject, InjectRegion);
-            _injectRegionRegistered = true;
-        }
-    }
-
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(WorkbenchShellViewModel.Theme)
@@ -86,7 +72,7 @@ public partial class WorkbenchWindow : Window
         }
     }
 
-    // —— 窗口尺寸持久化（chat 宽不跨重启持久——见 WorkspaceView split hook follow-up） ——
+    // —— 窗口尺寸持久化（布局/分隔条由 WorkspaceView + WorkbenchShellViewModel 跨重启持久） ——
 
     /// <summary>构造期同步恢复窗口尺寸（JsonPreferencesStore.GetAsync 同步完成）。</summary>
     private void RestoreWindowSize()

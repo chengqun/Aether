@@ -33,9 +33,9 @@ public sealed class StockappMainViewModel : WorkbenchShellViewModel
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore,
         ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient,
         ILlmConfigService llmService, CtpViewModel ctpVm, TradingViewModel tradingVm, StockTradingViewModel stockTradingVm,
-        IWorkspaceManager workspaceManager, IRegionManager regionManager, WorkspaceDefinition defaultWorkspace)
+        IWorkspaceManager workspaceManager, WorkspaceDefinition defaultWorkspace)
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService,
-               workspaceManager, regionManager, defaultWorkspace, "stockapp")
+               workspaceManager, defaultWorkspace, "stockapp")
     {
         _ctpVm = ctpVm;
         Futures = ctpVm;

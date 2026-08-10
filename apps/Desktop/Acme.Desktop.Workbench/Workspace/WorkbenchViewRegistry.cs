@@ -37,17 +37,6 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new AutomationView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Automation);
 
-        // 测试 panel（验证 IRegionManager 注入路径）。
-        Register(PanelKeys.Test,
-            () => new TextBlock
-            {
-                Text = "✅ 插件面板注入成功",
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                FontSize = 14,
-            },
-            () => null);
-
         // 租户专属 panel（Stockapp 期货/回测/股票页等）。无注册时 contributors 为空 enumerable。
         foreach (var c in contributors)
             c.Contribute(this, serviceProvider);
