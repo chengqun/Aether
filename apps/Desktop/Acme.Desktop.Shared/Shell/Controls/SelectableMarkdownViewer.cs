@@ -16,6 +16,16 @@ namespace Acme.Desktop.Shared.Shell.Controls;
 /// </summary>
 public class SelectableMarkdownViewer : MarkdownScrollViewer
 {
+    public SelectableMarkdownViewer()
+    {
+        // 控件级主题覆盖：base ctor 已 Styles.Insert(0, GithubLike)——GithubLike 是控件级样式，
+        // 优先级高于 app 级 SharedTheme，故 app 级 markdown 覆盖无效。此处把 token 覆盖挂到同一
+        // 控件 Styles（在 GithubLike 之后），同特异性后置者胜 → 表格/代码块/引用/链接跟随主题。
+        // XAML 后续设 MarkdownStyleName="GithubLike" 时 setter 只 Remove/Insert(0) 旧 _markdownStyle，
+        // 不动本覆盖（始终在 GithubLike 之后）。见 MarkdownThemeStyles。
+        Styles.Add(new MarkdownThemeStyles());
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);

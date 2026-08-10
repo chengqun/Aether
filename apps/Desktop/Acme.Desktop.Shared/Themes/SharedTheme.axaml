@@ -301,72 +301,8 @@
     <Setter Property="Padding" Value="12,8"/>
   </Style>
 
-  <!-- Markdown.Avalonia 代码块跨平台等宽字体（避免 macOS 无 Consolas 崩溃） -->
-  <Style Selector="TextBlock.CodeBlock">
-    <Setter Property="FontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"/>
-  </Style>
-  <!-- Markdown.Avalonia 行内代码（ColorTextBlock.CCode）等宽字体。
-       CCode.MonospaceFontFamily 默认取 TryGetMonospace()，在装了 Office 的 macOS 上会命中
-       Consolas（系统枚举得到但 Avalonia 无法加载其字形文件），无 fallback 时 Measure 阶段抛
-       “Could not create glyphTypeface”导致整页崩溃，故显式覆盖为带 fallback 的等宽字体列表。 -->
-  <Style Selector="cb|CCode">
-    <Setter Property="MonospaceFontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Courier New,monospace"/>
-  </Style>
-
-  <!-- Markdown.Avalonia (GithubLike 主题) 视觉增强：统一品牌色（经 AccentBrush token，dark 主题自动跟随）。
-       代码块圆角 + 品牌色左竖条，引用块品牌色竖线 + 表面底，链接/行内代码品牌色。
-       selector 取自 MarkdownStyleGithubLike 主题（Border.CodeBlock/Border.Blockquote/cb|CCode/cb|CHyperlink 等），
-       应用级样式覆盖控件级主题（同 TextBlock.CodeBlock 字体 fallback 机制）。 -->
-  <Style Selector="Border.CodeBlock">
-    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="4,0,0,0"/>
-    <Setter Property="CornerRadius" Value="8"/>
-    <Setter Property="Padding" Value="16,10"/>
-  </Style>
-  <Style Selector="TextBlock.CodeBlock">
-    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-  </Style>
-  <Style Selector="cb|CCode">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
-  </Style>
-  <Style Selector="Border.Blockquote">
-    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="4,0,0,0"/>
-    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-    <Setter Property="CornerRadius" Value="0,6,6,0"/>
-  </Style>
-  <Style Selector="cb|CHyperlink">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-  </Style>
-
-  <!-- Markdown.Avalonia 表格主题化（修 dark 主题表格白块 bug）。
-       GithubLike 主题对表格元素硬编码浅色（Border.Table 边框 #DFE2E5、单元格边框 #DFE2E5、
-       表头 #FFFFFF、奇行 White、偶行 #F6F8FA）→ 非 light 主题下表格仍是白底浅框，与深色气泡冲突。
-       此处用 token 覆盖（同 Border.CodeBlock/Blockquote 机制），表格跟随主题——
-       不让 GithubLike 自行决定颜色。selector 与 GithubLike 一一对应（bare selector 应用级覆盖控件级主题）：
-       Border.Table / Grid.Table>Border / Border.TableHeader cb|CTextBlock / Border.OddTableRow / Border.EvenTableRow。 -->
-  <Style Selector="Border.Table">
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-    <Setter Property="BorderThickness" Value="0,0,1,1"/>
-    <Setter Property="Margin" Value="5"/>
-  </Style>
-  <Style Selector="Grid.Table > Border">
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-    <Setter Property="BorderThickness" Value="1,1,0,0"/>
-    <Setter Property="Padding" Value="13,6"/>
-  </Style>
-  <Style Selector="Border.TableHeader cb|CTextBlock">
-    <Setter Property="FontWeight" Value="Bold"/>
-    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-  </Style>
-  <Style Selector="Border.OddTableRow">
-    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
-  </Style>
-  <Style Selector="Border.EvenTableRow">
-    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-  </Style>
+  <!-- Markdown.Avalonia 主题覆盖已移至控件级 MarkdownThemeStyles（SelectableMarkdownViewer 加载）。
+       原因：GithubLike 主题由 MarkdownScrollViewer ctor Styles.Insert(0,…) 挂进【控件自身】Styles 集合，
+       控件级优先级 > app 级 → 此处（app 级）的 markdown 覆盖不生效。见 MarkdownThemeStyles.axaml。 -->
 
 </Styles>
