@@ -35,16 +35,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public bool IsLlmTabActive => ActiveTab == "llm";
     public bool IsDeviceTabActive => ActiveTab == "device";
-    public bool IsAppearanceTabActive => ActiveTab == "appearance";
     public bool IsNotLlmTab => ActiveTab != "llm";
     public bool IsNotDeviceTab => ActiveTab != "device";
-    public bool IsNotAppearanceTab => ActiveTab != "appearance";
-
-    /// <summary>主题宿主（shell VM 实现 IThemeHost）。非 workbench 宿主可能为 null（外观 tab 降级为空提示）。</summary>
-    private IThemeHost? ThemeHost => _serviceProvider.GetService<MainViewModelBase>() as IThemeHost;
-
-    /// <summary>主题列表（共享 host 的 ThemeOption 实例，IsCurrent 变化实时反映）。null = 无主题宿主。</summary>
-    public IReadOnlyList<ThemeOption>? Themes => ThemeHost?.Themes;
 
     [ObservableProperty]
     private ObservableCollection<LlmConfigDto> _llmConfigs = new();
@@ -111,15 +103,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         await LoadDeviceConfigAsync();
         UpdateConnectionStatus();
         SubscribeToConnectionStateChanges();
-        OnPropertyChanged(nameof(Themes)); // 外观 tab：窗口打开时刷新主题列表绑定
-    }
-
-    /// <summary>选中主题（外观 tab）。委托 IThemeHost.SelectThemeAsync。</summary>
-    [RelayCommand]
-    private async Task SelectTheme(string name)
-    {
-        if (ThemeHost is { } host)
-            await host.SelectThemeAsync(name);
     }
 
     private async Task LoadLlmConfigsAsync()
@@ -433,10 +416,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ActiveTab = tab;
         OnPropertyChanged(nameof(IsLlmTabActive));
         OnPropertyChanged(nameof(IsDeviceTabActive));
-        OnPropertyChanged(nameof(IsAppearanceTabActive));
         OnPropertyChanged(nameof(IsNotLlmTab));
         OnPropertyChanged(nameof(IsNotDeviceTab));
-        OnPropertyChanged(nameof(IsNotAppearanceTab));
     }
 
     public async Task AutoConnectIfEnabledAsync()
