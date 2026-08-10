@@ -57,10 +57,12 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
         // 从内存返回历史
         var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
 
-        // 应用 reducer（SlidingWindow 截断）
+        // 应用 reducer（SlidingWindow 截断），再净化——内存累积路径可能混入孤儿 tool_use
+        // （审批挂起/出错时模型发了 tool_use 但无 tool_result 落地）或残留尾部 user，Sanitize 兜底防 400。
+        IEnumerable<ChatMessage> history = list;
         if (_reducer is not null)
-            return await _reducer.ReduceAsync(list, cancellationToken).ConfigureAwait(false);
-        return list;
+            history = await _reducer.ReduceAsync(list, cancellationToken).ConfigureAwait(false);
+        return TranscriptHistoryConverter.Sanitize(history);
     }
 
     /// <summary>

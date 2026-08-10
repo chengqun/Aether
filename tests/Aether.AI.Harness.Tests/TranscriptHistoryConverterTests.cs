@@ -107,8 +107,8 @@ public class TranscriptHistoryConverterTests
         var messages = new List<Message>
         {
             Message.User("do two things"),
-            ToolMsg("call-a", "ToolA", "{\"x\":1}", "{\"r\":1}"),
-            ToolMsg("call-b", "ToolB", "{\"y\":2}", "{\"r\":2}"),
+            TranscriptHistoryConverterTests.ToolMsg("call-a", "ToolA", "{\"x\":1}", "{\"r\":1}"),
+            TranscriptHistoryConverterTests.ToolMsg("call-b", "ToolB", "{\"y\":2}", "{\"r\":2}"),
             Message.Assistant("done"),
         };
 
@@ -128,7 +128,7 @@ public class TranscriptHistoryConverterTests
             Assert.Contains(calls, c => c.CallId == r.CallId);
     }
 
-    private static Message ToolMsg(string callId, string name, string input, string output) => new()
+    internal static Message ToolMsg(string callId, string name, string input, string output) => new()
     {
         Role = MessageRole.Tool,
         ToolName = name,
@@ -136,4 +136,189 @@ public class TranscriptHistoryConverterTests
         Content = "",
         Metadata = new Dictionary<string, string> { ["kind"] = "tool", ["input"] = input, ["output"] = output },
     };
+}
+
+/// <summary>
+/// <see cref="TranscriptHistoryConverter.Sanitize"/> 直接测试——验证「重启续聊 400」的四类诱因被修复。
+/// </summary>
+public class TranscriptHistorySanitizeTests
+{
+    [Fact]
+    public void Trailing_tool_result_without_answer_is_trimmed_to_assistant()
+    {
+        // 上一轮以 tool_result 收尾、无最终回答（审批挂起 / 中断）→ 还原后尾部是 user(tool_result)。
+        // 框架追加新 user 消息会与它连续→400。Sanitize 应裁剪到以 assistant 结尾。
+        var messages = new List<Message>
+        {
+            Message.User("查天气"),
+            TranscriptHistoryConverterTests.ToolMsg("call-1", "GetWeather", "{\"city\":\"北京\"}", "{\"result\":\"晴\"}"),
+            // 无最终 assistant 回答
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        // 整段不完整轮次被裁剪→空历史（user 问题也删，因为无答案可保）
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void Trailing_tool_result_after_complete_prior_turn_keeps_prior_turn()
+    {
+        // 有完整上一轮答案 + 不完整本轮（tool 无答案）→ 保留完整轮，裁剪不完整轮。
+        var messages = new List<Message>
+        {
+            Message.User("q1"),
+            Message.Assistant("a1"),
+            Message.User("q2"),
+            TranscriptHistoryConverterTests.ToolMsg("call-1", "GetWeather", "{}", "{\"r\":1}"),
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        // 保留 q1→a1；q2 + tool 被裁剪
+        Assert.Equal(2, result.Count);
+        Assert.Equal(ChatRole.User, result[0].Role);
+        Assert.Equal("q1", result[0].Text);
+        Assert.Equal(ChatRole.Assistant, result[1].Role);
+        Assert.Equal("a1", result[1].Text);
+    }
+
+    [Fact]
+    public void Trailing_tool_with_assistant_narration_keeps_narration()
+    {
+        // 上一轮：assistant 旁白 + tool_use + tool_result，无最终回答。
+        // 裁剪 tool_result 后，旁白保留（assistant text 安全），tool_use 沦孤儿被删。
+        var messages = new List<Message>
+        {
+            Message.User("查天气"),
+            Message.Assistant("让我查一下"), // 旁白
+            TranscriptHistoryConverterTests.ToolMsg("call-1", "GetWeather", "{}", "{\"r\":1}"),
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        // user(q) → assistant("让我查一下")；tool 段裁剪
+        Assert.Equal(2, result.Count);
+        Assert.Equal(ChatRole.Assistant, result[1].Role);
+        Assert.Equal("让我查一下", result[1].Text);
+        Assert.Empty(result[1].Contents.OfType<FunctionCallContent>());
+    }
+
+    [Fact]
+    public void Empty_callId_is_synthesized_and_pair_stays_matched()
+    {
+        // 持久化丢失 CallId（ToolCallId=null）→ 还原配对但 id 空 → 端点拒。
+        // Sanitize 应合成非空 id 且 call↔result 共享。
+        var messages = new List<Message>
+        {
+            Message.User("q"),
+            new Message
+            {
+                Role = MessageRole.Tool,
+                ToolName = "GetWeather",
+                ToolCallId = null, // 丢失
+                Content = "",
+                Metadata = new Dictionary<string, string> { ["kind"] = "tool", ["input"] = "{}", ["output"] = "{\"r\":1}" },
+            },
+            Message.Assistant("done"),
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        var call = result.SelectMany(m => m.Contents.OfType<FunctionCallContent>()).Single();
+        var res = result.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single();
+        Assert.False(string.IsNullOrEmpty(call.CallId));
+        Assert.Equal(call.CallId, res.CallId);
+    }
+
+    [Fact]
+    public void Null_tool_output_gets_placeholder()
+    {
+        // 审批挂起后持久化 output="" → 还原为 null result → 端点拒空 tool_result。Sanitize 占位。
+        var messages = new List<Message>
+        {
+            Message.User("q"),
+            new Message
+            {
+                Role = MessageRole.Tool,
+                ToolName = "GetWeather",
+                ToolCallId = "call-1",
+                Content = "",
+                Metadata = new Dictionary<string, string> { ["kind"] = "tool", ["input"] = "{}", ["output"] = "" },
+            },
+            Message.Assistant("done"),
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        var res = result.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single();
+        Assert.NotNull(res.Result);
+        Assert.NotEqual("", res.Result);
+    }
+
+    [Fact]
+    public void Orphan_tool_use_in_accumulator_is_dropped()
+    {
+        // 内存累积路径：模型发了 tool_use 但无 tool_result（审批挂起 / 出错）→ 孤儿 call。
+        var orphan = new ChatMessage { Role = ChatRole.Assistant };
+        orphan.Contents.Add(new FunctionCallContent("call-x", "ToolX", null));
+
+        var result = TranscriptHistoryConverter.Sanitize(new[] { orphan });
+
+        Assert.Empty(result); // 孤儿 call 无 result → 删，消息变空 → 删
+    }
+
+    [Fact]
+    public void Consecutive_user_messages_are_merged()
+    {
+        // 持久化遗留连续 user（某轮 agent 完全无输出）→ 角色不交替。Sanitize 合并。
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "q1"),
+            new(ChatRole.User, "q2"),
+            new(ChatRole.Assistant, "a"),
+        };
+
+        var result = TranscriptHistoryConverter.Sanitize(history);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(ChatRole.User, result[0].Role);
+        // 两个 user text 合并到一条
+        Assert.Contains("q1", result[0].Text);
+        Assert.Contains("q2", result[0].Text);
+    }
+
+    [Fact]
+    public void Complete_history_is_unchanged()
+    {
+        // 正常完整历史（以 assistant 结尾）→ 不裁剪、不合并，保持原样。
+        var messages = new List<Message>
+        {
+            Message.User("q1"),
+            Message.Assistant("a1"),
+            Message.User("q2"),
+            Message.Assistant("a2"),
+        };
+
+        var result = TranscriptHistoryConverter.Convert(messages);
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal(ChatRole.Assistant, result[^1].Role);
+    }
+
+    [Fact]
+    public void Sanitize_is_idempotent()
+    {
+        var messages = new List<Message>
+        {
+            Message.User("q"),
+            TranscriptHistoryConverterTests.ToolMsg("call-1", "GetWeather", "{}", "{\"r\":1}"),
+            Message.Assistant("done"),
+        };
+
+        var once = TranscriptHistoryConverter.Convert(messages);
+        var twice = TranscriptHistoryConverter.Sanitize(once);
+
+        Assert.Equal(once.Count, twice.Count);
+    }
 }
