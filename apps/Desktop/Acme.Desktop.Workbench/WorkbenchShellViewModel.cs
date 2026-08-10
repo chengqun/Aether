@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
@@ -11,6 +13,7 @@ using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Workbench;
 
@@ -23,7 +26,11 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
     private readonly IWorkspaceManager _workspaceManager;
     private readonly IRegionManager _regionManager;
     private readonly WorkspaceDefinition _defaultWorkspace;
+    private readonly IPreferencesStore _preferences;
     private INotifyPropertyChanged? _navWorkspace;
+
+    /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
+    private const string LayoutPrefKey = "workbench.layout";
 
     public WorkbenchShellViewModel(
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog,
@@ -36,6 +43,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
         _workspaceManager = workspaceManager;
         _regionManager = regionManager;
         _defaultWorkspace = defaultWorkspace;
+        _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _workspaceManager.WorkspaceActivated += OnWorkspaceActivated;
     }
 
@@ -135,10 +143,66 @@ public partial class WorkbenchShellViewModel : MainViewModelBase
     private void InjectTestPanel()
         => _regionManager.AddToRegion("inject", new PanelViewModel("test", "test", "插件测试", "test", null));
 
-    /// <summary>启动期：base 初始化（账号/业务 VM/Chat/调度器/MCP）后激活默认工作台。</summary>
+    /// <summary>启动期：base 初始化（账号/业务 VM/Chat/调度器/MCP）后激活工作台。
+    /// 激活前合并已持久化的布局（用户拖动后的 GridSplitter 位置 + tab 选择）——IWorkspace.Layout 只读，
+    /// 必须在建工作台前合并进 definition，不能改已建工作台。</summary>
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
+        var def = await RestoreLayoutAsync(_defaultWorkspace);
+        await _workspaceManager.ActivateAsync(def);
+    }
+
+    /// <summary>从偏好存储恢复用户自定义布局。校验区域集与 definition 一致（面板增删则回退默认），反序列化失败也回退（不崩）。</summary>
+    private async Task<WorkspaceDefinition> RestoreLayoutAsync(WorkspaceDefinition def)
+    {
+        try
+        {
+            var json = await _preferences.GetAsync(LayoutPrefKey);
+            if (string.IsNullOrWhiteSpace(json)) return def;
+            var layout = JsonSerializer.Deserialize<LayoutNode>(json);
+            if (layout is null || !CoversSameRegions(layout, def.Layout)) return def; // 结构变 → 回退
+            return def with { Layout = layout };
+        }
+        catch
+        {
+            return def; // 反序列化失败 → 回退（不崩）
+        }
+    }
+
+    /// <summary>两棵布局树覆盖相同的 region id 集合（面板增删会不等 → 回退默认，免用过期结构）。</summary>
+    private static bool CoversSameRegions(LayoutNode a, LayoutNode b)
+        => CollectRegions(a).SetEquals(CollectRegions(b));
+
+    /// <summary>收集布局树中所有 region id（LayoutRegion.RegionId + LayoutTabbed.RegionIds）。</summary>
+    private static HashSet<string> CollectRegions(LayoutNode n)
+    {
+        var set = new HashSet<string>();
+        void Walk(LayoutNode x)
+        {
+            switch (x)
+            {
+                case LayoutSplit s:
+                    foreach (var c in s.Children) Walk(c);
+                    break;
+                case LayoutRegion r:
+                    set.Add(r.RegionId);
+                    break;
+                case LayoutTabbed t:
+                    foreach (var id in t.RegionIds) set.Add(id);
+                    break;
+            }
+        }
+        Walk(n);
+        return set;
+    }
+
+    /// <summary>清除已保存的布局并重新激活默认工作台（重置 GridSplitter 位置 + tab 选择）。
+    /// 重新激活会建新 WorkspaceView；旧 view 的 OnHostClosing 守卫（_workspace != Active）确保关闭时不覆盖重置。</summary>
+    [RelayCommand]
+    private async Task ResetLayout()
+    {
+        await _preferences.SetAsync(LayoutPrefKey, null);
         await _workspaceManager.ActivateAsync(_defaultWorkspace);
     }
 }
