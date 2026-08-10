@@ -11,11 +11,15 @@ public class InverseBoolConverter : IValueConverter
         => value is bool b ? !b : false;
 }
 
-/// <summary>非空 → true（用于可见性绑定）。</summary>
+/// <summary>非空 → true（用于可见性绑定）。字符串空串也算“空”。
+/// 传 ConverterParameter="inverse" 则反转（空 → true），用于二者择一的互斥可见性。</summary>
 public class NotNullConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value != null;
+    {
+        bool notEmpty = value is string s ? !string.IsNullOrEmpty(s) : value != null;
+        return parameter is string p && p.Equals("inverse", StringComparison.OrdinalIgnoreCase) ? !notEmpty : notEmpty;
+    }
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }

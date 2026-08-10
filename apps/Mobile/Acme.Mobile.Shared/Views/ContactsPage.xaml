@@ -4,7 +4,14 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    xmlns:bl="clr-namespace:Microsoft.Maui.Controls.Xaml.Markup;assembly=Microsoft.Maui.Controls.Xaml"
     Title="通讯录">
+
+    <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:NotNullConverter x:Key="NotNull" />
+    </ContentPage.Resources>
 
     <ContentPage.ToolbarItems>
         <ToolbarItem IconImageSource="addfriend" Command="{Binding AddFriendCommand}" />
@@ -15,41 +22,76 @@
                    Text="{Binding SearchText}"
                    SearchCommand="{Binding RefreshContactsCommand}" />
 
+        <!-- 通讯录分组列表：外层 CollectionView 渲染分组，每组用 BindableLayout 渲染组内联系人。
+             不用 IsGrouped（IsGrouped 要求每个分组对象是 IEnumerable；ContactGroup 只有 Contacts 属性，
+             非可枚举 → 组内条目不渲染 = 通讯录空白。此为 AlphaAgent 原始嵌套模式，已验证可用）。 -->
         <CollectionView Grid.Row="1"
                         ItemsSource="{Binding ContactGroups}"
-                        IsGrouped="True"
                         SelectionMode="None">
-            <CollectionView.GroupHeaderTemplate>
-                <DataTemplate x:DataType="vm:ContactGroup">
-                    <HorizontalStackLayout Spacing="6" Padding="16,8,16,4" BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                        <Label Text="{Binding Title}" FontFamily="OpenSansSemibold" FontSize="13"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                    </HorizontalStackLayout>
-                </DataTemplate>
-            </CollectionView.GroupHeaderTemplate>
-
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="vm:ContactItem">
-                    <Grid ColumnDefinitions="44,*" Padding="16,10" RowSpacing="0" ColumnSpacing="12">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToContactDetailCommand}"
-                                CommandParameter="{Binding .}" />
-                        </Grid.GestureRecognizers>
+                <DataTemplate x:DataType="vm:ContactGroup">
+                    <VerticalStackLayout Spacing="0">
 
-                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
-                                BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
-                                HorizontalOptions="Start" VerticalOptions="Center">
-                            <Label Text="{Binding Initial}" TextColor="White" FontSize="18" FontFamily="OpenSansSemibold"
-                                   HorizontalOptions="Center" VerticalOptions="Center" />
-                        </Border>
-
-                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="{Binding Name}" FontSize="16" />
-                            <Label Text="{Binding Type}" FontSize="12"
+                        <!-- 分组标题（标题为空时隐藏，如「新的朋友」所在的首组） -->
+                        <Grid Padding="16,8,16,4"
+                              BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
+                              IsVisible="{Binding Title, Converter={StaticResource StringToBool}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0" Text="{Binding ExpandIndicator}" FontSize="11"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                   VerticalOptions="Center" Margin="0,0,6,0" />
+                            <Label Grid.Column="1" Text="{Binding Title}" FontFamily="OpenSansSemibold" FontSize="13"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                            </Grid.GestureRecognizers>
+                        </Grid>
+
+                        <!-- 组内联系人：BindableLayout 平铺（无嵌套滚动冲突），随分组折叠/展开 -->
+                        <VerticalStackLayout Spacing="0"
+                                             IsVisible="{Binding IsExpanded}"
+                                             BindableLayout.ItemsSource="{Binding Contacts}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ContactItem">
+                                    <Grid ColumnDefinitions="44,*" Padding="16,10" RowSpacing="0" ColumnSpacing="12">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToContactDetailCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
+
+                                        <!-- 头像：有自定义图标(IconSource)显示图标，否则显示首字母 -->
+                                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
+                                                StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                                BackgroundColor="{StaticResource Primary}"
+                                                HorizontalOptions="Start" VerticalOptions="Center"
+                                                IsVisible="{Binding IconSource, Converter={StaticResource NotNull}, ConverterParameter=inverse}">
+                                            <Label Text="{Binding Initial}" TextColor="White" FontSize="18" FontFamily="OpenSansSemibold"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+                                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
+                                                StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                                BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
+                                                HorizontalOptions="Start" VerticalOptions="Center"
+                                                IsVisible="{Binding IconSource, Converter={StaticResource NotNull}}">
+                                            <Image Source="{Binding IconSource}" WidthRequest="24" HeightRequest="24"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontSize="16" />
+                                            <Label Text="{Binding Type}" FontSize="12"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
-                    </Grid>
+
+                    </VerticalStackLayout>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
