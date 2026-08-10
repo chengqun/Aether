@@ -8,6 +8,7 @@ using Acme.Desktop.Workbench.Theming;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Workbench;
@@ -45,6 +46,7 @@ public partial class WorkbenchWindow : Window
         base.OnOpened(e);
         // 初始主题应用（若有自定义 JSON）。
         ThemeLoader.Apply(this, _vm?.CustomThemeJson);
+        ApplyThemeVariant();
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -63,6 +65,15 @@ public partial class WorkbenchWindow : Window
         }
     }
 
+    /// <summary>账号菜单「🎨 主题」子项点击：MenuItem.Click 从叶子子项冒泡到父「🎨 主题」，
+    /// <c>e.Source</c> 的 DataContext 是被点的 ThemeOption。父项自身 DataContext 是 shell VM（非 ThemeOption）
+    /// → 自动跳过。经 ThemeOption.SelectCommand 触发换肤（避开 MenuItem 容器 Command 绑定的跨 popup 歧义）。</summary>
+    public void OnSelectTheme(object? sender, RoutedEventArgs e)
+    {
+        if (e.Source is MenuItem mi && mi.DataContext is ThemeOption t)
+            t.SelectCommand?.Execute(t.Name);
+    }
+
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(WorkbenchShellViewModel.Theme)
@@ -70,6 +81,17 @@ public partial class WorkbenchWindow : Window
         {
             ThemeLoader.Apply(this, _vm?.CustomThemeJson);
         }
+        if (e.PropertyName == nameof(WorkbenchShellViewModel.IsDarkVariant))
+            ApplyThemeVariant();
+    }
+
+    /// <summary>把主题明暗倾向同步到 Avalonia 原生控件主题。<see cref="ThemeLoader"/> 的 JSON overlay
+    /// 只覆盖自定义 token 画刷；原生控件（TextBox/ComboBox/滚动条/ListBox…）须经 <see cref="ThemeVariant"/>
+    /// 翻转，否则 dark 主题下原生控件仍是浅底白块。设到 Application 级——所有子窗口（设置/Trace…）一并翻转。</summary>
+    private void ApplyThemeVariant()
+    {
+        if (Application.Current is { } app)
+            app.RequestedThemeVariant = (_vm?.IsDarkVariant ?? false) ? ThemeVariant.Dark : ThemeVariant.Light;
     }
 
     // —— 窗口尺寸持久化（布局/分隔条由 WorkspaceView + WorkbenchShellViewModel 跨重启持久） ——

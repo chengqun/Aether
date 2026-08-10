@@ -1,5 +1,6 @@
 {
   "$note": "示例自定义主题（dark / Catppuccin Mocha 风）。Codex host 可读此 JSON 经 ThemeLoader 叠加到 WorkbenchTheme 之上，换 JSON 即换肤，无需重编。",
+  "variant": "dark",
   "colors": {
     "AccentColor": "#89b4fa",
     "AccentBrush": "#89b4fa",

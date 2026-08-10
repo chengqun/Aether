@@ -30,13 +30,15 @@
               <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
-              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}">
+              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
                 <MenuItem.ItemTemplate>
                   <DataTemplate>
-                    <MenuItem Header="{Binding Name}"
-                              Command="{Binding $parent[MenuItem].DataContext.SelectThemeCommand}"
-                              CommandParameter="{Binding Name}"
-                              IsEnabled="{Binding !IsCurrent}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="✓" FontWeight="Bold" Width="14"
+                                 Foreground="{DynamicResource AccentBrush}"
+                                 IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"/>
+                    </StackPanel>
                   </DataTemplate>
                 </MenuItem.ItemTemplate>
               </MenuItem>
@@ -119,13 +121,15 @@
               <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
               <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
               <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
-              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}">
+              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
                 <MenuItem.ItemTemplate>
                   <DataTemplate>
-                    <MenuItem Header="{Binding Name}"
-                              Command="{Binding $parent[MenuItem].DataContext.SelectThemeCommand}"
-                              CommandParameter="{Binding Name}"
-                              IsEnabled="{Binding !IsCurrent}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="✓" FontWeight="Bold" Width="14"
+                                 Foreground="{DynamicResource AccentBrush}"
+                                 IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"/>
+                    </StackPanel>
                   </DataTemplate>
                 </MenuItem.ItemTemplate>
               </MenuItem>

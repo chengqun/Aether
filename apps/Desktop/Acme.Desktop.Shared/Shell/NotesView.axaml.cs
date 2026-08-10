@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit.Folding;
@@ -48,6 +49,13 @@ public partial class NotesView : UserControl
         {
             ConfigureEditorAppearance();
             SyncCodeEditor();
+        };
+        // 主题明暗切换时（用户在账号菜单/设置选 light↔dark）重染编辑器：原生 TextArea 背景随 ThemeVariant 翻转，
+        // 但语法着色/当前行/选中色是这里硬编码的——须随 ActualThemeVariant 重设，否则 dark 下留着浅色语法 + 亮条纹。
+        CodeEditor.ActualThemeVariantChanged += (_, _) =>
+        {
+            ApplyEditorTheme();
+            ApplyHighlighting();
         };
         this.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed,
             RoutingStrategies.Bubble, handledEventsToo: true);
@@ -202,15 +210,32 @@ public partial class NotesView : UserControl
     private void ApplyHighlighting()
     {
         if (_vm?.SelectedNode is not { } node) return;
-        CodeEditor.SyntaxHighlighting = HighlightingFor(node);
+        var dark = IsDarkEditor;
+        var def = HighlightingFor(node, dark);
+        // 语法定义是 HighlightingManager 缓存的同一实例，颜色在 ApplyVscodeColors 里原地改——
+        // 设同一引用不触发重绘，须先置 null 再设回强制 TextArea 刷新（主题切换场景）。
+        if (def is not null && ReferenceEquals(CodeEditor.SyntaxHighlighting, def))
+        {
+            CodeEditor.SyntaxHighlighting = null;
+            CodeEditor.SyntaxHighlighting = def;
+        }
+        else
+        {
+            CodeEditor.SyntaxHighlighting = def;
+        }
     }
 
-    /// <summary>节点 → 高亮定义：类型强制语法优先（Agent=YAML/Workflow=Json），否则按节点语法映射。统一 VSCode 配色。</summary>
-    private static IHighlightingDefinition? HighlightingFor(NoteNodeVM node)
+    /// <summary>编辑器当前是否深色主题——读 <see cref="StyledElement.ActualThemeVariant"/>
+    /// （WorkbenchWindow 设 Application.RequestedThemeVariant 后向下传播到编辑器）。</summary>
+    private bool IsDarkEditor => CodeEditor.ActualThemeVariant == ThemeVariant.Dark;
+
+    /// <summary>节点 → 高亮定义：类型强制语法优先（Agent=YAML/Workflow=Json），否则按节点语法映射。
+    /// 统一 VSCode 配色（Light+ / Dark+ 随主题切换）。</summary>
+    private static IHighlightingDefinition? HighlightingFor(NoteNodeVM node, bool dark)
     {
         var forced = NoteNodeTypeRegistry.Get(node.NodeType).Syntax;
         var syntax = (forced ?? node.Syntax)?.ToLowerInvariant();
-        if (syntax == "yaml") return LoadYaml();
+        if (syntax == "yaml") return LoadYaml(dark);
         return Load(syntax switch
         {
             "markdown" => "MarkDown",
@@ -227,22 +252,33 @@ public partial class NotesView : UserControl
             "vb" => "VB",
             "powershell" => "PowerShell",
             _ => null,
-        });
+        }, dark);
     }
 
-    private static IHighlightingDefinition? _yamlDef;
+    // YAML 内联 .xshd 两套缓存（AvaloniaEdit 无内置 YAML 高亮）：light / dark 各一份，切主题不重建。
+    private static IHighlightingDefinition? _yamlLight, _yamlDark;
 
-    /// <summary>自定义 YAML 高亮（AvaloniaEdit 无内置；内联 .xshd，VSCode 配色）。</summary>
-    private static IHighlightingDefinition LoadYaml()
+    /// <summary>自定义 YAML 高亮（AvaloniaEdit 无内置；内联 .xshd）。配色随主题——VSCode Light+ / Dark+。</summary>
+    private static IHighlightingDefinition LoadYaml(bool dark)
     {
-        if (_yamlDef is not null) return _yamlDef;
-        var xshd = @"<SyntaxDefinition name=""YAML"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
-  <Color name=""Comment"" foreground=""#008000""/>
-  <Color name=""String"" foreground=""#A31515""/>
-  <Color name=""Number"" foreground=""#098658""/>
-  <Color name=""Keyword"" foreground=""#0000FF""/>
-  <Color name=""Key"" foreground=""#267F99""/>
-  <Color name=""DocMarker"" foreground=""#808080""/>
+        if (dark) return _yamlDark ??= BuildYaml(dark);
+        return _yamlLight ??= BuildYaml(dark);
+    }
+
+    private static IHighlightingDefinition BuildYaml(bool dark)
+    {
+        // Light+ : Comment 绿 / String 暗红 / Keyword 蓝 / Key 青
+        // Dark+  : Comment 暗绿 / String 橙 / Key 浅蓝（深底高对比，暗红在深底不可读）
+        var (comment, str, num, kw, key, doc) = dark
+            ? ("#6A9955", "#CE9178", "#B5CEA8", "#569CD6", "#9CDCFE", "#6A9955")
+            : ("#008000", "#A31515", "#098658", "#0000FF", "#267F99", "#808080");
+        var xshd = $@"<SyntaxDefinition name=""YAML"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
+  <Color name=""Comment"" foreground=""{comment}""/>
+  <Color name=""String"" foreground=""{str}""/>
+  <Color name=""Number"" foreground=""{num}""/>
+  <Color name=""Keyword"" foreground=""{kw}""/>
+  <Color name=""Key"" foreground=""{key}""/>
+  <Color name=""DocMarker"" foreground=""{doc}""/>
   <RuleSet>
     <Rule color=""DocMarker"">^---\s*$</Rule>
     <Rule color=""DocMarker"">^\.\.\.\s*$</Rule>
@@ -259,57 +295,68 @@ public partial class NotesView : UserControl
   </RuleSet>
 </SyntaxDefinition>";
         using var reader = XmlReader.Create(new StringReader(xshd));
-        _yamlDef = HighlightingLoader.Load(reader, HighlightingManager.Instance);
-        return _yamlDef;
+        return HighlightingLoader.Load(reader, HighlightingManager.Instance);
     }
 
-    private static IHighlightingDefinition? Load(string? name)
+    private static IHighlightingDefinition? Load(string? name, bool dark)
     {
         if (name is null) return null;
+        // GetDefinition 返回 HighlightingManager 缓存的同一实例——颜色在 ApplyVscodeColors 里原地改。
+        // 主题是 app 级（全窗一致），故全局重染无冲突；切主题后 ApplyHighlighting 先置 null 再设回强制重绘。
         var def = HighlightingManager.Instance.GetDefinition(name);
-        if (def is not null) ApplyVscodeColors(def);
+        if (def is not null) ApplyVscodeColors(def, dark);
         return def;
     }
 
-    /// <summary>VSCode 质感：当前行高亮 + 选中色 + 括号匹配 + 搜索面板。</summary>
+    /// <summary>VSCode 质感：当前行高亮 + 选中色 + 括号匹配 + 搜索面板。仅 Loaded 调一次（避免重复装 SearchPanel/Folding）。</summary>
     private void ConfigureEditorAppearance()
     {
         try
         {
             CodeEditor.Options.HighlightCurrentLine = true;
-            var tv = CodeEditor.TextArea.TextView;
-            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse("#F0F0F4"));
-            tv.CurrentLineBorder = null;
-            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse("#ADD6FF"));
-            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse("#1A1A1F"));
-            // 安装搜索替换面板（Ctrl+F 呼出）
+            // 安装搜索替换面板（Ctrl+F 呼出）+ 代码折叠（基于 {} 配对）——一次性，不可在主题切换时重复调。
             SearchPanel.Install(CodeEditor);
-            // 安装代码折叠（基于 {} 配对）
             _foldingManager = FoldingManager.Install(CodeEditor.TextArea);
+            ApplyEditorTheme();
         }
         catch { /* 控件未就绪则跳过 */ }
     }
 
-    /// <summary>把内置定义的颜色重映射为 VSCode Light+ 配色（蓝关键字/橙字符串/绿注释/绿数字）。</summary>
-    private static void ApplyVscodeColors(IHighlightingDefinition def)
+    /// <summary>编辑器主题色（当前行底 + 选中底/前景）。随 ActualThemeVariant 切——Loaded 与主题切换都调。</summary>
+    private void ApplyEditorTheme()
+    {
+        try
+        {
+            var dark = IsDarkEditor;
+            var tv = CodeEditor.TextArea.TextView;
+            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(dark ? "#2a2b3e" : "#F0F0F4"));
+            tv.CurrentLineBorder = null;
+            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(dark ? "#264f78" : "#ADD6FF"));
+            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(dark ? "#cdd6f4" : "#1A1A1F"));
+        }
+        catch { /* 控件未就绪则跳过 */ }
+    }
+
+    /// <summary>把内置定义的颜色重映射为 VSCode 配色（Light+ 浅底 / Dark+ 深底）。深底用亮色语法 token 保对比度。</summary>
+    private static void ApplyVscodeColors(IHighlightingDefinition def, bool dark)
     {
         foreach (var c in def.NamedHighlightingColors)
         {
             var n = (c.Name ?? "").ToUpperInvariant();
             string? hex = null;
-            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = "#008000";
-            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = "#A31515";
-            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = "#098658";
-            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = "#795E26";
-            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = "#267F99";
-            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = "#800000";
-            else if (n.Contains("ATTRIBUT")) hex = "#FF0000";
+            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = dark ? "#6A9955" : "#008000";
+            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = dark ? "#CE9178" : "#A31515";
+            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = dark ? "#B5CEA8" : "#098658";
+            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = dark ? "#DCDCAA" : "#795E26";
+            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = dark ? "#4EC9B0" : "#267F99";
+            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = dark ? "#569CD6" : "#800000";
+            else if (n.Contains("ATTRIBUT")) hex = dark ? "#9CDCFE" : "#FF0000";
             else if (n.Contains("KEYWORD") || n.Contains("VISIBILITY") || n.Contains("MODIFIER")
                 || n.Contains("REFERENCE") || n.Contains("VALUE") || n.Contains("EXCEPTION")
                 || n.Contains("GOTO") || n.Contains("CONTEXT") || n.Contains("OPERATOR")
                 || n.Contains("PARAMETER") || n.Contains("NAMESPACE") || n.Contains("GETSET")
                 || n.Contains("TRUEFALSE") || n.Contains("SEMANTIC") || n.Contains("CHECKED")
-                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = "#0000FF";
+                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = dark ? "#569CD6" : "#0000FF";
             if (hex is not null)
             {
                 c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));

@@ -26,6 +26,12 @@ public sealed class ThemeDefinition
     /// <summary>背景资源（WorkspaceBackground）：图片 asset 或纯色 fallback。</summary>
     [JsonPropertyName("background")]
     public BackgroundDef? Background { get; set; }
+
+    /// <summary>主题明暗倾向："light" / "dark"（可选）。决定 Avalonia 原生控件（TextBox/ComboBox/滚动条…）
+    /// 的 <see cref="Avalonia.Styling.ThemeVariant"/>——JSON overlay 只覆盖自定义 token 画刷，
+    /// 原生控件须经 ThemeVariant 翻转，否则 dark 主题下原生控件仍是浅底白块。缺省按 "dark" 处理。</summary>
+    [JsonPropertyName("variant")]
+    public string? Variant { get; set; }
 }
 
 /// <summary>背景定义。</summary>

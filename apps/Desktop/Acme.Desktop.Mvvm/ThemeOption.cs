@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Desktop.Mvvm;
@@ -20,6 +21,10 @@ public sealed partial class ThemeOption : ObservableObject
     /// <summary>是否当前选中（高亮/禁用再选）。</summary>
     [ObservableProperty]
     private bool _isCurrent;
+
+    /// <summary>选中此主题的命令（host 在建表时注入自己的 SelectThemeCommand）。
+    /// 账号菜单子菜单用 ItemContainerStyle 绑此——避免 $parent[MenuItem] 跨 popup 的绑定歧义。</summary>
+    public ICommand? SelectCommand { get; set; }
 
     public ThemeOption(string name, string? description, bool isBuiltIn, bool isCurrent = false)
     {

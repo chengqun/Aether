@@ -78,6 +78,11 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     [ObservableProperty]
     private string? _customThemeJson;
 
+    /// <summary>当前主题是否深色倾向——驱动 Avalonia 原生控件的 ThemeVariant（light→Light / dark→Dark）。
+    /// JSON overlay 只覆盖自定义 token 画刷；原生控件（TextBox/ComboBox/滚动条…）须经 ThemeVariant 翻转。</summary>
+    [ObservableProperty]
+    private bool _isDarkVariant;
+
     private DesktopOptions? _desktopOptions;
     /// <summary>桌面路径选项（惰性从 DI 取，同 NotesViewModel 的 NotesEditorOptions 模式）。</summary>
     private DesktopOptions DesktopOptions
@@ -174,12 +179,14 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
 
     // ── 主题（IThemeHost 实现） ──
 
-    /// <summary>扫描主题列表：内置 light/dark + &lt;tenantDir&gt;/themes/*.json。启动调一次，不热重载。</summary>
+    /// <summary>扫描主题列表：内置 light/dark + &lt;tenantDir&gt;/themes/*.json。启动调一次，不热重载。
+    /// 每个选项注入 SelectThemeCommand——账号菜单子菜单经 ItemContainerStyle 绑 SelectCommand，
+    /// 避开 $parent[MenuItem] 跨 popup 的绑定歧义。</summary>
     private Task LoadThemesAsync()
     {
         Themes.Clear();
-        Themes.Add(new ThemeOption("light", "内置浅色", true));
-        Themes.Add(new ThemeOption("dark", "内置深色（Catppuccin Mocha）", true));
+        Themes.Add(new ThemeOption("light", "内置浅色", true) { SelectCommand = SelectThemeCommand });
+        Themes.Add(new ThemeOption("dark", "内置深色（Catppuccin Mocha）", true) { SelectCommand = SelectThemeCommand });
         var dir = DesktopOptions.ThemesDirectory;
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
@@ -187,13 +194,13 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
             {
                 var name = Path.GetFileNameWithoutExtension(f);
                 if (name is "light" or "dark") continue; // 不覆盖内置名
-                Themes.Add(new ThemeOption(name, Path.GetFileName(f), false));
+                Themes.Add(new ThemeOption(name, Path.GetFileName(f), false) { SelectCommand = SelectThemeCommand });
             }
         }
         return Task.CompletedTask;
     }
 
-    /// <summary>选中主题：设 overlay JSON + 当前名 + IsCurrent 高亮 + 持久化。供 RelayCommand 与 IThemeHost.SelectThemeAsync 共用。</summary>
+    /// <summary>选中主题：设 overlay JSON + 当前名 + IsCurrent 高亮 + IsDarkVariant + 持久化。供 RelayCommand 与 IThemeHost.SelectThemeAsync 共用。</summary>
     private async Task SelectThemeCoreAsync(string name, CancellationToken ct)
     {
         var json = name switch
@@ -205,6 +212,14 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         // 用户文件缺失/非法 → 回退 light（视觉与名一致，免残留指向不存在的主题）。
         if (json is null && name != "light")
             name = "light";
+        // 深色倾向：light→false，dark→true，用户主题读 JSON variant 字段（缺省 dark）。
+        // 驱动 Avalonia 原生控件 ThemeVariant——overlay 不覆盖原生控件，须靠 variant 翻转。
+        IsDarkVariant = name switch
+        {
+            "light" => false,
+            "dark" => true,
+            _ => !string.Equals(ThemeLoader.Deserialize(json ?? "")?.Variant, "light", StringComparison.OrdinalIgnoreCase),
+        };
         CustomThemeJson = json;   // 触发 ThemeLoader.Apply（窗口订阅 CustomThemeJson 变化）
         Theme = name;             // 当前名（高亮）
         foreach (var t in Themes)
