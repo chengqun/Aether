@@ -97,6 +97,11 @@
     <Setter Property="FontFamily" Value="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"/>
     <Setter Property="FontSize" Value="11.9"/>
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+    <!-- #5 代码块横向滚动：MarkdownScrollViewer 内部 ScrollViewer 的 HorizontalScrollBarVisibility=Disabled
+         （整篇开横向滚动会让段落不换行，不可取），而代码块又未被单独包在 ScrollViewer 里 → 超长代码行被裁剪、
+         内容丢失。改 Wrap 让长行在代码块内折行（内容不丢），是无需引入 SyntaxHigh 的安全修法。
+         真·逐代码块横向滚动需 SyntaxHigh（AvaloniaEdit 代码块），但它与 Empty+自定义主题架构冲突，暂不做。 -->
+    <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
 
   <!-- Note 块 -->

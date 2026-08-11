@@ -17,6 +17,16 @@ namespace Acme.Desktop.Shared.Shell.Controls;
 /// </summary>
 public class SelectableMarkdownViewer : MarkdownScrollViewer
 {
+    // #2 缓存反射：_document 字段与 GetSelectedText 方法在类型上固定不变，每次复制都 GetField/GetMethod
+    // 反射查找是纯浪费。缓存为 static，首次解析后零开销。
+    private static readonly FieldInfo? _documentField = typeof(MarkdownScrollViewer)
+        .GetField("_document", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static MethodInfo? _getSelectedTextMethod;
+
+    // #3 缓存正则：Normalize 每次复制都 new 两个 Regex（默认未编译），改 static readonly Compiled。
+    private static readonly Regex _inlineSpace = new(@"[ \t]+", RegexOptions.Compiled);
+    private static readonly Regex _blankLines = new(@"\n{3,}", RegexOptions.Compiled);
+
     public SelectableMarkdownViewer()
     {
         // 不用 GithubLike（其硬编码浅色 + 控件级优先级压过 app 级主题）。改用 Empty 空主题，
@@ -54,10 +64,12 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
     /// <summary>反射 MarkdownScrollViewer._document 调用 DocumentElement.GetSelectedText()</summary>
     private string? GetSelectedText()
     {
-        var docField = typeof(MarkdownScrollViewer).GetField("_document",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var doc = docField?.GetValue(this);
-        return doc?.GetType().GetMethod("GetSelectedText", Type.EmptyTypes)?.Invoke(doc, null) as string;
+        if (_documentField is null) return null;
+        var doc = _documentField.GetValue(this);
+        if (doc is null) return null;
+        // GetSelectedText 定义在 _document 的固定类型上，首次拿到 doc 后缓存 MethodInfo，后续零反射。
+        _getSelectedTextMethod ??= doc.GetType().GetMethod("GetSelectedText", Type.EmptyTypes);
+        return _getSelectedTextMethod?.Invoke(doc, null) as string;
     }
 
     /// <summary>清洗选中文本：统一换行、合并行内多余空格/制表符（表格填充）、压缩连续空行、去行尾空白。</summary>
@@ -67,9 +79,9 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
         var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
         var lines = normalized.Split('\n');
         for (int i = 0; i < lines.Length; i++)
-            lines[i] = Regex.Replace(lines[i], @"[ \t]+", " ").Trim();
+            lines[i] = _inlineSpace.Replace(lines[i], " ").Trim();
         var result = string.Join('\n', lines);
-        result = Regex.Replace(result, @"\n{3,}", "\n\n");
+        result = _blankLines.Replace(result, "\n\n");
         return result.Trim();
     }
 }
