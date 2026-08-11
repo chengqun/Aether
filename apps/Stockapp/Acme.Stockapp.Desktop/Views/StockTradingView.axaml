@@ -8,7 +8,7 @@
 
   <UserControl.Styles>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="White" />
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="10" />

@@ -69,7 +69,7 @@
             </TreeView.ContextMenu>
             <TreeView.ItemTemplate>
               <TreeDataTemplate ItemsSource="{Binding Children}">
-                <Grid HorizontalAlignment="Stretch">
+                <Grid HorizontalAlignment="Stretch" Background="Transparent">
                   <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
                           CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
                   <StackPanel Orientation="Horizontal" Spacing="6">
@@ -83,21 +83,76 @@
                 </Grid>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
+            <TreeView.Resources>
+              <!-- 自定义 TreeViewItem 主题：
+                   展开箭头固定在最左 16px 常驻列，不随节点宽度或层级变化；无子节点的项隐藏箭头
+                   但保留该列宽（按 NoteNodeVM.Children.Count 判定，避免折叠父节点被误判为叶子）；
+                   内容栏铺满整行并 hit-test，整行可点选（不再只有标题文字可点）。 -->
+              <ControlTheme x:Key="NotesTreeViewItemTheme" TargetType="TreeViewItem"
+                            BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                <Setter Property="Template">
+                  <ControlTemplate>
+                    <Grid RowDefinitions="Auto,Auto">
+                      <!-- 选中/悬停高亮：命名 PART_LayoutRoot（继承自默认主题的 :selected/:pointerover 样式
+                           按 Border#PART_LayoutRoot 名命中并改其 Background）。Background 绑到模板父级
+                           Background（默认透明且可 hit-test）让整行可点选；样式优先级高于 TemplateBinding，
+                           故悬停/选中色仍能覆盖透明底色。chevron + 内容嵌在 Border 内，高亮覆盖整行内容。 -->
+                      <Border x:Name="PART_LayoutRoot" Grid.Row="0"
+                              CornerRadius="4"
+                              Background="{TemplateBinding Background}"
+                              BorderBrush="{TemplateBinding BorderBrush}"
+                              BorderThickness="{TemplateBinding BorderThickness}"
+                              Padding="{TemplateBinding Padding}"
+                              Focusable="True">
+                        <Grid ColumnDefinitions="16,*">
+                          <!-- 展开箭头：固定 16px 常驻列，不随节点宽度或层级变化。按 NoteNodeVM.Children.Count
+                               判定有无子节点（折叠父节点的生成容器数 ItemCount=0 会误判，故用数据子节点数），
+                               无子节点则隐藏箭头但保留该列宽（ContentPresenter 仍在 col 1，左缘对齐一致）。
+                               箭头默认指向右（▶ 收起），展开时顺时针旋转 90° 变向下（▼ 展开）。 -->
+                          <ToggleButton x:Name="PART_ExpandCollapseChevron"
+                                        Grid.Column="0"
+                                        Width="16" Height="16"
+                                        Background="Transparent" BorderThickness="0"
+                                        Padding="0" Margin="0" Focusable="False"
+                                        RenderTransformOrigin="0.5,0.5"
+                                        IsVisible="{Binding Children.Count, Converter={x:Static shell:CountToBoolConverter.Instance}}"
+                                        IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                            <Path Data="M0,0 L8,5 L0,10 Z"
+                                  Fill="{DynamicResource TextSecondaryBrush}"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          </ToggleButton>
+                          <!-- 显式 Content/ContentTemplate TemplateBinding（Avalonia 无 ContentSource；
+                               这是默认 Fluent TreeViewItem 模板的写法），让 TreeView.ItemTemplate
+                               （TreeDataTemplate）正确套用到节点头，否则只渲染数据对象的 ToString()。 -->
+                          <ContentPresenter x:Name="PART_HeaderPresenter"
+                                            Grid.Column="1"
+                                            Content="{TemplateBinding Header}"
+                                            ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalAlignment="Stretch"
+                                            Focusable="False"/>
+                        </Grid>
+                      </Border>
+                      <ItemsPresenter x:Name="PART_ItemsPresenter" Grid.Row="1"
+                                      Margin="16,0,0,0"
+                                      IsVisible="{TemplateBinding IsExpanded}"/>
+                    </Grid>
+                  </ControlTemplate>
+                </Setter>
+                <!-- 展开时箭头顺时针旋转 90°：▶ → ▼ -->
+                <Style Selector="^ /template/ ToggleButton#PART_ExpandCollapseChevron[IsChecked=True]">
+                  <Setter Property="RenderTransform">
+                    <RotateTransform Angle="90"/>
+                  </Setter>
+                </Style>
+              </ControlTheme>
+            </TreeView.Resources>
             <TreeView.Styles>
               <Style Selector="TreeViewItem">
+                <Setter Property="Theme" Value="{StaticResource NotesTreeViewItemTheme}"/>
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="Padding" Value="2,1"/>
-              </Style>
-              <!-- 箭头三角大小不变，只压缩容器空白让其紧贴节点 -->
-              <Style Selector="TreeViewItem /template/ ToggleButton">
-                <Setter Property="Width" Value="12"/>
-                <Setter Property="MinWidth" Value="0"/>
-                <Setter Property="Padding" Value="0"/>
-                <Setter Property="Margin" Value="0"/>
-              </Style>
-              <!-- 选中后背景变深，文字转白保证可读 -->
-              <Style Selector="TreeViewItem:selected">
-                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Padding" Value="0,3"/>
               </Style>
             </TreeView.Styles>
           </TreeView>
