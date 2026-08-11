@@ -24,6 +24,10 @@ public sealed class AskUserDialogService : IAskUserDialogService
             var vm = new AskUserDialogViewModel(questions);
             var window = new AskUserWindow { DataContext = vm };
             vm.Finished += window.Close;
+            // 与 ApprovalDialogService 同：后台线程经 InvokeAsync 弹模态窗在 macOS 上可能不激活
+            // → 父窗禁用、弹窗不可见 = 假死。显式激活确保可见。
+            window.ShowActivated = true;
+            window.Opened += (_, _) => window.Activate();
             await window.ShowDialog(desktop.MainWindow);
             return vm.Result;
         });
