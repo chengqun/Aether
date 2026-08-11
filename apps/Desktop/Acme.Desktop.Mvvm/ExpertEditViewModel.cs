@@ -21,10 +21,17 @@ public partial class ToolOption : ObservableObject
     public bool IsDangerous => ApprovalLevel == "Dangerous";
     /// <summary>展示标签：Safe→"自动" / Confirm→"审批" / Dangerous→"危险"。</summary>
     public string ApprovalBadge => ApprovalLevel switch { "Dangerous" => "危险", "Confirm" => "审批", _ => "自动" };
+    /// <summary>该工具是否自动放行（RequireToolApproval 开时，勾选的非-Safe 工具不弹审批框）。Safe 工具本就自动跑，不可勾。</summary>
+    [ObservableProperty] private bool _autoApprove;
+    /// <summary>自动放行 CheckBox 是否可交互：Safe 工具本就自动跑，勾自动放行无意义。</summary>
+    public bool CanAutoApprove => ApprovalLevel != "Safe";
     partial void OnApprovalLevelChanged(string value)
     {
         OnPropertyChanged(nameof(ApprovalBadge));
         OnPropertyChanged(nameof(IsDangerous));
+        OnPropertyChanged(nameof(CanAutoApprove));
+        // 降级到 Safe 时清掉自动放行（避免持久化无意义的 Safe 工具自动放行）
+        if (value == "Safe") AutoApprove = false;
     }
     [ObservableProperty] private bool _isSelected;
 
@@ -104,6 +111,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
 
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
         var selectedSkillSet = new HashSet<string>(existing?.Skills ?? Enumerable.Empty<string>());
+        var autoApproveSet = new HashSet<string>(existing?.AutoApprovalRules ?? Enumerable.Empty<string>());
 
         // 按分类分组构建原生工具列表（MCP 工具已在 GetAvailableTools 过滤，单独走 MCP 区）
         foreach (var meta in allTools)
@@ -117,6 +125,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                 ApprovalLevel = (existing?.ToolApprovals is not null
                     && existing.ToolApprovals.TryGetValue(meta.Name, out var ov)) ? ov : meta.ApprovalLevel,
                 IsSelected = selectedSet.Contains(meta.Name),
+                AutoApprove = autoApproveSet.Contains(meta.Name) && meta.ApprovalLevel != "Safe",
             };
 
             var group = ToolCategories.FirstOrDefault(g => g.Category == meta.Category);
@@ -149,6 +158,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                         ApprovalLevel = (existing?.ToolApprovals is not null
                             && existing.ToolApprovals.TryGetValue(tool.Name, out var mcpOv)) ? mcpOv : "Dangerous",
                         IsSelected = selectedSet.Contains(tool.Name),
+                        AutoApprove = autoApproveSet.Contains(tool.Name), // MCP 工具默认 Dangerous，非 Safe
                     };
                     Tools.Add(opt);
                     grp.Tools.Add(opt);
@@ -285,6 +295,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     {
         new() { Value = AgentMemoryMode.Off, Display = "无记忆 · 每次独立运行" },
         new() { Value = AgentMemoryMode.SlidingWindow, Display = "滑动窗口 · 仅最近 N 条（推荐）" },
+        new() { Value = AgentMemoryMode.Summarize, Display = "摘要压缩 · 保留最近 N 条，更早的自动摘要" },
         new() { Value = AgentMemoryMode.Full, Display = "完整记忆 · 保留全部历史" },
     };
 
@@ -310,12 +321,16 @@ public sealed partial class ExpertEditViewModel : ObservableObject
         }
     }
 
-    /// <summary>窗口大小输入框是否可见（仅滑动窗口时需要配置 N）。</summary>
-    public bool IsWindowVisible => Memory == AgentMemoryMode.SlidingWindow;
+    /// <summary>窗口大小输入框是否可见（滑动窗口 / 摘要压缩都需要配置 N）。</summary>
+    public bool IsWindowVisible => Memory is AgentMemoryMode.SlidingWindow or AgentMemoryMode.Summarize;
+
+    /// <summary>窗口大小标签随模式切换：滑动窗口显「窗口大小」、摘要压缩显「保留条数」。</summary>
+    public string MaxHistoryLabel => Memory == AgentMemoryMode.Summarize ? "保留条数（更早的自动摘要）" : "窗口大小";
 
     partial void OnMemoryChanged(AgentMemoryMode value)
     {
         OnPropertyChanged(nameof(IsWindowVisible));
+        OnPropertyChanged(nameof(MaxHistoryLabel));
         OnPropertyChanged(nameof(SelectedMemoryModeOption));
         ScheduleAutoSave();
     }
@@ -400,6 +415,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             Tools = toolList,
             ToolApprovals = Tools.Where(t => t.IsSelected && t.ApprovalLevel != t.DeclaredLevel)
                 .ToDictionary(t => t.Name, t => t.ApprovalLevel),
+            AutoApprovalRules = Tools.Where(t => t.IsSelected && t.AutoApprove).Select(t => t.Name).ToList(),
             Skills = skillList,
             Memory = Memory,
             MaxHistory = MaxHistory,

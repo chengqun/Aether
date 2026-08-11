@@ -23,6 +23,8 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private List<string> _tools = new();
     /// <summary>按工具名覆盖审批等级（"Safe"/"Confirm"/"Dangerous"）；专家编辑页可调。</summary>
     [ObservableProperty] private Dictionary<string, string> _toolApprovals = new();
+    /// <summary>自动放行的工具名列表（RequireToolApproval 开时，列入的非-Safe 工具不弹审批框）。</summary>
+    [ObservableProperty] private List<string> _autoApprovalRules = new();
     /// <summary>勾选启用的 skill 名（空=启用 skills 时用全部）。</summary>
     [ObservableProperty] private List<string> _skills = new();
     [ObservableProperty] private bool _isSummoned;
@@ -77,6 +79,7 @@ public sealed partial class ExpertItem : ObservableObject
         AgentMemoryMode.SlidingWindow => "滑动窗口",
         AgentMemoryMode.Full => "全量记忆",
         AgentMemoryMode.Off => "关闭",
+        AgentMemoryMode.Summarize => "摘要压缩",
         _ => Memory.ToString(),
     };
 }

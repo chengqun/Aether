@@ -47,7 +47,7 @@
               </ComboBox>
             </StackPanel>
             <StackPanel Spacing="2" IsVisible="{Binding IsWindowVisible}">
-              <TextBlock Text="窗口大小" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBlock Text="{Binding MaxHistoryLabel}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
               <NumericUpDown Value="{Binding MaxHistory}" Minimum="1" Maximum="200" FormatString="0"/>
             </StackPanel>
             <CheckBox Content="长期记忆（跨会话召回+沉淀）" IsChecked="{Binding EnableLongTermMemory}" Margin="0,2"/>
@@ -74,7 +74,10 @@
         </Expander>
 
         <Expander Header="工具审批" IsExpanded="False">
-          <CheckBox Content="启用工具调用前审批（Dangerous 工具弹审批框）" IsChecked="{Binding RequireToolApproval}" Margin="0,4"/>
+          <StackPanel Spacing="4">
+            <CheckBox Content="启用工具调用前审批（Dangerous 工具弹审批框）" IsChecked="{Binding RequireToolApproval}" Margin="0,4"/>
+            <TextBlock Text="开启后，在下方工具列表勾「自动放行」可让指定工具免弹框（常驻规则按名放行）；Safe 工具本就自动跑。" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+          </StackPanel>
         </Expander>
 
         <Expander Header="Web 搜索" IsExpanded="False">
@@ -151,6 +154,7 @@
                             <Border Background="{DynamicResource DangerBgBrush}" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
                               <TextBlock Text="危险" FontSize="9" Foreground="{DynamicResource DangerBrush}"/>
                             </Border>
+                            <CheckBox Content="自动放行" IsChecked="{Binding AutoApprove}" IsVisible="{Binding CanAutoApprove}" Margin="6,0,0,0" FontSize="9" Padding="2,0"/>
                           </StackPanel>
                         </CheckBox>
                       </DataTemplate>
@@ -207,6 +211,7 @@
                                 <Border Background="{DynamicResource DangerBgBrush}" CornerRadius="3" Padding="4,0" IsVisible="{Binding IsDangerous}">
                                   <TextBlock Text="危险" FontSize="9" Foreground="{DynamicResource DangerBrush}"/>
                                 </Border>
+                                <CheckBox Content="自动放行" IsChecked="{Binding AutoApprove}" IsVisible="{Binding CanAutoApprove}" Margin="6,0,0,0" FontSize="9" Padding="2,0"/>
                               </StackPanel>
                             </CheckBox>
                           </DataTemplate>

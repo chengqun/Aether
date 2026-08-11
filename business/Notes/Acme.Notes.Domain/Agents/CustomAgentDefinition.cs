@@ -37,6 +37,9 @@ public sealed class CustomAgentDefinition
     /// <summary>按工具名覆盖审批等级（"Safe"/"Confirm"/"Dangerous"）；未列入取工具声明等级。专家编辑页可调。</summary>
     public Dictionary<string, string> ToolApprovals { get; set; } = new();
 
+    /// <summary>自动放行的工具名列表（RequireToolApproval 开时，列入的非-Safe 工具不弹审批框）。可空。</summary>
+    public List<string> AutoApprovalRules { get; set; } = new();
+
     /// <summary>勾选启用的 skill 名（对应 SkillRegistry 中的 skill；空=启用 skills 时用全部）。</summary>
     public IReadOnlyList<string> Skills { get; set; } = Array.Empty<string>();
 

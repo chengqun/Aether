@@ -510,6 +510,15 @@ public sealed class HarnessRuntime
         return created;
     }
 
+    /// <summary>
+    /// 注册工作流会话→conversationId 映射，供 <c>RestoringChatHistoryProvider</c> 在重启续聊时
+    /// 按 conversationId 加载 transcript 重建 LLM 历史。工作流路径（<c>RunStreamingAsync(AIAgent,…)</c>
+    /// 重载）自管 <c>FrameworkAgentSession</c>、不经 <see cref="GetOrCreateFrameworkSessionAsync"/>，
+    /// 故需显式注册——否则 RestoringChatHistoryProvider 对工作流会话失效（LLM 上下文空，只 UI 显示有历史）。
+    /// </summary>
+    public void RegisterWorkflowSession(FrameworkAgentSession session, Guid conversationId)
+        => _sessionConversationMap.Register(session, conversationId);
+
     private static IEnumerable<string> ExtractToolCalls(AgentResponse response)
     {
         var names = new List<string>();

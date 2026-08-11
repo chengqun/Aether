@@ -93,6 +93,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             IsCodeRule = isCodeRule,
             Tools = def.Tools,
             ToolApprovals = def.ToolApprovals,
+            AutoApprovalRules = def.AutoApprovalRules,
             Skills = def.Skills,
             ModelId = def.ModelId ?? string.Empty,
             Memory = MapMemory(def.Memory),
@@ -125,6 +126,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         {
             NotesAgentMemoryMode.SlidingWindow => Aether.AI.Core.Agents.AgentMemoryMode.SlidingWindow,
             NotesAgentMemoryMode.Off => Aether.AI.Core.Agents.AgentMemoryMode.Off,
+            NotesAgentMemoryMode.Summarize => Aether.AI.Core.Agents.AgentMemoryMode.Summarize,
             _ => Aether.AI.Core.Agents.AgentMemoryMode.Full,
         };
 }

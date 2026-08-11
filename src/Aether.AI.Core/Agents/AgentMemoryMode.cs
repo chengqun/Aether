@@ -14,4 +14,12 @@ public enum AgentMemoryMode
 
     /// <summary>No memory — each turn runs independently with no prior context.</summary>
     Off = 2,
+
+    /// <summary>
+    /// Summarize — retain only the most recent <c>MaxHistory</c> messages; older turns
+    /// are LLM-compressed into a running summary (via <c>SummarizingChatReducer</c>) so
+    /// key facts survive without unbounded growth. Distinct from <see cref="SlidingWindow"/>
+    /// (which drops old turns outright).
+    /// </summary>
+    Summarize = 3,
 }

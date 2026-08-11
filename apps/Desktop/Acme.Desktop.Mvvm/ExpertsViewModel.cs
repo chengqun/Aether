@@ -144,6 +144,7 @@ public partial class ExpertsViewModel : ObservableObject
                         ModelName = modelNames.TryGetValue(def.ModelId ?? string.Empty, out var mn) ? mn : string.Empty,
                         Tools = def.Tools.ToList(),
                         ToolApprovals = def.ToolApprovals ?? new Dictionary<string, string>(),
+                        AutoApprovalRules = def.AutoApprovalRules?.ToList() ?? new List<string>(),
                         Skills = def.Skills.ToList(),
                         Memory = def.Memory,
                         MaxHistory = def.MaxHistory,
@@ -232,6 +233,7 @@ public partial class ExpertsViewModel : ObservableObject
                 ModelId = item.ModelId ?? string.Empty,
                 Tools = item.Tools,
                 ToolApprovals = item.ToolApprovals ?? new Dictionary<string, string>(),
+                AutoApprovalRules = item.AutoApprovalRules?.ToList() ?? new List<string>(),
                 Skills = item.Skills,
                 Memory = item.Memory,
                 MaxHistory = item.MaxHistory,
@@ -263,6 +265,7 @@ public partial class ExpertsViewModel : ObservableObject
                 existing.ModelId = item.ModelId;
                 existing.Tools = item.Tools;
                 existing.ToolApprovals = item.ToolApprovals;
+                existing.AutoApprovalRules = item.AutoApprovalRules;
                 existing.Skills = item.Skills;
                 existing.Memory = item.Memory;
                 existing.MaxHistory = item.MaxHistory;

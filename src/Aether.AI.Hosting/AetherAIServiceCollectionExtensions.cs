@@ -100,13 +100,23 @@ public static class AetherAIServiceCollectionExtensions
             var store = sp.GetService<IConversationStore>();
             var map = sp.GetRequiredService<SessionConversationMap>();
             var logger = sp.GetService<ILoggerFactory>();
+            var chatClientFactory = sp.GetService<IChatClientFactory>();
+#pragma warning disable MEAI001 // SummarizingChatReducer 在 MEAI 10.7 仍是实验性 API，此处显式启用摘要记忆模式
             return definition => definition.Memory switch
             {
                 AgentMemoryMode.Off => new NoMemoryChatHistoryProvider(),
                 AgentMemoryMode.SlidingWindow => new RestoringChatHistoryProvider(store, map,
                     new SlidingWindowChatReducer(definition.MaxHistory), logger),
-                _ => new RestoringChatHistoryProvider(store, map, null, logger), // Full
+                // 摘要压缩：保留最近 MaxHistory 条，更早的由 LLM 摘要（threshold=MaxHistory → 达 2× 才触发摘要，避免每轮摘要）。
+                // 规则 agent 无真 IChatClient（RuleChatClient 的 GetResponseAsync 会抛），回退 Full。
+                AgentMemoryMode.Summarize when definition.Engine != EngineKind.Rule && chatClientFactory is not null
+                    => new RestoringChatHistoryProvider(store, map,
+                        new SummarizingChatReducer(chatClientFactory.Create(definition.ModelId),
+                            definition.MaxHistory, definition.MaxHistory)
+                        { SummarizationPrompt = SummarizeDefaults.Prompt }, logger),
+                _ => new RestoringChatHistoryProvider(store, map, null, logger), // Full / Rule+Summarize 回退
             };
+#pragma warning restore MEAI001
         });
 
         services.AddSingleton<AgentFactory>(sp =>

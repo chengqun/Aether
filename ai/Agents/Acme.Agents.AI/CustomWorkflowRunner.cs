@@ -101,6 +101,9 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
 
         var workflowAgent = WorkflowFactory.BuildAsAIAgent(workflowDef, participants, workflowId.ToString(), def.Name, def.Description);
         var session = await workflowAgent.CreateSessionAsync(ct);
+        // 注册工作流会话→conversationId，供 participant 的 RestoringChatHistoryProvider 重启后续聊恢复 LLM 历史
+        // （工作流路径不经 HarnessRuntime.GetOrCreateFrameworkSessionAsync，故需显式注册）。
+        _runtime.RegisterWorkflowSession(session, conversationId);
         _sessions[conversationId] = (workflowId, workflowAgent, session);
         return (workflowAgent, session);
     }

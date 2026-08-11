@@ -164,6 +164,10 @@ public sealed class AgentSourceParser : IAgentSourceParser
                     }
                     catch { /* 工具审批覆盖反序列化失败：忽略，用声明等级 */ }
                     break;
+                case "autoapprovalrules":
+                    // 自动放行工具名列表（flow [a,b] 或 block - a）；与 tools 同构
+                    result.AutoApprovalRules = ParseListValue(value, lines, ref i);
+                    break;
                 case "skills":
                     result.Skills = ParseListValue(value, lines, ref i);
                     break;
@@ -232,6 +236,12 @@ public sealed class AgentSourceParser : IAgentSourceParser
             ? null
             : "tool_approvals: " + System.Text.Json.JsonSerializer.Serialize(f.ToolApprovals);
 
+        // auto_approval_rules: 自动放行工具名列表（仅非空时输出，flow [\"a\",\"b\"]）
+        var autoRulesList = f.AutoApprovalRules?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+        var autoRulesLine = autoRulesList.Count == 0
+            ? null
+            : "auto_approval_rules: [" + string.Join(",", autoRulesList.Select(n => $"\"{n}\"")) + "]";
+
         return $@"---
 name: {f.Name}
 description: {f.Description}
@@ -239,6 +249,7 @@ category: {f.Category}
 {toolsLine}
 {skillsLine}
 {approvalsLine}
+{autoRulesLine}
 memory: {f.Memory}
 max_history: {f.MaxHistory}
 model: {f.ModelId ?? string.Empty}

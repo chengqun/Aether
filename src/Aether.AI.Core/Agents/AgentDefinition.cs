@@ -59,6 +59,14 @@ public sealed class AgentDefinition
     public IReadOnlyDictionary<string, string>? ToolApprovals { get; init; }
 
     /// <summary>
+    /// 按工具名自动放行的列表（MAF <c>ToolApprovalAgentOptions.AutoApprovalRules</c>）。当
+    /// <see cref="RequireToolApproval"/> 开启时，列入此列表的非-Safe 工具调用由常驻规则自动放行、
+    /// 不弹审批框；未列入的仍走 UI 审批。与 <see cref="ToolApprovals"/>（覆盖等级）正交：后者调危险等级，
+    /// 前者决定放行与否。null/空=无自动放行规则。Safe 工具本就自动跑，列入无副作用。
+    /// </summary>
+    public IReadOnlyList<string>? AutoApprovalRules { get; init; }
+
+    /// <summary>
     /// Names of skills (registered with the SkillRegistry) the agent may use when
     /// </summary>
     public IReadOnlyList<string> Skills { get; init; } = Array.Empty<string>();

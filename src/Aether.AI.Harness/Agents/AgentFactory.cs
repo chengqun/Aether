@@ -165,6 +165,7 @@ public sealed class AgentFactory
             DisableOpenTelemetry = true,
             DisableAgentSkillsProvider = true, // skill 指令需 LLM 解析；规则大脑不读
             ChatOptions = new ChatOptions { Instructions = definition.Instructions, Tools = tools },
+            ToolApprovalAgentOptions = BuildToolApprovalOptions(definition), // 规则 agent 若挂审批工具同样按名放行
             // 规则大脑靠 history 重建轮内状态（最新 user 消息 + 本轮工具调用计数），必须保留轮内 history。
             // NoMemoryChatHistoryProvider（Memory=Off）连轮内 history 也清掉 → 工具调用后 MAF re-invoke 时
             // 只传 [tool:result]，user 消息丢失 → LatestUser=null → 误报「无匹配规则」。故规则 agent 遇
@@ -196,6 +197,7 @@ public sealed class AgentFactory
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
+            ToolApprovalAgentOptions = BuildToolApprovalOptions(definition),
             FileMemoryStore = fileMemoryEnabled
                 ? new FileSystemAgentFileStore(Path.Combine(FileMemoryRoot!, definition.Id))
                 : null,
@@ -317,11 +319,39 @@ public sealed class AgentFactory
         return _toolRegistry.LevelOf(toolName);
     }
 
+    /// <summary>
+    /// 把 <see cref="AgentDefinition.AutoApprovalRules"/>（按工具名自动放行列表）转成 MAF
+    /// <see cref="ToolApprovalAgentOptions"/>。规则在弹用户前评估：命中工具名→自动放行（true），
+    /// 否则→继续评估下一条规则（false），最终落到 UI 弹框。与 <see cref="ApprovalRequiredAIFunction"/>
+    /// 包装叠加：包装让非-Safe 工具发审批请求 → 中间件看请求 → 命中规则自动放行，否则弹框。
+    /// <see cref="AgentDefinition.RequireToolApproval"/> 关时无包装→无审批请求→本规则惰性无副作用。
+    /// </summary>
+    private static ToolApprovalAgentOptions? BuildToolApprovalOptions(AgentDefinition definition)
+    {
+        if (definition.AutoApprovalRules is not { Count: > 0 } names) return null;
+        var set = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return new ToolApprovalAgentOptions
+        {
+            AutoApprovalRules = new Func<ToolAutoApprovalRuleContext, ValueTask<bool>>[]
+            {
+                ctx => new ValueTask<bool>(set.Contains(ctx.FunctionCallContent.Name ?? string.Empty)),
+            },
+        };
+    }
+
     private static ChatHistoryProvider? BuildHistoryProvider(AgentDefinition definition)
         => definition.Memory switch
         {
             AgentMemoryMode.Off => new NoMemoryChatHistoryProvider(),
             AgentMemoryMode.SlidingWindow => new InMemoryChatHistoryProvider(
+                new InMemoryChatHistoryProviderOptions
+                {
+                    ChatReducer = new SlidingWindowChatReducer(definition.MaxHistory),
+                }),
+            // Summarize 在此 static fallback 里退回滑动窗口——static 路径无 IChatClientFactory，
+            // 无法构造 SummarizingChatReducer。运行时由 Hosting 的 _historyProviderFactory（持 chatClientFactory）
+            // 接真 SummarizingChatReducer；fallback 仅在未配工厂（如测试）时使用。
+            AgentMemoryMode.Summarize => new InMemoryChatHistoryProvider(
                 new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new SlidingWindowChatReducer(definition.MaxHistory),
