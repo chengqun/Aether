@@ -69,23 +69,33 @@
             </TreeView.ContextMenu>
             <TreeView.ItemTemplate>
               <TreeDataTemplate ItemsSource="{Binding Children}">
-                <Grid HorizontalAlignment="Stretch" Background="Transparent">
-                  <Border Background="{DynamicResource AccentBrush}" Opacity="0.22"
+                <!-- 用 Auto,* 的 Grid（而非水平 StackPanel）让标题被约束在 * 列内：
+                     StackPanel 给子控件无限横向空间，TextTrimming 不生效；Grid 的 * 列
+                     把标题限定在可用宽度，长名以 … 截断，不再撑宽行、触发横向滚动。 -->
+                <Grid ColumnDefinitions="20,*" Background="Transparent">
+                  <Border Grid.ColumnSpan="2" Background="{DynamicResource AccentBrush}" Opacity="0.22"
                           CornerRadius="4" IsVisible="{Binding IsDropTarget}" />
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                          Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}" VerticalAlignment="Center"/>
-                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                          StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                          Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
-                  </StackPanel>
+                  <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
+                        StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                        Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding Title}"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0"/>
                 </Grid>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
             <TreeView.Styles>
               <Style Selector="TreeViewItem">
                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              </Style>
+              <!-- 禁用横向滚动：树列较窄时，长名子节点被选中会触发 BringIntoView 横向滚动，把父节点的
+                   展开/收起箭头挤出视口左侧。禁用横向滚动后选中只竖向滚入视野、不再横向位移（标题已
+                   用 TextTrimming 截断，不会溢出，故横向滚动本就无需要）。 -->
+              <Style Selector="TreeView /template/ ScrollViewer">
+                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
               </Style>
               <!-- 无子节点的项隐藏展开箭头：按 NoteNodeVM.Children.Count 判定（折叠父节点的生成容器数
                    ItemCount=0 会误判为叶子，故用数据子节点数）。沿用默认 TreeViewItem 模板——箭头在其
