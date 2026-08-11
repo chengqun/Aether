@@ -416,11 +416,38 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
     private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
     {
-        // 计划只显示在浮动面板（输入框上方），不在对话流里重复显示
+        // 计划只显示在浮动面板（输入框上方），不在对话流里重复显示。
+        // 去重：agent 跨轮重新规划时有时对同一事项重复 todos_add（旧项仍在 TodoProvider 列表里又被加一遍），
+        // 致一份计划里出现两条内容相同的条目。按 Title（忽略大小写/首尾空白）去重，保留首次出现顺序；
+        // 若任一副本已完成，则合并为已完成。
         ActiveTodos.Clear();
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var merged = new List<(string Title, string? Description, bool IsComplete)>();
         foreach (var t in list)
-            ActiveTodos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+        {
+            var key = (t.Title ?? string.Empty).Trim();
+            if (key.Length == 0)
+            {
+                merged.Add((t.Title ?? string.Empty, t.Description, t.IsComplete));
+                continue;
+            }
+            if (seen.TryGetValue(key, out var i))
+            {
+                if (t.IsComplete) merged[i] = (merged[i].Title, merged[i].Description, true);
+            }
+            else
+            {
+                seen[key] = merged.Count;
+                merged.Add((t.Title ?? string.Empty, t.Description, t.IsComplete));
+            }
+        }
+        foreach (var m in merged)
+            ActiveTodos.Add(new TodoItemVM { Title = m.Title, Description = m.Description ?? string.Empty, IsComplete = m.IsComplete });
         HasActivePlan = ActiveTodos.Count > 0;
+        // PlanSummary（"X/Y" 计数）是计算属性，仅依赖 HasActivePlan/IsPlanExpanded 变化才上抛。
+        // 完成 todo 时 HasActivePlan 不变（仍 true）→ 计数不刷新，用户须点表头展开/收起才触发 OnIsPlanExpandedChanged
+        // 间接刷新计数。这里在集合变更后显式上抛，让计数随完成进度实时更新。
+        OnPropertyChanged(nameof(PlanSummary));
         _todosTouchedThisTurn = true; // 本轮确有 todos 更新（SendInputAsync 末尾据此置 PlanAwaitingAccept）
     }
 
@@ -1172,7 +1199,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             // plan 模式轮、且本轮确实产出计划 → 待接受（驱动接受条）；execute 轮/无计划 → false。
             // 放在 RefreshModeAsync 之前：避免模式回翻干扰（门控已脱钩 SelectedMode，但语义上先定信号再读模式）。
-            PlanAwaitingAccept = desiredMode == "plan" && _todosTouchedThisTurn && HasActivePlan;
+            // 已开始执行则不再弹接受条：若本轮已有任意 todo 完成，说明 agent 在 plan 轮里已自行执行，
+            // 此时再提示「计划已就绪，接受开始执行」与事实相悖（用户已看到执行结果）。
+            PlanAwaitingAccept = desiredMode == "plan" && _todosTouchedThisTurn && HasActivePlan
+                && !ActiveTodos.Any(t => t.IsComplete);
 
             // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
             await PersistTurnAsync(content, runItems, fullText.ToString());
