@@ -36,6 +36,11 @@ public partial class NotesViewModel : ObservableObject
     private IKnowledgeSourceParser KnowledgeParser =>
         _knowledgeParser ??= _serviceProvider.GetRequiredService<IKnowledgeSourceParser>();
 
+    private IStrategyFormCodec? _strategyCodec;
+    /// <summary>YAML 策略表单 codec（Stockapp 注册；Qifu 不注册→null→策略节点无表单）。</summary>
+    private IStrategyFormCodec? StrategyCodec =>
+        _strategyCodec ??= _serviceProvider.GetService<IStrategyFormCodec>();
+
     private ICustomAgentRunner? _agentRunner;
     /// <summary>自定义 agent 运行时（agent/规则/workflow 笔记源码栏直改后失效缓存，否则召唤仍跑旧程序）。</summary>
     private ICustomAgentRunner? AgentRunner => _agentRunner ??= _serviceProvider.GetService<ICustomAgentRunner>();
@@ -164,6 +169,7 @@ public partial class NotesViewModel : ObservableObject
     public bool IsKnowledgeNode => SelectedNode?.NodeType == NoteNodeType.Knowledge;
     public bool IsRuleNode => SelectedNode?.NodeType == NoteNodeType.Rule;
     public bool IsCodeRuleNode => SelectedNode?.NodeType == NoteNodeType.CodeRule;
+    public bool IsStrategyNode => SelectedNode?.NodeType == NoteNodeType.Strategy;
     // IsFormNode/HasRightPane 由描述符旗标驱动——单点声明哪些类型有右栏表单，避免散落类型表。
     public bool IsFormNode => SelectedNode is not null && NoteNodeTypeRegistry.Get(SelectedNode.NodeType).IsFormNode;
     public bool HasRightPane => IsMarkdownNode || IsFormNode;
@@ -191,6 +197,7 @@ public partial class NotesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsKnowledgeNode));
         OnPropertyChanged(nameof(IsRuleNode));
         OnPropertyChanged(nameof(IsCodeRuleNode));
+        OnPropertyChanged(nameof(IsStrategyNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
@@ -241,6 +248,38 @@ public partial class NotesViewModel : ObservableObject
                 Title = name,
                 Content = source,
                 NodeType = NoteNodeType.Knowledge,
+            });
+            await RefreshAsync();
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>把 YAML 策略内容解析为表单模型（供视图层构建编辑 VM）。codec 未注册（Qifu）→ null + 错误。</summary>
+    public (StrategyFormModel? Model, string? Error) TryParseStrategy(string content, string name)
+    {
+        if (StrategyCodec is null) return (null, "策略表单不可用（未注册 codec）");
+        if (!StrategyCodec.TryParse(content, name, out var model, out var error)) return (null, error);
+        return (model, null);
+    }
+
+    /// <summary>保存 YAML 策略：序列化 model → 更新笔记 Content/Title/NodeType=Strategy → 刷新树。</summary>
+    public async Task<(bool Success, string? Error)> SaveStrategyAsync(StrategyFormModel model, string name)
+    {
+        if (SelectedNode is null) return (false, "未选中节点");
+        if (StrategyCodec is null) return (false, "策略表单不可用（未注册 codec）");
+        try
+        {
+            var source = StrategyCodec.Serialize(model);
+            await NoteService.UpdateAsync(new UpdateNoteRequest
+            {
+                Id = SelectedNode.Id.ToString(),
+                Title = name,
+                Content = source,
+                NodeType = NoteNodeType.Strategy,
             });
             await RefreshAsync();
             return (true, null);

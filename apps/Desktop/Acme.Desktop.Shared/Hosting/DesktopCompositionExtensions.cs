@@ -162,6 +162,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<INoteNodeEditVmFactory, CodeRuleEditVmFactory>();
         services.AddSingleton<INoteNodeEditVmFactory, WorkflowEditVmFactory>();
         services.AddSingleton<INoteNodeEditVmFactory, KnowledgeEditVmFactory>();
+        // 策略表单工厂：NodeType=Strategy 派发。codec 由 Stockapp 注册（Qifu 不注册→工厂解析 null→无表单）。
+        services.AddSingleton<INoteNodeEditVmFactory, StrategyEditVmFactory>();
         // 桌面端模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端
         services.AddSingleton<IModelSource, LlmConfigModelSource>();
         services.AddSingleton<IChatClientFactory, DesktopChatClientFactory>();

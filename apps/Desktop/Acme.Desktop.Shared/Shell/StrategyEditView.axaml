@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Desktop.Mvvm"
+             x:Class="Acme.Desktop.Shared.Shell.StrategyEditView"
+             Classes="form-fields">
+
+  <UserControl.Resources>
+    <!-- 操作数编辑模板：kind 切换 + 指标引用/数字输入。复用于左右操作数。 -->
+    <DataTemplate x:Key="OperandTemplate" DataType="vm:OperandModel">
+      <Grid ColumnDefinitions="Auto,*,4" Margin="0,1">
+        <ComboBox Grid.Column="0" Width="74"
+                   ItemsSource="{x:Static vm:StrategyFormModel.OperandKindOptions}"
+                   SelectedValue="{Binding Kind, Mode=TwoWay}"
+                   SelectedValueBinding="{Binding Value}">
+          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
+          <ComboBox.SelectionBoxItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.SelectionBoxItemTemplate>
+        </ComboBox>
+        <!-- 指标引用：指标名 + 可选输出名 -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsIndicator}">
+          <ComboBox MinWidth="90"
+                    ItemsSource="{Binding $parent[UserControl].DataContext.AvailableIndicatorNames}"
+                    SelectedItem="{Binding IndicatorName}"
+                    PlaceholderText="指标"/>
+          <ComboBox Width="84"
+                    ItemsSource="{x:Static vm:StrategyFormModel.OutputNames}"
+                    SelectedItem="{Binding OutputName}"
+                    PlaceholderText="输出"/>
+        </StackPanel>
+        <!-- 数字字面量 -->
+        <TextBox Grid.Column="1" Text="{Binding NumberText}" PlaceholderText="如 20 / 70"
+                 IsVisible="{Binding IsNumber}"/>
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="11"
+                   VerticalAlignment="Center" IsVisible="{Binding HasError}"/>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="2" Margin="10,6">
+
+        <Expander Header="基本信息" IsExpanded="True">
+          <StackPanel Spacing="6">
+            <StackPanel Spacing="2">
+              <TextBlock Text="名称（笔记标题 = 策略注册键）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <TextBox Text="{Binding Name}" PlaceholderText="如 SmaCross"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+              <TextBlock Text="默认信号（无规则匹配时）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <ComboBox ItemsSource="{x:Static vm:StrategyFormModel.DefaultOptions}" SelectedItem="{Binding Default}"/>
+            </StackPanel>
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="参数（params）" IsExpanded="True">
+          <StackPanel Spacing="6">
+            <Button Content="+ 新增参数" Command="{Binding $parent[UserControl].DataContext.AddParamCommand}" Padding="12,4"/>
+            <ItemsControl ItemsSource="{Binding Params}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="*,*,*,Auto" Margin="0,0,0,4">
+                    <TextBox Grid.Column="0" Text="{Binding Key}" PlaceholderText="key（如 FastPeriod）" Margin="0,0,4,0"/>
+                    <TextBox Grid.Column="1" Text="{Binding Label}" PlaceholderText="显示名" Margin="0,0,4,0"/>
+                    <TextBox Grid.Column="2" Text="{Binding DefaultValue}" PlaceholderText="默认值" Margin="0,0,4,0"/>
+                    <Button Grid.Column="3" Content="✕"
+                            Command="{Binding $parent[UserControl].DataContext.RemoveParamCommand}"
+                            CommandParameter="{Binding}" Padding="8,4"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="指标（indicators）" IsExpanded="True">
+          <StackPanel Spacing="6">
+            <Button Content="+ 新增指标" Command="{Binding $parent[UserControl].DataContext.AddIndicatorCommand}" Padding="12,4"/>
+            <ItemsControl ItemsSource="{Binding Indicators}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,2">
+                    <StackPanel Spacing="4">
+                      <Grid ColumnDefinitions="*,*,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding Name}" PlaceholderText="指标名（如 fast）" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:StrategyFormModel.IndicatorTypes}"
+                                  SelectedItem="{Binding Type}" Margin="0,0,4,0"/>
+                        <Button Grid.Column="2" Content="✕"
+                                Command="{Binding $parent[UserControl].DataContext.RemoveIndicatorCommand}"
+                                CommandParameter="{Binding}" Padding="8,4"/>
+                      </Grid>
+                      <!-- 指标参数键值行 -->
+                      <ItemsControl ItemsSource="{Binding Args}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid ColumnDefinitions="*,*,Auto" Margin="0,0,0,2">
+                              <TextBox Grid.Column="0" Text="{Binding Key}" PlaceholderText="参数键（如 period）" Margin="0,0,4,0"/>
+                              <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="值（可填 {FastPeriod}）" Margin="0,0,4,0"/>
+                              <Button Grid.Column="2" Content="✕"
+                                      Command="{Binding $parent[UserControl].DataContext.RemoveIndicatorArgCommand}"
+                                      CommandParameter="{Binding}" Padding="8,4"/>
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Button Content="+ 参数" Padding="8,2" HorizontalAlignment="Left"
+                              Command="{Binding $parent[UserControl].DataContext.AddIndicatorArgCommand}"
+                              CommandParameter="{Binding}"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Expander>
+
+        <Expander Header="规则（rules）" IsExpanded="True">
+          <StackPanel Spacing="6">
+            <Button Content="+ 新增规则" Command="{Binding $parent[UserControl].DataContext.AddRuleCommand}" Padding="12,4"/>
+            <ItemsControl ItemsSource="{Binding Rules}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,2">
+                    <StackPanel Spacing="4">
+                      <!-- 信号 + 组合器 + 删除 -->
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                        <TextBlock Grid.Column="0" Text="信号" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:StrategyFormModel.SignalOptions}"
+                                  SelectedItem="{Binding Signal}" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="2" Width="150"
+                                  ItemsSource="{x:Static vm:StrategyFormModel.CombinerOptions}"
+                                  SelectedValue="{Binding Combiner, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}" Margin="0,0,4,0">
+                          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
+                          <ComboBox.SelectionBoxItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.SelectionBoxItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Column="3" Content="✕"
+                                Command="{Binding $parent[UserControl].DataContext.RemoveRuleCommand}"
+                                CommandParameter="{Binding}" Padding="8,4"/>
+                      </Grid>
+
+                      <!-- 简单条件：子句列表 -->
+                      <StackPanel Spacing="4" IsVisible="{Binding IsSimple}">
+                        <ItemsControl ItemsSource="{Binding Clauses}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Grid ColumnDefinitions="*,Auto,*,Auto" Margin="0,0,0,4">
+                                <ContentControl Grid.Column="0" Content="{Binding Left}" ContentTemplate="{StaticResource OperandTemplate}" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Column="1" Width="104"
+                                          ItemsSource="{x:Static vm:StrategyFormModel.ComparisonOps}"
+                                          SelectedItem="{Binding Op}" Margin="0,0,4,0"/>
+                                <ContentControl Grid.Column="2" Content="{Binding Right}" ContentTemplate="{StaticResource OperandTemplate}" Margin="0,0,4,0"/>
+                                <Button Grid.Column="3" Content="✕"
+                                        Command="{Binding $parent[UserControl].DataContext.RemoveClauseCommand}"
+                                        CommandParameter="{Binding}" Padding="8,4"/>
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="+ 子句" Padding="8,2" HorizontalAlignment="Left"
+                                Command="{Binding $parent[UserControl].DataContext.AddClauseCommand}"
+                                CommandParameter="{Binding}"/>
+                      </StackPanel>
+
+                      <!-- 高级条件（not/深层嵌套）：原始 when YAML，编辑走下方源码 -->
+                      <StackPanel Spacing="2" IsVisible="{Binding IsAdvanced}">
+                        <TextBlock Text="⚠ 条件较复杂（含 not 或深层嵌套），请在下方源码编辑 when 字段" FontSize="10"
+                                   Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
+                        <TextBox Text="{Binding RawWhenYaml}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                                 AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Expander>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

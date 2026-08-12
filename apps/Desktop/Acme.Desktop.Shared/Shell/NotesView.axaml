@@ -192,6 +192,10 @@
                 <Border IsVisible="{Binding IsKnowledgeNode}">
                   <shell:KnowledgeEditView DataContext="{Binding ActiveEditVm}"/>
                 </Border>
+                <!-- 策略表单（YAML 声明式；NodeType=Strategy，下栏为 YAML 源码） -->
+                <Border IsVisible="{Binding IsStrategyNode}">
+                  <shell:StrategyEditView DataContext="{Binding ActiveEditVm}"/>
+                </Border>
               </Grid>
             </Grid>
           </DockPanel>

@@ -26,7 +26,7 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate,                       true,  true,  true),
             new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate,             true,  true,  true),
             new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate,       false, false, false),
-            new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           false, false, false),
+            new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           true,  false, false),
         };
     }
 

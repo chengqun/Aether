@@ -147,6 +147,49 @@ public sealed class WorkflowEditVmFactory : INoteNodeEditVmFactory
     }
 }
 
+/// <summary>Strategy（YAML 声明式策略）表单工厂。内联构造 StrategyEditViewModel；保存前从 live content 重解析
+/// 高级规则的 RawWhenYaml 回填（防表单快照覆盖下栏源码对 exotic 条件的改动），同 Knowledge 的 body 回填。</summary>
+public sealed class StrategyEditVmFactory : INoteNodeEditVmFactory
+{
+    public NoteNodeType NodeType => NoteNodeType.Strategy;
+    public async Task<object?> CreateAsync(EditVmContext ctx)
+    {
+        var notes = ctx.Notes;
+        var (model, parseErr) = notes.TryParseStrategy(ctx.Node.Content ?? "", ctx.Node.Title ?? "");
+        if (model is null)
+        {
+            notes.StatusMessage = "解析失败：" + parseErr;
+            return null;
+        }
+        var editVm = new StrategyEditViewModel(ctx.Node.Id, ctx.Node.Title ?? "", model);
+        editVm.SaveRequested += async saved =>
+        {
+            if (notes.SelectedNode?.Id != editVm.Id) return;
+            MergeAdvancedFromLive(saved, notes);
+            var result = await notes.SaveFormItemSilentlyAsync(() => notes.SaveStrategyAsync(saved, editVm.Name), editVm.Id);
+            if (result.Success) { notes.StatusMessage = "已保存"; ctx.SyncCodeEditor(); }
+            else editVm.Error = result.Error;
+        };
+        editVm.CancelRequested += () => { notes.IsPreviewOnly = false; };
+        return editVm;
+    }
+
+    /// <summary>下栏源码可能改了高级规则的 when：从当前节点 content 重新解析，把高级规则的 RawWhenYaml 回填，
+    /// 避免表单保存用 VM 快照覆盖下栏对 exotic 条件的改动（同 CodeRule 的 C# body 回填）。</summary>
+    private static void MergeAdvancedFromLive(StrategyFormModel saved, NotesViewModel notes)
+    {
+        if (notes.SelectedNode?.Content is not string c || string.IsNullOrEmpty(c)) return;
+        if (!saved.Rules.Any(r => r.IsAdvanced)) return;
+        var (live, _) = notes.TryParseStrategy(c, saved.Name);
+        if (live is null) return;
+        for (int i = 0; i < saved.Rules.Count && i < live.Rules.Count; i++)
+        {
+            if (saved.Rules[i].IsAdvanced && live.Rules[i].IsAdvanced)
+                saved.Rules[i].RawWhenYaml = live.Rules[i].RawWhenYaml;
+        }
+    }
+}
+
 /// <summary>Knowledge（知识对象）表单工厂。内联构造 KnowledgeEditViewModel + link resolver 闭包；保存前重解析 body。</summary>
 public sealed class KnowledgeEditVmFactory : INoteNodeEditVmFactory
 {

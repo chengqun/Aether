@@ -132,6 +132,7 @@ public partial class App : global::Avalonia.Application
         aether.AddQuotesTools().AddCtpTools().AddTradingTools().AddStockTradingTools();   // stockapp 租户专属 AI 工具
         services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
+        services.AddSingleton<IStrategyFormCodec, StrategyFormCodec>(); // YAML 策略表单 codec（Stockapp 专属，引 Trading.Scripting）
 
         // 工作台引擎（view registry / region manager / workspace manager + Stockapp 工作台定义）。
         // 租户专属页（期货/回测/股票）经 contributor 注入 view registry——Workbench 库不依赖租户程序集。
