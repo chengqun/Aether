@@ -22,6 +22,8 @@ public partial class ChatView : UserControl
     private IChatViewHost? _vm;
     private ChatTurnItem? _trackedTurn;
     private ChatMessageItem? _trackedChild;
+    /// <summary>宿主窗口——订阅其 Activated，在模态弹窗（审批/ask_user）关闭后重新贴底。</summary>
+    private Window? _hostWindow;
 
     /// <summary>是否跟随到底部。流式追加 Content 不触发 CollectionChanged，需靠此标志 + 属性变化驱动滚动。</summary>
     private bool _stickToBottom = true;
@@ -37,6 +39,7 @@ public partial class ChatView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     /// <summary>
@@ -66,7 +69,28 @@ public partial class ChatView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        // 订阅宿主窗口 Activated：模态弹窗（审批/ask_user）关闭后宿主窗被重新激活，
+        // 此时流式恢复但布局/焦点偏移常使滚动偏离底部（"焦点跑飞"）——若 agent 正在运行则强制贴底。
+        if (_hostWindow is null && TopLevel.GetTopLevel(this) is Window w)
+        {
+            _hostWindow = w;
+            _hostWindow.Activated += OnHostActivated;
+        }
         Dispatcher.UIThread.Post(ScrollToBottom);
+    }
+
+    private void OnUnloaded(object? sender, RoutedEventArgs e)
+    {
+        if (_hostWindow is not null)
+            _hostWindow.Activated -= OnHostActivated;
+        _hostWindow = null;
+    }
+
+    /// <summary>宿主窗重新激活（模态弹窗关闭 / 从其它应用切回）且 agent 运行中：强制贴底，把视窗拉回最新输出。</summary>
+    private void OnHostActivated(object? sender, EventArgs e)
+    {
+        if (_vm?.IsAgentRunning ?? false)
+            ReanchorToBottom();
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -157,6 +181,22 @@ public partial class ChatView : UserControl
     {
         if (e.PropertyName == nameof(ChatTurnItem.Status))
             RequestScrollToBottom();
+    }
+
+    /// <summary>强制贴底并延迟滚到底（等布局/Markdown 渲染稳定）。模态弹框关闭后恢复流式时调用——
+    /// 弹窗关闭常使滚动偏离底部（"焦点跑飞"），这里在布局稳定后重新贴底，且每帧重申 _stickToBottom，
+    /// 避免中途的布局滚动把它翻假导致后续 token 驱动的滚动失效。</summary>
+    private async void ReanchorToBottom()
+    {
+        // 双帧延迟：第一帧等布局刷新，第二帧等 Markdown 重新渲染完成，各自重申贴底 + 滚一次确保到位
+        // （参考 OnBecameVisible 的同款手法）。
+        _stickToBottom = true;
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        _stickToBottom = true;
+        ScrollToBottom();
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        _stickToBottom = true;
+        ScrollToBottom();
     }
 
     /// <summary>用户滚动时维护贴底标志。OffsetDelta==0 表示仅内容尺寸变化（非用户滚动），不改变标志。</summary>

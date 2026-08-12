@@ -162,6 +162,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     {
         var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
         var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
+        // 本轮 todos 信号重置：只有本轮真的 todos_* 了才在末尾插计划快照卡，避免上一轮的计划状态
+        // （HasActivePlan/ActiveTodos 跨轮保留供浮动面板显示）被误当作本轮产出 → 计划卡逐轮累积。
+        // SendInputAsync 处也重置一次（留作语义注释），这里覆盖远程消息路径（不经过 SendInputAsync）。
+        _todosTouchedThisTurn = false;
         await _dispatcher.InvokeAsync(() =>
         {
             items.Add(cursor.Current);
@@ -308,10 +312,12 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             await _dispatcher.InvokeAsync(() =>
             {
                 FinalizeSegment(cursor.Current, items);
-                // 每轮一快照：turn 结束若有活动计划，把计划卡插到本轮首（用户消息之后、agent 工作之前），
-                // 内联在对话里、出现在"制定计划"的位置（参考 Claude Code），而非堆在轮末与浮动面板叠底。
-                // 借已有 kind=plan 持久化脚手架——历史会话恢复后仍能看到每轮的计划。
-                if (HasActivePlan && ActiveTodos.Count > 0)
+                // 每轮一快照：本轮确有 todos 更新（_todosTouchedThisTurn）且仍有活动计划时，
+                // 把计划卡插到本轮首（用户消息之后、agent 工作之前），内联在对话里、出现在"制定计划"的位置
+                // （参考 Claude Code），而非堆在轮末与浮动面板叠底。借已有 kind=plan 持久化脚手架——
+                // 历史会话恢复后仍能看到每轮的计划。须用 _todosTouchedThisTurn 门控：HasActivePlan/ActiveTodos
+                // 跨轮保留供浮动面板显示，若不门控则每一轮都会用陈旧计划插一张快照 → 计划卡逐轮累积。
+                if (_todosTouchedThisTurn && HasActivePlan && ActiveTodos.Count > 0)
                 {
                     var planCard = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName, IsStreaming = false };
                     foreach (var t in ActiveTodos)
@@ -364,6 +370,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     {
         if (ev.Kind == ToolStreamEventKind.Call)
         {
+            // 审批恢复轮 MAF 会重新发出已批准工具的 Call（同 CallId）。第一轮已建过同 CallId 的工具卡
+            // （在审批卡之前），若不处理会留下 orphan 卡（无结果、显"卡住/在跑"）+ 恢复轮再建一张 →
+            // 同一逻辑调用两张卡、显示错乱。这里移除旧 orphan，在当前位置（审批卡之后）新建一张，
+            // 保证后续 Result 落在审批卡之后、时序正确。
+            if (!string.IsNullOrEmpty(ev.CallId) && cursor.PendingTools.TryGetValue(ev.CallId, out var stale))
+            {
+                cursor.PendingTools.Remove(ev.CallId);
+                items.Remove(stale);
+            }
             var idx = items.IndexOf(cursor.Current);
             if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
             {
