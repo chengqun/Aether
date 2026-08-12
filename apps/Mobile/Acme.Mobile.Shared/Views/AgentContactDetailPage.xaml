@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<ContentPage
+<ContentPage Shell.TabBarIsVisible="False"
     x:Class="Acme.Mobile.Shared.Views.AgentContactDetailPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -40,8 +40,10 @@
             <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsAgentKindAgent}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="工具" FontFamily="OpenSansSemibold" FontSize="14" />
-                    <CollectionView ItemsSource="{Binding ToolCategories}" SelectionMode="None">
-                        <CollectionView.ItemTemplate>
+                    <!-- 用 BindableLayout 替代 CollectionView：工具分类数量有限无需虚拟化，
+                         且避免 ScrollView 内套 CollectionView 的嵌套滚动反模式（布局卡顿/测量警告）。 -->
+                    <VerticalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding ToolCategories}">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="model:ToolCategoryGroup">
                                 <VerticalStackLayout Spacing="6" Margin="0,4">
                                     <HorizontalStackLayout Spacing="8">
@@ -72,8 +74,8 @@
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Frame>
 

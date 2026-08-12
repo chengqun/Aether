@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<ContentPage
+<ContentPage Shell.TabBarIsVisible="False"
     x:Class="Acme.Mobile.Shared.Views.ChatDetailPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -18,7 +18,7 @@
                 <Border BackgroundColor="{StaticResource BubbleMine}"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
                         Padding="12,8" MaximumWidthRequest="280">
-                    <Label Text="{Binding Content}" TextColor="#1A1A1A" FontSize="15" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding Content}" TextColor="{StaticResource TextPrimary}" FontSize="15" LineBreakMode="WordWrap" />
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>
@@ -29,7 +29,7 @@
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
                         Padding="12,8" MaximumWidthRequest="300">
-                    <md:MarkdownView MarkdownText="{Binding Content}" Theme="{StaticResource AppMarkdownTheme}" />
+                    <md:MarkdownView MarkdownText="{Binding Content}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>

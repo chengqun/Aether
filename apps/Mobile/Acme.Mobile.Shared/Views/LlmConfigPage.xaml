@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<ContentPage
+<ContentPage Shell.TabBarIsVisible="False"
     x:Class="Acme.Mobile.Shared.Views.LlmConfigPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -47,7 +47,7 @@
                                             IsVisible="{Binding IsDefault}">
                                         <Label Text="默认" TextColor="White" FontSize="10" VerticalOptions="Center" />
                                     </Border>
-                                    <Border Grid.Column="2" BackgroundColor="#9E9E9E" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
+                                    <Border Grid.Column="2" BackgroundColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
                                             IsVisible="{Binding IsSystem}">
                                         <Label Text="系统" TextColor="White" FontSize="10" VerticalOptions="Center" />
                                     </Border>

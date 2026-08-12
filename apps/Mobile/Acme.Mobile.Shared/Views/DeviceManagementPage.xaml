@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<ContentPage
+<ContentPage Shell.TabBarIsVisible="False"
     x:Class="Acme.Mobile.Shared.Views.DeviceManagementPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -62,9 +62,9 @@
                                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                     <Label Grid.Column="0" Text="{Binding DeviceName}" FontSize="16" FontAttributes="Bold"
                                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Grid.Column="1" Text="● 已关联" FontSize="12" TextColor="#16A34A"
+                                    <Label Grid.Column="1" Text="● 已关联" FontSize="12" TextColor="{AppThemeBinding Light={StaticResource StatusSuccess}, Dark={StaticResource StatusSuccessDark}}"
                                            IsVisible="{Binding HasRelationship}" VerticalOptions="Center" />
-                                    <Label Grid.Column="1" Text="○ 未关联" FontSize="12" TextColor="#D97706"
+                                    <Label Grid.Column="1" Text="○ 未关联" FontSize="12" TextColor="{AppThemeBinding Light={StaticResource StatusWarning}, Dark={StaticResource StatusWarningDark}}"
                                            IsVisible="{Binding HasRelationship, Converter={StaticResource InverseBool}}" VerticalOptions="Center" />
                                 </Grid>
 

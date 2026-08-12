@@ -29,7 +29,7 @@
                             <SwipeView.RightItems>
                                 <SwipeItems Mode="Execute">
                                     <SwipeItem Text="删除"
-                                               BackgroundColor="#FF3B30"
+                                               BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteConversationCommand}"
                                                CommandParameter="{Binding Id}" />
                                 </SwipeItems>
@@ -61,7 +61,7 @@
                                 <VerticalStackLayout Grid.Column="2" Spacing="4" VerticalOptions="Center">
                                     <Label Text="{Binding LastMessageTime, StringFormat='{0:HH:mm}'}" FontSize="11"
                                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                    <Border BackgroundColor="#FF3B30"
+                                    <Border BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                                             StrokeShape="RoundRectangle 10" StrokeThickness="0"
                                             HorizontalOptions="End" Padding="6,2"
                                             IsVisible="True">

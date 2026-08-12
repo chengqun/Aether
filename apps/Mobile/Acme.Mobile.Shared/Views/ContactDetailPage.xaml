@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<ContentPage
+<ContentPage Shell.TabBarIsVisible="False"
     x:Class="Acme.Mobile.Shared.Views.ContactDetailPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -45,7 +45,7 @@
 
                 <Button Text="删除关系"
                         Style="{StaticResource GhostButton}"
-                        TextColor="#D32F2F"
+                        TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                         Command="{Binding DeleteRelationshipCommand}" />
             </VerticalStackLayout>
 

@@ -34,4 +34,12 @@
 
     <Color x:Key="NavBackground">#F7F7F7</Color>
     <Color x:Key="NavBackgroundDark">#1A1A1A</Color>
+
+    <!-- 语义状态色（dark 模式需提亮以保证对比度） -->
+    <Color x:Key="Danger">#D32F2F</Color>
+    <Color x:Key="DangerDark">#EF5350</Color>
+    <Color x:Key="StatusSuccess">#16A34A</Color>
+    <Color x:Key="StatusSuccessDark">#4ADE80</Color>
+    <Color x:Key="StatusWarning">#D97706</Color>
+    <Color x:Key="StatusWarningDark">#FBBF24</Color>
 </ResourceDictionary>
