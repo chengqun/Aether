@@ -55,7 +55,7 @@
                     IsEnabled="{Binding IsLoginEnabled}" />
 
             <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                               Color="{StaticResource Primary}" />
+                               Color="{DynamicResource Primary}" />
         </VerticalStackLayout>
     </ScrollView>
 

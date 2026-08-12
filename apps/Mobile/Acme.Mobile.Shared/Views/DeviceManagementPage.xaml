@@ -30,7 +30,7 @@
                             Command="{Binding AddDeviceCommand}"
                             IsEnabled="{Binding IsAdding, Converter={StaticResource InverseBool}}" />
                     <ActivityIndicator Grid.Column="1" IsRunning="{Binding IsAdding}" IsVisible="{Binding IsAdding}"
-                                       Color="{StaticResource Primary}" VerticalOptions="Center" />
+                                       Color="{DynamicResource Primary}" VerticalOptions="Center" />
                 </Grid>
             </VerticalStackLayout>
         </Frame>

@@ -42,7 +42,7 @@
                                 <!-- Row 0: avatar + username + time -->
                                 <Grid Grid.Row="0" ColumnDefinitions="36,*,Auto" ColumnSpacing="10">
                                     <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
-                                            BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 18" StrokeThickness="0"
+                                            BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 18" StrokeThickness="0"
                                             HorizontalOptions="Start" VerticalOptions="Center">
                                         <Label Text="{Binding Avatar}" TextColor="White" FontSize="16" FontFamily="OpenSansSemibold"
                                                HorizontalOptions="Center" VerticalOptions="Center" />

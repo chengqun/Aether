@@ -40,7 +40,7 @@
 
                                 <!-- Avatar -->
                                 <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
-                                        BackgroundColor="{StaticResource Primary}"
+                                        BackgroundColor="{DynamicResource Primary}"
                                         StrokeShape="RoundRectangle 22" StrokeThickness="0"
                                         HorizontalOptions="Start" VerticalOptions="Center">
                                     <Label Text="{Binding Initial}" TextColor="White" FontSize="18"

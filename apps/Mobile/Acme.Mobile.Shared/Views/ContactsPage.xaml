@@ -17,15 +17,13 @@
         <ToolbarItem IconImageSource="addfriend" Command="{Binding AddFriendCommand}" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="Auto,*">
-        <SearchBar Grid.Row="0" Placeholder="搜索"
-                   Text="{Binding SearchText}"
-                   SearchCommand="{Binding RefreshContactsCommand}" />
+    <Grid RowDefinitions="*">
+        <!-- 搜索栏暂未实现，先去掉 -->
 
         <!-- 通讯录分组列表：外层 CollectionView 渲染分组，每组用 BindableLayout 渲染组内联系人。
              不用 IsGrouped（IsGrouped 要求每个分组对象是 IEnumerable；ContactGroup 只有 Contacts 属性，
              非可枚举 → 组内条目不渲染 = 通讯录空白。此为 AlphaAgent 原始嵌套模式，已验证可用）。 -->
-        <CollectionView Grid.Row="1"
+        <CollectionView Grid.Row="0"
                         ItemsSource="{Binding ContactGroups}"
                         SelectionMode="None">
             <CollectionView.ItemTemplate>
@@ -66,7 +64,7 @@
                                         <!-- 头像：有自定义图标(IconSource)显示图标，否则显示首字母 -->
                                         <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
                                                 StrokeShape="RoundRectangle 22" StrokeThickness="0"
-                                                BackgroundColor="{StaticResource Primary}"
+                                                BackgroundColor="{DynamicResource Primary}"
                                                 HorizontalOptions="Start" VerticalOptions="Center"
                                                 IsVisible="{Binding IconSource, Converter={StaticResource NotNull}, ConverterParameter=inverse}">
                                             <Label Text="{Binding Initial}" TextColor="White" FontSize="18" FontFamily="OpenSansSemibold"
@@ -77,8 +75,20 @@
                                                 BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
                                                 HorizontalOptions="Start" VerticalOptions="Center"
                                                 IsVisible="{Binding IconSource, Converter={StaticResource NotNull}}">
-                                            <Image Source="{Binding IconSource}" WidthRequest="24" HeightRequest="24"
-                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                            <!-- 随主题切换图标颜色（浅色主题显深图 #1A1A1A、深色主题显浅图 #E8E8E8），
+                                                 与标题栏右上角「添加好友」工具栏图标一致。
+                                                 静态 AppThemeBinding 写在 Image.Source 是 MAUI 主题自适应图片官方写法，
+                                                 内部订阅 RequestedThemeChanged，正确处理 Light/Dark/System 三态及 OS 切换。
+                                                 不把 {Binding} 放进 AppThemeBinding（嵌套绑定不随主题重解析）、
+                                                 不用 AppThemeBinding 控 IsVisible（bool 转换不可靠）。
+                                                 IsCustomIcon 限定仅自定义图标项（新的朋友）显示，设备项不受影响。 -->
+                                            <Image WidthRequest="24" HeightRequest="24"
+                                                   HorizontalOptions="Center" VerticalOptions="Center"
+                                                   IsVisible="{Binding IsCustomIcon}">
+                                                <Image.Source>
+                                                    <AppThemeBinding Light="addfriend" Dark="addfriend_dark" />
+                                                </Image.Source>
+                                            </Image>
                                         </Border>
 
                                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">

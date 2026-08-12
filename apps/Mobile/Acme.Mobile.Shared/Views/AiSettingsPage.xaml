@@ -31,7 +31,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
 
                     <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+                                       Color="{DynamicResource Primary}" HorizontalOptions="Start" />
                 </VerticalStackLayout>
             </Frame>
 
@@ -57,7 +57,7 @@
                             IsEnabled="{Binding IsYushuLoggingIn, Converter={StaticResource InverseBool}}" />
 
                     <ActivityIndicator IsRunning="{Binding IsYushuLoggingIn}" IsVisible="{Binding IsYushuLoggingIn}"
-                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+                                       Color="{DynamicResource Primary}" HorizontalOptions="Start" />
 
                     <!-- Sync to server (desktop only) -->
                     <Button Text="同步到服务器" Style="{StaticResource GhostButton}"
@@ -89,7 +89,7 @@
                             IsEnabled="{Binding IsCloudDocsLoggingIn, Converter={StaticResource InverseBool}}" />
 
                     <ActivityIndicator IsRunning="{Binding IsCloudDocsLoggingIn}" IsVisible="{Binding IsCloudDocsLoggingIn}"
-                                       Color="{StaticResource Primary}" HorizontalOptions="Start" />
+                                       Color="{DynamicResource Primary}" HorizontalOptions="Start" />
 
                     <!-- Sync to server (desktop only) -->
                     <Button Text="同步到服务器" Style="{StaticResource GhostButton}"

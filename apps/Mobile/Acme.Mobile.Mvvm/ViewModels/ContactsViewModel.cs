@@ -201,6 +201,7 @@ public partial class ContactsViewModel : NavigableViewModelBase
             Type = "",
             ActionType = "NewFriends"
         };
+        // 「新的朋友」自定义图标项——XAML 用 IsCustomIcon 显示随主题切换的 addfriend 图标
         newFriendItem.SetCustomIconSource("addfriend");
         ContactGroups.Add(new ContactGroup
         {
@@ -571,7 +572,13 @@ public class ContactItem : ObservableObject
     {
         _customIconSource = iconSource;
         OnPropertyChanged(nameof(IconSource));
+        OnPropertyChanged(nameof(IsCustomIcon));
     }
+
+    /// <summary>
+    /// 是否为自定义图标项（如「新的朋友」）。XAML 据此决定是否显示随主题切换的图标。
+    /// </summary>
+    public bool IsCustomIcon => !string.IsNullOrEmpty(_customIconSource);
 
     public string? IconSource
     {
@@ -579,6 +586,16 @@ public class ContactItem : ObservableObject
         {
             if (!string.IsNullOrEmpty(_customIconSource))
                 return _customIconSource;
+            return DeviceTypeIcon;
+        }
+    }
+
+    private string? DeviceTypeIcon
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(DeviceType))
+                return null;
 
             if (!string.IsNullOrEmpty(DeviceType))
             {

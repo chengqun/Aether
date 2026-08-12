@@ -20,7 +20,7 @@
                 <Grid ColumnDefinitions="64,*,Auto" ColumnSpacing="16" RowDefinitions="Auto,Auto">
                     <Border Grid.RowSpan="2" Grid.Column="0"
                             WidthRequest="64" HeightRequest="64"
-                            BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 32" StrokeThickness="0"
+                            BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 32" StrokeThickness="0"
                             HorizontalOptions="Start" VerticalOptions="Center">
                         <Label Text="{Binding UsernameInitial}" TextColor="White" FontSize="26"
                                FontFamily="OpenSansSemibold"

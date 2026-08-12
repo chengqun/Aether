@@ -20,7 +20,7 @@
             <!-- Status + Sync -->
             <HorizontalStackLayout Spacing="8">
                 <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                                   Color="{StaticResource Primary}" VerticalOptions="Center" />
+                                   Color="{DynamicResource Primary}" VerticalOptions="Center" />
                 <Label Text="{Binding Status}" FontSize="13" VerticalOptions="Center"
                        TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
             </HorizontalStackLayout>
@@ -43,7 +43,7 @@
                                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                     <Label Grid.Column="0" Text="{Binding Name}" FontSize="16" FontFamily="OpenSansSemibold"
                                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Border Grid.Column="1" BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
+                                    <Border Grid.Column="1" BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 6" StrokeThickness="0" Padding="6,1"
                                             IsVisible="{Binding IsDefault}">
                                         <Label Text="默认" TextColor="White" FontSize="10" VerticalOptions="Center" />
                                     </Border>

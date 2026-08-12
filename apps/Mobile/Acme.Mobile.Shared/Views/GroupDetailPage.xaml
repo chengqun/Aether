@@ -58,7 +58,7 @@
                 <DataTemplate x:DataType="domain:GroupMember">
                     <Grid ColumnDefinitions="44,*,Auto" Padding="16,10" ColumnSpacing="12">
                         <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
-                                BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
                                 HorizontalOptions="Start" VerticalOptions="Center">
                             <Label Text="{Binding Username}" TextColor="White" FontSize="13" FontFamily="OpenSansSemibold"
                                    LineBreakMode="TailTruncation"
@@ -91,7 +91,7 @@
                 <DataTemplate x:DataType="vm:FriendSelectItem">
                     <Grid ColumnDefinitions="44,*,Auto" Padding="16,10" ColumnSpacing="12">
                         <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
-                                BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 22" StrokeThickness="0"
                                 HorizontalOptions="Start" VerticalOptions="Center">
                             <Label Text="{Binding Initial}" TextColor="White" FontSize="18" FontFamily="OpenSansSemibold"
                                    HorizontalOptions="Center" VerticalOptions="Center" />

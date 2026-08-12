@@ -14,7 +14,7 @@
             <!-- 头部 -->
             <HorizontalStackLayout Spacing="14" VerticalOptions="Start">
                 <Border WidthRequest="64" HeightRequest="64"
-                        BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 32" StrokeThickness="0">
+                        BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 32" StrokeThickness="0">
                     <Label Text="{Binding AgentInitial}" TextColor="White" FontSize="28" FontFamily="OpenSansSemibold"
                            HorizontalOptions="Center" VerticalOptions="Center" />
                 </Border>

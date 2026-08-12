@@ -9,7 +9,7 @@
     <Grid RowDefinitions="*,Auto,Auto" Padding="32" VerticalOptions="Center">
         <VerticalStackLayout Grid.Row="0" VerticalOptions="End" HorizontalOptions="Center" Spacing="16">
             <Border WidthRequest="96" HeightRequest="96"
-                    BackgroundColor="{StaticResource Primary}"
+                    BackgroundColor="{DynamicResource Primary}"
                     StrokeShape="RoundRectangle 24"
                     StrokeThickness="0"
                     HorizontalOptions="Center">
@@ -21,7 +21,7 @@
         </VerticalStackLayout>
 
         <ActivityIndicator Grid.Row="1" IsRunning="{Binding ShowProgress}"
-                           IsVisible="{Binding ShowProgress}" Color="{StaticResource Primary}"
+                           IsVisible="{Binding ShowProgress}" Color="{DynamicResource Primary}"
                            HorizontalOptions="Center" Margin="0,24,0,8" />
         <Label Grid.Row="2" Text="{Binding StatusMessage}"
                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"

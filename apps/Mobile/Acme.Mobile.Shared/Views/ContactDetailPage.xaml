@@ -18,7 +18,7 @@
             <VerticalStackLayout Spacing="12" Padding="24,32,24,20"
                                  HorizontalOptions="Center">
                 <Border WidthRequest="80" HeightRequest="80"
-                        BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 40" StrokeThickness="0"
+                        BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 40" StrokeThickness="0"
                         HorizontalOptions="Center">
                     <Label Text="{Binding ContactInitial}" TextColor="White" FontSize="32" FontFamily="OpenSansSemibold"
                            HorizontalOptions="Center" VerticalOptions="Center" />

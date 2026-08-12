@@ -21,7 +21,7 @@
               BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
             <HorizontalStackLayout Grid.Column="0" Spacing="8">
                 <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
-                                   Color="{StaticResource Primary}" VerticalOptions="Center" />
+                                   Color="{DynamicResource Primary}" VerticalOptions="Center" />
                 <Label Text="{Binding Status}" FontSize="13" VerticalOptions="Center"
                        TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
             </HorizontalStackLayout>
@@ -41,7 +41,7 @@
                             <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <Label Grid.Column="0" Text="{Binding AgentName}" FontSize="16" FontFamily="OpenSansSemibold"
                                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                <Border Grid.Column="1" BackgroundColor="{StaticResource Primary}" StrokeShape="RoundRectangle 8" StrokeThickness="0" Padding="8,2">
+                                <Border Grid.Column="1" BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 8" StrokeThickness="0" Padding="8,2">
                                     <Label Text="{Binding Kind}" TextColor="White" FontSize="11" VerticalOptions="Center" />
                                 </Border>
                             </Grid>
