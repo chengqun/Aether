@@ -27,6 +27,7 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate,             true,  true,  true),
             new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate,       false, false, false),
             new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           true,  false, false),
+            new(NoteNodeType.LeanAlgorithm, "Lean 算法", NavIcons.Cpu,    "#0EA5E9", "cpu",       "csharp", "新 Lean 算法", LeanAlgorithmTemplate,       false, false, false),
         };
     }
 
@@ -119,6 +120,63 @@ public class SmaCrossStrategy : IStrategy
         if (!_fast.IsReady || !_slow.IsReady) return SignalDirection.Hold;
         // 快线在慢线上方→做多，否则清仓（均线带策略；穿越信号可自行加 prev 比较）
         return _fast.Value > _slow.Value ? SignalDirection.Long : SignalDirection.Flat;
+    }
+}
+";
+
+    /// <summary>
+    /// Lean 算法策略默认模板：C# 源码（无 front-matter），一个继承 <c>LeanAlgorithmBase</c>（= QCAlgorithm）的类。
+    /// 由 <c>LeanAlgorithmScriptCompiler</c>（Trading.Runtime.Lean）Roslyn 编译成 dll，注册进 <c>LeanAlgorithmRegistry</c>，
+    /// 供回测页 Lean 引擎选择器使用。直接复用 Lean 全部能力（原生指标/Portfolio/Schedule/History/OnEndOfDay…）——
+    /// 绕过 IStrategy 壳，与 CodeStrategy（IStrategy，Lean 中立）/ Strategy（YAML 声明式）三条路径平行、互不耦合。
+    /// <para>数据约定：必须 <c>AddCtpData</c> 订阅本地 CtpBar（回测读预取 CSV），写 AddSecurity 拿不到数据。</para>
+    /// <para>参数：runner 把 start/end/cash/symbol + 用户参数设进 Lean Config，<c>ConfigureFromConfig</c> 读前四者；
+    /// 用户自定义参数直接 <c>GetParameter("MyParam")</c>。UI 据静态 <c>ParameterDefinitions</c> 渲染输入框。</para>
+    /// 注意：Roslyn 编译的源码无 ImplicitUsings，所需 using 须显式写出。name = 笔记标题（= 注册键）。
+    /// </summary>
+    private const string LeanAlgorithmTemplate = @"using System.Collections.Generic;
+using QuantConnect;
+using QuantConnect.Algorithm;
+using QuantConnect.Data;
+using QuantConnect.Indicators;
+using Acme.Trading.Domain;
+using Acme.Trading.Runtime.Lean;
+
+public class SmaCrossLeanAlgo : LeanAlgorithmBase
+{
+    private Symbol _symbol;
+    private SimpleMovingAverage _fast;
+    private SimpleMovingAverage _slow;
+
+    // UI 据此静态成员渲染参数输入框（静态约定，免实例化）。无参数则返回空。
+    public static IReadOnlyList<StrategyParameterDef> ParameterDefinitions => new[]
+    {
+        new StrategyParameterDef(""FastPeriod"", ""快线周期"", ""5""),
+        new StrategyParameterDef(""SlowPeriod"", ""慢线周期"", ""20""),
+    };
+
+    public override void Initialize()
+    {
+        // 从 Config 读 start/end/cash 并设置（runner 透传）。用户参数直接 GetParameter(""FastPeriod"")。
+        ConfigureFromConfig();
+
+        int fast = GetParameter(""FastPeriod"") is { Length: > 0 } f && int.TryParse(f, out var fv) ? fv : 5;
+        int slow = GetParameter(""SlowPeriod"") is { Length: > 0 } s && int.TryParse(s, out var sv) ? sv : 20;
+
+        // 必须用 AddCtpData 订阅本地 CtpBar（回测读预取 CSV）。写 AddSecurity 拿不到本地数据。
+        _symbol = AddCtpData(GetParameter(""symbol"") ?? ""600000"", Resolution.Daily);
+        _fast = SMA(_symbol, fast, Resolution.Daily);
+        _slow = SMA(_symbol, slow, Resolution.Daily);
+        SetBenchmark(_symbol);
+    }
+
+    public override void OnData(Slice slice)
+    {
+        if (!(_fast.IsReady && _slow.IsReady)) return;
+        if (_fast > _slow && !Portfolio.Invested)
+            SetHoldings(_symbol, 1.0m);          // Lean 原生仓位 API——可自由 sizing（区别于 IStrategy 壳的 1/N 均分）
+        else if (_fast < _slow && Portfolio.Invested)
+            Liquidate(_symbol);
     }
 }
 ";

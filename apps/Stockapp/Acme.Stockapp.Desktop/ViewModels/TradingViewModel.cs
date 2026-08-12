@@ -23,15 +23,19 @@ public partial class TradingViewModel : ObservableObject
     private readonly IBacktestApplicationService _backtest;
     private readonly ILiveTradingApplicationService _live;
     private readonly IStrategyScriptingService _scripting;
+    private readonly ILeanAlgorithmRuntime _leanBacktest;
+    private readonly ILeanAlgorithmScriptingService _leanScripting;
     private readonly IPreferencesStore _preferences;
     public CtpConnectorViewModel Connector { get; }
 
-    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector, IStrategyScriptingService scripting, IPreferencesStore preferences)
+    public TradingViewModel(IBacktestApplicationService backtest, ILiveTradingApplicationService live, CtpConnectorViewModel connector, IStrategyScriptingService scripting, ILeanAlgorithmRuntime leanBacktest, ILeanAlgorithmScriptingService leanScripting, IPreferencesStore preferences)
     {
         _backtest = backtest;
         _live = live;
         Connector = connector;
         _scripting = scripting;
+        _leanBacktest = leanBacktest;
+        _leanScripting = leanScripting;
         _preferences = preferences;
 
         _live.StatusChanged += OnLiveStatusChanged;
@@ -42,12 +46,24 @@ public partial class TradingViewModel : ObservableObject
             OnPropertyChanged(nameof(StrategyOptions));
             LoadStrategyParameters(IsLiveMode ? LiveStrategy : StrategyName);
         });
+        // Lean 算法脚本加载完成 → 刷新 Lean 算法选择器 + 重新加载参数（独立链路，与 IStrategy 路径互不影响）
+        _leanScripting.Loaded += () => Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(LeanAlgorithmOptions));
+            RefreshLeanLoadErrors();
+            LoadLeanAlgorithmParameters(LeanAlgorithmName);
+        });
 
         // 恢复上次选中的策略（JsonPreferencesStore.GetAsync 同步完成，GetAwaiter().GetResult() 不死锁）
         _strategyName = _preferences.GetAsync("trading.backtestStrategy").GetAwaiter().GetResult() ?? "";
         _liveStrategy = _preferences.GetAsync("trading.liveStrategy").GetAwaiter().GetResult() ?? "";
+        _leanAlgorithmName = _preferences.GetAsync("trading.leanAlgorithm").GetAwaiter().GetResult() ?? "";
+        var savedEngine = _preferences.GetAsync("trading.engine").GetAwaiter().GetResult();
+        _engine = string.Equals(savedEngine, "LeanAlgorithm", StringComparison.OrdinalIgnoreCase)
+            ? StrategyEngine.LeanAlgorithm : StrategyEngine.IStrategy;
         // 启动时加载当前策略的参数（构造函数设字段不触发 OnStrategyNameChanged，需显式调）
         LoadStrategyParameters(IsLiveMode ? _liveStrategy : _strategyName);
+        LoadLeanAlgorithmParameters(_leanAlgorithmName);
     }
 
     partial void OnStrategyNameChanged(string value)
@@ -63,7 +79,12 @@ public partial class TradingViewModel : ObservableObject
     }
 
     partial void OnIsLiveModeChanged(bool value)
-        => LoadStrategyParameters(value ? LiveStrategy : StrategyName);
+    {
+        LoadStrategyParameters(value ? LiveStrategy : StrategyName);
+        OnPropertyChanged(nameof(IsEngineSelectorVisible));
+        OnPropertyChanged(nameof(IsLeanAlgorithmSectionVisible));
+        OnPropertyChanged(nameof(IsIStrategySectionVisible));
+    }
 
     /// <summary>从 StrategyRegistry 加载策略参数定义 → 填充 StrategyParameterRows。</summary>
     private void LoadStrategyParameters(string? strategyName)
@@ -80,6 +101,80 @@ public partial class TradingViewModel : ObservableObject
     {
         var dict = new Dictionary<string, string>();
         foreach (var row in StrategyParameterRows)
+            if (!string.IsNullOrWhiteSpace(row.Key))
+                dict[row.Key] = row.Value ?? "";
+        return dict;
+    }
+
+    // ═══ 引擎切换（IStrategy 壳 vs Lean 算法直写）═══
+    // 三条策略路径：CodeStrategy/Strategy 走 IStrategy 壳（Lean 中立）；LeanAlgorithm 直接写 QCAlgorithm（与 Lean 耦合）。
+    // 引擎切换只影响回测路径；实盘当前只支持 IStrategy 壳（Lean 实盘=后续）。
+
+    /// <summary>回测引擎：IStrategy（壳，Lean 中立）或 LeanAlgorithm（直写 QCAlgorithm，复用 Lean 全部能力）。</summary>
+    public StrategyEngine[] EngineOptions { get; } = new[] { StrategyEngine.IStrategy, StrategyEngine.LeanAlgorithm };
+
+    [ObservableProperty] private StrategyEngine _engine = StrategyEngine.IStrategy;
+
+    partial void OnEngineChanged(StrategyEngine value)
+    {
+        _preferences.SetAsync("trading.engine", value.ToString()).SafeFireAndForget();
+        OnPropertyChanged(nameof(IsLeanAlgorithmSectionVisible));
+        OnPropertyChanged(nameof(IsIStrategySectionVisible));
+    }
+
+    /// <summary>Lean 引擎是否可用作实盘（当前否——Lean 实盘为后续）。</summary>
+    public bool IsLeanLiveSupported => false;
+
+    /// <summary>策略 tab：显示引擎切换（仅回测；实盘只支持 IStrategy）。</summary>
+    public bool IsEngineSelectorVisible => !IsLiveMode;
+    /// <summary>策略 tab：显示 Lean 算法选择器（仅回测 + Lean 引擎）。</summary>
+    public bool IsLeanAlgorithmSectionVisible => !IsLiveMode && Engine == StrategyEngine.LeanAlgorithm;
+    /// <summary>策略 tab：显示 IStrategy 选择器（实盘，或回测 IStrategy 引擎）。</summary>
+    public bool IsIStrategySectionVisible => IsLiveMode || Engine == StrategyEngine.IStrategy;
+
+    // ═══ Lean 算法（直写 QCAlgorithm）═══
+
+    public string[] LeanAlgorithmOptions => _leanScripting.GetRegisteredNames().ToArray();
+
+    [ObservableProperty] private string _leanAlgorithmName = "";
+
+    partial void OnLeanAlgorithmNameChanged(string value)
+    {
+        _preferences.SetAsync("trading.leanAlgorithm", value).SafeFireAndForget();
+        LoadLeanAlgorithmParameters(value);
+    }
+
+    /// <summary>当前 Lean 算法的参数行（UI 动态渲染）。切算法时从 LeanAlgorithmScriptingService.GetParameterDefinitions 重建。</summary>
+    public ObservableCollection<StrategyParameterRow> LeanAlgorithmParameterRows { get; } = new();
+
+    /// <summary>Lean 算法编译错误（名→错误），UI 展示以便排查"下拉为空"等问题。空串=无错误。</summary>
+    [ObservableProperty] private string _leanLoadErrors = "";
+    public bool HasLeanLoadErrors => !string.IsNullOrEmpty(LeanLoadErrors);
+    /// <summary>无算法且无错误 → 显示"新建笔记"引导。</summary>
+    public bool ShowLeanEmptyHint => LeanAlgorithmOptions.Length == 0 && !HasLeanLoadErrors;
+
+    private void RefreshLeanLoadErrors()
+    {
+        var errs = _leanScripting.LoadErrors;
+        LeanLoadErrors = errs.Count == 0 ? "" : string.Join("\n", errs.Select(kv => $"• {kv.Key}：{kv.Value}"));
+        OnPropertyChanged(nameof(HasLeanLoadErrors));
+        OnPropertyChanged(nameof(ShowLeanEmptyHint));
+    }
+
+    /// <summary>从 LeanAlgorithmScriptingService 加载算法参数定义 → 填充 LeanAlgorithmParameterRows。</summary>
+    private void LoadLeanAlgorithmParameters(string? algoName)
+    {
+        LeanAlgorithmParameterRows.Clear();
+        if (string.IsNullOrWhiteSpace(algoName)) return;
+        foreach (var def in _leanScripting.GetParameterDefinitions(algoName))
+            LeanAlgorithmParameterRows.Add(new StrategyParameterRow { Key = def.Key, Label = def.Label, Value = def.DefaultValue });
+    }
+
+    /// <summary>从 LeanAlgorithmParameterRows 构建 Dictionary（传给 LeanAlgorithmBacktestRequest.StrategyParameters）。</summary>
+    private Dictionary<string, string> BuildLeanAlgorithmParameters()
+    {
+        var dict = new Dictionary<string, string>();
+        foreach (var row in LeanAlgorithmParameterRows)
             if (!string.IsNullOrWhiteSpace(row.Key))
                 dict[row.Key] = row.Value ?? "";
         return dict;
@@ -134,19 +229,39 @@ public partial class TradingViewModel : ObservableObject
         Error = string.Empty;
         try
         {
-            var input = new BacktestRunInput
+            BacktestResult result;
+            if (Engine == StrategyEngine.LeanAlgorithm)
             {
-                Symbol = Symbol,
-                StrategyName = StrategyName,
-                StartDate = (StartDate ?? DateTime.Today.AddDays(-365)).Date,
-                EndDate = (EndDate ?? DateTime.Today).Date,
-                InitialCash = InitialCash,
-                FastPeriod = 10,
-                SlowPeriod = 30,
-                StrategyParameters = BuildStrategyParameters(),
-                Resolution = ParseResolution(Resolution),
-            };
-            var result = await Task.Run(() => _backtest.RunAsync(input, CancellationToken.None));
+                // Lean 算法路径：直写 QCAlgorithm 子类，绕过 IStrategy 壳，复用 Lean 全部能力。
+                var request = new LeanAlgorithmBacktestRequest
+                {
+                    StrategyName = LeanAlgorithmName,
+                    Symbol = Symbol,
+                    StartDate = (StartDate ?? DateTime.Today.AddDays(-365)).Date,
+                    EndDate = (EndDate ?? DateTime.Today).Date,
+                    InitialCash = InitialCash,
+                    Resolution = ParseResolution(Resolution),
+                    StrategyParameters = BuildLeanAlgorithmParameters(),
+                };
+                result = await Task.Run(() => _leanBacktest.RunAsync(request, CancellationToken.None));
+            }
+            else
+            {
+                // IStrategy 路径（既有，零改动）：CodeStrategy / Strategy 经 TradingHostAlgorithm 壳跑。
+                var input = new BacktestRunInput
+                {
+                    Symbol = Symbol,
+                    StrategyName = StrategyName,
+                    StartDate = (StartDate ?? DateTime.Today.AddDays(-365)).Date,
+                    EndDate = (EndDate ?? DateTime.Today).Date,
+                    InitialCash = InitialCash,
+                    FastPeriod = 10,
+                    SlowPeriod = 30,
+                    StrategyParameters = BuildStrategyParameters(),
+                    Resolution = ParseResolution(Resolution),
+                };
+                result = await Task.Run(() => _backtest.RunAsync(input, CancellationToken.None));
+            }
 
             if (result.IsSuccess)
             {
@@ -306,4 +421,11 @@ public partial class StrategyParameterRow : ObservableObject
     public string Key { get; set; } = "";
     [ObservableProperty] private string _label = "";
     [ObservableProperty] private string _value = "";
+}
+
+/// <summary>回测引擎：IStrategy（壳，Lean 中立）/ LeanAlgorithm（直写 QCAlgorithm，与 Lean 耦合）。</summary>
+public enum StrategyEngine
+{
+    IStrategy,
+    LeanAlgorithm,
 }

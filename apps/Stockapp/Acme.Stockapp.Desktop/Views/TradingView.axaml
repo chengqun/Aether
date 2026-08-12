@@ -101,30 +101,76 @@
         <StackPanel Spacing="10" MaxWidth="480">
           <TextBlock Text="策略选择与参数" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
 
-          <!-- 策略选择（回测/实盘共用，按模式绑不同属性） -->
-          <StackPanel Spacing="4">
-            <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-            <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding StrategyName}" HorizontalAlignment="Stretch"
-                      IsVisible="{Binding !IsLiveMode}" />
-            <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding LiveStrategy}" HorizontalAlignment="Stretch"
-                      IsVisible="{Binding IsLiveMode}" />
+          <!-- 引擎切换（仅回测；实盘只支持 IStrategy 壳）-->
+          <StackPanel Spacing="4" IsVisible="{Binding IsEngineSelectorVisible}">
+            <TextBlock Text="引擎" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+            <ComboBox ItemsSource="{Binding EngineOptions}" SelectedItem="{Binding Engine}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="IStrategy = Lean 中立壳（CodeStrategy/YAML 策略）；Lean算法 = 直写 QCAlgorithm，复用 Lean 全部能力"
+                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
           </StackPanel>
 
-          <TextBlock Text="{Binding CurrentStrategyDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <!-- ── IStrategy 路径（实盘，或回测 IStrategy 引擎）── -->
+          <StackPanel Spacing="10" IsVisible="{Binding IsIStrategySectionVisible}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding StrategyName}" HorizontalAlignment="Stretch"
+                        IsVisible="{Binding !IsLiveMode}" />
+              <ComboBox ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding LiveStrategy}" HorizontalAlignment="Stretch"
+                        IsVisible="{Binding IsLiveMode}" />
+            </StackPanel>
 
-          <!-- 策略参数（动态渲染） -->
-          <ItemsControl ItemsSource="{Binding StrategyParameterRows}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Spacing="4" Margin="0,4">
-                  <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-                  <TextBox Text="{Binding Value}" />
-                </StackPanel>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Text="该策略无参数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                     IsVisible="{Binding !StrategyParameterRows.Count}" Margin="0,8" />
+            <TextBlock Text="{Binding CurrentStrategyDescription}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+
+            <ItemsControl ItemsSource="{Binding StrategyParameterRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Spacing="4" Margin="0,4">
+                    <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBox Text="{Binding Value}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="该策略无参数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       IsVisible="{Binding !StrategyParameterRows.Count}" Margin="0,8" />
+          </StackPanel>
+
+          <!-- ── Lean 算法路径（仅回测 + Lean 引擎）── -->
+          <StackPanel Spacing="10" IsVisible="{Binding IsLeanAlgorithmSectionVisible}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Lean 算法" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+              <ComboBox ItemsSource="{Binding LeanAlgorithmOptions}" SelectedItem="{Binding LeanAlgorithmName}" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <TextBlock Text="Lean 算法笔记（NoteNodeType.LeanAlgorithm）经 Roslyn 编译成 QCAlgorithm 子类，绕过 IStrategy 壳直跑 Lean。"
+                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+
+            <!-- 编译错误（"下拉为空"时在此排查）-->
+            <Border Background="{DynamicResource DangerBrush}" Opacity="0.12" CornerRadius="6" Padding="10,8"
+                    IsVisible="{Binding HasLeanLoadErrors}">
+              <StackPanel Spacing="4">
+                <TextBlock Text="⚠ Lean 算法编译错误" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
+                <SelectableTextBlock Text="{Binding LeanLoadErrors}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap"
+                                     Foreground="{DynamicResource TextPrimaryBrush}" />
+              </StackPanel>
+            </Border>
+            <!-- 无算法 + 无错误提示 -->
+            <TextBlock Text="尚未加载 Lean 算法——在笔记页新建「Lean 算法」节点并保存（自动编译注册）。"
+                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                       IsVisible="{Binding ShowLeanEmptyHint}" />
+
+            <ItemsControl ItemsSource="{Binding LeanAlgorithmParameterRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Spacing="4" Margin="0,4">
+                    <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBox Text="{Binding Value}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="该算法无参数" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       IsVisible="{Binding !LeanAlgorithmParameterRows.Count}" Margin="0,8" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
     </TabItem>

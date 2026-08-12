@@ -75,6 +75,10 @@ public partial class App : global::Avalonia.Application
             var notes = Services.GetRequiredService<INoteService>();
             notes.NotesChanged += () => scripting.Reload(); // 笔记变更 → 防抖重编译注册策略
             scripting.LoadAsync().SafeFireAndForget();
+            // 启动加载 Lean 算法脚本笔记 → Roslyn 编译 → LeanAlgorithmRegistry（NotesChanged 时自动重加载）
+            var leanScripting = Services.GetRequiredService<ILeanAlgorithmScriptingService>();
+            notes.NotesChanged += () => leanScripting.Reload();
+            leanScripting.LoadAsync().SafeFireAndForget();
             // 启动加载代码规则脚本笔记 → Roslyn 编译 → ICodeBrainRegistry（NotesChanged 时自动重加载）
             CodeRuleHost.Start(Services);
         }
@@ -133,6 +137,10 @@ public partial class App : global::Avalonia.Application
         services.AddTradingScripting(); // 策略脚本加载（需在 AddDesktopCommon 后，依赖 INoteService）
         services.AddSingleton<IStrategyNoteSource, StrategyNoteSource>(); // 桥接 Notes → 策略笔记源
         services.AddSingleton<IStrategyFormCodec, StrategyFormCodec>(); // YAML 策略表单 codec（Stockapp 专属，引 Trading.Scripting）
+        // Lean 算法策略：第三种策略写法（与 Lean 直接耦合，独立链路，不动 IStrategy/YAML 路径）。
+        // 须在 AddDesktopCommon 后（依赖 INoteService）+ AddTradingRuntimeLean 后（引 Lean 程序集）。
+        services.AddLeanAlgorithmServices(tenantDir);
+        services.AddSingleton<ILeanAlgorithmNoteSource, LeanAlgorithmNoteSource>(); // 桥接 Notes → Lean 算法笔记源
 
         // 工作台引擎（view registry / region manager / workspace manager + Stockapp 工作台定义）。
         // 租户专属页（期货/回测/股票）经 contributor 注入 view registry——Workbench 库不依赖租户程序集。

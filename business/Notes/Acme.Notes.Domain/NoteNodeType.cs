@@ -10,4 +10,6 @@ public enum NoteNodeType
     CodeRule = 5,
     CodeStrategy = 6,
     Strategy = 7,
+    /// <summary>Lean 算法策略：直接写 QCAlgorithm 子类（复用 Lean 全部能力），与 Lean 耦合。全宽代码编辑器。</summary>
+    LeanAlgorithm = 8,
 }
