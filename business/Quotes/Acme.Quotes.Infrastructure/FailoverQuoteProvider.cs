@@ -15,9 +15,13 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
     private readonly ILogger<FailoverQuoteProvider> _logger;
 
     /// <summary>
-    /// 记录上一次失败的 provider，Key 为 provider 类型名
+    /// 记录上一次失败的 provider，Key 为 provider 类型名，Value 为失败时刻（UTC）。
+    /// 超过 <see cref="_failureTtl"/> 的条目视为过期——瞬态失败（WAF 断连/限流）不应永久拉黑 provider。
     /// </summary>
     private static readonly ConcurrentDictionary<string, DateTime> _failedProviders = new();
+
+    /// <summary>失败 provider 的冷却时长：超过后重新尝试，避免一次瞬态失败永久跳过。</summary>
+    private static readonly TimeSpan _failureTtl = TimeSpan.FromSeconds(60);
 
     public FailoverQuoteProvider(IEnumerable<IQuoteProvider> providers, ILogger<FailoverQuoteProvider> logger)
     {
@@ -51,12 +55,16 @@ public class FailoverQuoteProvider : IFailoverQuoteProvider
         {
             var providerName = provider.GetType().Name;
 
-            // 跳过上一次失败的 provider
-            if (_failedProviders.ContainsKey(providerName))
+            // 跳过近期失败的 provider（冷却期内）；超过 TTL 的视为过期——移除并重试。
+            if (_failedProviders.TryGetValue(providerName, out var failedAt))
             {
-                skippedProviders.Add(providerName);
-                _logger.LogDebug("Skipping provider {ProviderName} due to previous failure", providerName);
-                continue;
+                if (DateTime.UtcNow - failedAt < _failureTtl)
+                {
+                    skippedProviders.Add(providerName);
+                    _logger.LogDebug("Skipping provider {ProviderName} due to recent failure ({Age}s ago)", providerName, (int)(DateTime.UtcNow - failedAt).TotalSeconds);
+                    continue;
+                }
+                _failedProviders.TryRemove(providerName, out _);
             }
 
             try

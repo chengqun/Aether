@@ -2,6 +2,7 @@ using Acme.Quotes.Domain;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -20,6 +21,7 @@ public class SinaQuoteProvider : IQuoteProvider
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger;
+        QuoteHttpHeaders.ApplyBrowserUserAgent(_httpClient);
     }
 
     public bool IsSupported(string code, string freq, string type, string exchange)
@@ -76,24 +78,41 @@ public class SinaQuoteProvider : IQuoteProvider
         var quotes = new List<Quote>();
         try
         {
-            string jsonData = Regex.Match(content, @"=\((.*)\);").Groups[1].Value;
-            var data = JsonSerializer.Deserialize<List<List<object>>>(jsonData);
+            // 新浪 JSONP：/*<script>...</script>*/=([ {...}, {...} ]);
+            // 取 =(...) 内的 JSON 数组。Singleline 兼容换行。
+            string jsonData = Regex.Match(content, @"=\((.*)\);", RegexOptions.Singleline).Groups[1].Value;
+            if (string.IsNullOrWhiteSpace(jsonData))
+                return quotes;
 
-            if (data != null)
+            using var doc = JsonDocument.Parse(jsonData);
+            foreach (var el in doc.RootElement.EnumerateArray())
             {
-                foreach (var item in data)
+                // 当前接口返回对象数组：{d(日期),o(open),h(high),l(low),c(close),v(volume),...}
+                if (el.ValueKind == JsonValueKind.Object)
                 {
-                    if (item.Count >= 6)
-                    {
-                        var date = DateTime.Parse(item[0]?.ToString() ?? "");
-                        var open = decimal.TryParse(item[1]?.ToString(), out var o) ? o : 0;
-                        var close = decimal.TryParse(item[2]?.ToString(), out var c) ? c : 0;
-                        var high = decimal.TryParse(item[3]?.ToString(), out var h) ? h : 0;
-                        var low = decimal.TryParse(item[4]?.ToString(), out var l) ? l : 0;
-                        var volume = decimal.TryParse(item[5]?.ToString(), out var v) ? v : 0;
-
-                        quotes.Add(new Quote(0, date, open, high, low, close, volume));
-                    }
+                    if (!el.TryGetProperty("d", out var dEl)) continue;
+                    if (!DateTime.TryParse(dEl.GetString(), out var date)) continue;
+                    quotes.Add(new Quote(
+                        0, date,
+                        GetDec(el, "o"),
+                        GetDec(el, "h"),
+                        GetDec(el, "l"),
+                        GetDec(el, "c"),
+                        GetDec(el, "v")));
+                }
+                else if (el.ValueKind == JsonValueKind.Array)
+                {
+                    // 兼容旧格式：[date, open, close, high, low, volume]
+                    var parts = el.EnumerateArray().Select(x => x.GetString()).ToList();
+                    if (parts.Count < 6) continue;
+                    if (!DateTime.TryParse(parts[0], out var date)) continue;
+                    quotes.Add(new Quote(
+                        0, date,
+                        decimal.TryParse(parts[1], out var o) ? o : 0,
+                        decimal.TryParse(parts[3], out var h) ? h : 0,
+                        decimal.TryParse(parts[4], out var l) ? l : 0,
+                        decimal.TryParse(parts[2], out var c) ? c : 0,
+                        decimal.TryParse(parts[5], out var v) ? v : 0));
                 }
             }
         }
@@ -103,5 +122,15 @@ public class SinaQuoteProvider : IQuoteProvider
         }
 
         return quotes;
+    }
+
+    private static decimal GetDec(JsonElement obj, string name)
+    {
+        if (!obj.TryGetProperty(name, out var v)) return 0;
+        if (v.ValueKind == JsonValueKind.String)
+            return decimal.TryParse(v.GetString(), out var d) ? d : 0;
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetDecimal(out var num))
+            return num;
+        return 0;
     }
 }

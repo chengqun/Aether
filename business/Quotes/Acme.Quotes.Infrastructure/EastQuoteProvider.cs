@@ -19,6 +19,9 @@ public class EastQuoteProvider : IQuoteProvider
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger;
+        // 东方财富 WAF 会拒绝无 UA 的请求（直接断连，致 HttpConnection.SendAsync 失败）。
+        QuoteHttpHeaders.ApplyBrowserUserAgent(_httpClient);
+        _httpClient.DefaultRequestHeaders.Referrer = new Uri("https://quote.eastmoney.com/");
     }
 
     public bool IsSupported(string code, string freq, string type, string exchange)

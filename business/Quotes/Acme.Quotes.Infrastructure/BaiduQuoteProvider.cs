@@ -16,7 +16,6 @@ public class BaiduQuoteProvider : IQuoteProvider
     private readonly HttpClient _httpClient;
     private readonly ILogger<BaiduQuoteProvider> _logger;
     private const string BaseUrl = "https://finance.pae.baidu.com/vapi/v1/getquotation";
-    private const string DefaultMarketType = "us";
 
     private readonly Dictionary<string, string> _frequencyMap = new()
     {
@@ -27,6 +26,8 @@ public class BaiduQuoteProvider : IQuoteProvider
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger;
+        // 百度行情接口对无 UA 的请求直接返回 403 Forbidden。
+        QuoteHttpHeaders.ApplyBrowserUserAgent(_httpClient);
     }
 
     public bool IsSupported(string code, string freq, string type, string exchange)
@@ -100,8 +101,21 @@ public class BaiduQuoteProvider : IQuoteProvider
 
         string ktype = _frequencyMap.TryGetValue(freq, out var val) ? val : "day";
 
-        return $"{BaseUrl}?group={groupParam}&ktype={ktype}&code={code}&market_type={DefaultMarketType}";
+        // market_type 按品种区分：A 股=ab（旧代码硬编码 "us" 致 403/空——美股市场类型取不到 A 股数据）。
+        string marketType = MarketTypeFor(type);
+        return $"{BaseUrl}?group={groupParam}&ktype={ktype}&code={code}&market_type={marketType}";
     }
+
+    private static string MarketTypeFor(string type) => type switch
+    {
+        "股票" => "ab",
+        "期货" => "futures",
+        "指数" => "index",
+        "美股指数" => "us",
+        "汇率" => "huilv",
+        "虚拟币" => "huilv",
+        _ => "ab",
+    };
 
     private List<Quote> ParseKlineData(string response)
     {
