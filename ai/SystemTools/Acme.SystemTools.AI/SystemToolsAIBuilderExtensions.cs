@@ -15,7 +15,7 @@ namespace Acme.SystemTools.AI;
 public static class SystemToolsAIBuilderExtensions
 {
     public static readonly string[] ToolNames = {
-        "ReadFile", "WriteFile", "EditFile", "LineEditFile", "DeleteFile",
+        "ReadFile", "WriteFile", "EditFile", "LineEditFile", "DeleteFile", "MoveFile",
         "Grep", "Glob", "ExecuteCommand", "ExploreDirectory",
         "ExecuteShellCommand", "FetchUrl", "DiffFile"
     };
@@ -34,6 +34,7 @@ public static class SystemToolsAIBuilderExtensions
         s.AddTransient<FileEditTool>();
         s.AddTransient<FileLineEditTool>();
         s.AddTransient<FileDeleteTool>();
+        s.AddTransient<FileMoveTool>();
         s.AddTransient<GrepTool>();
         s.AddTransient<GlobTool>();
         s.AddTransient<CommandExecutorTool>();
@@ -54,6 +55,8 @@ public static class SystemToolsAIBuilderExtensions
                 sp => CreateTool<FileLineEditTool>(sp, "LineEditFile"), ToolApprovalLevel.Confirm);
             reg.Register("DeleteFile", "删除文件", cat,
                 sp => CreateTool<FileDeleteTool>(sp, "DeleteFile"), ToolApprovalLevel.Dangerous);
+            reg.Register("MoveFile", "移动或重命名文件", cat,
+                sp => CreateTool<FileMoveTool>(sp, "MoveFile"), ToolApprovalLevel.Confirm);
             reg.Register("Grep", "正则搜索文件内容", cat,
                 sp => CreateTool<GrepTool>(sp, "Grep"));
             reg.Register("Glob", "按模式匹配文件（如 *.cs）", cat,

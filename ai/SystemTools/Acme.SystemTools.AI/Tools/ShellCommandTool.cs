@@ -25,48 +25,57 @@ public class ShellCommandTool
 
         var actualTimeout = timeoutMs ?? 60000;
 
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
         try
         {
             var psi = new ProcessStartInfo
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,   // 重定向 stdin 并立即关闭：防止命令读 stdin 永久阻塞
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
             };
 
-            // 根据平台选择 Shell
+            // 根据平台选择 Shell。用 ArgumentList 传参，避免命令串里的引号/空格被错切
+            // （旧实现 Arguments = $"-c \"{command}\" 在命令含双引号时会截断/错乱）。
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 psi.FileName = "cmd.exe";
-                psi.Arguments = $"/c \"{command}\"";
+                psi.ArgumentList.Add("/c");
+                psi.ArgumentList.Add(command);
             }
             else
             {
                 psi.FileName = "/bin/bash";
-                psi.Arguments = $"-c \"{command}\"";
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add(command);
             }
 
-            using var process = new Process { StartInfo = psi };
+            process = new Process { StartInfo = psi };
             process.Start();
+            // 立即关闭 stdin：任何读 stdin 的子命令拿到 EOF 而非永久阻塞。
+            try { process.StandardInput.Close(); } catch { }
 
             // 异步读取 stdout 和 stderr 避免死锁
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
             // 等待进程退出或超时
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(actualTimeout);
 
+            bool cancelledByUser = false;
             try
             {
                 await process.WaitForExitAsync(cts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // 超时（非外部取消）
-                try { process.Kill(entireProcessTree: true); } catch { }
+                // 超时（非外部取消）：进程已在下方 finally 被 kill。
                 var partialStdout = await stdoutTask;
                 var partialStderr = await stderrTask;
                 return new Output
@@ -77,9 +86,25 @@ public class ShellCommandTool
                     Success = false,
                 };
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 用户主动停止：进程已在下方 finally 被 kill。
+                cancelledByUser = true;
+            }
 
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
+
+            if (cancelledByUser)
+            {
+                return new Output
+                {
+                    ExitCode = -1,
+                    StandardOutput = Truncate(stdout, 50000),
+                    StandardError = $"命令执行已被取消（用户停止）。\n{Truncate(stderr, 10000)}",
+                    Success = false,
+                };
+            }
 
             return new Output
             {
@@ -98,6 +123,20 @@ public class ShellCommandTool
                 StandardError = $"执行 Shell 命令失败: {ex.Message}",
                 Success = false,
             };
+        }
+        finally
+        {
+            // 任何退出路径（正常/超时/取消/异常）都确保杀掉进程树，避免孤儿进程堆积吃 CPU/内存。
+            if (process is not null)
+            {
+                try
+                {
+                    if (!process.HasExited)
+                        process.Kill(entireProcessTree: true);
+                }
+                catch { /* 进程可能已退出 */ }
+                process.Dispose();
+            }
         }
     }
 

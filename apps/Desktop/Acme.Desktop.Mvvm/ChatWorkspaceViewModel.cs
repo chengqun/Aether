@@ -645,6 +645,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [RelayCommand]
     private void NewChat()
     {
+        // 切到新聊天前先取消进行中的流式运行，否则后台 run 孤儿化继续跑（IsAgentRunning 不归零、
+        // 工具持续重试、孤儿进程堆积 → CPU/内存耗尽）。StopGeneration 走的是同一条取消路径。
+        CancelRunningRun();
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
@@ -657,6 +660,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task ResumeConversationAsync(ConversationItem item)
     {
         if (item is null) return;
+        // 切会话前先取消进行中的运行，避免后台孤儿 run 继续消耗资源（同 NewChat）。
+        CancelRunningRun();
         try
         {
             var conv = await _conversationStore.GetAsync(item.Id);
@@ -709,6 +714,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task DeleteConversationAsync(ConversationItem item)
     {
         if (item is null) return;
+        // 删会话前先取消进行中的运行（若删的正是当前会话，后台 run 会孤立写入已删会话）。
+        CancelRunningRun();
         try
         {
             await _conversationStore.DeleteAsync(item.Id);
@@ -1103,6 +1110,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _runCts?.Cancel();
     }
 
+    /// <summary>取消进行中的流式运行（新聊天/切会话/删会话前调）。
+    /// 只 Cancel token，不阻塞等待——RunSegmentedStreamAsync 的 finally 会在 dispatcher 上
+    /// 清 IsAgentRunning 并 Dispose _runCts。CT 转发链路完整（→ agent.RunStreamingAsync(ct)），
+    /// 故 Cancel 会让卡住的 LLM 流/工具调用抛 OCE 而结束本轮。</summary>
+    private void CancelRunningRun()
+    {
+        _runCts?.Cancel();
+    }
+
     /// <summary>用户在输入框切换 plan/execute 模式：新会话只记 SelectedMode（首轮 desiredMode 应用），已存在会话立即 SetMode。</summary>
     private async Task SetModeOnSessionAsync(string mode)
     {
@@ -1147,6 +1163,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task SendInputAsync()
     {
         if (!CanSendInput || string.IsNullOrWhiteSpace(InputText)) return;
+        // 防重入：UI 已靠 IsAgentRunning 隐藏发送键/禁用输入框，这里兜底——
+        // 上一轮未结束时（取消尚未落地）绝不再起一轮，避免 _runCts 被覆盖、两轮并发。
+        if (IsAgentRunning) return;
 
         var content = InputText.Trim();
         InputText = string.Empty;
