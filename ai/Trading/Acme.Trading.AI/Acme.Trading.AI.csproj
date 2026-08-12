@@ -5,6 +5,8 @@
     <ProjectReference Include="..\..\..\business\Trading\Acme.Trading.Application\Acme.Trading.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Scripting\Acme.Trading.Scripting.csproj" />
+    <!-- Lean 中立端口（ILeanAlgorithmScriptingService）：CreateLeanAlgorithm 工具经此做即时编译验证，不引 Trading.Runtime.Lean（保持 DDD 分层）。 -->
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Domain\Acme.Trading.Runtime.Domain.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

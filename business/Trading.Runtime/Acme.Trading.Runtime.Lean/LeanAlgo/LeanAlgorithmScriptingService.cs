@@ -103,4 +103,13 @@ public sealed class LeanAlgorithmScriptingService : ILeanAlgorithmScriptingServi
 
     public IReadOnlyList<StrategyParameterDef> GetParameterDefinitions(string name)
         => LeanAlgorithmRegistry.GetParameterDefinitions(name);
+
+    public (bool Success, string? Error) TryCompile(string source, string name)
+    {
+        // 复用 LoadAsync 的编译路径（含落盘 dll + LoadFrom 找 QCAlgorithm 子类 + 依赖解析），
+        // 确保前馈校验与真实加载一致。不注册——仅返回错误供 CreateLeanAlgorithm 工具决策。
+        if (LeanAlgorithmScriptCompiler.TryCompile(source, name, _cacheDir, out var type, out _, out var err) && type is not null)
+            return (true, null);
+        return (false, err);
+    }
 }

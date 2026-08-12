@@ -29,4 +29,11 @@ public interface ILeanAlgorithmScriptingService
 
     /// <summary>获取 Lean 算法的参数定义（UI 据此动态渲染参数输入框）。算法不存在或无参数返回空列表。</summary>
     IReadOnlyList<StrategyParameterDef> GetParameterDefinitions(string name);
+
+    /// <summary>
+    /// 即时编译验证 Lean 算法源码（不落库、不注册），返回编译错误（前馈传感器，供 CreateLeanAlgorithm 工具校验：
+    /// AI 据此在落库前修订源码，避免笔记里堆坏代码）。成功的源码随后由 <see cref="LoadAsync"/>（NotesChanged 触发）
+    /// 编译并注册到 LeanAlgorithmRegistry。编译含 QCAlgorithm 子类查找 + 依赖解析，与 <see cref="LoadAsync"/> 路径一致。
+    /// </summary>
+    (bool Success, string? Error) TryCompile(string source, string name);
 }
