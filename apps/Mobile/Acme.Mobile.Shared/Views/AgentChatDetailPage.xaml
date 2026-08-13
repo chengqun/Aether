@@ -6,9 +6,11 @@
     xmlns:md="clr-namespace:Indiko.Maui.Controls.Markdown;assembly=Indiko.Maui.Controls.Markdown"
     xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     Title="AI 助手">
 
     <ContentPage.Resources>
+        <conv:StringToBoolConverter x:Key="StringToBool" />
         <!-- 用户消息：右侧绿色气泡 -->
         <DataTemplate x:Key="UserTextTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
@@ -28,30 +30,42 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 工具调用：紧凑卡片 -->
+        <!-- 工具调用：紧凑卡片 + 参数详情 -->
         <DataTemplate x:Key="ToolCallTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
-                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
-                        <Label Text="🔧" FontSize="13" />
-                        <Label Text="{Binding ToolName, StringFormat='调用 {0}'}" FontSize="13" FontFamily="OpenSansSemibold"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                    </HorizontalStackLayout>
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
+                    <VerticalStackLayout Spacing="4">
+                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                            <Label Text="🔧" FontSize="13" />
+                            <Label Text="{Binding ToolName, StringFormat='调用 {0}'}" FontSize="13" FontFamily="OpenSansSemibold"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding ToolDetail}" FontSize="11" FontFamily="OpenSansRegular"
+                               LineBreakMode="CharacterWrap" MaxLines="6"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                               IsVisible="{Binding ToolDetail, Converter={StaticResource StringToBool}}" />
+                    </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 工具结果：紧凑卡片 -->
+        <!-- 工具结果：紧凑卡片 + 返回详情 -->
         <DataTemplate x:Key="ToolResultTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
-                    <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
-                        <Label Text="✅" FontSize="13" />
-                        <Label Text="{Binding ToolName, StringFormat='结果 {0}'}" FontSize="13"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                    </HorizontalStackLayout>
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
+                    <VerticalStackLayout Spacing="4">
+                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                            <Label Text="✅" FontSize="13" />
+                            <Label Text="{Binding ToolName, StringFormat='结果 {0}'}" FontSize="13"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding ToolDetail}" FontSize="11" FontFamily="OpenSansRegular"
+                               LineBreakMode="CharacterWrap" MaxLines="8"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                               IsVisible="{Binding ToolDetail, Converter={StaticResource StringToBool}}" />
+                    </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>

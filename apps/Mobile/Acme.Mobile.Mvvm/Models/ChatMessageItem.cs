@@ -117,6 +117,17 @@ public partial class ChatMessageItem : ObservableObject
         _ => Content
     };
 
+    /// <summary>
+    /// 工具卡片详情文本（参数/结果 JSON），供卡片在消息流中直接展示输入输出，
+    /// 避免只显示工具名看不到调了什么、返回了什么。
+    /// </summary>
+    public string? ToolDetail => ItemType switch
+    {
+        "tool_call" => Input is { Count: > 0 } ? FormatDict(Input) : null,
+        "tool_result" => Output is { Count: > 0 } ? FormatDict(Output) : null,
+        _ => null
+    };
+
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,

@@ -668,7 +668,26 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     _uiThreadDispatcher?.Post(() => ProcessToolEvent(capturedEv));
                     return Task.CompletedTask;
                 },
-                OnApprovalRequest: null, // 手机端暂不支持工具审批交互（TODO）
+                OnApprovalRequest: (req, _) =>
+                {
+                    if (_streamVersion != version) return Task.CompletedTask;
+                    // 手机端无工具审批 UI：明确提示而非静默断流。
+                    // 工具审批由 Agent 的 RequireToolApproval 触发；如需手机端执行工具，
+                    // 请在桌面专家编辑器关闭该 Agent 的「工具审批」开关。
+                    _uiThreadDispatcher?.Post(() =>
+                    {
+                        Messages.Add(new ChatMessageItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            ItemType = "text",
+                            Role = "assistant",
+                            Content = $"⚠️ 工具「{req.ToolName}」需要审批，手机端暂不支持审批交互。请在桌面端专家编辑器关闭该 Agent 的工具审批后重试。",
+                            AuthorName = AgentName,
+                            Timestamp = DateTime.Now
+                        });
+                    });
+                    return Task.CompletedTask;
+                },
                 OnTodoList: null, // 手机端暂不渲染计划卡（TODO）
                 OnError: (text, _) =>
                 {
@@ -689,10 +708,12 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             // 在后台线程执行（避免 Android NetworkOnMainThreadException）
             await Task.Run(async () =>
             {
-                // desiredMode: 规则无 mode；agent/工作流手机端暂无 plan/execute UI → null
+                // desiredMode: 手机端无 plan/execute UI，强制 execute（自主执行），
+                // 否则启用了 AgentModeProvider 的 Agent 会停在默认 plan 模式等「接受计划」而断流。
+                // Agent 未启用 AgentModeProvider 时 TrySetModeAsync 为 no-op，无副作用。
                 await _agentRunner.RunStreamingAsync(
                     _currentConversationId, _agentId, content, handlers,
-                    approvalResponse: null, desiredMode: null, ct);
+                    approvalResponse: null, desiredMode: "execute", ct);
             }, ct);
 
             if (_streamVersion != version) return;
@@ -713,6 +734,19 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             if (_streamVersion != version) return;
             ErrorMessage = $"发送失败: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"[AgentChatDetail] 发送失败: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+            // 就地把异常显示到对话流（不只依赖顶部 ErrorMessage），便于定位工具调用后断流的真因
+            _uiThreadDispatcher?.Post(() =>
+            {
+                Messages.Add(new ChatMessageItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ItemType = "text",
+                    Role = "assistant",
+                    Content = $"❌ 发送失败：{ex.GetType().Name}：{ex.Message}",
+                    AuthorName = AgentName,
+                    Timestamp = DateTime.Now
+                });
+            });
         }
         finally
         {
