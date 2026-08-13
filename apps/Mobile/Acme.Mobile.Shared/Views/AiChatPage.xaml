@@ -33,23 +33,13 @@
                         Command="{Binding OpenDrawerCommand}" />
             </Grid>
 
-            <!-- 消息区：有活动对话时显示 surface（仅消息，输入栏由底部组合提供）；无则空态。
+            <!-- 消息区：始终显示 surface（无活动会话时为空对话面板，底部 agent+LLM 选择条引导发消息，无需空态页）。
                  Surface 的 BindingContext 在 code-behind 被改为 ChatSurface（无 HasActiveChat），
                  故 IsVisible 绑在 wrapper Grid 上（页面上下文），不能直接绑在 Surface 上。 -->
             <Grid Grid.Row="1">
                 <Grid IsVisible="{Binding HasActiveChat}">
                     <views:AgentChatSurface x:Name="Surface" ShowInputBar="False" />
                 </Grid>
-                <VerticalStackLayout IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
-                                     HorizontalOptions="Center" VerticalOptions="Center" Spacing="16" Padding="32">
-                    <Label Text="🤖" FontSize="64" HorizontalOptions="Center" />
-                    <Label Text="选择 AI 助手开始对话" FontSize="17" HorizontalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                    <Label Text="AI 助手可帮你查行情、写策略、分析数据" FontSize="13" HorizontalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                    <Button Text="选择助手" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
-                            Clicked="OnPickAgent" Padding="28,10" HorizontalOptions="Center" />
-                </VerticalStackLayout>
             </Grid>
 
             <!-- 底部组合栏：选择条（agent chip + LLM chip）上沿 + 输入栏，与输入框一体（仅活动对话时显示）。

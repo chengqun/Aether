@@ -223,7 +223,18 @@ public partial class AiChatViewModel : NavigableViewModelBase
         _eventBusService?.Subscribe<ConversationTitleUpdatedEvent>(OnConversationTitleUpdated);
     }
 
-    /// <summary>首次激活：有历史则恢复最近一条，无则空态。</summary>
+    /// <summary>以当前 agent（不在名册则回退首个）在 surface 内开新对话；无可用 agent 时不动作并返回 false。</summary>
+    private async Task<bool> StartNewConversationFromCurrentAsync()
+    {
+        var agent = ChatSurface.AgentName;
+        if (string.IsNullOrEmpty(agent) || (_agentNames != null && !_agentNames.Contains(agent)))
+            agent = _agentNames?.FirstOrDefault();
+        if (string.IsNullOrEmpty(agent)) return false;
+        await StartNewConversationWithAgentAsync(agent);
+        return true;
+    }
+
+    /// <summary>首次激活：有历史则恢复最近一条；无则直接进入新对话（底部已有 agent+LLM 选择条，无需空态页）。</summary>
     private async Task BootstrapAsync()
     {
         var recent = Conversations.OrderByDescending(c => c.LastMessageTime).FirstOrDefault();
@@ -233,7 +244,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
         }
         else
         {
-            HasActiveChat = false;
+            // 无历史会话：直接进入新对话面板（agent chip + LLM chip + 输入栏已就位）。
+            // 有可用 agent 则以其开新会话；无则显示空面板，用户经 agent chip 选择后再发消息。
+            if (!await StartNewConversationFromCurrentAsync())
+                HasActiveChat = true;
         }
     }
 
@@ -333,11 +347,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
     private async Task NewConversation()
     {
         IsDrawerOpen = false;
-        var agent = ChatSurface.AgentName;
-        if (string.IsNullOrEmpty(agent) || (_agentNames != null && !_agentNames.Contains(agent)))
-            agent = _agentNames?.FirstOrDefault();
-        if (string.IsNullOrEmpty(agent)) return;
-        await StartNewConversationWithAgentAsync(agent);
+        await StartNewConversationFromCurrentAsync();
     }
 
     /// <summary>用指定 agent 在 surface 内开新对话（首条消息 lazy-create）。
@@ -390,11 +400,12 @@ public partial class AiChatViewModel : NavigableViewModelBase
             if (_conversationStore != null)
                 await _conversationStore.DeleteAsync(conversationId);
             Conversations.Remove(conv);
-            // 删的是当前活动会话 → 回空态（surface 隐藏，下次切换/新建时 SetParameters 自然重置 Messages）
+            // 删的是当前活动会话 → 直接开新对话（不回空态，底部选择条始终可用）
             if (_activeConversationId == conversationId)
             {
                 _activeConversationId = Guid.Empty;
-                HasActiveChat = false;
+                if (!await StartNewConversationFromCurrentAsync())
+                    HasActiveChat = true;
             }
             StatusMessage = Conversations.Count == 0 ? "暂无 AI 对话" : string.Empty;
         }

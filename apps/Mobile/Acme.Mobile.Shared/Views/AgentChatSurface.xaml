@@ -10,6 +10,7 @@
 
     <ContentView.Resources>
         <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
         <!-- 用户消息：右侧绿色气泡 -->
         <DataTemplate x:Key="UserTextTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
@@ -24,7 +25,7 @@
             <Border Margin="12,4" HorizontalOptions="Fill"
                     BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
                     StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8">
-                <md:MarkdownView MarkdownText="{Binding Content}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
             </Border>
         </DataTemplate>
 

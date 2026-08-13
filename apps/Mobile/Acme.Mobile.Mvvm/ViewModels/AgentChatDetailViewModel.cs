@@ -430,6 +430,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
     /// <summary>
     /// 将 Aether Message 映射为 ChatMessageItem（用于恢复历史消息）。
+    /// 与实时流式保持一致：思考段→思考卡、工具步→tool_call+tool_result 两张卡、文本→气泡。
     /// </summary>
     private IEnumerable<ChatMessageItem> ExpandMessage(Message msg)
     {
@@ -449,42 +450,58 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             yield break;
         }
 
-        // 工具步骤（Role=Tool 或 Metadata.kind=tool）
         var kind = msg.Metadata?.TryGetValue("kind", out var k) == true ? k : null;
+
+        // 思考段（kind=reasoning）—— 还原为思考卡，与实时流式一致。
+        // LLM 历史经 TranscriptHistoryConverter 跳过 reasoning（不入续轮上下文），故持久化安全。
+        if (kind == "reasoning")
+        {
+            if (!string.IsNullOrEmpty(msg.Content))
+            {
+                yield return new ChatMessageItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ItemType = "thinking",
+                    Role = "assistant",
+                    Content = msg.Content,
+                    AuthorName = AgentName,
+                    Timestamp = timestamp
+                };
+            }
+            yield break;
+        }
+
+        // 计划卡（kind=plan）—— 手机端暂不渲染计划卡，跳过
+        if (kind == "plan") yield break;
+
+        // 工具步（Role=Tool / kind=tool，持久化时合并了 call+result）→ 还原为 tool_call + tool_result 两张卡
         if (role == "tool" || kind == "tool")
         {
-            // 解析 input/output JSON
-            Dictionary<string, object>? input = null;
-            Dictionary<string, object>? output = null;
-            if (msg.Metadata?.TryGetValue("input", out var inputJson) == true && !string.IsNullOrEmpty(inputJson))
+            var input = ParseMetaJson(msg.Metadata, "input");
+            var output = ParseMetaJson(msg.Metadata, "output");
+            var toolName = msg.ToolName ?? "tool";
+            yield return new ChatMessageItem
             {
-                try { input = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(inputJson); }
-                catch { }
-            }
-            if (msg.Metadata?.TryGetValue("output", out var outputJson) == true && !string.IsNullOrEmpty(outputJson))
-            {
-                try { output = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(outputJson); }
-                catch { }
-            }
+                Id = Guid.NewGuid().ToString(),
+                ItemType = "tool_call",
+                Role = "assistant",
+                ToolName = toolName,
+                Input = input,
+                AuthorName = AgentName,
+                Timestamp = timestamp
+            };
             yield return new ChatMessageItem
             {
                 Id = Guid.NewGuid().ToString(),
                 ItemType = "tool_result",
                 Role = "assistant",
-                ToolName = msg.ToolName ?? "tool",
-                Input = input,
+                ToolName = toolName,
                 Output = output,
                 AuthorName = AgentName,
                 Timestamp = timestamp
             };
             yield break;
         }
-
-        // 思考段（Metadata.kind=reasoning）—— 历史恢复时跳过，减少噪音
-        if (kind == "reasoning") yield break;
-
-        // 计划卡（Metadata.kind=plan）—— 历史恢复时跳过（手机端暂不渲染计划卡）
-        if (kind == "plan") yield break;
 
         // 普通助手文本
         if (!string.IsNullOrEmpty(msg.Content))
@@ -500,6 +517,14 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 Timestamp = timestamp
             };
         }
+    }
+
+    /// <summary>从 Message.Metadata 解析指定 key 的 JSON 为字典（工具 input/output 还原用）。</summary>
+    private static Dictionary<string, object>? ParseMetaJson(IReadOnlyDictionary<string, string>? meta, string key)
+    {
+        if (meta == null || !meta.TryGetValue(key, out var json) || string.IsNullOrEmpty(json)) return null;
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json); }
+        catch { return null; }
     }
 
     public override Task OnDeactivatedAsync()
@@ -744,12 +769,13 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
             if (_streamVersion != version) return;
 
-            // 刷新剩余未 flush 的 token 到 UI
+            // 刷新剩余未 flush 的 token 到 UI（此处已在 UI 线程，直接调 FinalizeStreaming，
+            // 确保最终文本段已落地 Messages，随后持久化读取的 transcript 完整）
             _flushTimer?.Change(0, Timeout.Infinite);
-            _uiThreadDispatcher?.Post(FinalizeStreaming);
+            FinalizeStreaming();
 
-            // 持久化助手回复（镜像桌面 PersistTurnAsync — 最少持久化 user + assistant）
-            await PersistAssistantReplyAsync(content, fullText.ToString(), ct);
+            // 持久化本轮 transcript（思考 / 工具 / 文本，与实时流式一致）
+            await PersistAssistantReplyAsync(content, ct);
 
             // 首轮 lazy-create 的会话：异步用 LLM 生成简短标题，回写会话并通知 UI 刷新抽屉列表项。
             // 镜像桌面 ChatWorkspaceViewModel.GenerateAndApplyTitleAsync（justCreated 后 fire-and-forget）。
@@ -894,8 +920,9 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     /// <summary>
     /// 持久化本轮 transcript 到 IConversationStore（镜像桌面 PersistTurnAsync）。
     /// 首轮 user 消息已在 lazy-create 时追加；非首轮在此补回。
+    /// 本轮中间过程（思考 / 工具调用+结果 / 文本旁白 / 最终回答）按显示顺序持久化，使查看历史与实时流式一致。
     /// </summary>
-    private async Task PersistAssistantReplyAsync(string userContent, string assistantText, CancellationToken ct)
+    private async Task PersistAssistantReplyAsync(string userContent, CancellationToken ct)
     {
         if (_currentConversationId == Guid.Empty || _conversationStore == null) return;
         try
@@ -908,11 +935,41 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             if (last is null || last.Role != MessageRole.User || last.Content != userContent)
                 conv.Append(Message.User(userContent));
 
-            // 追加助手回复
-            if (!string.IsNullOrWhiteSpace(assistantText))
+            // 持久化本轮助手侧 transcript（思考 / 工具 / 文本）。工具 call+result 合并为单条 Role=Tool 消息
+            // （input+output），TranscriptHistoryConverter 还原为 FunctionCall+FunctionResult 配对并经 Sanitize
+            // 兜底——续轮不会触发 400。reasoning 段 converter 跳过不入 LLM 历史，仅用于 UI 还原。
+            var turnItems = CollectCurrentTurnAssistantItems();
+            ChatMessageItem? pendingToolCall = null;
+            foreach (var item in turnItems)
             {
-                conv.Append(Message.Assistant(assistantText));
+                switch (item.ItemType)
+                {
+                    case "thinking":
+                        if (!string.IsNullOrEmpty(item.Content))
+                            conv.Append(new Message
+                            {
+                                Role = MessageRole.Assistant,
+                                Content = item.Content,
+                                Metadata = new Dictionary<string, string> { ["kind"] = "reasoning" }
+                            });
+                        break;
+                    case "tool_call":
+                        pendingToolCall = item; // 等配对的 tool_result 合并落库
+                        break;
+                    case "tool_result":
+                        conv.Append(ToToolMessage(pendingToolCall, item));
+                        pendingToolCall = null;
+                        break;
+                    default: // text（旁白 / 最终回答）
+                        if (!string.IsNullOrWhiteSpace(item.Content))
+                            conv.Append(Message.Assistant(item.Content));
+                        break;
+                }
             }
+            // 残留未配对的 tool_call（流式中断）→ 单独落一条（Sanitize 当孤儿丢弃，安全）
+            if (pendingToolCall != null)
+                conv.Append(ToToolMessage(pendingToolCall, null));
+
             await _conversationStore.SaveAsync(conv, ct);
         }
         catch (Exception ex)
@@ -920,6 +977,37 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             // 持久化失败不阻塞对话
             System.Diagnostics.Debug.WriteLine($"[AgentChatDetail] 持久化失败: {ex.Message}");
         }
+    }
+
+    /// <summary>从 <see cref="Messages"/> 取本轮用户消息之后的所有助手项（思考/工具/文本），按显示顺序持久化。</summary>
+    private List<ChatMessageItem> CollectCurrentTurnAssistantItems()
+    {
+        var result = new List<ChatMessageItem>();
+        int userIdx = -1;
+        for (int i = Messages.Count - 1; i >= 0; i--)
+        {
+            if (Messages[i].Role == "user" && Messages[i].ItemType == "text")
+            {
+                userIdx = i;
+                break;
+            }
+        }
+        if (userIdx < 0) return result;
+        for (int i = userIdx + 1; i < Messages.Count; i++)
+            result.Add(Messages[i]);
+        return result;
+    }
+
+    /// <summary>把工具调用(call)+结果(result)合并为单条 Role=Tool 持久化消息（匹配 TranscriptHistoryConverter）。</summary>
+    private static Message ToToolMessage(ChatMessageItem? call, ChatMessageItem? result)
+    {
+        var meta = new Dictionary<string, string> { ["kind"] = "tool" };
+        var toolName = (call ?? result)?.ToolName ?? "tool";
+        if (call?.Input is { Count: > 0 })
+            meta["input"] = System.Text.Json.JsonSerializer.Serialize(call.Input);
+        if (result?.Output is { Count: > 0 })
+            meta["output"] = System.Text.Json.JsonSerializer.Serialize(result.Output);
+        return new Message { Role = MessageRole.Tool, ToolName = toolName, Content = string.Empty, Metadata = meta };
     }
 
     private void PublishNewAgentConversation(int type, string name, string? context)
