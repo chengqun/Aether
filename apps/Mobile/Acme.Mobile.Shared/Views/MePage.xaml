@@ -83,6 +83,25 @@
                     </Grid>
                     <BoxView Style="{StaticResource Divider}" Margin="14,0" />
 
+                    <!-- 同步证券（仅行情/Stockapp 租户显示） -->
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12"
+                          IsVisible="{Binding IsStockTenant}">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding SyncSecuritiesCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="📈" FontSize="20" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="同步证券" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="{Binding SyncSecuritiesStatus}" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                   IsVisible="{Binding SyncSecuritiesStatus, Converter={StaticResource StringToBool}}" />
+                        </VerticalStackLayout>
+                        <ActivityIndicator Grid.Column="2" IsRunning="{Binding IsSyncingSecurities}"
+                                           IsVisible="{Binding IsSyncingSecurities}" VerticalOptions="Center" />
+                    </Grid>
+                    <BoxView Style="{StaticResource Divider}" Margin="14,0" IsVisible="{Binding IsStockTenant}" />
+
                     <!-- 创建群组 -->
                     <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
                         <Grid.GestureRecognizers>

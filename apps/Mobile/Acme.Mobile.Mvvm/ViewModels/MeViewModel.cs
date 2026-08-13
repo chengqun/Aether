@@ -1,5 +1,6 @@
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
+using Acme.Securities.Application;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +21,9 @@ public partial class MeViewModel : NavigableViewModelBase
     private readonly IPlatformInfo? _platformInfo;
     private readonly IUpdateService? _updateService;
     private readonly ISignalRChatService? _signalRChatService;
+    private readonly ISecurityClientSyncService? _securitySyncService;
+    private readonly IToastService? _toastService;
+    private readonly AppServerOptions? _serverOptions;
 
     [ObservableProperty]
     private string _username = "未登录";
@@ -51,6 +55,17 @@ public partial class MeViewModel : NavigableViewModelBase
     [ObservableProperty]
     private CheckUpdateResult? _latestUpdateInfo;
 
+    [ObservableProperty]
+    private bool _isSyncingSecurities;
+
+    [ObservableProperty]
+    private string _syncSecuritiesStatus = string.Empty;
+
+    /// <summary>
+    /// 是否为行情（Stockapp）租户——仅此租户有证券数据/AI 行情工具，「同步证券」仅对它显示。
+    /// </summary>
+    public bool IsStockTenant => _serverOptions?.Tenant == "stockapp";
+
     /// <summary>
     /// 导航请求事件
     /// </summary>
@@ -77,7 +92,10 @@ public partial class MeViewModel : NavigableViewModelBase
                        IUpdateService? updateService = null,
                        IUIThreadDispatcher? uiThreadDispatcher = null,
                        ISignalRChatService? signalRChatService = null,
-                       IAppTokenStore? tokenStore = null)
+                       IAppTokenStore? tokenStore = null,
+                       ISecurityClientSyncService? securitySyncService = null,
+                       IToastService? toastService = null,
+                       AppServerOptions? serverOptions = null)
     {
         _authService = authService;
         _tokenStore = tokenStore;
@@ -86,6 +104,9 @@ public partial class MeViewModel : NavigableViewModelBase
         _updateService = updateService;
         _uiThreadDispatcher = uiThreadDispatcher;
         _signalRChatService = signalRChatService;
+        _securitySyncService = securitySyncService;
+        _toastService = toastService;
+        _serverOptions = serverOptions;
     }
 
     [RelayCommand]
@@ -265,6 +286,47 @@ public partial class MeViewModel : NavigableViewModelBase
         finally
         {
             IsCheckingUpdate = false;
+        }
+    }
+
+    /// <summary>
+    /// 手动同步证券数据到本地 securities.db（镜像桌面期货页「同步证券」按钮）。
+    /// 手机端 Quotes AI 工具（QuerySecurity）查的是本地缓存，不同步则查空库。
+    /// </summary>
+    [RelayCommand]
+    private async Task SyncSecuritiesAsync()
+    {
+        if (_securitySyncService == null || IsSyncingSecurities) return;
+
+        IsSyncingSecurities = true;
+        SyncSecuritiesStatus = "正在同步证券...";
+
+        try
+        {
+            var result = await Task.Run(() => _securitySyncService.SyncFromServerAsync());
+
+            if (result != null)
+            {
+                SyncSecuritiesStatus = result.SyncedCount > 0
+                    ? $"已同步 {result.SyncedCount} 条证券"
+                    : "已是最新";
+                await (_toastService?.ShowAsync($"证券同步完成（{result.SyncedCount} 条）") ?? Task.CompletedTask);
+            }
+            else
+            {
+                SyncSecuritiesStatus = "同步失败";
+                await (_toastService?.ShowAsync("证券同步失败") ?? Task.CompletedTask);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MeViewModel] 证券同步失败: {ex.Message}");
+            SyncSecuritiesStatus = "同步失败";
+            await (_toastService?.ShowAsync("证券同步失败，请检查网络") ?? Task.CompletedTask);
+        }
+        finally
+        {
+            IsSyncingSecurities = false;
         }
     }
 

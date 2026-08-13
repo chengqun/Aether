@@ -1,4 +1,6 @@
+using Acme.AppAuth.Domain;
 using Acme.Mobile.Mvvm.Services;
+using Acme.Securities.Application;
 
 namespace Acme.Mobile.Shared.Services;
 
@@ -8,14 +10,23 @@ namespace Acme.Mobile.Shared.Services;
 /// 运行时（<c>IAgentConfigInitializer.RefreshLlmConfigAsync</c>），无 HTTP。不在此启 SignalR（ChatViewModel
 /// 首次激活时 lazy 连，同 AlphaAgent）。</para>
 /// <para>Tier2 <see cref="StartBackgroundSyncsAsync"/>（fire-and-forget，ChatPage 激活后调）：catch-all，永不阻塞 UI。
-/// 各缓存/会话同步由对应 VM 激活时自行触发，此处仅作占位 + 未来扩展（如后台证券同步）。</para>
+/// 各缓存/会话同步由对应 VM 激活时自行触发；此处对行情（Stockapp）租户做后台证券增量同步——
+/// Quotes AI 工具查本地 securities.db，不同步则查空库（对标桌面 CtpViewModel 启动 fire-and-forget 同步）。</para>
 /// </summary>
 public sealed class MobilePostLoginInitializer : IPostLoginInitializer
 {
     private readonly IAgentConfigInitializer? _agentConfigInitializer;
+    private readonly ISecurityClientSyncService? _securitySyncService;
+    private readonly AppServerOptions? _serverOptions;
 
-    public MobilePostLoginInitializer(IAgentConfigInitializer? agentConfigInitializer = null)
-        => _agentConfigInitializer = agentConfigInitializer;
+    public MobilePostLoginInitializer(IAgentConfigInitializer? agentConfigInitializer = null,
+                                      ISecurityClientSyncService? securitySyncService = null,
+                                      AppServerOptions? serverOptions = null)
+    {
+        _agentConfigInitializer = agentConfigInitializer;
+        _securitySyncService = securitySyncService;
+        _serverOptions = serverOptions;
+    }
 
     public async Task<PostLoginResult> InitializeCriticalAsync()
     {
@@ -39,8 +50,25 @@ public sealed class MobilePostLoginInitializer : IPostLoginInitializer
     {
         try
         {
-            // Tier2 占位：各社交缓存的同步由对应 VM 激活时触发（cache-first + 后台增量）。
-            // 未来可在此追加后台证券同步等租户无关的 fire-and-forget 任务。
+            // Tier2：各社交缓存的同步由对应 VM 激活时触发（cache-first + 后台增量）。
+            // 行情（Stockapp）租户：后台证券增量同步（fire-and-forget，永不阻塞 UI）。
+            // Quotes AI 工具（QuerySecurity）查本地 securities.db，首次全量、后续增量。
+            if (_securitySyncService != null && _serverOptions?.Tenant == "stockapp")
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var result = await _securitySyncService.SyncFromServerAsync().ConfigureAwait(false);
+                        System.Diagnostics.Debug.WriteLine($"[PostLogin] 后台证券同步完成: {result.SyncedCount} 条");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[PostLogin] 后台证券同步失败: {ex.Message}");
+                    }
+                });
+            }
+
             await Task.CompletedTask;
         }
         catch (Exception ex)
