@@ -83,6 +83,28 @@ public static class TranscriptHistoryConverter
         return list;
     }
 
+    /// <summary>
+    /// <see cref="Sanitize"/> 的「活路径」子集，用于包装 LLM 客户端、在每次发请求前就地修正
+    /// tool 消息结构（修 DeepSeek 等 OpenAI 兼容端点的「Messages with role tool must be a
+    /// response to a preceding message with tool_calls」400）。
+    /// <para>与 <see cref="Sanitize"/> 的关键区别：<b>不做</b> <see cref="MergeConsecutiveSameRole"/>
+    /// 与 <see cref="TrimTrailingNonAssistant"/>——活路径的工具续轮请求合法地以 tool_result 消息收尾
+    /// （让 LLM 看到工具返回继续生成），裁剪尾部非 assistant 会删掉这个 tool_result、令 LLM 收不到
+    /// 工具结果而空转。活路径只需修「结构非法」的孤儿，不需保「历史以 assistant 结尾」不变量。</para>
+    /// <para>幂等：对已合法历史无副作用（配对完整的 tool_use/tool_result 原样放行）。</para>
+    /// </summary>
+    public static List<ChatMessage> SanitizeLive(IEnumerable<ChatMessage>? messages)
+    {
+        var list = (messages ?? Enumerable.Empty<ChatMessage>()).Select(Clone).ToList();
+        if (list.Count == 0) return list;
+
+        SynthesizeEmptyCallIds(list);
+        DropOrphanToolContents(list);
+        FixEmptyToolResults(list);
+        RemoveEmptyMessages(list);
+        return list;
+    }
+
     // 浅拷贝：Sanitize 会就地改 Contents（删/替换 content），不能改到调用方持有的原始消息。
     private static ChatMessage Clone(ChatMessage src)
     {

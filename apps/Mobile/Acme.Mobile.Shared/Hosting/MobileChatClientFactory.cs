@@ -36,7 +36,7 @@ public sealed class MobileChatClientFactory : IChatClientFactory
             var selectedId = _llmHolder.LlmConfigId;
             if (!string.IsNullOrWhiteSpace(selectedId))
                 return _clients.GetOrAdd(selectedId, id => BuildClient(id));
-            return _defaultClient;
+            return Wrap(_defaultClient, "mobile-default");
         }
         return _clients.GetOrAdd(modelId, id => BuildClient(id));
     }
@@ -44,15 +44,23 @@ public sealed class MobileChatClientFactory : IChatClientFactory
     private IChatClient BuildClient(string configId)
     {
         var config = ResolveConfig(configId);
-        if (config is null) return _defaultClient;
+        if (config is null) return Wrap(_defaultClient, "mobile-default");
 
         OpenAIClient client = string.IsNullOrWhiteSpace(config.Endpoint)
             ? new OpenAIClient(config.ApiKey)
             : new OpenAIClient(
                 new System.ClientModel.ApiKeyCredential(config.ApiKey),
                 new OpenAIClientOptions { Endpoint = new Uri(config.Endpoint!) });
-        return client.GetChatClient(config.ModelName).AsIChatClient();
+        return Wrap(client.GetChatClient(config.ModelName).AsIChatClient(), "mobile");
     }
+
+    /// <summary>
+    /// 包一层 <see cref="ToolHistorySanitizingChatClient"/>：发请求前修孤儿 tool 消息，
+    /// 防 DeepSeek 等 OpenAI 兼容端点报「tool must be a response to a preceding message with tool_calls」400
+    /// （NoMemory 跨步重置 / 滑窗裁断 / 审批残留等都会造出孤儿 tool_result）。配对完整时原样放行。
+    /// </summary>
+    private static IChatClient Wrap(IChatClient inner, string label)
+        => new ToolHistorySanitizingChatClient(inner, label);
 
     private LlmConfigDto? ResolveConfig(string configId)
     {
