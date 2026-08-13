@@ -6,6 +6,7 @@
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
+    Shell.NavBarIsVisible="False"
     Title="AI">
 
     <ContentPage.Resources>
@@ -13,31 +14,48 @@
     </ContentPage.Resources>
 
     <Grid x:Name="RootGrid">
-        <!-- 主列：header + 聊天面板/空态 -->
-        <Grid RowDefinitions="Auto,*">
-            <!-- header：‹ 返回 / ≡ 抽屉 / agent 名 / ＋新对话 -->
-            <Grid Grid.Row="0" ColumnDefinitions="44,44,*,44" Padding="4,0"
+        <!-- 主列：header + 选择条 + 聊天面板/空态 -->
+        <Grid RowDefinitions="Auto,Auto,*">
+            <!-- header：‹ 返回(左) / ≡ 历史 + ＋新对话(右) — 历史远离左侧返回防误触 -->
+            <Grid Grid.Row="0" ColumnDefinitions="44,*,44,44" Padding="4,0"
                   BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
                 <Button Grid.Column="0" Text="‹" FontSize="34" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding CloseAiCommand}" />
-                <Button Grid.Column="1" Text="≡" FontSize="22" Padding="0"
+                <Button Grid.Column="2" Text="≡" FontSize="22" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding OpenDrawerCommand}" />
-                <Label Grid.Column="2" Text="{Binding ChatSurface.AgentName, FallbackValue='AI 助手'}"
-                       FontSize="16" FontFamily="OpenSansSemibold"
-                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                       HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
                 <Button Grid.Column="3" Text="＋" FontSize="26" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding NewConversationCommand}" />
             </Grid>
 
-            <!-- 聊天面板（有活动对话时） -->
-            <views:AgentChatSurface Grid.Row="1" x:Name="Surface" IsVisible="{Binding HasActiveChat}" />
+            <!-- 选择条：agent chip(左,点=换助手) + LLM chip(右,点=选 LLM) — 与桌面端一致 -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Padding="12,4,12,6" ColumnSpacing="8"
+                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+                <!-- agent chip -->
+                <Button Grid.Column="0" HorizontalOptions="Start" Padding="14,6" FontSize="13"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        Text="{Binding ChatSurface.AgentName, StringFormat='🤖 {0} ▾', FallbackValue='🤖 选择助手 ▾'}"
+                        Command="{Binding NewConversationCommand}" />
+                <!-- LLM chip -->
+                <Button Grid.Column="1" x:Name="LlmChip" HorizontalOptions="End" Padding="14,6" FontSize="13"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        Text="{Binding CurrentLlmName, StringFormat='⚡ {0} ▾'}"
+                        Clicked="OnPickLlm" />
+            </Grid>
+
+            <!-- 聊天面板（有活动对话时）—— wrapper 绑页面 HasActiveChat（页面上下文）；
+                 surface 内部由 code-behind 设 BindingContext=ChatSurface 绑 Messages/输入栏。
+                 不直接在 Surface 上绑 HasActiveChat：Surface.BindingContext 被改为 ChatSurface 后该绑定会失效。 -->
+            <Grid Grid.Row="2" IsVisible="{Binding HasActiveChat}">
+                <views:AgentChatSurface x:Name="Surface" />
+            </Grid>
 
             <!-- 空态（无活动对话时） -->
-            <VerticalStackLayout Grid.Row="1" IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
+            <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
                                  HorizontalOptions="Center" VerticalOptions="Center" Spacing="16" Padding="32">
                 <Label Text="🤖" FontSize="64" HorizontalOptions="Center" />
                 <Label Text="选择 AI 助手开始对话" FontSize="17" HorizontalOptions="Center"
@@ -56,11 +74,14 @@
             </BoxView.GestureRecognizers>
         </BoxView>
 
-        <!-- 左侧抽屉：历史会话列表 -->
-        <Border x:Name="Drawer" WidthRequest="300" HorizontalOptions="Start"
-                TranslationX="-300" InputTransparent="False"
+        <!-- 右侧抽屉：历史会话列表（从右滑入，与右侧 ≡ 按钮对应）。
+             InputTransparent=True 初始（关闭态）——抽屉仅靠 TranslationX 移出屏幕，
+             但 MAUI 平移不改变命中测试区，故关闭时必须 InputTransparent 让触摸穿透，
+             否则会挡住底栏发送按钮 / LLM chip（均在右侧）。开合时由 code-behind 翻转。 -->
+        <Border x:Name="Drawer" WidthRequest="300" HorizontalOptions="End"
+                TranslationX="300" InputTransparent="True"
                 BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
-                StrokeShape="RoundRectangle 0,16,16,0" StrokeThickness="0">
+                StrokeShape="RoundRectangle 16,0,0,16" StrokeThickness="0">
             <Grid RowDefinitions="Auto,*,Auto" Padding="0">
                 <!-- 抽屉头：＋新对话 -->
                 <Button Grid.Row="0" Text="＋ 新对话" Style="{StaticResource PrimaryButton}"

@@ -41,14 +41,16 @@ public partial class AiChatPage : ContentPage
     private async Task AnimateDrawerAsync(bool open)
     {
         Backdrop.InputTransparent = !open;
+        // 抽屉关闭时穿透触摸（平移不改变命中测试区，否则挡住右侧发送按钮/LLM chip）
+        Drawer.InputTransparent = !open;
         if (open)
         {
             Drawer.IsVisible = true;
             Backdrop.IsVisible = true;
         }
-        // 抽屉横向平移 + 遮罩透明度
+        // 抽屉从右横向平移 + 遮罩透明度
         await Task.WhenAll(
-            Drawer.TranslateTo(open ? 0 : -300, 0, 200, Easing.SinOut),
+            Drawer.TranslateTo(open ? 0 : 300, 0, 200, Easing.SinOut),
             Backdrop.FadeTo(open ? 1 : 0, 200));
         if (!open)
         {
@@ -63,6 +65,31 @@ public partial class AiChatPage : ContentPage
         // 清除选择，便于再次点同一项
         ((CollectionView)sender!).SelectedItem = null;
         await _vm.SelectHistoryAsync(item);
+    }
+
+    /// <summary>LLM chip 点击：弹 ActionSheet 选 LLM（"默认"=回退平台默认；与桌面端全局默认语义一致）。</summary>
+    private async void OnPickLlm(object? sender, EventArgs e)
+    {
+        var configs = _vm.LlmConfigs;
+        if (configs == null || configs.Count == 0)
+        {
+            await DisplayAlert("提示", "暂无可选 LLM 配置，请先在「我 → LLM 配置」中添加。", "知道了");
+            return;
+        }
+
+        // 破坏按钮选项："使用默认" 排第一（选它=回退默认），其余为各配置名。
+        var names = new List<string> { "使用默认" };
+        names.AddRange(configs.Select(c => c.Name));
+        var choice = await DisplayActionSheet("选择 LLM", "取消", null, names.ToArray());
+        if (choice == null || choice == "取消") return;
+
+        if (choice == "使用默认")
+        {
+            _vm.SetLlm(null);
+            return;
+        }
+        var matched = configs.FirstOrDefault(c => c.Name == choice);
+        if (matched != null) _vm.SetLlm(matched);
     }
 
     protected override async void OnAppearing()

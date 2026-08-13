@@ -11,11 +11,11 @@
     <ShellContent Title="启动" ContentTemplate="{DataTemplate views:SplashPage}" Route="SplashPage" />
     <ShellContent Title="登录" ContentTemplate="{DataTemplate views:LoginPage}" Route="LoginPage" />
 
-    <!-- 主页 TabBar（聊天/AI/通讯录/发现/我 五 tab；图标 svg 在 Mobile.Shared/Resources/Images） -->
+    <!-- 主页 TabBar（聊天/通讯录/AI/发现/我 五 tab；AI 居中；图标 svg 在 Mobile.Shared/Resources/Images） -->
     <TabBar Route="Main">
         <ShellContent Title="聊天" Icon="chat" ContentTemplate="{DataTemplate views:ChatPage}" Route="ChatPage" />
-        <ShellContent Title="AI" Icon="ai" ContentTemplate="{DataTemplate views:AiChatPage}" Route="AiChatPage" Shell.TabBarIsVisible="False" />
         <ShellContent Title="通讯录" Icon="contact" ContentTemplate="{DataTemplate views:ContactsPage}" Route="ContactsPage" />
+        <ShellContent Title="AI" Icon="ai" ContentTemplate="{DataTemplate views:AiChatPage}" Route="AiChatPage" Shell.TabBarIsVisible="False" />
         <ShellContent Title="发现" Icon="discovery" ContentTemplate="{DataTemplate views:DiscoveryPage}" Route="DiscoveryPage" />
         <ShellContent Title="我" Icon="me" ContentTemplate="{DataTemplate views:MePage}" Route="MePage" />
     </TabBar>

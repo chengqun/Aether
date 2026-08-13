@@ -41,6 +41,9 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     private bool _isLoaded = false;
     private Guid _currentConversationId = Guid.Empty; // Guid.Empty = 未创建，首次发送时 lazy-create
     private Guid _agentId = Guid.Empty; // 由 ICatalog 按名称解析
+
+    /// <summary>当前解析到的 agent Id（供宿主 VM 在 LLM 切换后 Invalidate 缓存）。Guid.Empty=未解析。</summary>
+    public Guid AgentId => _agentId;
     private bool _agentResolved = false; // agent id/kind 是否已解析
     private bool _shouldAutoQueryStock = false; // 股票新会话需自动查询
     private string _previousKey = string.Empty;
@@ -575,6 +578,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         if (_agentId == Guid.Empty)
         {
             ErrorMessage = $"未找到 Agent「{AgentName}」，请确认已创建";
+            ShowInlineError($"未找到 Agent「{AgentName}」。该助手可能未在本机创建/同步，请在桌面端创建后同步，或重新选择助手。");
             return;
         }
 
@@ -1064,6 +1068,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         {
             ErrorMessage = "服务未初始化";
             System.Diagnostics.Debug.WriteLine($"[AgentChatDetail] SendMessageAsync: _agentRunner is null");
+            ShowInlineError("服务未初始化，无法发送。请重启 App 或检查登录状态。");
             return;
         }
 
@@ -1074,5 +1079,22 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         MessageText = string.Empty;
 
         await StreamResponseAsync(content);
+    }
+
+    /// <summary>在对话流里显示一条错误提示（替代静默 return，便于定位发送失败的真因）。</summary>
+    private void ShowInlineError(string message)
+    {
+        _uiThreadDispatcher?.Post(() =>
+        {
+            Messages.Add(new ChatMessageItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                ItemType = "text",
+                Role = "assistant",
+                Content = $"❌ {message}",
+                AuthorName = AgentName,
+                Timestamp = DateTime.Now
+            });
+        });
     }
 }

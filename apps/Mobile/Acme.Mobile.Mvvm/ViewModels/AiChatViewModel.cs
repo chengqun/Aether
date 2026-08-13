@@ -6,10 +6,13 @@ using System.Threading.Tasks;
 using Acme.Agents.AI;
 using Acme.AppAuth.Domain;
 using Acme.ChatSocial.Domain;
+using Acme.Llm.Application;
+using Acme.Llm.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Notes.Domain;
+using Aether.AI.Harness;
 using Aether.AI.Memory;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -29,9 +32,14 @@ public partial class AiChatViewModel : NavigableViewModelBase
     private readonly ICustomAgentCatalog? _agentCatalog;
     private readonly IEventBusService? _eventBusService;
     private readonly ICurrentUser? _currentUser;
+    private readonly ILlmConfigService? _llmConfigService;
+    private readonly SelectedLlmHolder? _llmHolder;
+    private readonly ICustomAgentRunner? _agentRunner;
+    private readonly IAppSettings? _appSettings;
     private Guid? _cachedUserId;
     private bool _isSubscribed = false;
     private bool _isBootstrapped = false;
+    private bool _isLlmLoaded = false;
     /// <summary>当前 surface 活动会话 Id（抽屉切换时记录；picker 新对话为 <see cref="Guid.Empty"/> 哨兵，
     /// 待 <see cref="OnNewConversation"/> 回填）。用于删除时判断是否回到空态。</summary>
     private Guid _activeConversationId = Guid.Empty;
@@ -59,6 +67,13 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [ObservableProperty]
     private ObservableConversation? _selectedHistory;
 
+    /// <summary>可选 LLM 配置列表（供页面 ActionSheet 渲染；<c>null</c>=未加载/不可用）。</summary>
+    public List<LlmConfigDto>? LlmConfigs { get; private set; }
+
+    /// <summary>当前 LLM 显示名（"默认"=未选/用平台默认；与桌面端一致的全局默认语义，非按会话）。</summary>
+    [ObservableProperty]
+    private string _currentLlmName = "默认";
+
     /// <summary>导航请求（Mvvm 库不引用 MAUI Shell，由页面 code-behind 订阅执行 <c>Shell.Current.GoToAsync</c>）。</summary>
     public event EventHandler<NavigationRequestedEvent>? NavigationRequested;
 
@@ -68,7 +83,11 @@ public partial class AiChatViewModel : NavigableViewModelBase
         ICustomAgentCatalog? agentCatalog = null,
         IEventBusService? eventBusService = null,
         ICurrentUser? currentUser = null,
-        IUIThreadDispatcher? uiThreadDispatcher = null)
+        IUIThreadDispatcher? uiThreadDispatcher = null,
+        ILlmConfigService? llmConfigService = null,
+        SelectedLlmHolder? llmHolder = null,
+        ICustomAgentRunner? agentRunner = null,
+        IAppSettings? appSettings = null)
     {
         ChatSurface = chatSurface;
         _conversationStore = conversationStore;
@@ -76,6 +95,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
         _eventBusService = eventBusService;
         _currentUser = currentUser;
         _uiThreadDispatcher = uiThreadDispatcher;
+        _llmConfigService = llmConfigService;
+        _llmHolder = llmHolder;
+        _agentRunner = agentRunner;
+        _appSettings = appSettings;
     }
 
     private async Task<Guid> GetCurrentUserIdAsync()
@@ -101,6 +124,12 @@ public partial class AiChatViewModel : NavigableViewModelBase
     {
         SubscribeEvents();
         await LoadConversationsAsync();
+        // 首次激活加载 LLM 列表 + 恢复持久化的选择（写回 holder 让 MobileChatClientFactory 用上）。
+        if (!_isLlmLoaded)
+        {
+            _isLlmLoaded = true;
+            await LoadLlmConfigsAsync();
+        }
 
         // 仅首次激活 bootstrap：恢复最近会话或进入空态。后续激活（tab 回切/picker 返回）只刷新历史列表。
         if (!_isBootstrapped)
@@ -114,6 +143,48 @@ public partial class AiChatViewModel : NavigableViewModelBase
     {
         // 取消在跑流式 + 停后台服务（不清 Messages，回切时保持）。
         await ChatSurface.OnDeactivatedAsync();
+    }
+
+    /// <summary>加载 LLM 配置列表并恢复持久化的选择（写回 <see cref="SelectedLlmHolder"/>，与桌面端全局默认语义一致）。</summary>
+    private async Task LoadLlmConfigsAsync()
+    {
+        if (_llmConfigService == null) return;
+        try
+        {
+            LlmConfigs = await Task.Run(() => _llmConfigService.GetCachedAsync());
+            // 恢复上次选择：持久化 id 命中列表则写 holder + 刷新显示名，否则回退默认。
+            var savedId = _appSettings?.GetString("selectedLlmId", string.Empty);
+            if (!string.IsNullOrEmpty(savedId) && Guid.TryParse(savedId, out var id))
+            {
+                var matched = LlmConfigs?.FirstOrDefault(c => c.Id == id);
+                if (matched != null)
+                {
+                    if (_llmHolder != null) _llmHolder.LlmConfigId = savedId;
+                    CurrentLlmName = matched.Name;
+                }
+            }
+            else
+            {
+                CurrentLlmName = "默认";
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AiChatViewModel] 加载 LLM 配置失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>切换全局默认 LLM（与桌面端一致：写 holder + 持久化 + Invalidate 当前 agent 缓存）。
+    /// 传 <c>null</c> = 回退平台默认。</summary>
+    public void SetLlm(LlmConfigDto? config)
+    {
+        var id = config?.Id.ToString() ?? string.Empty;
+        if (_llmHolder != null) _llmHolder.LlmConfigId = string.IsNullOrEmpty(id) ? null : id;
+        try { _appSettings?.SetString("selectedLlmId", id); } catch { /* 无 store 则跳过持久化 */ }
+        CurrentLlmName = config?.Name ?? "默认";
+        // Invalidate 当前 agent 缓存，让下一轮用新 LLM 重建（MobileChatClientFactory 读 holder）。
+        var agentId = ChatSurface.AgentId;
+        if (agentId != Guid.Empty) _agentRunner?.Invalidate(agentId);
     }
 
     private void SubscribeEvents()
