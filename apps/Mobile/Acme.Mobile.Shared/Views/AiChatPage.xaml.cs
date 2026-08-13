@@ -13,6 +13,9 @@ namespace Acme.Mobile.Shared.Views;
 public partial class AiChatPage : ContentPage
 {
     private readonly AiChatViewModel _vm;
+#if IOS
+    private UIKit.UIScreenEdgePanGestureRecognizer? _backEdgePan;
+#endif
 
     public AiChatPage(AiChatViewModel viewModel)
     {
@@ -23,6 +26,37 @@ public partial class AiChatPage : ContentPage
         _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.NavigationRequested += OnNavigationRequested;
     }
+
+    protected override void OnHandlerChanged()
+    {
+        base.OnHandlerChanged();
+#if IOS
+        // AI 页是全屏 tab（非推送页），无原生 swipe-back。挂一个左边缘右滑手势，复刻 iOS 推送页
+        // 的边缘滑动返回：触发与 ‹ 按钮相同的 CloseAi 路径。仅左边缘激活，不干扰消息区滚动。
+        if (Handler?.PlatformView is UIKit.UIView pv && _backEdgePan == null)
+        {
+            _backEdgePan = new UIKit.UIScreenEdgePanGestureRecognizer(HandleBackEdgePan)
+            {
+                Edges = UIKit.UIRectEdge.Left
+            };
+            pv.AddGestureRecognizer(_backEdgePan);
+        }
+#endif
+    }
+
+#if IOS
+    private void HandleBackEdgePan()
+    {
+        if (_backEdgePan?.State != UIKit.UIGestureRecognizerState.Recognized) return;
+        // 抽屉开着时，边缘右滑先关抽屉（而非返回），避免误退
+        if (_vm.IsDrawerOpen)
+        {
+            _vm.IsDrawerOpen = false;
+            return;
+        }
+        _vm.CloseAiCommand.Execute(null);
+    }
+#endif
 
     private async void OnNavigationRequested(object? sender, NavigationRequestedEvent e)
     {
