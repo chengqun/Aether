@@ -14,10 +14,10 @@
     </ContentPage.Resources>
 
     <Grid x:Name="RootGrid">
-        <!-- 主列：header + 选择条 + 聊天面板/空态 -->
-        <Grid RowDefinitions="Auto,Auto,*">
-            <!-- header：‹ 返回(左) / ≡ 历史 + ＋新对话(右) — 历史远离左侧返回防误触 -->
-            <Grid Grid.Row="0" ColumnDefinitions="44,*,44,44" Padding="4,0"
+        <!-- 主列：header + 消息区 + 底部选择条/输入栏 -->
+        <Grid RowDefinitions="Auto,*,Auto">
+            <!-- header：‹ 返回(左) / ≡ 历史(右) —— ＋ 已移除（agent 选择下移到输入栏上沿） -->
+            <Grid Grid.Row="0" ColumnDefinitions="44,*,44" Padding="4,0"
                   BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
                 <Button Grid.Column="0" Text="‹" FontSize="34" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
@@ -25,49 +25,62 @@
                 <Button Grid.Column="2" Text="≡" FontSize="22" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding OpenDrawerCommand}" />
-                <Button Grid.Column="3" Text="＋" FontSize="26" Padding="0"
-                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                        Command="{Binding NewConversationCommand}" />
             </Grid>
 
-            <!-- 选择条：agent chip(左,点=换助手) + LLM chip(右,点=选 LLM) — 与桌面端一致 -->
-            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Padding="12,4,12,6" ColumnSpacing="8"
-                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                <!-- agent chip -->
-                <Button Grid.Column="0" HorizontalOptions="Start" Padding="14,6" FontSize="13"
-                        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
-                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                        Text="{Binding ChatSurface.AgentName, StringFormat='🤖 {0} ▾', FallbackValue='🤖 选择助手 ▾'}"
-                        Command="{Binding NewConversationCommand}" />
-                <!-- LLM chip -->
-                <Button Grid.Column="1" x:Name="LlmChip" HorizontalOptions="End" Padding="14,6" FontSize="13"
-                        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
-                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                        Text="{Binding CurrentLlmName, StringFormat='⚡ {0} ▾'}"
-                        Clicked="OnPickLlm" />
+            <!-- 消息区：有活动对话时显示 surface（仅消息，输入栏由底部组合提供）；无则空态。
+                 Surface 的 BindingContext 在 code-behind 被改为 ChatSurface（无 HasActiveChat），
+                 故 IsVisible 绑在 wrapper Grid 上（页面上下文），不能直接绑在 Surface 上。 -->
+            <Grid Grid.Row="1">
+                <Grid IsVisible="{Binding HasActiveChat}">
+                    <views:AgentChatSurface x:Name="Surface" ShowInputBar="False" />
+                </Grid>
+                <VerticalStackLayout IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
+                                     HorizontalOptions="Center" VerticalOptions="Center" Spacing="16" Padding="32">
+                    <Label Text="🤖" FontSize="64" HorizontalOptions="Center" />
+                    <Label Text="选择 AI 助手开始对话" FontSize="17" HorizontalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                    <Label Text="AI 助手可帮你查行情、写策略、分析数据" FontSize="13" HorizontalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Button Text="选择助手" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
+                            Command="{Binding NewConversationCommand}" Padding="28,10" HorizontalOptions="Center" />
+                </VerticalStackLayout>
             </Grid>
 
-            <!-- 聊天面板（有活动对话时）—— wrapper 绑页面 HasActiveChat（页面上下文）；
-                 surface 内部由 code-behind 设 BindingContext=ChatSurface 绑 Messages/输入栏。
-                 不直接在 Surface 上绑 HasActiveChat：Surface.BindingContext 被改为 ChatSurface 后该绑定会失效。 -->
-            <Grid Grid.Row="2" IsVisible="{Binding HasActiveChat}">
-                <views:AgentChatSurface x:Name="Surface" />
-            </Grid>
-
-            <!-- 空态（无活动对话时） -->
-            <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
-                                 HorizontalOptions="Center" VerticalOptions="Center" Spacing="16" Padding="32">
-                <Label Text="🤖" FontSize="64" HorizontalOptions="Center" />
-                <Label Text="选择 AI 助手开始对话" FontSize="17" HorizontalOptions="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                <Label Text="AI 助手可帮你查行情、写策略、分析数据" FontSize="13" HorizontalOptions="Center"
-                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                <Button Text="选择助手" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
-                        Command="{Binding NewConversationCommand}" Padding="28,10" HorizontalOptions="Center" />
+            <!-- 底部组合栏：选择条（agent chip + LLM chip）上沿 + 输入栏，与输入框一体（仅活动对话时显示）。
+                 选择条绑页面 VM（agent 名经 ChatSurface.AgentName、LLM 经 CurrentLlmName）；
+                 输入栏绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。 -->
+            <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasActiveChat}" Spacing="0"
+                                 BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+                <!-- 选择条：agent chip(左,点=换助手) + LLM chip(右,点=选 LLM) -->
+                <Grid ColumnDefinitions="*,Auto" Padding="12,6,12,2" ColumnSpacing="8">
+                    <Button Grid.Column="0" HorizontalOptions="Start" Padding="14,6" FontSize="13"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                            Text="{Binding ChatSurface.AgentName, StringFormat='🤖 {0} ▾', FallbackValue='🤖 选择助手 ▾'}"
+                            Command="{Binding NewConversationCommand}" />
+                    <Button Grid.Column="1" x:Name="LlmChip" HorizontalOptions="End" Padding="14,6" FontSize="13"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                            Text="{Binding CurrentLlmName, StringFormat='⚡ {0} ▾'}"
+                            Clicked="OnPickLlm" />
+                </Grid>
+                <!-- 输入栏 -->
+                <Border Padding="8" StrokeThickness="0">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Grid.Column="0" x:Name="MessageEntry"
+                               Text="{Binding ChatSurface.MessageText}"
+                               Placeholder="输入消息…"
+                               ReturnType="Send"
+                               ReturnCommand="{Binding ChatSurface.SendMessageCommand}" />
+                        <Button Grid.Column="1" Text="发送" Style="{StaticResource PrimaryButton}"
+                                Command="{Binding ChatSurface.SendMessageCommand}"
+                                IsEnabled="{Binding ChatSurface.CanSendMessage}" Padding="16,8" />
+                    </Grid>
+                </Border>
             </VerticalStackLayout>
         </Grid>
 
-        <!-- 抽屉半透明遮罩 -->
+        <!-- 抽屉半透明遮罩（覆盖整页） -->
         <BoxView x:Name="Backdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="False">
             <BoxView.GestureRecognizers>
                 <TapGestureRecognizer Command="{Binding CloseDrawerCommand}" />

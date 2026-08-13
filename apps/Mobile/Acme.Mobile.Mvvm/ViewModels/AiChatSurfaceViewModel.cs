@@ -1,6 +1,7 @@
 using Acme.Agents.AI;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Services;
+using Aether.AI.Hosting;
 using Aether.AI.Memory;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -24,9 +25,10 @@ public class AiChatSurfaceViewModel : AgentChatDetailViewModel
         IClipboardService? clipboardService = null,
         IToastService? toastService = null,
         ISpeechRecognitionService? speechRecognitionService = null,
-        IStreamingBackgroundService? streamingBackgroundService = null)
+        IStreamingBackgroundService? streamingBackgroundService = null,
+        IConversationTitleService? titleService = null)
         : base(agentRunner, conversationStore, agentCatalog, eventBusService, uiThreadDispatcher,
-               clipboardService, toastService, speechRecognitionService, streamingBackgroundService)
+               clipboardService, toastService, speechRecognitionService, streamingBackgroundService, titleService)
     {
     }
 }

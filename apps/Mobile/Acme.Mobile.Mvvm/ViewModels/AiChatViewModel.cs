@@ -193,6 +193,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
         _isSubscribed = true;
         _eventBusService?.Subscribe<NewConversationEvent>(OnNewConversation);
         _eventBusService?.Subscribe<AgentPickedEvent>(OnAgentPicked);
+        _eventBusService?.Subscribe<ConversationTitleUpdatedEvent>(OnConversationTitleUpdated);
     }
 
     /// <summary>首次激活：有历史则恢复最近一条，无则空态。</summary>
@@ -226,14 +227,19 @@ public partial class AiChatViewModel : NavigableViewModelBase
             Conversations.Clear();
             foreach (var s in summaries)
             {
-                var agentName = string.IsNullOrEmpty(s.AgentName) ? s.Title : s.AgentName;
+                // AgentName = 真实 agent 名（kind 映射 + 切换会话时锁定 agent）；显示名优先 AI 生成的标题，
+                // 其次 agent 名（lazy-create 时标题先用 agent 名占位，LLM 生成完真正标题后经
+                // ConversationTitleUpdatedEvent 就地刷新，故此处仅决定初次载入的显示名）。
+                var agentName = string.IsNullOrEmpty(s.AgentName) ? null : s.AgentName;
+                var displayName = !string.IsNullOrEmpty(s.Title) ? s.Title
+                                  : (!string.IsNullOrEmpty(agentName) ? agentName : "AI 对话");
                 var conv = new Conversation
                 {
                     Id = s.ConversationId,
                     Type = 3,
-                    Name = agentName,
-                    AgentName = agentName,
-                    Kind = (int?)agentKindMap.GetValueOrDefault(agentName),
+                    Name = displayName,
+                    AgentName = agentName ?? displayName,
+                    Kind = (int?)agentKindMap.GetValueOrDefault(agentName ?? string.Empty),
                     LastMessage = s.LastMessagePreview,
                     LastMessageTime = s.UpdatedAt.LocalDateTime,
                 };
@@ -396,6 +402,17 @@ public partial class AiChatViewModel : NavigableViewModelBase
         await ChatSurface.OnActivatedAsync();
         HasActiveChat = true;
         IsDrawerOpen = false;
+    }
+
+    /// <summary>AI 会话标题生成完成（首轮 fire-and-forget）：就地刷新抽屉列表项的显示名，
+    /// 无需重载历史列表（lazy-create 时占位为 agent 名，此处替换为真正的标题）。</summary>
+    private void OnConversationTitleUpdated(ConversationTitleUpdatedEvent @event)
+    {
+        _uiThreadDispatcher?.Post(() =>
+        {
+            var existing = Conversations.FirstOrDefault(c => c.Id == @event.ConversationId);
+            existing?.UpdateTitle(@event.Title);
+        });
     }
 
     private void SortConversations()

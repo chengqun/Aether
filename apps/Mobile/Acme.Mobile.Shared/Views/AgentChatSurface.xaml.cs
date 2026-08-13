@@ -17,6 +17,25 @@ public partial class AgentChatSurface : ContentView
     {
         InitializeComponent();
         BindingContextChanged += OnBindingContextChanged;
+        // 默认显示输入栏；AI tab 设 ShowInputBar=False 隐藏自带输入栏（页面在底部提供选择条+输入栏一体的组合）。
+        InputBar.IsVisible = ShowInputBar;
+    }
+
+    /// <summary>是否显示自带输入栏。默认 true（推送页用）；AI tab 设 false，由页面在底部提供「选择条+输入栏」组合。</summary>
+    public static readonly BindableProperty ShowInputBarProperty =
+        BindableProperty.Create(nameof(ShowInputBar), typeof(bool), typeof(AgentChatSurface),
+            defaultValue: true, propertyChanged: OnShowInputBarChanged);
+
+    public bool ShowInputBar
+    {
+        get => (bool)GetValue(ShowInputBarProperty);
+        set => SetValue(ShowInputBarProperty, value);
+    }
+
+    private static void OnShowInputBarChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        if (bindable is AgentChatSurface s)
+            s.InputBar.IsVisible = (bool)newValue;
     }
 
     private void OnBindingContextChanged(object? sender, EventArgs e)

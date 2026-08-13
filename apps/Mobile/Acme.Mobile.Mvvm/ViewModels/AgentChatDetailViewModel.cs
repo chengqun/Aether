@@ -13,6 +13,7 @@ using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Messages;
+using Aether.AI.Hosting;
 using Aether.AI.Memory;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Mobile.Mvvm.Abstractions;
@@ -37,6 +38,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     private readonly IToastService? _toastService;
     private readonly ISpeechRecognitionService? _speechRecognitionService;
     private readonly IStreamingBackgroundService? _streamingBackgroundService;
+    private readonly IConversationTitleService? _titleService;
 
     private bool _isLoaded = false;
     private Guid _currentConversationId = Guid.Empty; // Guid.Empty = 未创建，首次发送时 lazy-create
@@ -163,7 +165,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                                     IClipboardService? clipboardService = null,
                                     IToastService? toastService = null,
                                     ISpeechRecognitionService? speechRecognitionService = null,
-                                    IStreamingBackgroundService? streamingBackgroundService = null)
+                                    IStreamingBackgroundService? streamingBackgroundService = null,
+                                    IConversationTitleService? titleService = null)
     {
         _agentRunner = agentRunner;
         _conversationStore = conversationStore;
@@ -174,6 +177,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         _toastService = toastService;
         _speechRecognitionService = speechRecognitionService;
         _streamingBackgroundService = streamingBackgroundService;
+        _titleService = titleService;
         SendMessageCommand = new AsyncRelayCommand(SendMessageAsync, () => CanSendMessage);
     }
 
@@ -583,6 +587,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         }
 
         var version = _streamVersion;
+        var justCreated = false;
 
         try
         {
@@ -616,6 +621,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             // lazy-create conversation on first send（镜像桌面）
             if (_currentConversationId == Guid.Empty)
             {
+                justCreated = true;
                 _currentConversationId = Guid.NewGuid();
                 var conv = new Conversation
                 {
@@ -728,6 +734,11 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
             // 持久化助手回复（镜像桌面 PersistTurnAsync — 最少持久化 user + assistant）
             await PersistAssistantReplyAsync(content, fullText.ToString(), ct);
+
+            // 首轮 lazy-create 的会话：异步用 LLM 生成简短标题，回写会话并通知 UI 刷新抽屉列表项。
+            // 镜像桌面 ChatWorkspaceViewModel.GenerateAndApplyTitleAsync（justCreated 后 fire-and-forget）。
+            if (justCreated)
+                _ = GenerateAndApplyTitleAsync(content, fullText.ToString());
         }
         catch (OperationCanceledException)
         {
@@ -907,6 +918,37 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             LastMessageTime = DateTime.UtcNow
         };
         _eventBusService?.Publish(new NewConversationEvent(conversation));
+    }
+
+    /// <summary>
+    /// 首轮对话后用 LLM 生成简短标题，回写 <see cref="IConversationStore"/> 中的会话标题，
+    /// 并发 <see cref="ConversationTitleUpdatedEvent"/> 通知 AI tab 抽屉列表就地刷新显示名
+    /// （lazy-create 时标题先用 agent 名占位，生成完后替换）。失败静默，不影响对话。
+    /// 镜像桌面 <c>ChatWorkspaceViewModel.GenerateAndApplyTitleAsync</c>。
+    /// </summary>
+    private async Task GenerateAndApplyTitleAsync(string userMessage, string assistantReply)
+    {
+        if (_titleService == null || _conversationStore == null || _currentConversationId == Guid.Empty)
+            return;
+
+        try
+        {
+            var title = await _titleService.GenerateTitleAsync(userMessage, assistantReply);
+            if (string.IsNullOrWhiteSpace(title)) return;
+
+            var conv = await _conversationStore.GetAsync(_currentConversationId, default);
+            if (conv == null) return;
+
+            conv.Title = title;
+            await _conversationStore.SaveAsync(conv, default);
+
+            _eventBusService?.Publish(new ConversationTitleUpdatedEvent(_currentConversationId, title));
+        }
+        catch (Exception ex)
+        {
+            // 标题生成失败不影响主流程
+            System.Diagnostics.Debug.WriteLine($"[AgentChatDetail] 生成标题失败: {ex.Message}");
+        }
     }
 
     [RelayCommand]

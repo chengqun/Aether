@@ -90,4 +90,14 @@ public partial class ObservableConversation : ObservableObject
         LastMessage = source.LastMessage;
         LastMessageTime = source.LastMessageTime;
     }
+
+    /// <summary>AI 自动生成标题后更新显示名（首条消息 lazy-create 时先用 agent 名占位，
+    /// LLM 生成完真正的标题后调此方法就地刷新抽屉列表项，无需重载）。</summary>
+    public void UpdateTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return;
+        _source.Name = title;
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(Initial));
+    }
 }
