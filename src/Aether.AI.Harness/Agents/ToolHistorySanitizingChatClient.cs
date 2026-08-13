@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.AI;
 
@@ -10,8 +11,9 @@ namespace Aether.AI.Harness.Agents;
 /// 防 DeepSeek 等 OpenAI 兼容端点报「Messages with role tool must be a response to a preceding message with tool_calls」400。
 /// <para>与 <see cref="ToolFilteringChatClient"/> 同形：持 <c>_inner</c> 转发。活路径用 <see cref="TranscriptHistoryConverter.SanitizeLive"/>
 /// （非 <see cref="TranscriptHistoryConverter.Sanitize"/>）——续轮请求合法地以 tool_result 收尾，不能裁尾部非 assistant。</para>
-/// <para>配对完整的合法历史原样放行（幂等无副作用）。仅当结构被修正时打 Debug 日志，便于定位孤儿来源
-/// （NoMemory 跨步重置 / 滑窗裁断 / 审批挂起残留等）。</para>
+/// <para>配对完整的合法历史原样放行（幂等无副作用）。每次发送打 Debug 日志（tools 名 + 消息结构摘要）；
+/// 内层抛异常时把「tools 名 + 消息摘要」拼进异常 message 抛出，让聊天页错误气泡直接显示诊断信息，
+/// 便于定位 DeepSeek「Requested function not found」等端点错误的真实请求形状。</para>
 /// </summary>
 public sealed class ToolHistorySanitizingChatClient : IChatClient
 {
@@ -24,42 +26,77 @@ public sealed class ToolHistorySanitizingChatClient : IChatClient
         _label = label ?? nameof(ToolHistorySanitizingChatClient);
     }
 
-    public Task<ChatResponse> GetResponseAsync(
+    public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         var sanitized = TranscriptHistoryConverter.SanitizeLive(messages);
-        LogIfChanged(messages, sanitized);
-        return _inner.GetResponseAsync(sanitized, options, cancellationToken);
+        var tools = ToolNames(options);
+        var msgSummary = Summarize(sanitized);
+        Debug.WriteLine($"[{_label}] GetResponse tools={tools} msgs={msgSummary}");
+        try
+        {
+            return await _inner.GetResponseAsync(sanitized, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (Wrap(ex, tools, msgSummary, out var wrapped))
+        {
+            throw wrapped;
+        }
     }
 
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         var sanitized = TranscriptHistoryConverter.SanitizeLive(messages);
-        LogIfChanged(messages, sanitized);
-        return _inner.GetStreamingResponseAsync(sanitized, options, cancellationToken);
+        var tools = ToolNames(options);
+        var msgSummary = Summarize(sanitized);
+        Debug.WriteLine($"[{_label}] GetStream tools={tools} msgs={msgSummary}");
+        var stream = _inner.GetStreamingResponseAsync(sanitized, options, cancellationToken);
+        return WithDiagnostics(stream, tools, msgSummary);
     }
 
-    private void LogIfChanged(IEnumerable<ChatMessage> original, List<ChatMessage> sanitized)
+    /// <summary>包装流式枚举：迭代中内层抛异常时，把诊断信息拼进异常 message 重新抛出。</summary>
+    private async IAsyncEnumerable<ChatResponseUpdate> WithDiagnostics(
+        IAsyncEnumerable<ChatResponseUpdate> stream,
+        string tools, string msgSummary,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
-        // 始终打一行结构摘要（便于定位 400 时的真实消息形状）；被修正时额外标注 SANITIZED。
-        var origList = original as List<ChatMessage> ?? original.ToList();
-        var changed = origList.Count != sanitized.Count || OrigChanged(origList, sanitized);
-        Debug.WriteLine($"[{_label}] {(changed ? "SANITIZED" : "ok")} before={Summarize(origList)} after={Summarize(sanitized)}");
-    }
-
-    private static bool OrigChanged(List<ChatMessage> orig, List<ChatMessage> san)
-    {
-        if (orig.Count != san.Count) return true;
-        for (int i = 0; i < orig.Count; i++)
+        var enumerator = stream.GetAsyncEnumerator(ct);
+        try
         {
-            if (orig[i].Role != san[i].Role || orig[i].Contents.Count != san[i].Contents.Count)
-                return true;
-            for (int j = 0; j < orig[i].Contents.Count; j++)
-                if (orig[i].Contents[j].GetType() != san[i].Contents[j].GetType())
-                    return true;
+            while (true)
+            {
+                bool next;
+                try { next = await enumerator.MoveNextAsync().ConfigureAwait(false); }
+                catch (Exception ex) when (Wrap(ex, tools, msgSummary, out var wrapped))
+                {
+                    throw wrapped;
+                }
+                if (!next) yield break;
+                yield return enumerator.Current;
+            }
         }
-        return false;
+        finally { await enumerator.DisposeAsync().ConfigureAwait(false); }
+    }
+
+    /// <summary>构造带诊断头的包装异常。返回 false（让原异常穿透）只在 Wrap 不可行时——这里恒 true。</summary>
+    private static bool Wrap(Exception ex, string tools, string msgSummary, out Exception wrapped)
+    {
+        var diag = $"[诊断] tools=[{tools}] msgs={msgSummary} → {ex.GetType().Name}: {ex.Message}";
+        Debug.WriteLine($"[ToolHistorySanitizingChatClient] 内层异常: {diag}");
+        wrapped = new InvalidOperationException(diag, ex);
+        return true;
+    }
+
+    private static string ToolNames(ChatOptions? options)
+    {
+        if (options?.Tools is null || options.Tools.Count == 0) return "(none)";
+        var sb = new StringBuilder();
+        foreach (var t in options.Tools)
+        {
+            if (sb.Length > 0) sb.Append(',');
+            sb.Append(t is AIFunction fn ? fn.Name : t.GetType().Name);
+        }
+        return sb.ToString();
     }
 
     /// <summary>紧凑摘要：每条消息「角色:内容类型[CallId]」，用 | 连接——揭示顺序与配对。</summary>
@@ -83,7 +120,7 @@ public sealed class ToolHistorySanitizingChatClient : IChatClient
                     case TextContent:
                         sb.Append('t'); break;
                     case FunctionCallContent fc:
-                        sb.Append("c[").Append(string.IsNullOrEmpty(fc.CallId) ? "_" : fc.CallId).Append(']'); break;
+                        sb.Append("c[").Append(string.IsNullOrEmpty(fc.CallId) ? "_" : fc.CallId).Append('/').Append(fc.Name).Append(']'); break;
                     case FunctionResultContent fr:
                         sb.Append("r[").Append(string.IsNullOrEmpty(fr.CallId) ? "_" : fr.CallId).Append(']'); break;
                     default:
