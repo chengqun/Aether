@@ -40,6 +40,9 @@ public partial class AiChatViewModel : NavigableViewModelBase
     private bool _isSubscribed = false;
     private bool _isBootstrapped = false;
     private bool _isLlmLoaded = false;
+    private bool _isAgentListLoaded = false;
+    /// <summary>可用 agent 名册（chip ActionSheet 渲染 + 新对话默认 agent 回退）。null=未加载。</summary>
+    private List<string>? _agentNames;
     /// <summary>当前 surface 活动会话 Id（抽屉切换时记录；picker 新对话为 <see cref="Guid.Empty"/> 哨兵，
     /// 待 <see cref="OnNewConversation"/> 回填）。用于删除时判断是否回到空态。</summary>
     private Guid _activeConversationId = Guid.Empty;
@@ -69,6 +72,9 @@ public partial class AiChatViewModel : NavigableViewModelBase
 
     /// <summary>可选 LLM 配置列表（供页面 ActionSheet 渲染；<c>null</c>=未加载/不可用）。</summary>
     public List<LlmConfigDto>? LlmConfigs { get; private set; }
+
+    /// <summary>可用 agent 名单（供页面 agent chip ActionSheet 渲染；<c>null</c>=未加载/不可用）。</summary>
+    public IReadOnlyList<string>? AgentNames => _agentNames;
 
     /// <summary>当前 LLM 显示名（"默认"=未选/用平台默认；与桌面端一致的全局默认语义，非按会话）。</summary>
     [ObservableProperty]
@@ -130,6 +136,12 @@ public partial class AiChatViewModel : NavigableViewModelBase
             _isLlmLoaded = true;
             await LoadLlmConfigsAsync();
         }
+        // 首次激活加载 agent 名单（agent chip ActionSheet + 新对话默认 agent 回退用）。
+        if (!_isAgentListLoaded)
+        {
+            _isAgentListLoaded = true;
+            await LoadAgentNamesAsync();
+        }
 
         // 仅首次激活 bootstrap：恢复最近会话或进入空态。后续激活（tab 回切/picker 返回）只刷新历史列表。
         if (!_isBootstrapped)
@@ -185,6 +197,21 @@ public partial class AiChatViewModel : NavigableViewModelBase
         // Invalidate 当前 agent 缓存，让下一轮用新 LLM 重建（MobileChatClientFactory 读 holder）。
         var agentId = ChatSurface.AgentId;
         if (agentId != Guid.Empty) _agentRunner?.Invalidate(agentId);
+    }
+
+    /// <summary>从 <see cref="ICustomAgentCatalog"/> 载入 agent 名单（agent chip ActionSheet + 新对话默认 agent 回退）。</summary>
+    private async Task LoadAgentNamesAsync()
+    {
+        if (_agentCatalog == null) return;
+        try
+        {
+            var agents = await _agentCatalog.ListAsync();
+            _agentNames = agents.Select(a => a.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AiChatViewModel] 加载 agent 名单失败: {ex.Message}");
+        }
     }
 
     private void SubscribeEvents()
@@ -300,12 +327,34 @@ public partial class AiChatViewModel : NavigableViewModelBase
         IsDrawerOpen = false;
     }
 
-    /// <summary>新对话：推送 agent 选择页（picker 选定后发 AgentPickedEvent 回来）。</summary>
+    /// <summary>新对话：直接用当前 agent 开新会话，不弹 agent 选择页（agent 经 chip ActionSheet 切换）。
+    /// 当前 agent 名不在名册（如默认占位名）时回退到名册首个 agent；无可用 agent 则不动作。</summary>
     [RelayCommand]
-    private void NewConversation()
+    private async Task NewConversation()
     {
         IsDrawerOpen = false;
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("AgentPickerPage"));
+        var agent = ChatSurface.AgentName;
+        if (string.IsNullOrEmpty(agent) || (_agentNames != null && !_agentNames.Contains(agent)))
+            agent = _agentNames?.FirstOrDefault();
+        if (string.IsNullOrEmpty(agent)) return;
+        await StartNewConversationWithAgentAsync(agent);
+    }
+
+    /// <summary>用指定 agent 在 surface 内开新对话（首条消息 lazy-create）。
+    /// agent chip ActionSheet 选定 / picker AgentPickedEvent / 新对话默认 agent 均经此入口。</summary>
+    public async Task StartNewConversationWithAgentAsync(string agentName)
+    {
+        // 复用同一 agent 开新对话时，currentKey 不变→SetParameters 不重置；强制视为切换以清空消息/标题。
+        ChatSurface.ForceNewConversation();
+        ChatSurface.SetParameters(new Dictionary<string, object>
+        {
+            ["agentName"] = agentName,
+        });
+        _activeConversationId = Guid.Empty; // 新会话，待首条消息 lazy-create 后 OnNewConversation 回填
+        ChatSurface.IsVoiceMode = false;
+        await ChatSurface.OnActivatedAsync();
+        HasActiveChat = true;
+        IsDrawerOpen = false;
     }
 
     [RelayCommand]
@@ -390,19 +439,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
         });
     }
 
-    /// <summary>picker 选定 agent：在 surface 内开新对话（首条消息 lazy-create）。</summary>
+    /// <summary>picker 选定 agent：在 surface 内开新对话（首条消息 lazy-create）。
+    /// 经 <see cref="StartNewConversationWithAgentAsync"/> 与 agent chip ActionSheet 路径合一。</summary>
     private async void OnAgentPicked(AgentPickedEvent @event)
-    {
-        ChatSurface.SetParameters(new Dictionary<string, object>
-        {
-            ["agentName"] = @event.AgentName,
-        });
-        _activeConversationId = Guid.Empty; // 新会话，待首条消息 lazy-create 后 OnNewConversation 回填
-        ChatSurface.IsVoiceMode = false;
-        await ChatSurface.OnActivatedAsync();
-        HasActiveChat = true;
-        IsDrawerOpen = false;
-    }
+        => await StartNewConversationWithAgentAsync(@event.AgentName);
 
     /// <summary>AI 会话标题生成完成（首轮 fire-and-forget）：就地刷新抽屉列表项的显示名，
     /// 无需重载历史列表（lazy-create 时占位为 agent 名，此处替换为真正的标题）。</summary>

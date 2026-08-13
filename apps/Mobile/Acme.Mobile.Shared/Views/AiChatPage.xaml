@@ -22,6 +22,12 @@
                 <Button Grid.Column="0" Text="‹" FontSize="34" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding CloseAiCommand}" />
+                <!-- 会话标题（AI 自动生成 / 恢复历史 / 首轮占位），动态更新 -->
+                <Label Grid.Column="1" Text="{Binding ChatSurface.CurrentTitle}"
+                       FontSize="16" FontFamily="OpenSansSemibold"
+                       HorizontalOptions="Center" VerticalOptions="Center"
+                       LineBreakMode="TailTruncation" MaxLines="1"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
                 <Button Grid.Column="2" Text="≡" FontSize="22" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         Command="{Binding OpenDrawerCommand}" />
@@ -42,7 +48,7 @@
                     <Label Text="AI 助手可帮你查行情、写策略、分析数据" FontSize="13" HorizontalOptions="Center"
                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     <Button Text="选择助手" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
-                            Command="{Binding NewConversationCommand}" Padding="28,10" HorizontalOptions="Center" />
+                            Clicked="OnPickAgent" Padding="28,10" HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>
 
@@ -57,7 +63,7 @@
                             BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
                             TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                             Text="{Binding ChatSurface.AgentName, StringFormat='🤖 {0} ▾', FallbackValue='🤖 选择助手 ▾'}"
-                            Command="{Binding NewConversationCommand}" />
+                            Clicked="OnPickAgent" />
                     <Button Grid.Column="1" x:Name="LlmChip" HorizontalOptions="End" Padding="14,6" FontSize="13"
                             BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
                             TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"

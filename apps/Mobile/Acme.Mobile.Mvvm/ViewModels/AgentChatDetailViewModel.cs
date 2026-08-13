@@ -131,6 +131,12 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     [ObservableProperty]
     private AgentKind _agentKind;
 
+    /// <summary>当前会话标题（lazy-create 占位 / 恢复历史 / AI 自动生成后更新），供宿主页 header 显示。
+    /// 切换会话时在 <see cref="SetParameters"/> 重置为空，由 <see cref="LoadMessagesAsync"/> 或
+    /// lazy-create 或 <see cref="GenerateAndApplyTitleAsync"/> 重新填充。</summary>
+    [ObservableProperty]
+    private string _currentTitle = string.Empty;
+
     /// <summary>
     /// 是否为 LLM Agent 类型
     /// </summary>
@@ -270,12 +276,18 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             _isLoaded = false;
             _agentResolved = false; // 切换 Agent 后需重新解析
             Messages.Clear();
-            // 重置会话 Token 计数
+            // 重置会话 Token 计数 + 标题（恢复历史/lazy-create/AI 生成时重新填充）
             SessionInputTokens = 0;
             SessionOutputTokens = 0;
             SessionTokenInfo = string.Empty;
+            CurrentTitle = string.Empty;
         }
     }
+
+    /// <summary>强制下次 <see cref="SetParameters"/> 视为会话切换并重置状态。
+    /// 用于「新对话」复用同一 agent 时——同 agent 的 currentKey 不变，常规 key 比较不会触发重置，
+    /// 故宿主在开新对话前调此方法清空 <c>_previousKey</c>，确保消息/标题被清空。</summary>
+    public void ForceNewConversation() => _previousKey = string.Empty;
 
     /// <summary>旧版从 AiSettingsViewModel.GetStockModeAgentName() 读取；该 VM 暂未 re-enable，用此常量占位。</summary>
     private const string DefaultStockAgentName = "股票分析助手";
@@ -404,6 +416,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                             Messages.Add(item);
                         }
                     }
+                    // 恢复历史会话标题（AI 生成或首轮占位）到 header
+                    CurrentTitle = conv.Title ?? string.Empty;
                 }
                 SessionTokenInfo = FormatTokenInfo(SessionInputTokens + SessionOutputTokens);
             });
@@ -631,6 +645,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     Title = content.Length > 20 ? content[..20] + "…" : content,
                 };
                 conv.Append(Message.User(content));
+                // 首轮占位标题即时显示到 header（AI 生成后由 GenerateAndApplyTitleAsync 替换）
+                CurrentTitle = conv.Title;
                 await _conversationStore.SaveAsync(conv, ct);
 
                 // 通知聊天列表显示新会话
@@ -942,6 +958,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             conv.Title = title;
             await _conversationStore.SaveAsync(conv, default);
 
+            // 即时刷新 header 标题（此方法在后台线程 fire-and-forget，UI 属性经 dispatcher 调度）
+            _uiThreadDispatcher?.Post(() => CurrentTitle = title);
             _eventBusService?.Publish(new ConversationTitleUpdatedEvent(_currentConversationId, title));
         }
         catch (Exception ex)

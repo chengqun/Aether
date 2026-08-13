@@ -92,6 +92,21 @@ public partial class AiChatPage : ContentPage
         if (matched != null) _vm.SetLlm(matched);
     }
 
+    /// <summary>agent chip / 空态「选择助手」点击：弹 ActionSheet 选 agent，选定即在 surface 内开新对话。
+    /// 替代原 AgentPickerPage 推送——agent 选择与 LLM 一致走内联 ActionSheet，不离开 AI tab。</summary>
+    private async void OnPickAgent(object? sender, EventArgs e)
+    {
+        var names = _vm.AgentNames;
+        if (names == null || names.Count == 0)
+        {
+            await DisplayAlert("提示", "暂无可用 AI 助手，请先在桌面端创建后同步。", "知道了");
+            return;
+        }
+        var choice = await DisplayActionSheet("选择 AI 助手", "取消", null, names.ToArray());
+        if (choice == null || choice == "取消") return;
+        await _vm.StartNewConversationWithAgentAsync(choice);
+    }
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
