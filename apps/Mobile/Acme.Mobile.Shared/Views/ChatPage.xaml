@@ -27,7 +27,7 @@
                     <DataTemplate x:DataType="vm:ObservableConversation">
                         <SwipeView>
                             <SwipeView.RightItems>
-                                <SwipeItems Mode="Execute">
+                                <SwipeItems Mode="Reveal">
                                     <SwipeItem Text="删除"
                                                BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteConversationCommand}"
