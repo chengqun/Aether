@@ -43,6 +43,7 @@ public static class MauiProgram
         // Tab VM（Singleton，保持会话列表/发现/我的状态）
         builder.Services.AddSingleton<ChatViewModel>();
         builder.Services.AddSingleton<AiChatViewModel>();
+        builder.Services.AddSingleton<AiChatSurfaceViewModel>();   // AI tab 常驻聊天面板（Singleton）
         builder.Services.AddSingleton<ContactsViewModel>();
         builder.Services.AddSingleton<DiscoveryViewModel>();
         builder.Services.AddSingleton<MeViewModel>();

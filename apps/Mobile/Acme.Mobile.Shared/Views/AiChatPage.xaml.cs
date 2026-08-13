@@ -1,7 +1,15 @@
+using System.ComponentModel;
+using System.Linq;
+using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.ViewModels;
 
 namespace Acme.Mobile.Shared.Views;
 
+/// <summary>
+/// AI tab 页（豆包式）：对话优先 + 左侧抽屉历史。托管常驻 <see cref="AgentChatSurface"/>
+/// （BindingContext = <see cref="AiChatViewModel.ChatSurface"/>）。抽屉开合由 code-behind
+/// 监听 <see cref="AiChatViewModel.IsDrawerOpen"/> 做 <c>TranslateTo</c>/<c>FadeTo</c> 动画。
+/// </summary>
 public partial class AiChatPage : ContentPage
 {
     private readonly AiChatViewModel _vm;
@@ -11,54 +19,68 @@ public partial class AiChatPage : ContentPage
         InitializeComponent();
         _vm = viewModel;
         BindingContext = _vm;
-        SubscribeNavigationEvents();
+        Surface.BindingContext = _vm.ChatSurface;
+        _vm.PropertyChanged += OnVmPropertyChanged;
+        _vm.NavigationRequested += OnNavigationRequested;
     }
 
-    /// <summary>订阅导航事件（幂等：-= then +=）。</summary>
-    private void SubscribeNavigationEvents()
+    private async void OnNavigationRequested(object? sender, NavigationRequestedEvent e)
     {
-        _vm.NavigateToAgentChatDetailRequested -= OnNavigateToAgentChatDetail;
-        _vm.NavigateToAgentPickerRequested -= OnNavigateToAgentPicker;
-        _vm.NavigateToAgentChatDetailRequested += OnNavigateToAgentChatDetail;
-        _vm.NavigateToAgentPickerRequested += OnNavigateToAgentPicker;
+        await Shell.Current.GoToAsync(e.BuildNavigationUri());
     }
 
-    private void UnsubscribeNavigationEvents()
+    private async void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        _vm.NavigateToAgentChatDetailRequested -= OnNavigateToAgentChatDetail;
-        _vm.NavigateToAgentPickerRequested -= OnNavigateToAgentPicker;
+        if (e.PropertyName == nameof(AiChatViewModel.IsDrawerOpen))
+        {
+            await AnimateDrawerAsync(_vm.IsDrawerOpen);
+        }
     }
 
-    private async void OnNavigateToAgentChatDetail(object? sender, AgentChatDetailNavigationEventArgs e)
+    /// <summary>抽屉滑入/滑出 + 遮罩淡入/淡出。遮罩 InputTransparent 跟随开合，避免关闭态拦截主区点击。</summary>
+    private async Task AnimateDrawerAsync(bool open)
     {
-        await Shell.Current.GoToAsync(
-            $"AgentChatDetailPage?sessionId={e.SessionId}" +
-            $"&stockId={e.StockId ?? ""}" +
-            $"&stockName={Uri.EscapeDataString(e.StockName ?? "")}" +
-            $"&agentName={Uri.EscapeDataString(e.AgentName)}");
+        Backdrop.InputTransparent = !open;
+        if (open)
+        {
+            Drawer.IsVisible = true;
+            Backdrop.IsVisible = true;
+        }
+        // 抽屉横向平移 + 遮罩透明度
+        await Task.WhenAll(
+            Drawer.TranslateTo(open ? 0 : -300, 0, 200, Easing.SinOut),
+            Backdrop.FadeTo(open ? 1 : 0, 200));
+        if (!open)
+        {
+            // 关闭后隐藏遮罩；抽屉保留可见（已移出屏幕）以便下次动画无闪烁
+            Backdrop.IsVisible = false;
+        }
     }
 
-    private async void OnNavigateToAgentPicker(object? sender, EventArgs e)
+    private async void OnHistorySelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        await Shell.Current.GoToAsync("AgentPickerPage");
-    }
-
-    private async void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_vm.SelectedConversation is not null)
-            await _vm.NavigateToChatDetailAsync();
+        if (e.CurrentSelection.FirstOrDefault() is not ObservableConversation item) return;
+        // 清除选择，便于再次点同一项
+        ((CollectionView)sender!).SelectedItem = null;
+        await _vm.SelectHistoryAsync(item);
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        SubscribeNavigationEvents();
         await _vm.OnActivatedAsync();
+        // 首次显示时同步抽屉初始位（关闭态）
+        if (!_vm.IsDrawerOpen)
+        {
+            Backdrop.IsVisible = false;
+            Backdrop.Opacity = 0;
+            Backdrop.InputTransparent = true;
+        }
     }
 
     protected override async void OnDisappearing()
     {
-        UnsubscribeNavigationEvents();
+        // 切走 tab → 取消在跑流式（不耗电）；不动抽屉状态/历史
         await _vm.OnDeactivatedAsync();
         base.OnDisappearing();
     }

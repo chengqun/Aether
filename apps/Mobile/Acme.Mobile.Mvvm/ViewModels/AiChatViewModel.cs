@@ -17,10 +17,11 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Mobile.Mvvm.ViewModels;
 
 /// <summary>
-/// 「AI」tab 的列表 VM：只承载 AI agent 会话（<see cref="Conversation.Type"/> 3/4），
-/// 与社交聊天（<see cref="ChatViewModel"/>）分离。AI 会话以 <see cref="IConversationStore"/>
-/// （conversations.db）为权威源，不走 SignalR，故每次激活重载摘要拿最新 last-message。
-/// 新会话经 <see cref="NewConversationEvent"/>（<see cref="IEventBusService"/>）跨 VM 接收。
+/// 「AI」tab 宿主 VM（豆包式）：对话优先 + 左侧抽屉历史。
+/// 持有常驻 <see cref="ChatSurface"/>（<see cref="AiChatSurfaceViewModel"/> Singleton），抽屉切换会话时调
+/// <see cref="AgentChatDetailViewModel.SetParameters"/> 就地重载，不走 Shell 推送。历史列表来自
+/// <see cref="IConversationStore.GetSummariesAsync"/>；新会话经 <see cref="NewConversationEvent"/> 实时入列；
+/// picker 选定 agent 经 <see cref="AgentPickedEvent"/> 在 surface 内开新对话。
 /// </summary>
 public partial class AiChatViewModel : NavigableViewModelBase
 {
@@ -30,9 +31,15 @@ public partial class AiChatViewModel : NavigableViewModelBase
     private readonly ICurrentUser? _currentUser;
     private Guid? _cachedUserId;
     private bool _isSubscribed = false;
+    private bool _isBootstrapped = false;
+    /// <summary>当前 surface 活动会话 Id（抽屉切换时记录；picker 新对话为 <see cref="Guid.Empty"/> 哨兵，
+    /// 待 <see cref="OnNewConversation"/> 回填）。用于删除时判断是否回到空态。</summary>
+    private Guid _activeConversationId = Guid.Empty;
 
-    [ObservableProperty]
-    private string _title = "AI";
+    /// <summary>内嵌常驻聊天面板 VM（Singleton），页面把 AgentChatSurface.BindingContext 绑到它。</summary>
+    public AgentChatDetailViewModel ChatSurface { get; }
+
+    public ObservableCollection<ObservableConversation> Conversations { get; } = new();
 
     [ObservableProperty]
     private bool _isLoading;
@@ -40,24 +47,30 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
+    /// <summary>抽屉是否展开（页面 code-behind 监听变化做 TranslationX 动画）。</summary>
     [ObservableProperty]
-    private ObservableConversation? _selectedConversation;
+    private bool _isDrawerOpen;
 
-    public ObservableCollection<ObservableConversation> Conversations { get; } = new();
+    /// <summary>是否有活动对话（false→显示空态「选择 AI 助手」，true→显示聊天面板）。</summary>
+    [ObservableProperty]
+    private bool _hasActiveChat;
 
-    /// <summary>导航到 Agent 聊天详情页事件（tap 既有 AI 会话）。</summary>
-    public event EventHandler<AgentChatDetailNavigationEventArgs>? NavigateToAgentChatDetailRequested;
+    /// <summary>抽屉历史列表选中项。</summary>
+    [ObservableProperty]
+    private ObservableConversation? _selectedHistory;
 
-    /// <summary>导航到 agent 选择页事件（「＋新对话」）。</summary>
-    public event EventHandler? NavigateToAgentPickerRequested;
+    /// <summary>导航请求（Mvvm 库不引用 MAUI Shell，由页面 code-behind 订阅执行 <c>Shell.Current.GoToAsync</c>）。</summary>
+    public event EventHandler<NavigationRequestedEvent>? NavigationRequested;
 
     public AiChatViewModel(
+        AiChatSurfaceViewModel chatSurface,
         IConversationStore? conversationStore = null,
         ICustomAgentCatalog? agentCatalog = null,
         IEventBusService? eventBusService = null,
         ICurrentUser? currentUser = null,
         IUIThreadDispatcher? uiThreadDispatcher = null)
     {
+        ChatSurface = chatSurface;
         _conversationStore = conversationStore;
         _agentCatalog = agentCatalog;
         _eventBusService = eventBusService;
@@ -87,14 +100,20 @@ public partial class AiChatViewModel : NavigableViewModelBase
     public override async Task OnActivatedAsync()
     {
         SubscribeEvents();
-        // 每次激活重载：AI 会话无实时事件，靠激活时从 conversations.db 拿最新 last-message。
         await LoadConversationsAsync();
+
+        // 仅首次激活 bootstrap：恢复最近会话或进入空态。后续激活（tab 回切/picker 返回）只刷新历史列表。
+        if (!_isBootstrapped)
+        {
+            _isBootstrapped = true;
+            await BootstrapAsync();
+        }
     }
 
-    public override Task OnDeactivatedAsync()
+    public override async Task OnDeactivatedAsync()
     {
-        // 不取消 EventBus 订阅——保持 NewConversationEvent 实时接收（同 ChatViewModel 模式）。
-        return Task.CompletedTask;
+        // 取消在跑流式 + 停后台服务（不清 Messages，回切时保持）。
+        await ChatSurface.OnDeactivatedAsync();
     }
 
     private void SubscribeEvents()
@@ -102,16 +121,30 @@ public partial class AiChatViewModel : NavigableViewModelBase
         if (_isSubscribed) return;
         _isSubscribed = true;
         _eventBusService?.Subscribe<NewConversationEvent>(OnNewConversation);
+        _eventBusService?.Subscribe<AgentPickedEvent>(OnAgentPicked);
     }
 
-    /// <summary>从 <see cref="IConversationStore"/> 加载 AI 会话摘要。镜像 ChatViewModel.LoadAgentConversationsAsync。</summary>
+    /// <summary>首次激活：有历史则恢复最近一条，无则空态。</summary>
+    private async Task BootstrapAsync()
+    {
+        var recent = Conversations.OrderByDescending(c => c.LastMessageTime).FirstOrDefault();
+        if (recent != null)
+        {
+            await SwitchToConversationAsync(recent);
+        }
+        else
+        {
+            HasActiveChat = false;
+        }
+    }
+
+    /// <summary>从 <see cref="IConversationStore"/> 重载历史列表（不动 ChatSurface）。
+    /// 调用方在 UI 线程（<see cref="OnActivatedAsync"/> 自 <c>OnAppearing</c> / RelayCommand），
+    /// <c>await</c> 捕获 UI 同步上下文 → 续体仍在 UI 线程，直接改 <see cref="Conversations"/> 安全，
+    /// 且保证随后 <see cref="BootstrapAsync"/> 能读到已填充列表。</summary>
     private async Task LoadConversationsAsync()
     {
-        if (_conversationStore == null)
-        {
-            StatusMessage = "暂无 AI 对话";
-            return;
-        }
+        if (_conversationStore == null) return;
 
         try
         {
@@ -119,35 +152,31 @@ public partial class AiChatViewModel : NavigableViewModelBase
             var summaries = await _conversationStore.GetSummariesAsync(userId.ToString());
             var agentKindMap = await BuildAgentKindMapAsync();
 
-            _uiThreadDispatcher?.Post(() =>
+            Conversations.Clear();
+            foreach (var s in summaries)
             {
-                Conversations.Clear();
-                foreach (var s in summaries)
+                var agentName = string.IsNullOrEmpty(s.AgentName) ? s.Title : s.AgentName;
+                var conv = new Conversation
                 {
-                    var agentName = string.IsNullOrEmpty(s.AgentName) ? s.Title : s.AgentName;
-                    var conv = new Conversation
-                    {
-                        Id = s.ConversationId,
-                        Type = 3,
-                        Name = agentName,
-                        AgentName = agentName,
-                        Kind = (int?)agentKindMap.GetValueOrDefault(agentName),
-                        LastMessage = s.LastMessagePreview,
-                        LastMessageTime = s.UpdatedAt.LocalDateTime,
-                    };
-                    Conversations.Add(new ObservableConversation(conv));
-                }
-                SortConversations();
-                StatusMessage = Conversations.Count == 0 ? "暂无 AI 对话" : string.Empty;
-            });
+                    Id = s.ConversationId,
+                    Type = 3,
+                    Name = agentName,
+                    AgentName = agentName,
+                    Kind = (int?)agentKindMap.GetValueOrDefault(agentName),
+                    LastMessage = s.LastMessagePreview,
+                    LastMessageTime = s.UpdatedAt.LocalDateTime,
+                };
+                Conversations.Add(new ObservableConversation(conv));
+            }
+            SortConversations();
+            StatusMessage = Conversations.Count == 0 ? "暂无 AI 对话" : string.Empty;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AiChatViewModel] 加载 AI 会话失败: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AiChatViewModel] 加载历史失败: {ex.Message}");
         }
     }
 
-    /// <summary>构建 Agent 名称 → Kind 映射（基于 ICustomAgentCatalog 的 NodeType）。</summary>
     private async Task<Dictionary<string, AgentKind>> BuildAgentKindMapAsync()
     {
         var map = new Dictionary<string, AgentKind>();
@@ -167,11 +196,95 @@ public partial class AiChatViewModel : NavigableViewModelBase
                 }
             }
         }
-        catch { /* 获取 Agent 信息失败时返回空映射 */ }
+        catch { /* 空映射兜底 */ }
         return map;
     }
 
-    /// <summary>新 AI 会话事件：只接 Type 3/4，upsert 到列表。镜像 ChatViewModel.OnNewConversation。</summary>
+    /// <summary>切换到指定历史会话（抽屉 tap）：SetParameters 就地重载。</summary>
+    public async Task SwitchToConversationAsync(ObservableConversation conv)
+    {
+        ChatSurface.SetParameters(new Dictionary<string, object>
+        {
+            ["sessionId"] = conv.Id.ToString(),
+            ["agentName"] = conv.AgentName ?? conv.Name ?? "AI 助手",
+        });
+        _activeConversationId = conv.Id;
+        ChatSurface.IsVoiceMode = false;
+        await ChatSurface.OnActivatedAsync();
+        HasActiveChat = true;
+    }
+
+    /// <summary>抽屉历史项 tap（页面 code-behind SelectionChanged 调）。</summary>
+    public async Task SelectHistoryAsync(ObservableConversation? conv)
+    {
+        if (conv == null) return;
+        SelectedHistory = null; // 清除选择，便于再次点同一项
+        await SwitchToConversationAsync(conv);
+        IsDrawerOpen = false;
+    }
+
+    /// <summary>新对话：推送 agent 选择页（picker 选定后发 AgentPickedEvent 回来）。</summary>
+    [RelayCommand]
+    private void NewConversation()
+    {
+        IsDrawerOpen = false;
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("AgentPickerPage"));
+    }
+
+    [RelayCommand]
+    private void OpenDrawer() => IsDrawerOpen = true;
+
+    /// <summary>返回聊天 tab（AI 页全屏无 tab bar，经绝对路由切回 ChatPage，tab bar 恢复）。</summary>
+    [RelayCommand]
+    private void CloseAi()
+    {
+        IsDrawerOpen = false;
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("ChatPage", isAbsolute: true));
+    }
+
+    [RelayCommand]
+    private void CloseDrawer() => IsDrawerOpen = false;
+
+    [RelayCommand]
+    public async Task RefreshConversationsAsync()
+    {
+        IsLoading = true;
+        try { await LoadConversationsAsync(); }
+        finally { IsLoading = false; }
+    }
+
+    [RelayCommand]
+    public async Task DeleteConversationAsync(Guid conversationId)
+    {
+        var conv = Conversations.FirstOrDefault(c => c.Id == conversationId);
+        if (conv == null) return;
+        try
+        {
+            IsLoading = true;
+            if (_conversationStore != null)
+                await _conversationStore.DeleteAsync(conversationId);
+            Conversations.Remove(conv);
+            // 删的是当前活动会话 → 回空态（surface 隐藏，下次切换/新建时 SetParameters 自然重置 Messages）
+            if (_activeConversationId == conversationId)
+            {
+                _activeConversationId = Guid.Empty;
+                HasActiveChat = false;
+            }
+            StatusMessage = Conversations.Count == 0 ? "暂无 AI 对话" : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"删除失败: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    /// <summary>新 AI 会话事件（ChatSurface lazy-create 首条消息后发）：upsert 进历史列表。
+    /// 不在此处翻 <see cref="HasActiveChat"/>——picker 路径已由 <see cref="OnAgentPicked"/> 置位，
+    /// 推送页创建的会话不应强逼 AI tab 显示。</summary>
     private async void OnNewConversation(NewConversationEvent @event)
     {
         var conv = @event.Conversation;
@@ -182,6 +295,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
             var agentKindMap = await BuildAgentKindMapAsync();
             conv.Kind = (int?)agentKindMap.GetValueOrDefault(conv.AgentName);
         }
+
+        // picker 新对话首条消息 lazy-create 落地 → 回填活动会话 Id 哨兵
+        if (_activeConversationId == Guid.Empty)
+            _activeConversationId = conv.Id;
 
         _uiThreadDispatcher?.Post(() =>
         {
@@ -196,7 +313,20 @@ public partial class AiChatViewModel : NavigableViewModelBase
         });
     }
 
-    /// <summary>排序：按 LastMessageTime 降序，仅顺序变化才重建（减闪烁）。</summary>
+    /// <summary>picker 选定 agent：在 surface 内开新对话（首条消息 lazy-create）。</summary>
+    private async void OnAgentPicked(AgentPickedEvent @event)
+    {
+        ChatSurface.SetParameters(new Dictionary<string, object>
+        {
+            ["agentName"] = @event.AgentName,
+        });
+        _activeConversationId = Guid.Empty; // 新会话，待首条消息 lazy-create 后 OnNewConversation 回填
+        ChatSurface.IsVoiceMode = false;
+        await ChatSurface.OnActivatedAsync();
+        HasActiveChat = true;
+        IsDrawerOpen = false;
+    }
+
     private void SortConversations()
     {
         var desired = Conversations.OrderByDescending(c => c.LastMessageTime).ToList();
@@ -212,88 +342,5 @@ public partial class AiChatViewModel : NavigableViewModelBase
         if (!needsReorder) return;
         Conversations.Clear();
         foreach (var conv in desired) Conversations.Add(conv);
-    }
-
-    [RelayCommand]
-    public async Task RefreshConversationsAsync()
-    {
-        IsLoading = true;
-        try
-        {
-            await LoadConversationsAsync();
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    [RelayCommand]
-    public async Task NavigateToChatDetailAsync()
-    {
-        if (SelectedConversation == null) return;
-
-        var conv = SelectedConversation;
-        SelectedConversation = null;
-
-        if (conv.Type == 4)
-        {
-            // 从 Context 解析 stockId 和 stockName（Context = "stock:{stockId}:{stockName}"）
-            var stockName = "股票";
-            var stockId = conv.Id.ToString();
-            if (!string.IsNullOrEmpty(conv.Context) && conv.Context.StartsWith("stock:"))
-            {
-                var parts = conv.Context.Split(':', 3);
-                if (parts.Length >= 2) stockId = parts[1];
-                if (parts.Length >= 3) stockName = parts[2];
-            }
-            NavigateToAgentChatDetailRequested?.Invoke(this, new AgentChatDetailNavigationEventArgs
-            {
-                SessionId = conv.Id,
-                StockId = stockId,
-                StockName = stockName,
-                AgentName = conv.AgentName ?? "指标分析Agent"
-            });
-            return;
-        }
-
-        // Type 3
-        NavigateToAgentChatDetailRequested?.Invoke(this, new AgentChatDetailNavigationEventArgs
-        {
-            SessionId = conv.Id,
-            AgentName = conv.Name ?? "AI 助手"
-        });
-    }
-
-    /// <summary>「＋新对话」→ 打开 agent 选择页。</summary>
-    [RelayCommand]
-    public Task NewConversationAsync()
-    {
-        NavigateToAgentPickerRequested?.Invoke(this, EventArgs.Empty);
-        return Task.CompletedTask;
-    }
-
-    [RelayCommand]
-    public async Task DeleteConversationAsync(Guid conversationId)
-    {
-        var conv = Conversations.FirstOrDefault(c => c.Id == conversationId);
-        if (conv == null) return;
-
-        try
-        {
-            IsLoading = true;
-            if (_conversationStore != null)
-                await _conversationStore.DeleteAsync(conversationId);
-            Conversations.Remove(conv);
-            StatusMessage = Conversations.Count == 0 ? "暂无 AI 对话" : string.Empty;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"删除失败: {ex.Message}";
-        }
-        finally
-        {
-            IsLoading = false;
-        }
     }
 }

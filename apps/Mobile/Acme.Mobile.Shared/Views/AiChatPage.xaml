@@ -3,82 +3,132 @@
     x:Class="Acme.Mobile.Shared.Views.AiChatPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
     Title="AI">
 
-    <Grid RowDefinitions="Auto,*">
-        <!-- 顶部「＋新对话」按钮 -->
-        <Button Grid.Row="0"
-                Text="＋ 新对话"
-                Command="{Binding NewConversationCommand}"
-                Style="{StaticResource PrimaryButton}"
-                Margin="16,8"
-                HorizontalOptions="Fill" />
+    <ContentPage.Resources>
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
 
-        <RefreshView Grid.Row="1"
-                     Command="{Binding RefreshConversationsCommand}"
-                     IsRefreshing="{Binding IsLoading}">
-            <CollectionView ItemsSource="{Binding Conversations}"
-                            SelectionMode="Single"
-                            SelectedItem="{Binding SelectedConversation}"
-                            SelectionChanged="OnSelectionChanged">
+    <Grid x:Name="RootGrid">
+        <!-- 主列：header + 聊天面板/空态 -->
+        <Grid RowDefinitions="Auto,*">
+            <!-- header：‹ 返回 / ≡ 抽屉 / agent 名 / ＋新对话 -->
+            <Grid Grid.Row="0" ColumnDefinitions="44,44,*,44" Padding="4,0"
+                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+                <Button Grid.Column="0" Text="‹" FontSize="34" Padding="0"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        Command="{Binding CloseAiCommand}" />
+                <Button Grid.Column="1" Text="≡" FontSize="22" Padding="0"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        Command="{Binding OpenDrawerCommand}" />
+                <Label Grid.Column="2" Text="{Binding ChatSurface.AgentName, FallbackValue='AI 助手'}"
+                       FontSize="16" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                       HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
+                <Button Grid.Column="3" Text="＋" FontSize="26" Padding="0"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        Command="{Binding NewConversationCommand}" />
+            </Grid>
 
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="12">
-                        <Label Text="🤖" FontSize="48" HorizontalOptions="Center" />
-                        <Label Text="暂无 AI 对话" FontSize="16" HorizontalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        <Label Text="点上方「新对话」开始" FontSize="13" HorizontalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
+            <!-- 聊天面板（有活动对话时） -->
+            <views:AgentChatSurface Grid.Row="1" x:Name="Surface" IsVisible="{Binding HasActiveChat}" />
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ObservableConversation">
-                        <SwipeView>
-                            <SwipeView.RightItems>
-                                <SwipeItems Mode="Reveal">
-                                    <SwipeItem Text="删除"
-                                               BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
-                                               Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteConversationCommand}"
-                                               CommandParameter="{Binding Id}" />
-                                </SwipeItems>
-                            </SwipeView.RightItems>
+            <!-- 空态（无活动对话时） -->
+            <VerticalStackLayout Grid.Row="1" IsVisible="{Binding HasActiveChat, Converter={StaticResource InverseBool}}"
+                                 HorizontalOptions="Center" VerticalOptions="Center" Spacing="16" Padding="32">
+                <Label Text="🤖" FontSize="64" HorizontalOptions="Center" />
+                <Label Text="选择 AI 助手开始对话" FontSize="17" HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                <Label Text="AI 助手可帮你查行情、写策略、分析数据" FontSize="13" HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Button Text="选择助手" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
+                        Command="{Binding NewConversationCommand}" Padding="28,10" HorizontalOptions="Center" />
+            </VerticalStackLayout>
+        </Grid>
 
-                            <Grid ColumnDefinitions="44,*,Auto" Padding="16,10" ColumnSpacing="12"
-                                  BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+        <!-- 抽屉半透明遮罩 -->
+        <BoxView x:Name="Backdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="False">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CloseDrawerCommand}" />
+            </BoxView.GestureRecognizers>
+        </BoxView>
 
-                                <!-- Avatar -->
-                                <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
-                                        BackgroundColor="{DynamicResource Primary}"
-                                        StrokeShape="RoundRectangle 22" StrokeThickness="0"
-                                        HorizontalOptions="Start" VerticalOptions="Center">
-                                    <Label Text="{Binding Initial}" TextColor="White" FontSize="18"
-                                           FontFamily="OpenSansSemibold"
-                                           HorizontalOptions="Center" VerticalOptions="Center" />
-                                </Border>
+        <!-- 左侧抽屉：历史会话列表 -->
+        <Border x:Name="Drawer" WidthRequest="300" HorizontalOptions="Start"
+                TranslationX="-300" InputTransparent="False"
+                BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                StrokeShape="RoundRectangle 0,16,16,0" StrokeThickness="0">
+            <Grid RowDefinitions="Auto,*,Auto" Padding="0">
+                <!-- 抽屉头：＋新对话 -->
+                <Button Grid.Row="0" Text="＋ 新对话" Style="{StaticResource PrimaryButton}"
+                        Command="{Binding NewConversationCommand}" Margin="12,12,12,8" HorizontalOptions="Fill" />
 
-                                <!-- Name + last message -->
-                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                    <Label Text="{Binding DisplayName}" FontSize="16"
-                                           LineBreakMode="TailTruncation" MaxLines="1" />
-                                    <Label Text="{Binding LastMessage}" FontSize="13"
-                                           LineBreakMode="TailTruncation" MaxLines="1"
+                <!-- 历史会话列表 -->
+                <CollectionView Grid.Row="1" x:Name="HistoryList"
+                                ItemsSource="{Binding Conversations}"
+                                SelectionMode="Single"
+                                SelectionChanged="OnHistorySelectionChanged">
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8" Padding="20">
+                            <Label Text="💬" FontSize="36" HorizontalOptions="Center" />
+                            <Label Text="暂无 AI 对话" FontSize="14" HorizontalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ObservableConversation">
+                            <SwipeView>
+                                <SwipeView.RightItems>
+                                    <SwipeItems Mode="Reveal">
+                                        <SwipeItem Text="删除"
+                                                   BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                                                   Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteConversationCommand}"
+                                                   CommandParameter="{Binding Id}" />
+                                    </SwipeItems>
+                                </SwipeView.RightItems>
+
+                                <Grid ColumnDefinitions="40,*,Auto" Padding="14,10" ColumnSpacing="10"
+                                      BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+                                    <!-- Avatar -->
+                                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
+                                            BackgroundColor="{DynamicResource Primary}"
+                                            StrokeShape="RoundRectangle 20" StrokeThickness="0"
+                                            HorizontalOptions="Start" VerticalOptions="Center">
+                                        <Label Text="{Binding Initial}" TextColor="White" FontSize="16"
+                                               FontFamily="OpenSansSemibold"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+
+                                    <!-- Name + last message -->
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="{Binding DisplayName}" FontSize="15" FontFamily="OpenSansSemibold"
+                                               LineBreakMode="TailTruncation" MaxLines="1"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                        <Label Text="{Binding LastMessage}" FontSize="12"
+                                               LineBreakMode="TailTruncation" MaxLines="1"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                    </VerticalStackLayout>
+
+                                    <!-- Time -->
+                                    <Label Grid.Column="2" Text="{Binding LastMessageTime, StringFormat='{0:MM-dd HH:mm}'}" FontSize="10"
+                                           VerticalOptions="Center"
                                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </VerticalStackLayout>
+                                </Grid>
+                            </SwipeView>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
 
-                                <!-- Time -->
-                                <VerticalStackLayout Grid.Column="2" Spacing="4" VerticalOptions="Center">
-                                    <Label Text="{Binding LastMessageTime, StringFormat='{0:MM-dd HH:mm}'}" FontSize="11"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </VerticalStackLayout>
-
-                            </Grid>
-                        </SwipeView>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-        </RefreshView>
+                <!-- 抽屉底：刷新 -->
+                <Button Grid.Row="2" Text="↻ 刷新" BackgroundColor="Transparent"
+                        TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                        Command="{Binding RefreshConversationsCommand}" Margin="12,4,12,12" />
+            </Grid>
+        </Border>
     </Grid>
 
 </ContentPage>

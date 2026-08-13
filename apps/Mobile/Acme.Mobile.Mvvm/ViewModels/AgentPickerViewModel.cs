@@ -2,6 +2,8 @@ using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Acme.Agents.AI;
+using Acme.Mobile.Mvvm.Events;
+using Acme.Mobile.Mvvm.Services;
 using Acme.Notes.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -10,24 +12,24 @@ namespace Acme.Mobile.Mvvm.ViewModels;
 
 /// <summary>
 /// Agent 选择页 VM：「＋新对话」入口。列出 <see cref="ICustomAgentCatalog"/> 全部 agent，
-/// tap 一个 → 直接进 <c>AgentChatDetailPage</c>（仅 agentName，无 sessionId → 首次发送时 lazy-create）。
+/// tap 一个 → 发布 <see cref="AgentPickedEvent"/>（经 <see cref="IEventBusService"/>）通知 AI tab
+/// 在内嵌聊天面板内开新对话（首条消息 lazy-create），picker 页自行 pop 回 AI tab。
 /// 镜像 <see cref="ContactsViewModel.LoadAiAgentsAsync"/> 取名册。
 /// </summary>
 public partial class AgentPickerViewModel : NavigableViewModelBase
 {
     private readonly ICustomAgentCatalog? _agentCatalog;
+    private readonly IEventBusService? _eventBusService;
 
     [ObservableProperty]
     private bool _isLoading;
 
     public ObservableCollection<AgentPickItem> Agents { get; } = new();
 
-    /// <summary>tap agent → 导航到新 Agent 聊天（payload = agentName）。</summary>
-    public event EventHandler<string>? NavigateToAgentChatRequested;
-
-    public AgentPickerViewModel(ICustomAgentCatalog? agentCatalog = null)
+    public AgentPickerViewModel(ICustomAgentCatalog? agentCatalog = null, IEventBusService? eventBusService = null)
     {
         _agentCatalog = agentCatalog;
+        _eventBusService = eventBusService;
     }
 
     public override async Task OnActivatedAsync()
@@ -68,11 +70,11 @@ public partial class AgentPickerViewModel : NavigableViewModelBase
         }
     }
 
-    /// <summary>tap agent → 触发导航事件（页 code-behind 跳 AgentChatDetailPage?agentName=...）。</summary>
+    /// <summary>tap agent → 发布 <see cref="AgentPickedEvent"/>（AI tab 订阅后在 surface 内开新对话）；页 code-behind 随后 pop 回 AI tab。</summary>
     [RelayCommand]
     public Task PickAgentAsync(string agentName)
     {
-        NavigateToAgentChatRequested?.Invoke(this, agentName);
+        _eventBusService?.Publish(new AgentPickedEvent(agentName));
         return Task.CompletedTask;
     }
 }

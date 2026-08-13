@@ -1,8 +1,12 @@
-using System.Collections.Specialized;
 using Acme.Mobile.Mvvm.ViewModels;
 
 namespace Acme.Mobile.Shared.Views;
 
+/// <summary>
+/// 推送式 AI 聊天详情页（Shell 子页，tab bar 隐藏）。瘦身后仅托管 <see cref="AgentChatSurface"/>。
+/// 5 个入口（聊天列表/picker/股票联系人/agent 联系人）经 Shell <c>GoToAsync("AgentChatDetailPage?...")</c> 推送，
+/// <see cref="IQueryAttributable.ApplyQueryAttributes"/> → VM <see cref="AgentChatDetailViewModel.SetParameters"/>。
+/// </summary>
 public partial class AgentChatDetailPage : ContentPage, IQueryAttributable
 {
     private AgentChatDetailViewModel? _vm;
@@ -12,9 +16,7 @@ public partial class AgentChatDetailPage : ContentPage, IQueryAttributable
         InitializeComponent();
         _vm = viewModel;
         BindingContext = _vm;
-
-        _vm.Messages.CollectionChanged += OnMessagesChanged;
-        _vm.StreamingContentUpdated += OnStreamingContentUpdated;
+        Surface.BindingContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
     }
 
@@ -36,51 +38,12 @@ public partial class AgentChatDetailPage : ContentPage, IQueryAttributable
             Title = _vm.AgentName;
             await _vm.OnActivatedAsync();
         }
-        await ScrollToBottomAsync();
+        await Surface.ScrollToBottomAsync();
     }
 
     protected override async void OnDisappearing()
     {
         base.OnDisappearing();
         if (_vm != null) await _vm.OnDeactivatedAsync();
-    }
-
-    private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action == NotifyCollectionChangedAction.Add)
-            ThrottledScrollToBottom();
-    }
-
-    private void OnStreamingContentUpdated() => ThrottledScrollToBottom();
-
-    private void ThrottledScrollToBottom()
-    {
-        MainThread.BeginInvokeOnMainThread(async () =>
-        {
-            try
-            {
-                await Task.Delay(30);
-                if (_vm != null && _vm.Messages.Count > 0)
-                {
-                    var last = _vm.Messages[^1];
-                    MessagesList.ScrollTo(last, position: ScrollToPosition.End, animate: false);
-                }
-            }
-            catch { }
-        });
-    }
-
-    private async Task ScrollToBottomAsync()
-    {
-        try
-        {
-            await Task.Delay(50);
-            if (_vm != null && _vm.Messages.Count > 0)
-            {
-                var last = _vm.Messages[^1];
-                MessagesList.ScrollTo(last, position: ScrollToPosition.End, animate: false);
-            }
-        }
-        catch { }
     }
 }
