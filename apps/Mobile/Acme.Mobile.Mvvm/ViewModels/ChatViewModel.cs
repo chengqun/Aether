@@ -213,6 +213,9 @@ public partial class ChatViewModel : NavigableViewModelBase
 
             foreach (var conv in cachedConversations)
             {
+                // AI 会话（Type 3/4）已移至「AI」tab，不进社交列表（过滤历史残留缓存条目）。
+                if (conv.Type == 3 || conv.Type == 4) continue;
+
                 // 为缓存中的 Agent 会话补充 AgentName 和 Kind 信息
                 if (conv.Type == 3 || conv.Type == 4)
                 {
@@ -260,7 +263,6 @@ public partial class ChatViewModel : NavigableViewModelBase
                 Conversations.Add(new ObservableConversation(conv));
             }
 
-            await LoadAgentConversationsAsync();
             SortConversations();
             StatusMessage = Conversations.Count == 0 ? "暂无会话" : string.Empty;
         }
@@ -564,6 +566,9 @@ public partial class ChatViewModel : NavigableViewModelBase
     {
         var conv = @event.Conversation;
 
+        // AI 会话（Type 3/4）由 AiChatViewModel 接收，不进社交列表。
+        if (conv.Type == 3 || conv.Type == 4) return;
+
         // 对于 Agent 会话（Type 3/4），确保 Kind 属性已设置
         if ((conv.Type == 3 || conv.Type == 4) && conv.Kind == null && !string.IsNullOrEmpty(conv.AgentName))
         {
@@ -654,59 +659,6 @@ public partial class ChatViewModel : NavigableViewModelBase
         }
     }
 
-    private async Task LoadAgentConversationsAsync()
-    {
-        if (_conversationStore == null) return;
-
-        try
-        {
-            var userId = await GetCurrentUserIdAsync();
-            var summaries = await _conversationStore.GetSummariesAsync(userId.ToString());
-
-            // 构建 Agent 名称 → Kind 映射
-            var agentKindMap = await BuildAgentKindMapAsync();
-
-            foreach (var s in summaries)
-            {
-                // 跳过已在缓存列表中的会话（避免重复）
-                if (Conversations.Any(c => c.Id == s.ConversationId))
-                    continue;
-
-                var agentName = string.IsNullOrEmpty(s.AgentName) ? s.Title : s.AgentName;
-
-                var conv = new Conversation
-                {
-                    Id = s.ConversationId,
-                    Type = 3,
-                    Name = agentName,
-                    AgentName = agentName,
-                    Kind = (int?)agentKindMap.GetValueOrDefault(agentName),
-                    LastMessage = s.LastMessagePreview,
-                    LastMessageTime = s.UpdatedAt.LocalDateTime,
-                };
-
-                // 保存到本地缓存
-                if (_conversationSyncService != null)
-                {
-                    try
-                    {
-                        await Task.Run(() => _conversationSyncService.UpsertConversationAsync(conv, userId));
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[ChatViewModel] 缓存 Agent 会话失败: {ex.Message}");
-                    }
-                }
-
-                Conversations.Add(new ObservableConversation(conv));
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ChatViewModel] 加载 Agent 会话失败: {ex.Message}");
-        }
-    }
-
     /// <summary>
     /// 加载服务号信息流文件夹条目（Type=5），显示在聊天列表中
     /// </summary>
@@ -757,6 +709,8 @@ public partial class ChatViewModel : NavigableViewModelBase
                 Conversations.Clear();
                 foreach (var conv in allConversations)
                 {
+                    // AI 会话（Type 3/4）已移至「AI」tab，不进社交列表。
+                    if (conv.Type == 3 || conv.Type == 4) continue;
                     Conversations.Add(new ObservableConversation(conv));
                 }
             }
@@ -777,7 +731,6 @@ public partial class ChatViewModel : NavigableViewModelBase
                 }
             }
 
-            await LoadAgentConversationsAsync();
             SortConversations();
 
             StatusMessage = Conversations.Count == 0 ? "暂无会话" : string.Empty;

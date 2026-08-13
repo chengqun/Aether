@@ -40,8 +40,9 @@ public static class MauiProgram
 
         // —— ViewModel 注册（TabBar 主页 Singleton 保持状态；子页面 Transient 避免串扰）——
         builder.Services.AddSingleton<SplashViewModel>();
-        // 4 个 Tab VM（Singleton，保持会话列表/发现/我的状态）
+        // Tab VM（Singleton，保持会话列表/发现/我的状态）
         builder.Services.AddSingleton<ChatViewModel>();
+        builder.Services.AddSingleton<AiChatViewModel>();
         builder.Services.AddSingleton<ContactsViewModel>();
         builder.Services.AddSingleton<DiscoveryViewModel>();
         builder.Services.AddSingleton<MeViewModel>();
@@ -49,6 +50,7 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginViewModel>();
         builder.Services.AddTransient<AgentContactDetailViewModel>();
         builder.Services.AddTransient<AgentChatDetailViewModel>();
+        builder.Services.AddTransient<AgentPickerViewModel>();
         builder.Services.AddTransient<ChatDetailViewModel>();
         builder.Services.AddTransient<ContactDetailViewModel>();
         builder.Services.AddTransient<ContactMomentsViewModel>();
@@ -69,8 +71,9 @@ public static class MauiProgram
 
         // —— Page 注册（Shell 导航按路由解析，页面 ctor 注入 VM，必须注册）——
         builder.Services.AddSingleton<SplashPage>();
-        // 4 个 Tab Page（Singleton，与 Tab VM 同生命周期）
+        // Tab Page（Singleton，与 Tab VM 同生命周期）
         builder.Services.AddSingleton<ChatPage>();
+        builder.Services.AddSingleton<AiChatPage>();
         builder.Services.AddSingleton<ContactsPage>();
         builder.Services.AddSingleton<DiscoveryPage>();
         builder.Services.AddSingleton<MePage>();
@@ -78,6 +81,7 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<AgentContactDetailPage>();
         builder.Services.AddTransient<AgentChatDetailPage>();
+        builder.Services.AddTransient<AgentPickerPage>();
         builder.Services.AddTransient<ChatDetailPage>();
         builder.Services.AddTransient<ContactDetailPage>();
         builder.Services.AddTransient<ContactMomentsPage>();

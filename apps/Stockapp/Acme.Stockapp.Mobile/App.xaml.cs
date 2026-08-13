@@ -27,6 +27,7 @@ public partial class App : Application
         // LoginPage 是 AppShell.xaml 根 ShellContent，//LoginPage 走 ShellContent，无需 RegisterRoute。
         Routing.RegisterRoute("AgentContactDetailPage", typeof(AgentContactDetailPage));
         Routing.RegisterRoute("AgentChatDetailPage", typeof(AgentChatDetailPage));
+        Routing.RegisterRoute("AgentPickerPage", typeof(AgentPickerPage));
         Routing.RegisterRoute("ChatDetailPage", typeof(ChatDetailPage));
         Routing.RegisterRoute("ContactDetailPage", typeof(ContactDetailPage));
         Routing.RegisterRoute("ContactMomentsPage", typeof(ContactMomentsPage));

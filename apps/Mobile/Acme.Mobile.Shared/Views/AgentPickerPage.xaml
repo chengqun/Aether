@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.AgentPickerPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    Title="选择 AI 助手">
+
+    <Grid RowDefinitions="*">
+        <CollectionView Grid.Row="0"
+                        ItemsSource="{Binding Agents}"
+                        SelectionMode="Single"
+                        SelectionChanged="OnSelectionChanged">
+
+            <CollectionView.EmptyView>
+                <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="12">
+                    <Label Text="🤖" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="暂无可用 AI 助手" FontSize="16" HorizontalOptions="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:AgentPickItem">
+                    <Grid ColumnDefinitions="44,*,Auto" Padding="16,12" ColumnSpacing="12"
+                          BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+
+                        <!-- Avatar -->
+                        <Border Grid.Column="0" WidthRequest="44" HeightRequest="44"
+                                BackgroundColor="{DynamicResource Primary}"
+                                StrokeShape="RoundRectangle 22" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Label Text="{Binding Initial}" TextColor="White" FontSize="18"
+                                   FontFamily="OpenSansSemibold"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+
+                        <!-- Name -->
+                        <Label Grid.Column="1" Text="{Binding Name}" FontSize="16"
+                               VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
+
+                        <!-- Kind badge -->
+                        <Border Grid.Column="2"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
+                                StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="8,3"
+                                HorizontalOptions="End" VerticalOptions="Center">
+                            <Label Text="{Binding KindLabel}" FontSize="11"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+
+</ContentPage>
