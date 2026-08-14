@@ -7,6 +7,7 @@ using Acme.Llm.Domain;
 using Acme.Notes.Domain;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
+using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Hosting;
 using Aether.AI.Memory;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -51,6 +52,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private List<ChatTurnItem>? _pendingHistoryTurns; // 暂存的更早轮（时间正序，最旧在前；尚未加入 Messages 渲染）
     private const int HistoryInitialBatch = 10;       // 切换会话时初始渲染的最近轮数
     private const int HistoryLoadBatch = 10;          // 每次滚到顶部增量加载的轮数
+    private int _nextRunSeq = 1;                      // 当前会话下一个 run 的序号（1-based；新建=1，恢复=最大 seq+1）
 
     public ChatWorkspaceViewModel(
         IServiceProvider serviceProvider,
@@ -664,7 +666,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         CancelRunningRun();
         try
         {
-            var conv = await _conversationStore.GetAsync(item.Id);
+            var conv = await _conversationStore.GetConversationAsync(item.Id);
             _currentConversationId = item.Id;
             foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
 
@@ -689,10 +691,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             _pendingHistoryTurns = null;
             if (conv is not null)
             {
-                // 一次性按 user 消息分组重建全部 turn（POCO 构建 + metadata 解析，开销小），
-                // 但只把最近 N 轮加入 Messages 渲染——markdown 解析仅在绑定时发生，分批可避免卡顿。
-                // 更早的轮暂存 _pendingHistoryTurns，待用户滚到顶部时由 View 触发 LoadMoreHistory 增量加载。
-                var all = BuildTurns(conv.Messages, item.AgentName ?? "专家");
+                // 从 typed 事件流重建 transcript：每条 run 一轮（user 消息在 run.UserMessage），events 还原思考/工具/答案/计划卡。
+                // 只把最近 N 轮加入 Messages 渲染（markdown 解析仅在绑定时发生，分批避免卡顿）；更早轮暂存待上滚增量加载。
+                var runs = await _conversationStore.GetRunsAsync(item.Id);
+                var eventsByRun = new Dictionary<Guid, IReadOnlyList<AgentEvent>>();
+                foreach (var run in runs)
+                    eventsByRun[run.Id] = await _conversationStore.GetEventsAsync(run.Id);
+                _nextRunSeq = runs.Count == 0 ? 1 : runs.Max(r => r.Seq) + 1;
+
+                var all = BuildTurnsFromRuns(runs, eventsByRun, item.AgentName ?? "专家");
                 if (all.Count <= HistoryInitialBatch)
                 {
                     foreach (var t in all) Messages.Add(t);
@@ -702,6 +709,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     _pendingHistoryTurns = all.Take(all.Count - HistoryInitialBatch).ToList();
                     foreach (var t in all.Skip(all.Count - HistoryInitialBatch)) Messages.Add(t);
                 }
+            }
+            else
+            {
+                _nextRunSeq = 1;
             }
         }
         catch (Exception ex)
@@ -1199,6 +1210,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             {
                 justCreated = true;
                 _currentConversationId = Guid.NewGuid();
+                _nextRunSeq = 1;
                 var conv = new Conversation
                 {
                     ConversationId = _currentConversationId,
@@ -1206,8 +1218,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     AgentName = targetName,
                     Title = content.Length > 20 ? content[..20] + "…" : content,
                 };
-                conv.Append(Aether.AI.Core.Messages.Message.User(content));
-                await _conversationStore.SaveAsync(conv);
+                // 用户消息不再挂在 Conversation 上——它随 AgentRun.UserMessage 在本轮结束时持久化。
+                await _conversationStore.SaveConversationAsync(conv);
                 await _dispatcher.InvokeAsync(() =>
                 {
                     Conversations.Insert(0, new ConversationItem
@@ -1238,8 +1250,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             PlanAwaitingAccept = desiredMode == "plan" && _todosTouchedThisTurn && HasActivePlan
                 && !ActiveTodos.Any(t => t.IsComplete);
 
-            // 持久化 transcript（user + 思考段/工具步/回答）并乐观 bump 侧栏项
-            await PersistTurnAsync(content, runItems, fullText.ToString());
+            // 持久化本轮为 run+events（typed 事件流，CallId 写入时即配对）并乐观 bump 侧栏项。
+            await PersistRunAsync(content, runItems, fullText.ToString());
             if (kind != ChatTargetKind.Rule) await RefreshModeAsync();
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
@@ -1297,10 +1309,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var title = await _titleService.GenerateTitleAsync(userMessage, assistantReply);
             if (string.IsNullOrWhiteSpace(title)) return;
 
-            var conv = await _conversationStore.GetAsync(_currentConversationId);
+            var conv = await _conversationStore.GetConversationAsync(_currentConversationId);
             if (conv is null) return;
             conv.Title = title;
-            await _conversationStore.SaveAsync(conv);
+            await _conversationStore.SaveConversationAsync(conv);
 
             await _dispatcher.InvokeAsync(() =>
             {
@@ -1311,81 +1323,94 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         catch { /* 标题生成失败不影响主流程 */ }
     }
 
-    /// <summary>把本轮 transcript（user + 思考段/工具步/回答）追加到当前会话并持久化 + 乐观 bump 侧栏项。</summary>
-    private async Task PersistTurnAsync(string userContent,
+    /// <summary>
+    /// 把本轮 transcript 持久化为一个 <see cref="AgentRun"/> + 其 <see cref="AgentEvent"/> 事件流（typed、append-only，
+    /// CallId 在 ToolCall/ToolResult 写入时即配对），调 <see cref="IConversationStore.AppendRunAsync"/> 原子写入并
+    /// 反范式化更新会话 preview/updatedAt。乐观 bump 侧栏项。用户消息在 <see cref="AgentRun.UserMessage"/> 上，不另存。
+    /// 审批卡运行期态不持久化（与旧行为一致）。
+    /// </summary>
+    private async Task PersistRunAsync(string userContent,
         IReadOnlyList<ChatMessageItem> runItems, string fullText)
     {
         if (_currentConversationId == Guid.Empty) return;
         try
         {
-            var conv = await _conversationStore.GetAsync(_currentConversationId);
+            var conv = await _conversationStore.GetConversationAsync(_currentConversationId);
             if (conv is null) return;
-            // user 已在创建时追加过；非首轮回补
-            var last = conv.Messages.Count > 0 ? conv.Messages[^1] : null;
-            if (last is null || last.Role != Aether.AI.Core.Messages.MessageRole.User || last.Content != userContent)
-                conv.Append(Aether.AI.Core.Messages.Message.User(userContent));
-            // 按时序持久化本轮 transcript（计划卡 / 思考段 / 工具步 / 回答）。用户消息已单独追加，审批卡运行期态不持久化。
+
+            var now = DateTimeOffset.UtcNow;
+            var hasAnswer = runItems.Any(i => i.IsText && !i.IsReasoning && !string.IsNullOrWhiteSpace(i.Content));
+            var status = hasAnswer ? RunStatus.Completed : RunStatus.Interrupted;
+
+            var run = new AgentRun
+            {
+                ConversationId = _currentConversationId,
+                Seq = _nextRunSeq,
+                Status = status,
+                AgentId = conv.AgentId,
+                AgentName = conv.AgentName,
+                UserMessage = userContent,
+                StartedAt = now,   // 近似（实际开始更早）；持久化/排序用
+                FinishedAt = now,
+            };
+
+            var events = new List<AgentEvent>();
+            var seq = 1;
             foreach (var item in runItems)
             {
+                // 用户消息已在 run.UserMessage；审批卡运行期态不持久化；跳过空思考段。
                 if (item.IsUser || item.IsApprovalCard) continue;
-                if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue; // 跳过空思考段
-                conv.Append(ToTranscriptMessage(item));
+                if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue;
+
+                if (item.IsPlanCard)
+                {
+                    var todos = item.Todos.Select(t => new TodoItemInfo(t.Title, t.Title, t.Description, t.IsComplete)).ToList();
+                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.PlanUpdated, new AgentEventPayload.PlanUpdated(todos)));
+                }
+                else if (item.IsToolStep)
+                {
+                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolCall,
+                        new AgentEventPayload.ToolCall(item.CallId, item.ToolName ?? "tool", item.Input)));
+                    // 未完成的工具步（中断）只存 call，无 result——重建时为孤儿 call（UI 仍展示 call 卡），
+                    // LLM 历史重建时由 EventHistoryRebuilder.DropOrphanToolCalls 丢弃。
+                    if (item.IsToolCompleted)
+                        events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolResult,
+                            new AgentEventPayload.ToolResult(item.CallId, item.ToolName ?? "tool", item.Output)));
+                }
+                else if (item.IsReasoning)
+                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ReasoningChunk,
+                        new AgentEventPayload.ReasoningChunk(item.Content ?? string.Empty)));
+                else
+                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.TextChunk,
+                        new AgentEventPayload.TextChunk(item.Content ?? string.Empty)));
             }
-            await _conversationStore.SaveAsync(conv);
+
+            await _conversationStore.AppendRunAsync(run, events);
+            _nextRunSeq++;
 
             await _dispatcher.InvokeAsync(() =>
             {
                 var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
                 if (item is not null)
                 {
-                    item.Preview = fullText.Length > 40 ? fullText[..40] + "…" : fullText;
-                    item.DisplayTime = FormatTime(conv.UpdatedAt);
+                    var preview = string.IsNullOrWhiteSpace(fullText) ? userContent : fullText;
+                    item.Preview = preview.Length > 40 ? preview[..40] + "…" : preview;
+                    item.DisplayTime = FormatTime(now);
                     // 移到顶部
                     Conversations.Remove(item);
                     Conversations.Insert(0, item);
                 }
             });
         }
-        catch { /* transcript 持久化失败不阻塞对话 */ }
+        catch { /* run 持久化失败不阻塞对话 */ }
     }
 
-    /// <summary>ChatMessageItem → 持久化 Message。工具步用 metadata 存 input/output JSON；思考段 kind=reasoning；计划卡 kind=plan + todos JSON。</summary>
-    private static Aether.AI.Core.Messages.Message ToTranscriptMessage(ChatMessageItem item)
+    /// <summary>构造一个事件：Seq 自增分配，Payload 序列化为紧凑 JSON。</summary>
+    private static AgentEvent MakeEvent(Guid runId, ref int seq, AgentEventType type, object payload)
     {
-        var jsonOpts = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-        if (item.IsPlanCard)
-        {
-            var todosJson = System.Text.Json.JsonSerializer.Serialize(
-                item.Todos.Select(t => new { t.Title, Desc = t.Description, t.IsComplete }), jsonOpts);
-            return new Aether.AI.Core.Messages.Message
-            {
-                Role = Aether.AI.Core.Messages.MessageRole.Assistant,
-                Content = string.Empty,
-                Metadata = new Dictionary<string, string> { ["kind"] = "plan", ["todos"] = todosJson },
-            };
-        }
-        if (item.IsToolStep)
-        {
-            return new Aether.AI.Core.Messages.Message
-            {
-                Role = Aether.AI.Core.Messages.MessageRole.Tool,
-                ToolName = item.ToolName ?? string.Empty,
-                ToolCallId = item.CallId,
-                Content = string.Empty,
-                Metadata = new Dictionary<string, string>
-                {
-                    ["kind"] = "tool",
-                    ["input"] = item.Input is null ? "" : System.Text.Json.JsonSerializer.Serialize(item.Input, jsonOpts),
-                    ["output"] = item.Output is null ? "" : System.Text.Json.JsonSerializer.Serialize(item.Output, jsonOpts),
-                },
-            };
-        }
-        return new Aether.AI.Core.Messages.Message
-        {
-            Role = Aether.AI.Core.Messages.MessageRole.Assistant,
-            Content = item.Content ?? string.Empty,
-            Metadata = item.IsReasoning ? new Dictionary<string, string> { ["kind"] = "reasoning" } : null,
-        };
+        var e = new AgentEvent { RunId = runId, Seq = seq, EventType = type, Payload = AgentEventPayload.Serialize(payload) };
+        seq++;
+        return e;
     }
 
     /// <summary>是否还有更早的历史轮未渲染（供 View 判断是否触发增量加载）。</summary>
@@ -1407,91 +1432,121 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         return take;
     }
 
-    /// <summary>按 user 消息分组重建全部 turn：每条 user 消息开新轮，其后 assistant/tool 归入该轮。历史轮标记 Done。</summary>
-    private static List<ChatTurnItem> BuildTurns(IEnumerable<Aether.AI.Core.Messages.Message> messages, string agentName)
+    /// <summary>
+    /// 按 run 重建全部 turn：每条 <see cref="AgentRun"/> 一轮（Header=run.UserMessage + 用户气泡），其 <see cref="AgentEvent"/>
+    /// 还原思考段/工具步/答案/计划卡。工具 call+result 按 CallId 合并到同一张工具卡。历史轮标记 Done（Failed→Error）。
+    /// </summary>
+    private static List<ChatTurnItem> BuildTurnsFromRuns(
+        IReadOnlyList<AgentRun> runs,
+        IReadOnlyDictionary<Guid, IReadOnlyList<AgentEvent>> eventsByRun,
+        string agentName)
     {
         var turns = new List<ChatTurnItem>();
-        ChatTurnItem? cur = null;
-        foreach (var m in messages)
+        foreach (var run in runs.OrderBy(r => r.Seq))
         {
-            var ci = FromTranscriptMessage(m, agentName);
-            if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
+            var name = string.IsNullOrWhiteSpace(run.AgentName) ? agentName : run.AgentName;
+            var turn = new ChatTurnItem { Header = run.UserMessage };
+            // 用户气泡（用户请求属于本次执行）
+            turn.Children.Add(new ChatMessageItem
             {
-                cur = new ChatTurnItem { Header = m.Content };
-                cur.Children.Add(ci);
-                turns.Add(cur);
-            }
-            else
+                Side = ChatMessageSide.Right, ItemType = "text", Sender = "我",
+                Content = run.UserMessage, IsStreaming = false
+            });
+
+            if (eventsByRun.TryGetValue(run.Id, out var events) && events is not null && events.Count > 0)
             {
-                cur ??= new ChatTurnItem { Header = string.Empty };
-                if (cur.Children.Count == 0) turns.Add(cur);
-                cur.Children.Add(ci);
+                // CallId → 工具卡，result 到来时回填 Output + IsToolCompleted。
+                var toolCardsByCallId = new Dictionary<string, ChatMessageItem>();
+                foreach (var e in events.OrderBy(x => x.Seq))
+                {
+                    switch (e.EventType)
+                    {
+                        case AgentEventType.TextChunk:
+                            var text = AgentEventPayload.Deserialize<AgentEventPayload.TextChunk>(e.Payload)?.Text ?? string.Empty;
+                            turn.Children.Add(new ChatMessageItem
+                            {
+                                Side = ChatMessageSide.Left, ItemType = "text", Sender = name,
+                                Content = text, IsStreaming = false
+                            });
+                            break;
+
+                        case AgentEventType.ReasoningChunk:
+                            var rtext = AgentEventPayload.Deserialize<AgentEventPayload.ReasoningChunk>(e.Payload)?.Text ?? string.Empty;
+                            turn.Children.Add(new ChatMessageItem
+                            {
+                                Side = ChatMessageSide.Left, ItemType = "text", Sender = name,
+                                Content = rtext, IsStreaming = false,
+                                IsReasoning = true, IsReasoningContent = true
+                            });
+                            break;
+
+                        case AgentEventType.ToolCall:
+                            var tc = AgentEventPayload.Deserialize<AgentEventPayload.ToolCall>(e.Payload);
+                            var card = new ChatMessageItem
+                            {
+                                Side = ChatMessageSide.Left,
+                                ItemType = "tool",
+                                Sender = name,
+                                ToolName = tc?.Name ?? "tool",
+                                CallId = tc?.CallId ?? string.Empty,
+                                Input = tc?.Input,
+                                IsToolCompleted = false,
+                                IsStreaming = false,
+                            };
+                            if (!string.IsNullOrEmpty(card.CallId)) toolCardsByCallId[card.CallId] = card;
+                            turn.Children.Add(card);
+                            break;
+
+                        case AgentEventType.ToolResult:
+                            var tr = AgentEventPayload.Deserialize<AgentEventPayload.ToolResult>(e.Payload);
+                            var cid = tr?.CallId ?? string.Empty;
+                            if (!string.IsNullOrEmpty(cid) && toolCardsByCallId.TryGetValue(cid, out var existing))
+                            {
+                                existing.Output = tr?.Output;
+                                existing.IsToolCompleted = true;
+                            }
+                            else
+                            {
+                                // 无前置 call（不应发生）——单独 result 卡。
+                                turn.Children.Add(new ChatMessageItem
+                                {
+                                    Side = ChatMessageSide.Left, ItemType = "tool", Sender = name,
+                                    ToolName = tr?.Name ?? "tool", CallId = cid,
+                                    Output = tr?.Output, IsToolCompleted = true, IsStreaming = false,
+                                });
+                            }
+                            break;
+
+                        case AgentEventType.PlanUpdated:
+                            var pc = AgentEventPayload.Deserialize<AgentEventPayload.PlanUpdated>(e.Payload);
+                            var planCard = new ChatMessageItem
+                            {
+                                Side = ChatMessageSide.Left, ItemType = "plan", Sender = name, IsStreaming = false
+                            };
+                            if (pc?.Todos is not null)
+                                foreach (var t in pc.Todos)
+                                    planCard.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
+                            turn.Children.Add(planCard);
+                            break;
+
+                        // Approval/Error/Usage 桌面不持久化，跳过。
+                        case AgentEventType.ApprovalRequested:
+                        case AgentEventType.ApprovalDecision:
+                        case AgentEventType.Error:
+                        case AgentEventType.Usage:
+                            break;
+                    }
+                }
             }
+
+            turn.Finish(run.Status == RunStatus.Failed ? TurnStatus.Error : TurnStatus.Done);
+            // 用 run 实际时长覆盖（比 ~0s 更准）。
+            if (run.FinishedAt is not null)
+                turn.ElapsedText = $"{(run.FinishedAt.Value - run.StartedAt).TotalSeconds:F1}s";
+            turns.Add(turn);
         }
-        foreach (var t in turns) t.Finish(TurnStatus.Done); // 历史轮已结束
         return turns;
     }
-
-    /// <summary>持久化 Message → ChatMessageItem（还原历史时）。工具步/思考段从 metadata 还原。</summary>
-    private static ChatMessageItem FromTranscriptMessage(Aether.AI.Core.Messages.Message m, string agentName)
-    {
-        if (m.Role == Aether.AI.Core.Messages.MessageRole.User)
-            return new ChatMessageItem { Side = ChatMessageSide.Right, ItemType = "text", Sender = "我", Content = m.Content, IsStreaming = false };
-
-        if (m.Role == Aether.AI.Core.Messages.MessageRole.Tool)
-            return new ChatMessageItem
-            {
-                Side = ChatMessageSide.Left,
-                ItemType = "tool",
-                Sender = agentName,
-                ToolName = m.ToolName ?? string.Empty,
-                CallId = m.ToolCallId ?? string.Empty,
-                Input = MetaDict(m, "input"),
-                Output = MetaDict(m, "output"),
-                IsToolCompleted = MetaHas(m, "output"),
-            };
-
-        var kind = MetaVal(m, "kind");
-        if (kind == "plan")
-        {
-            var card = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = agentName, IsStreaming = false };
-            var todosJson = MetaVal(m, "todos");
-            if (!string.IsNullOrEmpty(todosJson))
-            {
-                try
-                {
-                    foreach (var t in System.Text.Json.JsonSerializer.Deserialize<List<TodoDto>>(todosJson)!)
-                        card.Todos.Add(new TodoItemVM { Title = t.Title ?? string.Empty, Description = t.Desc, IsComplete = t.IsComplete });
-                }
-                catch { /* 计划反序列化失败不阻塞恢复 */ }
-            }
-            return card;
-        }
-
-        var isReasoning = kind == "reasoning";
-        return new ChatMessageItem
-        {
-            Side = ChatMessageSide.Left,
-            ItemType = "text",
-            Sender = agentName,
-            Content = m.Content,
-            IsStreaming = false,
-            IsReasoning = isReasoning,
-        };
-    }
-
-    private static Dictionary<string, object>? MetaDict(Aether.AI.Core.Messages.Message m, string key)
-    {
-        if (m.Metadata is null || !m.Metadata.TryGetValue(key, out var json) || string.IsNullOrEmpty(json)) return null;
-        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json); }
-        catch { return null; }
-    }
-
-    private static bool MetaHas(Aether.AI.Core.Messages.Message m, string key)
-        => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v);
-
-    private static string? MetaVal(Aether.AI.Core.Messages.Message m, string key)
-        => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) ? v : null;
 }
 
 /// <summary>聊天目标偏好（chatTargets 键）：三类召唤 id 集合 + 当前选中目标。camelCase JSON 持久化。</summary>

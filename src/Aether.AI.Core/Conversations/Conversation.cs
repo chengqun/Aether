@@ -1,11 +1,14 @@
-using Aether.AI.Core.Messages;
-
 namespace Aether.AI.Core.Conversations;
 
 /// <summary>
-/// A persisted conversation: an ordered sequence of messages associated with
-/// a session and (optionally) a user. Conversations are what the Memory layer
-/// stores so that past interactions can be recalled later.
+/// A persisted conversation: metadata for an ordered sequence of agent runs. The full
+/// transcript lives as typed <see cref="Runs.AgentEvent"/>s attached to <see cref="Runs.AgentRun"/>s
+/// (loaded on demand via <c>IConversationStore.GetRunsAsync</c>/<c>GetEventsAsync</c>), NOT as a
+/// flat message list on this object.
+/// <para>
+/// <see cref="LastMessagePreview"/>/<see cref="LastMessageAt"/> are denormalized for list display
+/// (会话历史 flyout) so the summary query need not join the run/event tables.
+/// </para>
 /// </summary>
 public sealed class Conversation
 {
@@ -27,11 +30,9 @@ public sealed class Conversation
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public List<Message> Messages { get; } = new();
+    /// <summary>最近一条消息的预览文本（会话列表展示用），由 store 在 append run 时反范式化更新。</summary>
+    public string? LastMessagePreview { get; set; }
 
-    public void Append(Message message)
-    {
-        Messages.Add(message);
-        UpdatedAt = DateTimeOffset.UtcNow;
-    }
+    /// <summary>最近一条消息的时间（会话列表排序/展示用），由 store 在 append run 时反范式化更新。</summary>
+    public DateTimeOffset? LastMessageAt { get; set; }
 }

@@ -12,7 +12,7 @@ using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;
-using Aether.AI.Core.Messages;
+using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Hosting;
 using Aether.AI.Memory;
 using Acme.Mobile.Mvvm.Services;
@@ -399,7 +399,15 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
         try
         {
-            var conv = await _conversationStore.GetAsync(_currentConversationId, default);
+            var conv = await _conversationStore.GetConversationAsync(_currentConversationId, default);
+            if (_streamVersion != version) return;
+
+            var runs = conv == null
+                ? Array.Empty<AgentRun>()
+                : await _conversationStore.GetRunsAsync(_currentConversationId, default);
+            var eventsByRun = new Dictionary<Guid, IReadOnlyList<AgentEvent>>();
+            foreach (var run in runs)
+                eventsByRun[run.Id] = await _conversationStore.GetEventsAsync(run.Id, default);
             if (_streamVersion != version) return;
 
             _uiThreadDispatcher?.Post(() =>
@@ -409,12 +417,12 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 SessionOutputTokens = 0;
                 if (conv != null)
                 {
-                    foreach (var msg in conv.Messages)
+                    // 按 run.seq 顺序重建：每条 run 的 events 还原为用户气泡 + 思考/工具/文本卡。
+                    foreach (var run in runs.OrderBy(r => r.Seq))
                     {
-                        foreach (var item in ExpandMessage(msg))
-                        {
+                        eventsByRun.TryGetValue(run.Id, out var events);
+                        foreach (var item in ExpandRun(run, events))
                             Messages.Add(item);
-                        }
                     }
                     // 恢复历史会话标题（AI 生成或首轮占位）到 header
                     CurrentTitle = conv.Title ?? string.Empty;
@@ -429,102 +437,95 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     }
 
     /// <summary>
-    /// 将 Aether Message 映射为 ChatMessageItem（用于恢复历史消息）。
-    /// 与实时流式保持一致：思考段→思考卡、工具步→tool_call+tool_result 两张卡、文本→气泡。
+    /// 将一个 <see cref="AgentRun"/> + 其 <see cref="AgentEvent"/> 映射为 ChatMessageItem（用于恢复历史消息）。
+    /// 与实时流式保持一致：用户气泡 → 思考段→思考卡、工具 ToolCall→tool_call 卡 + ToolResult→tool_result 卡、TextChunk→文本气泡。
     /// </summary>
-    private IEnumerable<ChatMessageItem> ExpandMessage(Message msg)
+    private IEnumerable<ChatMessageItem> ExpandRun(AgentRun run, IReadOnlyList<AgentEvent>? events)
     {
-        var role = msg.Role.ToString().ToLowerInvariant();
-        var timestamp = msg.CreatedAt.LocalDateTime;
+        var agentName = string.IsNullOrWhiteSpace(run.AgentName) ? AgentName : run.AgentName;
 
-        if (role == "user")
+        // 用户气泡（用户请求属于本次执行）
+        yield return new ChatMessageItem
         {
-            yield return new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "text",
-                Role = "user",
-                Content = msg.Content,
-                Timestamp = timestamp
-            };
-            yield break;
-        }
+            Id = Guid.NewGuid().ToString(),
+            ItemType = "text",
+            Role = "user",
+            Content = run.UserMessage,
+            Timestamp = run.StartedAt.LocalDateTime
+        };
 
-        var kind = msg.Metadata?.TryGetValue("kind", out var k) == true ? k : null;
+        if (events == null) yield break;
 
-        // 思考段（kind=reasoning）—— 还原为思考卡，与实时流式一致。
-        // LLM 历史经 TranscriptHistoryConverter 跳过 reasoning（不入续轮上下文），故持久化安全。
-        if (kind == "reasoning")
+        foreach (var e in events.OrderBy(x => x.Seq))
         {
-            if (!string.IsNullOrEmpty(msg.Content))
+            switch (e.EventType)
             {
-                yield return new ChatMessageItem
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    ItemType = "thinking",
-                    Role = "assistant",
-                    Content = msg.Content,
-                    AuthorName = AgentName,
-                    Timestamp = timestamp
-                };
+                case AgentEventType.TextChunk:
+                    var text = AgentEventPayload.Deserialize<AgentEventPayload.TextChunk>(e.Payload)?.Text ?? string.Empty;
+                    if (!string.IsNullOrEmpty(text))
+                        yield return new ChatMessageItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            ItemType = "text",
+                            Role = "assistant",
+                            Content = text,
+                            MarkdownContent = text,
+                            AuthorName = agentName,
+                            Timestamp = e.CreatedAt.LocalDateTime
+                        };
+                    break;
+
+                case AgentEventType.ReasoningChunk:
+                    var rtext = AgentEventPayload.Deserialize<AgentEventPayload.ReasoningChunk>(e.Payload)?.Text ?? string.Empty;
+                    if (!string.IsNullOrEmpty(rtext))
+                        yield return new ChatMessageItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            ItemType = "thinking",
+                            Role = "assistant",
+                            Content = rtext,
+                            AuthorName = agentName,
+                            Timestamp = e.CreatedAt.LocalDateTime
+                        };
+                    break;
+
+                case AgentEventType.ToolCall:
+                    var tc = AgentEventPayload.Deserialize<AgentEventPayload.ToolCall>(e.Payload);
+                    yield return new ChatMessageItem
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ItemType = "tool_call",
+                        Role = "assistant",
+                        ToolName = tc?.Name ?? "tool",
+                        Input = tc?.Input,
+                        AuthorName = agentName,
+                        Timestamp = e.CreatedAt.LocalDateTime
+                    };
+                    break;
+
+                case AgentEventType.ToolResult:
+                    var tr = AgentEventPayload.Deserialize<AgentEventPayload.ToolResult>(e.Payload);
+                    yield return new ChatMessageItem
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ItemType = "tool_result",
+                        Role = "assistant",
+                        ToolName = tr?.Name ?? "tool",
+                        Output = tr?.Output,
+                        AuthorName = agentName,
+                        Timestamp = e.CreatedAt.LocalDateTime
+                    };
+                    break;
+
+                // plan/approval/error/usage：手机端不渲染，跳过。
+                case AgentEventType.PlanUpdated:
+                case AgentEventType.ApprovalRequested:
+                case AgentEventType.ApprovalDecision:
+                case AgentEventType.Error:
+                case AgentEventType.Usage:
+                    break;
             }
-            yield break;
         }
-
-        // 计划卡（kind=plan）—— 手机端暂不渲染计划卡，跳过
-        if (kind == "plan") yield break;
-
-        // 工具步（Role=Tool / kind=tool，持久化时合并了 call+result）→ 还原为 tool_call + tool_result 两张卡
-        if (role == "tool" || kind == "tool")
-        {
-            var input = ParseMetaJson(msg.Metadata, "input");
-            var output = ParseMetaJson(msg.Metadata, "output");
-            var toolName = msg.ToolName ?? "tool";
-            yield return new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "tool_call",
-                Role = "assistant",
-                ToolName = toolName,
-                Input = input,
-                AuthorName = AgentName,
-                Timestamp = timestamp
-            };
-            yield return new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "tool_result",
-                Role = "assistant",
-                ToolName = toolName,
-                Output = output,
-                AuthorName = AgentName,
-                Timestamp = timestamp
-            };
-            yield break;
-        }
-
-        // 普通助手文本
-        if (!string.IsNullOrEmpty(msg.Content))
-        {
-            yield return new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "text",
-                Role = "assistant",
-                Content = msg.Content,
-                MarkdownContent = msg.Content,
-                AuthorName = AgentName,
-                Timestamp = timestamp
-            };
-        }
-    }
-
-    /// <summary>从 Message.Metadata 解析指定 key 的 JSON 为字典（工具 input/output 还原用）。</summary>
-    private static Dictionary<string, object>? ParseMetaJson(IReadOnlyDictionary<string, string>? meta, string key)
-    {
-        if (meta == null || !meta.TryGetValue(key, out var json) || string.IsNullOrEmpty(json)) return null;
-        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json); }
-        catch { return null; }
     }
 
     public override Task OnDeactivatedAsync()
@@ -669,10 +670,10 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     AgentName = AgentName,
                     Title = content.Length > 20 ? content[..20] + "…" : content,
                 };
-                conv.Append(Message.User(content));
+                // 用户消息不再挂在 Conversation 上——它随 AgentRun.UserMessage 在本轮结束时持久化。
                 // 首轮占位标题即时显示到 header（AI 生成后由 GenerateAndApplyTitleAsync 替换）
                 CurrentTitle = conv.Title;
-                await _conversationStore.SaveAsync(conv, ct);
+                await _conversationStore.SaveConversationAsync(conv, ct);
 
                 // 通知聊天列表显示新会话
                 PublishNewAgentConversation(
@@ -775,7 +776,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             FinalizeStreaming();
 
             // 持久化本轮 transcript（思考 / 工具 / 文本，与实时流式一致）
-            await PersistAssistantReplyAsync(content, ct);
+            await PersistRunAsync(content, ct);
 
             // 首轮 lazy-create 的会话：异步用 LLM 生成简短标题，回写会话并通知 UI 刷新抽屉列表项。
             // 镜像桌面 ChatWorkspaceViewModel.GenerateAndApplyTitleAsync（justCreated 后 fire-and-forget）。
@@ -918,59 +919,76 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     }
 
     /// <summary>
-    /// 持久化本轮 transcript 到 IConversationStore（镜像桌面 PersistTurnAsync）。
-    /// 首轮 user 消息已在 lazy-create 时追加；非首轮在此补回。
-    /// 本轮中间过程（思考 / 工具调用+结果 / 文本旁白 / 最终回答）按显示顺序持久化，使查看历史与实时流式一致。
+    /// 持久化本轮 transcript 到 <see cref="IConversationStore"/>（镜像桌面 PersistRunAsync，但走事件流模型）。
+    /// 用户请求作为 <see cref="AgentRun.UserMessage"/>；本轮助手侧过程（思考 / 工具调用+结果 / 文本旁白 / 最终回答）
+    /// 按 <see cref="AgentEvent"/> 顺序写入，使查看历史与实时流式一致。mobile 无 CallId，用
+    /// <c>toolu_mobile_{n}</c> 合成（call 与其配对 result 共享同一 id，与 <see cref="ExpandRun"/> 还原对称）。
     /// </summary>
-    private async Task PersistAssistantReplyAsync(string userContent, CancellationToken ct)
+    private async Task PersistRunAsync(string userContent, CancellationToken ct)
     {
         if (_currentConversationId == Guid.Empty || _conversationStore == null) return;
         try
         {
-            var conv = await _conversationStore.GetAsync(_currentConversationId, ct);
+            var conv = await _conversationStore.GetConversationAsync(_currentConversationId, ct);
             if (conv == null) return;
 
-            // 非首轮补回 user 消息（首轮已在 lazy-create 时追加）
-            var last = conv.Messages.Count > 0 ? conv.Messages[^1] : null;
-            if (last is null || last.Role != MessageRole.User || last.Content != userContent)
-                conv.Append(Message.User(userContent));
+            // 计算下一个 run 序号（按已有 run 的最大 seq + 1）。
+            var runs = await _conversationStore.GetRunsAsync(_currentConversationId, ct);
+            var seq = runs.Count == 0 ? 1 : runs.Max(r => r.Seq) + 1;
 
-            // 持久化本轮助手侧 transcript（思考 / 工具 / 文本）。工具 call+result 合并为单条 Role=Tool 消息
-            // （input+output），TranscriptHistoryConverter 还原为 FunctionCall+FunctionResult 配对并经 Sanitize
-            // 兜底——续轮不会触发 400。reasoning 段 converter 跳过不入 LLM 历史，仅用于 UI 还原。
             var turnItems = CollectCurrentTurnAssistantItems();
-            ChatMessageItem? pendingToolCall = null;
+            var hasAnswer = turnItems.Any(i => i.ItemType == "text" && !string.IsNullOrWhiteSpace(i.Content));
+            var now = DateTimeOffset.UtcNow;
+            var run = new AgentRun
+            {
+                ConversationId = _currentConversationId,
+                Seq = seq,
+                Status = hasAnswer ? RunStatus.Completed : RunStatus.Interrupted,
+                AgentId = conv.AgentId,
+                AgentName = conv.AgentName,
+                UserMessage = userContent,
+                StartedAt = now,
+                FinishedAt = now,
+            };
+
+            var events = new List<AgentEvent>();
+            var eventSeq = 1;
+            int toolCounter = 0;
+            string? pendingCallId = null;
+            string? pendingToolName = null;
             foreach (var item in turnItems)
             {
                 switch (item.ItemType)
                 {
                     case "thinking":
                         if (!string.IsNullOrEmpty(item.Content))
-                            conv.Append(new Message
-                            {
-                                Role = MessageRole.Assistant,
-                                Content = item.Content,
-                                Metadata = new Dictionary<string, string> { ["kind"] = "reasoning" }
-                            });
+                            events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ReasoningChunk,
+                                new AgentEventPayload.ReasoningChunk(item.Content)));
                         break;
                     case "tool_call":
-                        pendingToolCall = item; // 等配对的 tool_result 合并落库
+                        toolCounter++;
+                        pendingCallId = $"toolu_mobile_{toolCounter}";
+                        pendingToolName = item.ToolName ?? "tool";
+                        events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolCall,
+                            new AgentEventPayload.ToolCall(pendingCallId, pendingToolName, item.Input)));
                         break;
                     case "tool_result":
-                        conv.Append(ToToolMessage(pendingToolCall, item));
-                        pendingToolCall = null;
+                        // 与前一个未配对 tool_call 共享 callId；无前置（异常情况）则自合成一个。
+                        var callId = pendingCallId ?? $"toolu_mobile_{++toolCounter}";
+                        events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolResult,
+                            new AgentEventPayload.ToolResult(callId, item.ToolName ?? pendingToolName ?? "tool", item.Output)));
+                        pendingCallId = null;
+                        pendingToolName = null;
                         break;
                     default: // text（旁白 / 最终回答）
                         if (!string.IsNullOrWhiteSpace(item.Content))
-                            conv.Append(Message.Assistant(item.Content));
+                            events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.TextChunk,
+                                new AgentEventPayload.TextChunk(item.Content)));
                         break;
                 }
             }
-            // 残留未配对的 tool_call（流式中断）→ 单独落一条（Sanitize 当孤儿丢弃，安全）
-            if (pendingToolCall != null)
-                conv.Append(ToToolMessage(pendingToolCall, null));
 
-            await _conversationStore.SaveAsync(conv, ct);
+            await _conversationStore.AppendRunAsync(run, events, ct);
         }
         catch (Exception ex)
         {
@@ -998,16 +1016,16 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         return result;
     }
 
-    /// <summary>把工具调用(call)+结果(result)合并为单条 Role=Tool 持久化消息（匹配 TranscriptHistoryConverter）。</summary>
-    private static Message ToToolMessage(ChatMessageItem? call, ChatMessageItem? result)
+    /// <summary>构造一个 <see cref="AgentEvent"/> 并自增 seq（镜像桌面 MakeEvent）。</summary>
+    private static AgentEvent MakeEvent(Guid runId, ref int seq, AgentEventType type, object? payload)
     {
-        var meta = new Dictionary<string, string> { ["kind"] = "tool" };
-        var toolName = (call ?? result)?.ToolName ?? "tool";
-        if (call?.Input is { Count: > 0 })
-            meta["input"] = System.Text.Json.JsonSerializer.Serialize(call.Input);
-        if (result?.Output is { Count: > 0 })
-            meta["output"] = System.Text.Json.JsonSerializer.Serialize(result.Output);
-        return new Message { Role = MessageRole.Tool, ToolName = toolName, Content = string.Empty, Metadata = meta };
+        return new AgentEvent
+        {
+            RunId = runId,
+            Seq = seq++,
+            EventType = type,
+            Payload = AgentEventPayload.Serialize(payload),
+        };
     }
 
     private void PublishNewAgentConversation(int type, string name, string? context)
@@ -1040,11 +1058,11 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             var title = await _titleService.GenerateTitleAsync(userMessage, assistantReply);
             if (string.IsNullOrWhiteSpace(title)) return;
 
-            var conv = await _conversationStore.GetAsync(_currentConversationId, default);
+            var conv = await _conversationStore.GetConversationAsync(_currentConversationId, default);
             if (conv == null) return;
 
             conv.Title = title;
-            await _conversationStore.SaveAsync(conv, default);
+            await _conversationStore.SaveConversationAsync(conv, default);
 
             // 即时刷新 header 标题（此方法在后台线程 fire-and-forget，UI 属性经 dispatcher 调度）
             _uiThreadDispatcher?.Post(() => CurrentTitle = title);

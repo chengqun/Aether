@@ -1,114 +1,94 @@
 using System.Globalization;
 using Acme.Persistence;
 using Aether.AI.Core.Conversations;
-using Aether.AI.Core.Messages;
+using Aether.AI.Core.Conversations.Runs;
 using Microsoft.Data.Sqlite;
 
 namespace Aether.AI.Memory.Stores;
 
 /// <summary>
-/// SQLite-backed <see cref="IConversationStore"/>. Tables <c>conversation</c> +
-/// <c>conversation_message</c>. Single-user (user_id column kept for the abstraction
-/// but the desktop passes empty). WAL + busy_timeout + foreign_keys, lazy schema.
+/// SQLite-backed <see cref="IConversationStore"/>. The transcript is a typed, append-only event
+/// stream: <c>conversation</c> (metadata + denormalized preview) + <c>agent_run</c> + <c>agent_event</c>.
+/// Single-user (user_id column kept for the abstraction but the desktop passes empty).
+/// WAL + busy_timeout + foreign_keys (cascade), lazy schema.
+/// <para>
+/// <b>旧库作废</b>：<see cref="MigrateAsync"/> 检测旧 flat <c>conversation_message</c> 表 → DROP 旧表整库重置
+/// （用户已决定旧 <c>conversations.db</c> 历史会丢失）。全新库不受影响。
+/// </para>
 /// </summary>
 public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStore
 {
     private const string ConvTable = "conversation";
-    private const string MsgTable = "conversation_message";
+    private const string RunTable = "agent_run";
+    private const string EventTable = "agent_event";
+    private const string OldMsgTable = "conversation_message"; // 旧 flat-message schema 签名
 
     private const string CreateConvSql =
         "CREATE TABLE IF NOT EXISTS " + ConvTable + " (" +
         "id TEXT NOT NULL PRIMARY KEY, user_id TEXT, agent_id TEXT NOT NULL, agent_name TEXT NOT NULL, " +
-        "title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)";
+        "title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, " +
+        "last_message_preview TEXT, last_message_at TEXT)";
 
-    private const string CreateMsgSql =
-        "CREATE TABLE IF NOT EXISTS " + MsgTable + " (" +
+    private const string CreateRunSql =
+        "CREATE TABLE IF NOT EXISTS " + RunTable + " (" +
         "id TEXT NOT NULL PRIMARY KEY, conversation_id TEXT NOT NULL, seq INTEGER NOT NULL, " +
-        "role INTEGER NOT NULL, content TEXT NOT NULL, tool_name TEXT, tool_call_id TEXT, metadata TEXT, created_at TEXT NOT NULL, " +
+        "status INTEGER NOT NULL, agent_id TEXT NOT NULL, agent_name TEXT NOT NULL, model_id TEXT, " +
+        "user_message TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT, " +
         "FOREIGN KEY(conversation_id) REFERENCES " + ConvTable + "(id) ON DELETE CASCADE)";
+
+    private const string CreateEventSql =
+        "CREATE TABLE IF NOT EXISTS " + EventTable + " (" +
+        "id TEXT NOT NULL PRIMARY KEY, run_id TEXT NOT NULL, seq INTEGER NOT NULL, " +
+        "event_type INTEGER NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, " +
+        "FOREIGN KEY(run_id) REFERENCES " + RunTable + "(id) ON DELETE CASCADE)";
 
     private const string CreateConvUpdatedIdx =
         "CREATE INDEX IF NOT EXISTS idx_conversation_updated ON " + ConvTable + "(updated_at DESC)";
-    private const string CreateMsgConvIdx =
-        "CREATE INDEX IF NOT EXISTS idx_message_conv ON " + MsgTable + "(conversation_id, seq)";
+    private const string CreateRunConvIdx =
+        "CREATE INDEX IF NOT EXISTS idx_run_conv ON " + RunTable + "(conversation_id, seq)";
+    private const string CreateEventRunIdx =
+        "CREATE INDEX IF NOT EXISTS idx_event_run ON " + EventTable + "(run_id, seq)";
 
     private const string CreateSchemaSql =
-        CreateConvSql + ";" + CreateMsgSql + ";" + CreateConvUpdatedIdx + ";" + CreateMsgConvIdx;
+        CreateConvSql + ";" + CreateRunSql + ";" + CreateEventSql + ";" +
+        CreateConvUpdatedIdx + ";" + CreateRunConvIdx + ";" + CreateEventRunIdx;
 
     public SqliteConversationStore(string connectionString) : base(connectionString) { }
 
     public static SqliteConversationStore ForFile(string dbPath) => new(BuildConnectionString(dbPath));
 
-    // FK ON DELETE CASCADE on conversation_message→conversation; enable enforcement on every connection.
+    // FK ON DELETE CASCADE on agent_event→agent_run→conversation; enforce on every connection.
     protected override bool ForeignKeysEnabled => true;
 
-    public async Task SaveAsync(Conversation conversation, CancellationToken cancellationToken = default)
+    public async Task SaveConversationAsync(Conversation conversation, CancellationToken cancellationToken = default)
     {
         if (conversation is null) throw new ArgumentNullException(nameof(conversation));
         conversation.UpdatedAt = DateTimeOffset.UtcNow;
         await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
-        await using var tx = await c.BeginTransactionAsync(cancellationToken);
-
-        // upsert conversation row
-        await using (var cmd = c.CreateCommand())
-        {
-            cmd.Transaction = (SqliteTransaction)tx;
-            cmd.CommandText =
-                "INSERT INTO " + ConvTable + " (id,user_id,agent_id,agent_name,title,created_at,updated_at) " +
-                "VALUES (@id,@uid,@aid,@an,@t,@ca,@ua) " +
-                "ON CONFLICT(id) DO UPDATE SET user_id=@uid, agent_id=@aid, agent_name=@an, title=@t, updated_at=@ua";
-            cmd.Parameters.AddWithValue("@id", conversation.ConversationId.ToString());
-            cmd.Parameters.AddWithValue("@uid", (object?)conversation.UserId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@aid", conversation.AgentId ?? string.Empty);
-            cmd.Parameters.AddWithValue("@an", conversation.AgentName ?? string.Empty);
-            cmd.Parameters.AddWithValue("@t", conversation.Title ?? string.Empty);
-            cmd.Parameters.AddWithValue("@ca", Format(conversation.CreatedAt));
-            cmd.Parameters.AddWithValue("@ua", Format(conversation.UpdatedAt));
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        // replace all messages (simple: delete + reinsert). Transcripts are small.
-        await using (var del = c.CreateCommand())
-        {
-            del.Transaction = (SqliteTransaction)tx;
-            del.CommandText = "DELETE FROM " + MsgTable + " WHERE conversation_id=@cid";
-            del.Parameters.AddWithValue("@cid", conversation.ConversationId.ToString());
-            await del.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        int seq = 0;
-        foreach (var m in conversation.Messages)
-        {
-            await using var ins = c.CreateCommand();
-            ins.Transaction = (SqliteTransaction)tx;
-            ins.CommandText =
-                "INSERT INTO " + MsgTable + " (id,conversation_id,seq,role,content,tool_name,tool_call_id,metadata,created_at) " +
-                "VALUES (@id,@cid,@seq,@r,@ct,@tn,@tc,@md,@ca)";
-            ins.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
-            ins.Parameters.AddWithValue("@cid", conversation.ConversationId.ToString());
-            ins.Parameters.AddWithValue("@seq", seq++);
-            ins.Parameters.AddWithValue("@r", (int)m.Role);
-            ins.Parameters.AddWithValue("@ct", m.Content ?? string.Empty);
-            ins.Parameters.AddWithValue("@tn", (object?)m.ToolName ?? DBNull.Value);
-            ins.Parameters.AddWithValue("@tc", (object?)m.ToolCallId ?? DBNull.Value);
-            var md = MetadataToJson(m.Metadata);
-            ins.Parameters.AddWithValue("@md", string.IsNullOrEmpty(md) ? DBNull.Value : (object)md);
-            ins.Parameters.AddWithValue("@ca", Format(m.CreatedAt));
-            await ins.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        await tx.CommitAsync(cancellationToken);
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO " + ConvTable + " (id,user_id,agent_id,agent_name,title,created_at,updated_at,last_message_preview,last_message_at) " +
+            "VALUES (@id,@uid,@aid,@an,@t,@ca,@ua,@pv,@la) " +
+            "ON CONFLICT(id) DO UPDATE SET user_id=@uid, agent_id=@aid, agent_name=@an, title=@t, " +
+            "updated_at=@ua, last_message_preview=@pv, last_message_at=@la";
+        cmd.Parameters.AddWithValue("@id", conversation.ConversationId.ToString());
+        cmd.Parameters.AddWithValue("@uid", (object?)conversation.UserId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@aid", conversation.AgentId ?? string.Empty);
+        cmd.Parameters.AddWithValue("@an", conversation.AgentName ?? string.Empty);
+        cmd.Parameters.AddWithValue("@t", conversation.Title ?? string.Empty);
+        cmd.Parameters.AddWithValue("@ca", Format(conversation.CreatedAt));
+        cmd.Parameters.AddWithValue("@ua", Format(conversation.UpdatedAt));
+        cmd.Parameters.AddWithValue("@pv", (object?)conversation.LastMessagePreview ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@la", conversation.LastMessageAt is null ? DBNull.Value : (object)Format(conversation.LastMessageAt.Value));
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task<Conversation?> GetAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    public async Task<Conversation?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
-        var conv = await ReadConversationAsync(c, conversationId, cancellationToken);
-        if (conv is null) return null;
-        conv.Messages.AddRange(await ReadMessagesAsync(c, conversationId, cancellationToken));
-        return conv;
+        return await ReadConversationAsync(c, conversationId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ConversationSummary>> GetSummariesAsync(string userId, CancellationToken cancellationToken = default)
@@ -116,12 +96,12 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
         await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
         await using var cmd = c.CreateCommand();
+        // preview 现已反范式化在 conversation 行上，无需子查询。
         cmd.CommandText =
-            "SELECT c.id, c.title, c.agent_id, c.agent_name, c.updated_at, " +
-            "(SELECT content FROM " + MsgTable + " m WHERE m.conversation_id=c.id ORDER BY m.seq DESC LIMIT 1) AS preview " +
-            "FROM " + ConvTable + " c " +
-            "WHERE @uid IS NULL OR c.user_id IS NULL OR c.user_id=@uid " +
-            "ORDER BY c.updated_at DESC";
+            "SELECT id, title, agent_id, agent_name, updated_at, last_message_preview " +
+            "FROM " + ConvTable + " " +
+            "WHERE @uid IS NULL OR user_id IS NULL OR user_id=@uid " +
+            "ORDER BY updated_at DESC";
         cmd.Parameters.AddWithValue("@uid", (object?)userId ?? DBNull.Value);
 
         var list = new List<ConversationSummary>();
@@ -149,17 +129,13 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
 
         var ids = new List<Guid>();
         await using (var r = await cmd.ExecuteReaderAsync(cancellationToken))
-        {
             while (await r.ReadAsync(cancellationToken)) ids.Add(Guid.Parse(r.GetString(0)));
-        }
 
         var list = new List<Conversation>();
         foreach (var id in ids)
         {
             var conv = await ReadConversationAsync(c, id, cancellationToken);
-            if (conv is null) continue;
-            conv.Messages.AddRange(await ReadMessagesAsync(c, id, cancellationToken));
-            list.Add(conv);
+            if (conv is not null) list.Add(conv);
         }
         return list;
     }
@@ -168,31 +144,142 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
     {
         await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
         await using var c = await OpenAsync(cancellationToken);
+        await using var cmd = c.CreateCommand();
+        // FK ON DELETE CASCADE: 删 conversation → 级联删 agent_run → agent_event。
+        cmd.CommandText = "DELETE FROM " + ConvTable + " WHERE id=@id";
+        cmd.Parameters.AddWithValue("@id", conversationId.ToString());
+        return await cmd.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    public async Task AppendRunAsync(AgentRun run, IReadOnlyList<AgentEvent> events, CancellationToken cancellationToken = default)
+    {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        if (events is null) throw new ArgumentNullException(nameof(events));
+
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
+        await using var c = await OpenAsync(cancellationToken);
         await using var tx = await c.BeginTransactionAsync(cancellationToken);
-        await using (var dm = c.CreateCommand())
+
+        // 1) insert run
+        await using (var cmd = c.CreateCommand())
         {
-            dm.Transaction = (SqliteTransaction)tx;
-            // FK ON DELETE CASCADE requires PRAGMA foreign_keys=ON; ForeignKeysEnabled sets it on every connection.
-            dm.CommandText = "DELETE FROM " + MsgTable + " WHERE conversation_id=@cid";
-            dm.Parameters.AddWithValue("@cid", conversationId.ToString());
-            await dm.ExecuteNonQueryAsync(cancellationToken);
+            cmd.Transaction = (SqliteTransaction)tx;
+            cmd.CommandText =
+                "INSERT INTO " + RunTable + " (id,conversation_id,seq,status,agent_id,agent_name,model_id,user_message,started_at,finished_at) " +
+                "VALUES (@id,@cid,@seq,@st,@aid,@an,@mid,@um,@sa,@fa)";
+            cmd.Parameters.AddWithValue("@id", run.Id.ToString());
+            cmd.Parameters.AddWithValue("@cid", run.ConversationId.ToString());
+            cmd.Parameters.AddWithValue("@seq", run.Seq);
+            cmd.Parameters.AddWithValue("@st", (int)run.Status);
+            cmd.Parameters.AddWithValue("@aid", run.AgentId ?? string.Empty);
+            cmd.Parameters.AddWithValue("@an", run.AgentName ?? string.Empty);
+            cmd.Parameters.AddWithValue("@mid", (object?)run.ModelId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@um", run.UserMessage ?? string.Empty);
+            cmd.Parameters.AddWithValue("@sa", Format(run.StartedAt));
+            cmd.Parameters.AddWithValue("@fa", run.FinishedAt is null ? DBNull.Value : (object)Format(run.FinishedAt.Value));
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
-        int affected;
-        await using (var dc = c.CreateCommand())
+
+        // 2) batch insert events
+        foreach (var e in events)
         {
-            dc.Transaction = (SqliteTransaction)tx;
-            dc.CommandText = "DELETE FROM " + ConvTable + " WHERE id=@id";
-            dc.Parameters.AddWithValue("@id", conversationId.ToString());
-            affected = await dc.ExecuteNonQueryAsync(cancellationToken);
+            await using var ins = c.CreateCommand();
+            ins.Transaction = (SqliteTransaction)tx;
+            ins.CommandText =
+                "INSERT INTO " + EventTable + " (id,run_id,seq,event_type,payload,created_at) " +
+                "VALUES (@id,@rid,@seq,@et,@pl,@ca)";
+            ins.Parameters.AddWithValue("@id", e.Id.ToString());
+            ins.Parameters.AddWithValue("@rid", run.Id.ToString());
+            ins.Parameters.AddWithValue("@seq", e.Seq);
+            ins.Parameters.AddWithValue("@et", (int)e.EventType);
+            ins.Parameters.AddWithValue("@pl", e.Payload ?? string.Empty);
+            ins.Parameters.AddWithValue("@ca", Format(e.CreatedAt));
+            await ins.ExecuteNonQueryAsync(cancellationToken);
         }
+
+        // 3) 反范式化更新 conversation preview/updatedAt
+        var preview = ComputePreview(run, events);
+        await using (var upd = c.CreateCommand())
+        {
+            upd.Transaction = (SqliteTransaction)tx;
+            upd.CommandText =
+                "UPDATE " + ConvTable + " SET last_message_preview=@pv, last_message_at=@la, updated_at=@ua " +
+                "WHERE id=@cid";
+            upd.Parameters.AddWithValue("@pv", (object?)preview ?? DBNull.Value);
+            var lastAt = run.FinishedAt ?? run.StartedAt;
+            upd.Parameters.AddWithValue("@la", Format(lastAt));
+            upd.Parameters.AddWithValue("@ua", Format(DateTimeOffset.UtcNow));
+            upd.Parameters.AddWithValue("@cid", run.ConversationId.ToString());
+            await upd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         await tx.CommitAsync(cancellationToken);
-        return affected > 0;
+    }
+
+    public async Task<IReadOnlyList<AgentRun>> GetRunsAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
+        await using var c = await OpenAsync(cancellationToken);
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "SELECT id,conversation_id,seq,status,agent_id,agent_name,model_id,user_message,started_at,finished_at " +
+            "FROM " + RunTable + " WHERE conversation_id=@cid ORDER BY seq";
+        cmd.Parameters.AddWithValue("@cid", conversationId.ToString());
+
+        var list = new List<AgentRun>();
+        await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await r.ReadAsync(cancellationToken))
+        {
+            list.Add(new AgentRun
+            {
+                Id = Guid.Parse(r.GetString(0)),
+                ConversationId = Guid.Parse(r.GetString(1)),
+                Seq = r.GetInt32(2),
+                Status = (RunStatus)r.GetInt32(3),
+                AgentId = r.GetString(4),
+                AgentName = r.GetString(5),
+                ModelId = r.IsDBNull(6) ? null : r.GetString(6),
+                UserMessage = r.GetString(7),
+                StartedAt = Parse(r.GetString(8)),
+                FinishedAt = r.IsDBNull(9) ? null : Parse(r.GetString(9)),
+            });
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<AgentEvent>> GetEventsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
+        await using var c = await OpenAsync(cancellationToken);
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "SELECT id,run_id,seq,event_type,payload,created_at " +
+            "FROM " + EventTable + " WHERE run_id=@rid ORDER BY seq";
+        cmd.Parameters.AddWithValue("@rid", runId.ToString());
+
+        var list = new List<AgentEvent>();
+        await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await r.ReadAsync(cancellationToken))
+        {
+            list.Add(new AgentEvent
+            {
+                Id = Guid.Parse(r.GetString(0)),
+                RunId = Guid.Parse(r.GetString(1)),
+                Seq = r.GetInt32(2),
+                EventType = (AgentEventType)r.GetInt32(3),
+                Payload = r.GetString(4),
+                CreatedAt = Parse(r.GetString(5)),
+            });
+        }
+        return list;
     }
 
     private static async Task<Conversation?> ReadConversationAsync(SqliteConnection c, Guid id, CancellationToken ct)
     {
         await using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT id,user_id,agent_id,agent_name,title,created_at,updated_at FROM " + ConvTable + " WHERE id=@id";
+        cmd.CommandText =
+            "SELECT id,user_id,agent_id,agent_name,title,created_at,updated_at,last_message_preview,last_message_at " +
+            "FROM " + ConvTable + " WHERE id=@id";
         cmd.Parameters.AddWithValue("@id", id.ToString());
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
@@ -205,43 +292,58 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
             Title = r.GetString(4),
             CreatedAt = Parse(r.GetString(5)),
             UpdatedAt = Parse(r.GetString(6)),
+            LastMessagePreview = r.IsDBNull(7) ? null : r.GetString(7),
+            LastMessageAt = r.IsDBNull(8) ? null : Parse(r.GetString(8)),
         };
     }
 
-    private static async Task<List<Message>> ReadMessagesAsync(SqliteConnection c, Guid conversationId, CancellationToken ct)
+    private static string ComputePreview(AgentRun run, IReadOnlyList<AgentEvent> events)
     {
-        var list = new List<Message>();
-        await using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT role,content,tool_name,tool_call_id,metadata,created_at FROM " + MsgTable + " WHERE conversation_id=@cid ORDER BY seq";
-        cmd.Parameters.AddWithValue("@cid", conversationId.ToString());
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
+        // 优先最后一条答案文本；否则回退到用户消息。
+        for (var i = events.Count - 1; i >= 0; i--)
         {
-            list.Add(new Message
+            if (events[i].EventType == AgentEventType.TextChunk)
             {
-                Role = (MessageRole)r.GetInt32(0),
-                Content = r.GetString(1),
-                ToolName = r.IsDBNull(2) ? null : r.GetString(2),
-                ToolCallId = r.IsDBNull(3) ? null : r.GetString(3),
-                Metadata = r.IsDBNull(4) ? null : MetadataFromJson(r.GetString(4)),
-                CreatedAt = Parse(r.GetString(5)),
-            });
+                var text = AgentEventPayload.Deserialize<AgentEventPayload.TextChunk>(events[i].Payload)?.Text;
+                if (!string.IsNullOrWhiteSpace(text))
+                    return Truncate(text.Replace('\n', ' ').Trim(), 80);
+            }
         }
-        return list;
+        return Truncate((run.UserMessage ?? string.Empty).Replace('\n', ' ').Trim(), 80);
     }
 
-    private static string? MetadataToJson(IReadOnlyDictionary<string, string>? meta)
-        => meta is null || meta.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(meta);
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
-    private static IReadOnlyDictionary<string, string>? MetadataFromJson(string json)
-    {
-        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json); }
-        catch { return null; }
-    }
-
-    /// <summary>迁移：旧库的 message 表可能没有 metadata 列（持久化工具步 input/output、思考段标记等）。幂等。</summary>
+    /// <summary>
+    /// 迁移：检测旧 flat <c>conversation_message</c> 表（旧 schema 签名）→ 整库重置（DROP 旧表 + 重建新 schema）。
+    /// 用户已决定旧 <c>conversations.db</c> 历史作废。全新库无 <c>conversation_message</c> → 无操作。
+    /// </summary>
     protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
-        => await SqliteMigrations.AddColumnAsync(connection, MsgTable, "metadata", "TEXT", ct);
+    {
+        if (!await TableExistsAsync(connection, OldMsgTable, ct)) return;
+
+        // 旧 flat-message schema → 整库重置。
+        await ExecAsync(connection, "DROP TABLE IF EXISTS " + OldMsgTable, ct);
+        await ExecAsync(connection, "DROP TABLE IF EXISTS " + EventTable, ct);
+        await ExecAsync(connection, "DROP TABLE IF EXISTS " + RunTable, ct);
+        await ExecAsync(connection, "DROP TABLE IF EXISTS " + ConvTable, ct);
+        await ExecAsync(connection, CreateSchemaSql, ct);
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection c, string name, CancellationToken ct)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=@n";
+        cmd.Parameters.AddWithValue("@n", name);
+        return await cmd.ExecuteScalarAsync(ct) is not null;
+    }
+
+    private static async Task ExecAsync(SqliteConnection c, string sql, CancellationToken ct)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
 
     private static string Format(DateTimeOffset dto) => dto.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
     private static DateTimeOffset Parse(string s) => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);

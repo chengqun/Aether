@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Memory;
 using Microsoft.Agents.AI;
@@ -39,10 +40,18 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
         {
             try
             {
-                var conv = await _store.GetAsync(conversationId, cancellationToken).ConfigureAwait(false);
+                var conv = await _store.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
                 if (conv is not null)
                 {
-                    var messages = TranscriptHistoryConverter.Convert(conv.Messages);
+                    // 从 typed 事件流重建 LLM 历史（取代旧的 flat-Message Convert+Sanitize saga）。
+                    // 结构不变量由构造保证：CallId 在事件写入时即配对、call↔result 相邻、Interrupted 尾部孤儿 call 被丢。
+                    var runs = await _store.GetRunsAsync(conversationId, cancellationToken).ConfigureAwait(false);
+                    var eventsByRun = new Dictionary<Guid, IReadOnlyList<AgentEvent>>();
+                    foreach (var run in runs)
+                    {
+                        eventsByRun[run.Id] = await _store.GetEventsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+                    }
+                    var messages = EventHistoryRebuilder.RebuildLlmHistory(runs, eventsByRun);
                     _sessionMessages[context.Session] = messages.ToList();
                 }
                 _restoredSessions.Add(context.Session);

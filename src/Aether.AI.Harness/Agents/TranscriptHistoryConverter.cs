@@ -1,96 +1,32 @@
-using Aether.AI.Core.Messages;
-using Aether.AI.Harness.Tools;
 using Microsoft.Extensions.AI;
 
 namespace Aether.AI.Harness.Agents;
 
 /// <summary>
-/// 把持久化的 transcript（<see cref="Message"/> 列表）还原为 LLM 的 <see cref="ChatMessage"/> 历史。
-/// <para><b>关键规则</b>（违反→GLM/Anthropic 兼容端点 400）：</para>
+/// 活路径 LLM 历史净化（<b>非</b>持久化恢复路径）。持久化恢复路径已改用
+/// <see cref="EventHistoryRebuilder.RebuildLlmHistory"/> 从 typed 事件流重建——结构不变量由构造保证，
+/// 不再需要 restore 净化 saga（旧的 <c>Convert</c>/<c>Sanitize</c> 已删）。
+/// <para>
+/// 此处保留两个「活路径」净化函数，防的是<b>运行时内存</b>孤儿（与持久化无关）：
+/// </para>
 /// <list type="bullet">
-/// <item>跳过空 content 的 assistant 消息（reasoning 段 / plan 卡，content=""）——空 assistant 会触发 messages 非法。</item>
-/// <item>Role=Tool 的工具步还原成 <b>配对</b>的两条：Assistant(FunctionCallContent) + User(FunctionResultContent)，
-/// callId 匹配、相邻——避免孤儿 tool result。</item>
-/// <item>末尾经 <see cref="Sanitize"/> 净化：合成空 CallId、丢弃孤儿 tool_use/tool_result、
-/// 空 tool 返回占位、合并连续同 role、裁剪尾部非 assistant 消息（修「重启续聊 400」——
-/// 上一轮若以 tool_result 收尾且无最终回答，新 user 消息会与尾部 user 连续→角色不交替→400）。</item>
+///   <item><see cref="SanitizeLive"/>：包装 LLM 客户端，每次发请求前就地修正 tool 消息结构
+///   （修 DeepSeek 等 OpenAI 兼容端点「Messages with role tool must be a response to a preceding
+///   message with tool_calls」400）。不裁尾、不合并——活路径工具续轮合法地以 tool_result 收尾。</item>
+///   <item><see cref="SanitizeProviderHistory"/>：<c>RestoringChatHistoryProvider</c> 累积路径专用。
+///   与 <see cref="SanitizeLive"/> 关键区别：<b>不丢弃孤儿 tool_call</b>，只丢孤儿 tool_result
+///   （活路径当前轮的 call 尚无 result 是正常的，误删致工具重调——见 double-tool-execution-fix）。</item>
 /// </list>
 /// </summary>
 public static class TranscriptHistoryConverter
 {
-    public static List<ChatMessage> Convert(IEnumerable<Message> messages)
-    {
-        var result = new List<ChatMessage>();
-        foreach (var m in messages ?? Enumerable.Empty<Message>())
-        {
-            switch (m.Role)
-            {
-                case MessageRole.User:
-                    result.Add(new ChatMessage(ChatRole.User, m.Content ?? string.Empty));
-                    break;
-
-                case MessageRole.Assistant:
-                    // 跳过 reasoning 段（kind=reasoning）和 plan 卡（kind=plan，content 空）——不进 LLM 历史。
-                    if (MetaVal(m, "kind") is "reasoning" or "plan") break;
-                    // 跳过空 content 的 assistant（防 400）。
-                    if (string.IsNullOrWhiteSpace(m.Content)) break;
-                    result.Add(new ChatMessage(ChatRole.Assistant, m.Content));
-                    break;
-
-                case MessageRole.Tool:
-                    // 工具步还原成 FunctionCall(tool_use) + FunctionResult(tool_result) 配对。
-                    // callId/toolName/output 缺省值由 Sanitize 兜底（合成非空 id / 占位返回）。
-                    var callId = m.ToolCallId ?? string.Empty;
-                    var toolName = string.IsNullOrWhiteSpace(m.ToolName) ? "tool" : m.ToolName!;
-                    var input = MetaInputDict(m);
-                    var output = MetaOutput(m) ?? "(无返回)";
-
-                    var callMsg = new ChatMessage { Role = ChatRole.Assistant };
-                    callMsg.Contents.Add(new FunctionCallContent(callId, toolName, input));
-                    result.Add(callMsg);
-
-                    var resultMsg = new ChatMessage { Role = ChatRole.User };
-                    resultMsg.Contents.Add(new FunctionResultContent(callId, output));
-                    result.Add(resultMsg);
-                    break;
-            }
-        }
-        return Sanitize(result);
-    }
-
-    /// <summary>
-    /// 把 <see cref="ChatMessage"/> 历史净化为 GLM/Anthropic 兼容端点可接受的形状。修复 4 类 400 诱因：
-    /// <para>1) 空 CallId → 合成非空 id（call↔result 按出现顺序配对，共享同一合成 id）；</para>
-    /// <para>2) 孤儿 tool_use（无匹配 tool_result）/ 孤儿 tool_result（无匹配 tool_use）→ 丢弃；</para>
-    /// <para>3) 空/null 工具返回 → 占位（避免 tool_result content 为空）；</para>
-    /// <para>4) 角色不交替（连续同 role / 尾部 user）→ 合并连续同 role + 裁剪尾部非 assistant（含被孤立的 tool_use）。</para>
-    /// <para>幂等：对已净化历史再跑一次无副作用。既用于 DB 恢复路径（<see cref="Convert"/>），
-    /// 也用于内存累积路径（<see cref="RestoringChatHistoryProvider"/> 返回前）——后者修会话内孤儿 tool_use
-    /// （审批挂起 / 出错时模型发了 tool_use 但无 tool_result 落地，下一轮会被当孤儿丢弃）。</para>
-    /// </summary>
-    public static List<ChatMessage> Sanitize(IEnumerable<ChatMessage>? messages)
-    {
-        var list = (messages ?? Enumerable.Empty<ChatMessage>()).Select(Clone).ToList();
-        if (list.Count == 0) return list;
-
-        SynthesizeEmptyCallIds(list);
-        DropOrphanToolContents(list);
-        FixEmptyToolResults(list);
-        RemoveEmptyMessages(list);
-        list = MergeConsecutiveSameRole(list);
-        TrimTrailingNonAssistant(list);
-        RemoveEmptyMessages(list);
-        return list;
-    }
-
     /// <summary>
     /// <see cref="Sanitize"/> 的「活路径」子集，用于包装 LLM 客户端、在每次发请求前就地修正
     /// tool 消息结构（修 DeepSeek 等 OpenAI 兼容端点的「Messages with role tool must be a
     /// response to a preceding message with tool_calls」400）。
-    /// <para>与 <see cref="Sanitize"/> 的关键区别：<b>不做</b> <see cref="MergeConsecutiveSameRole"/>
-    /// 与 <see cref="TrimTrailingNonAssistant"/>——活路径的工具续轮请求合法地以 tool_result 消息收尾
-    /// （让 LLM 看到工具返回继续生成），裁剪尾部非 assistant 会删掉这个 tool_result、令 LLM 收不到
-    /// 工具结果而空转。活路径只需修「结构非法」的孤儿，不需保「历史以 assistant 结尾」不变量。</para>
+    /// <para>与 restore 净化的关键区别：<b>不做</b>合并连续同 role 与裁剪尾部非 assistant——活路径的
+    /// 工具续轮请求合法地以 tool_result 消息收尾（让 LLM 看到工具返回继续生成），裁剪尾部会删掉这个
+    /// tool_result、令 LLM 收不到工具结果而空转。活路径只需修「结构非法」的孤儿。</para>
     /// <para>幂等：对已合法历史无副作用（配对完整的 tool_use/tool_result 原样放行）。</para>
     /// </summary>
     public static List<ChatMessage> SanitizeLive(IEnumerable<ChatMessage>? messages)
@@ -111,15 +47,12 @@ public static class TranscriptHistoryConverter
     /// <para>
     /// 活路径 FICC 循环里，<see cref="RestoringChatHistoryProvider.StoreChatHistoryAsync"/> 在每轮 LLM
     /// 调用<em>之后</em>才落地消息——故 <c>ProvideChatHistoryAsync</c> 被调用时，最近一轮的 tool_call
-    /// 必然<em>尚无</em>配对 result（result 要等下一轮 Store 从 FICC 追加的请求消息里落地）。若按
-    /// <see cref="DropOrphanToolContents"/> 把这个「当前进行中」的 call 当孤儿丢弃，下一轮请求就变成
-    /// 「有 tool_result 无前置 tool_call」→ GLM 见不到自己发过的调用 → 重调同一工具（每个工具执行两遍）。
+    /// 必然<em>尚无</em>配对 result（result 要等下一轮 Store 从 FICC 追加的请求消息里落地）。若把这个
+    /// 「当前进行中」的 call 当孤儿丢弃，下一轮请求就变成「有 tool_result 无前置 tool_call」→ GLM 见不到
+    /// 自己发过的调用 → 重调同一工具（每个工具执行两遍）。
     /// </para>
-    /// <para>
-    /// 故此处只修真正结构非法的孤儿 tool_result（无前置 call——OpenAI 兼容端点会 400），保留所有
-    /// tool_call：当前轮的 call 由 FICC 随后追加 result 配对，历史轮的 call 本就该有 result（无则属异常，
-    /// 保留比误删更安全——模型见到无 result 的旧 call 顶多重调，而误删当前 call 必致重调）。
-    /// </para>
+    /// <para>故此处只修真正结构非法的孤儿 tool_result（无前置 call——OpenAI 兼容端点会 400），保留所有
+    /// tool_call。</para>
     /// </summary>
     public static List<ChatMessage> SanitizeProviderHistory(IEnumerable<ChatMessage>? messages)
     {
@@ -151,7 +84,7 @@ public static class TranscriptHistoryConverter
             }
     }
 
-    // 浅拷贝：Sanitize 会就地改 Contents（删/替换 content），不能改到调用方持有的原始消息。
+    // 浅拷贝：净化会就地改 Contents（删/替换 content），不能改到调用方持有的原始消息。
     private static ChatMessage Clone(ChatMessage src)
     {
         var copy = new ChatMessage { Role = src.Role };
@@ -230,72 +163,5 @@ public static class TranscriptHistoryConverter
     {
         for (int i = list.Count - 1; i >= 0; i--)
             if (list[i].Contents.Count == 0) list.RemoveAt(i);
-    }
-
-    /// <summary>合并连续同 role 消息（合并 contents）——解决持久化遗留的连续 user / 连续 assistant。</summary>
-    private static List<ChatMessage> MergeConsecutiveSameRole(List<ChatMessage> list)
-    {
-        var merged = new List<ChatMessage>();
-        foreach (var msg in list)
-        {
-            if (merged.Count > 0 && merged[^1].Role == msg.Role)
-            {
-                foreach (var c in msg.Contents) merged[^1].Contents.Add(c);
-            }
-            else
-            {
-                merged.Add(msg);
-            }
-        }
-        return merged;
-    }
-
-    /// <summary>裁剪尾部非 assistant 消息：确保历史以 assistant 结尾（或为空），使框架追加的新 user
-    /// 消息不会与尾部 user 连续→角色不交替。删尾部 user 后，其前导 assistant 中的 tool_use 沦为孤儿→
-    /// 一并删（保留 text 旁白；若仅剩 tool_use 则删整条），反复直到尾部为 assistant(text) 或空。
-    /// 代表「上一轮以 tool_result 收尾但无最终回答」的不完整轮次被整段丢弃——可接受（无答案可保）。</summary>
-    private static void TrimTrailingNonAssistant(List<ChatMessage> list)
-    {
-        while (list.Count > 0)
-        {
-            var last = list[^1];
-            // 尾部非 assistant（user/tool 等）→ 删（新 user 消息会接在 assistant 后才合法）
-            if (last.Role != ChatRole.Assistant)
-            {
-                list.RemoveAt(list.Count - 1);
-                continue;
-            }
-            // 尾部 assistant：删其中孤立的 tool_use（其 result 已随上一轮 user 删除）
-            bool hasToolUse = last.Contents.Any(c => c is FunctionCallContent);
-            if (!hasToolUse) break; // 纯 text assistant → 安全，停
-            bool hasText = last.Contents.Any(c => c is TextContent);
-            if (hasText)
-            {
-                for (int i = last.Contents.Count - 1; i >= 0; i--)
-                    if (last.Contents[i] is FunctionCallContent) last.Contents.RemoveAt(i);
-                break; // 只剩 text → 安全，停
-            }
-            // 仅 tool_use 无 text → 删整条，继续看新的尾部
-            list.RemoveAt(list.Count - 1);
-        }
-    }
-
-    private static string? MetaVal(Message m, string key)
-        => m.Metadata is not null && m.Metadata.TryGetValue(key, out var v) ? v : null;
-
-    private static IDictionary<string, object?>? MetaInputDict(Message m)
-    {
-        var json = MetaVal(m, "input");
-        if (string.IsNullOrEmpty(json)) return null;
-        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(json); }
-        catch { return null; }
-    }
-
-    private static object? MetaOutput(Message m)
-    {
-        var json = MetaVal(m, "output");
-        if (string.IsNullOrEmpty(json)) return null;
-        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(json); }
-        catch { return json; }
     }
 }

@@ -1,6 +1,5 @@
 using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Memory;
-using Aether.AI.Core.Messages;
 
 namespace Aether.AI.Memory;
 
@@ -44,20 +43,11 @@ public sealed class MemoryService
     // ---- Conversations ----------------------------------------------------
 
     public Task SaveConversationAsync(Conversation conversation, CancellationToken cancellationToken = default)
-        => _conversationStore.SaveAsync(conversation, cancellationToken);
+        => _conversationStore.SaveConversationAsync(conversation, cancellationToken);
 
     public Task<Conversation?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
-        => _conversationStore.GetAsync(conversationId, cancellationToken);
+        => _conversationStore.GetConversationAsync(conversationId, cancellationToken);
 
     public Task<IReadOnlyList<Conversation>> GetConversationsAsync(string userId, CancellationToken cancellationToken = default)
         => _conversationStore.FindByUserAsync(userId, cancellationToken);
-
-    /// <summary>
-    /// Convenience helper: appends a message to a conversation and persists it.
-    /// </summary>
-    public async Task AppendAsync(Conversation conversation, Message message, CancellationToken cancellationToken = default)
-    {
-        conversation.Append(message);
-        await _conversationStore.SaveAsync(conversation, cancellationToken);
-    }
 }

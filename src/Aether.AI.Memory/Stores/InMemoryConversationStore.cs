@@ -1,16 +1,20 @@
 using System.Collections.Concurrent;
 using Aether.AI.Core.Conversations;
+using Aether.AI.Core.Conversations.Runs;
 
 namespace Aether.AI.Memory.Stores;
 
 /// <summary>
-/// In-process implementation of <see cref="IConversationStore"/>.
+/// In-process implementation of <see cref="IConversationStore"/>. Stores conversation metadata
+/// plus run/event lists in memory. Used by tests and as a fallback when SQLite is not wired up.
 /// </summary>
 public sealed class InMemoryConversationStore : IConversationStore
 {
     private readonly ConcurrentDictionary<Guid, Conversation> _conversations = new();
+    private readonly ConcurrentDictionary<Guid, List<AgentRun>> _runsByConversation = new();
+    private readonly ConcurrentDictionary<Guid, List<AgentEvent>> _eventsByRun = new();
 
-    public Task SaveAsync(Conversation conversation, CancellationToken cancellationToken = default)
+    public Task SaveConversationAsync(Conversation conversation, CancellationToken cancellationToken = default)
     {
         if (conversation is null) throw new ArgumentNullException(nameof(conversation));
         conversation.UpdatedAt = DateTimeOffset.UtcNow;
@@ -18,7 +22,7 @@ public sealed class InMemoryConversationStore : IConversationStore
         return Task.CompletedTask;
     }
 
-    public Task<Conversation?> GetAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    public Task<Conversation?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         _conversations.TryGetValue(conversationId, out var conversation);
         return Task.FromResult(conversation);
@@ -31,7 +35,7 @@ public sealed class InMemoryConversationStore : IConversationStore
             .OrderByDescending(c => c.UpdatedAt)
             .Select(c => new ConversationSummary(
                 c.ConversationId, c.Title, c.AgentId, c.AgentName, c.UpdatedAt,
-                c.Messages.Count == 0 ? string.Empty : c.Messages[^1].Content))
+                c.LastMessagePreview ?? string.Empty))
             .ToList();
         return Task.FromResult<IReadOnlyList<ConversationSummary>>(results);
     }
@@ -46,5 +50,72 @@ public sealed class InMemoryConversationStore : IConversationStore
     }
 
     public Task<bool> DeleteAsync(Guid conversationId, CancellationToken cancellationToken = default)
-        => Task.FromResult(_conversations.TryRemove(conversationId, out _));
+    {
+        var removed = _conversations.TryRemove(conversationId, out _);
+        if (_runsByConversation.TryRemove(conversationId, out var runs))
+        {
+            foreach (var run in runs)
+                _eventsByRun.TryRemove(run.Id, out _);
+        }
+        return Task.FromResult(removed);
+    }
+
+    public Task AppendRunAsync(AgentRun run, IReadOnlyList<AgentEvent> events, CancellationToken cancellationToken = default)
+    {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        if (events is null) throw new ArgumentNullException(nameof(events));
+
+        var runs = _runsByConversation.GetOrAdd(run.ConversationId, _ => new());
+        lock (runs)
+        {
+            runs.Add(run);
+        }
+        _eventsByRun[run.Id] = events.ToList();
+
+        // Denormalize preview/updatedAt on the conversation if present.
+        if (_conversations.TryGetValue(run.ConversationId, out var conv))
+        {
+            conv.LastMessagePreview = ComputePreview(run, events);
+            conv.LastMessageAt = run.FinishedAt ?? run.StartedAt;
+            conv.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<AgentRun>> GetRunsAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        _runsByConversation.TryGetValue(conversationId, out var runs);
+        IReadOnlyList<AgentRun> result = runs is null
+            ? Array.Empty<AgentRun>()
+            : runs.OrderBy(r => r.Seq).ToList();
+        return Task.FromResult(result);
+    }
+
+    public Task<IReadOnlyList<AgentEvent>> GetEventsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        _eventsByRun.TryGetValue(runId, out var events);
+        IReadOnlyList<AgentEvent> result = events is null
+            ? Array.Empty<AgentEvent>()
+            : events.OrderBy(e => e.Seq).ToList();
+        return Task.FromResult(result);
+    }
+
+    private static string ComputePreview(AgentRun run, IReadOnlyList<AgentEvent> events)
+    {
+        // Prefer the last answer text; fall back to the user message.
+        var lastText = events.LastOrDefault(e => e.EventType == AgentEventType.TextChunk);
+        if (lastText is not null)
+        {
+            var text = AgentEventPayload.Deserialize<AgentEventPayload.TextChunk>(lastText.Payload)?.Text;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                const int Max = 80;
+                text = text.Replace('\n', ' ').Trim();
+                return text.Length <= Max ? text : text[..Max] + "…";
+            }
+        }
+        const int MaxU = 80;
+        var um = run.UserMessage.Replace('\n', ' ').Trim();
+        return um.Length <= MaxU ? um : um[..MaxU] + "…";
+    }
 }
