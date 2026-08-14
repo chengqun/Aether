@@ -24,6 +24,9 @@
   <Folder Name="/ai/StockTrading/">
     <Project Path="ai/StockTrading/Acme.StockTrading.AI/Acme.StockTrading.AI.csproj" />
   </Folder>
+  <Folder Name="/ai/DataQuery/">
+    <Project Path="ai/DataQuery/Acme.DataQuery.AI/Acme.DataQuery.AI.csproj" />
+  </Folder>
   <Folder Name="/ai/Agents/">
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>
@@ -133,6 +136,11 @@
     <Project Path="business/StockTrading/Acme.StockTrading.Application/Acme.StockTrading.Application.csproj" />
     <Project Path="business/StockTrading/Acme.StockTrading.Domain/Acme.StockTrading.Domain.csproj" />
     <Project Path="business/StockTrading/Acme.StockTrading.Infrastructure/Acme.StockTrading.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/business/DataQuery/">
+    <Project Path="business/DataQuery/Acme.DataQuery.Domain/Acme.DataQuery.Domain.csproj" />
+    <Project Path="business/DataQuery/Acme.DataQuery.Application/Acme.DataQuery.Application.csproj" />
+    <Project Path="business/DataQuery/Acme.DataQuery.Infrastructure/Acme.DataQuery.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/business/AppAutomation/">
     <Project Path="business/AppAutomation/Acme.AppAutomation.Domain/Acme.AppAutomation.Domain.csproj" />
