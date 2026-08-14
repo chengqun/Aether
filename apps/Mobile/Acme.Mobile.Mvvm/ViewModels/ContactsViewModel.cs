@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Acme.Agents.AI;
-using Acme.Notes.Domain;
-using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Acme.ChatSocial.Domain;
@@ -19,7 +16,6 @@ namespace Acme.Mobile.Mvvm.ViewModels;
 public partial class ContactsViewModel : NavigableViewModelBase
 {
     private readonly IRelationshipService? _relationshipService;
-    private readonly ICustomAgentCatalog? _agentCatalog;
     private readonly IEventBusService? _eventBusService;
     private readonly IContactSyncService? _contactSyncService;
     private bool _isLoaded = false;
@@ -60,13 +56,11 @@ public partial class ContactsViewModel : NavigableViewModelBase
     public ObservableCollection<ContactGroup> ContactGroups { get; } = new ObservableCollection<ContactGroup>();
 
     public ContactsViewModel(IRelationshipService? relationshipService = null,
-                             ICustomAgentCatalog? agentCatalog = null,
                              IEventBusService? eventBusService = null,
                              IContactSyncService? contactSyncService = null,
                              IUIThreadDispatcher? uiThreadDispatcher = null)
     {
         _relationshipService = relationshipService;
-        _agentCatalog = agentCatalog;
         _eventBusService = eventBusService;
         _contactSyncService = contactSyncService;
         _uiThreadDispatcher = uiThreadDispatcher;
@@ -300,8 +294,6 @@ public partial class ContactsViewModel : NavigableViewModelBase
             });
         }
 
-        _ = LoadAiAgentsAsync();
-
         if (ContactGroups.Sum(g => g.Contacts.Count) == 1)
         {
             StatusMessage = "暂无联系人";
@@ -317,13 +309,6 @@ public partial class ContactsViewModel : NavigableViewModelBase
         if (_isSubscribed) return;
         _isSubscribed = true;
         _eventBusService?.Subscribe<ContactChangedEvent>(OnContactChanged);
-        _eventBusService?.Subscribe<AgentsChangedEvent>(OnAgentsChanged);
-    }
-
-    private void OnAgentsChanged(AgentsChangedEvent @event)
-    {
-        // 仅刷新 AI 助手分组（召唤/删除后），不走全量通讯录服务端同步
-        _uiThreadDispatcher?.Post(async () => await LoadAiAgentsAsync());
     }
 
     private async void OnContactChanged(ContactChangedEvent @event)
@@ -346,52 +331,7 @@ public partial class ContactsViewModel : NavigableViewModelBase
         }
         else
         {
-            await LoadAiAgentsAsync();
             StatusMessage = "通讯录加载失败";
-        }
-    }
-
-    private async Task LoadAiAgentsAsync()
-    {
-        if (_agentCatalog == null) return;
-
-        try
-        {
-            var agents = await _agentCatalog.ListAsync();
-
-            // 幂等替换：先移除旧的 AI 助手分组，再重新添加（召唤/删除后可重复调用而不重复分组）
-            for (int i = ContactGroups.Count - 1; i >= 0; i--)
-            {
-                if (ContactGroups[i].Contacts.Any(c => c.ActionType == "AgentDetail"))
-                    ContactGroups.RemoveAt(i);
-            }
-
-            if (agents.Any())
-            {
-                ContactGroups.Add(new ContactGroup
-                {
-                    Title = $"AI 助手 ({agents.Count})",
-                    Contacts = new ObservableCollection<ContactItem>(
-                        agents.Select(a => new ContactItem
-                        {
-                            Id = a.Name,
-                            Name = a.Name,
-                            Initial = a.Name[0].ToString(),
-                            Type = "AI助手",
-                            ActionType = "AgentDetail",
-                            AgentKind = a.NodeType switch
-                            {
-                                NoteNodeType.Workflow => AgentKind.Workflow,
-                                NoteNodeType.Rule or NoteNodeType.CodeRule => AgentKind.RuleBased,
-                                _ => AgentKind.Agent,
-                            }
-                        }))
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ContactsViewModel] 加载 AI 助手失败: {ex.Message}");
         }
     }
 
@@ -440,11 +380,6 @@ public partial class ContactsViewModel : NavigableViewModelBase
             {
                 case "NewFriends":
                     NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("NewFriendsPage"));
-                    return Task.CompletedTask;
-                case "AgentDetail":
-                    NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-                        "AgentContactDetailPage",
-                        new Dictionary<string, object> { ["agentName"] = contact.Name }));
                     return Task.CompletedTask;
             }
         }

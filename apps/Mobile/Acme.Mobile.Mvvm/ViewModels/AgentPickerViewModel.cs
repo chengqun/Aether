@@ -14,7 +14,7 @@ namespace Acme.Mobile.Mvvm.ViewModels;
 /// Agent 选择页 VM：「＋新对话」入口。列出 <see cref="ICustomAgentCatalog"/> 全部 agent，
 /// tap 一个 → 发布 <see cref="AgentPickedEvent"/>（经 <see cref="IEventBusService"/>）通知 AI tab
 /// 在内嵌聊天面板内开新对话（首条消息 lazy-create），picker 页自行 pop 回 AI tab。
-/// 镜像 <see cref="ContactsViewModel.LoadAiAgentsAsync"/> 取名册。
+/// 取名册逻辑独立于此（agent 对话现已从通讯录独立为 AI tab）。
 /// </summary>
 public partial class AgentPickerViewModel : NavigableViewModelBase
 {
