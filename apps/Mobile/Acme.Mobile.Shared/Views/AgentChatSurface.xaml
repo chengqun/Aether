@@ -33,9 +33,9 @@
              折叠态一行：VerbIcon + ToolName + MainArg(截断) + ✓ + ▸；完成且非展开时显 → 结果预览。
              展开态：输入(JSON) + 结果按 ResultKind 分支（text/code/error/table/json）。点卡片切 IsExpanded。 -->
         <DataTemplate x:Key="ToolTemplate" x:DataType="model:ChatMessageItem">
-            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
-                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="340">
+            <Border Margin="12,2" HorizontalOptions="Fill"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
+                    StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Command="{Binding ToggleExpandCommand}" />
                     </Border.GestureRecognizers>
@@ -106,17 +106,16 @@
                             </VerticalStackLayout>
                         </VerticalStackLayout>
                     </VerticalStackLayout>
-                </Border>
-            </HorizontalStackLayout>
+            </Border>
         </DataTemplate>
 
         <!-- 思考段：ItemType=text + IsReasoning（TextReasoningContent）。对齐桌面可折叠 pill：
              流式"思考中…"默认展开(切 IsStreamingExpanded)；完成"思考 · Xs"默认折叠(切 IsExpanded)。
              点卡片切换；body 展开时显 Content 全文。 -->
         <DataTemplate x:Key="ReasoningTemplate" x:DataType="model:ChatMessageItem">
-            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
-                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="340">
+            <Border Margin="12,2" HorizontalOptions="Fill"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
+                    StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6">
                     <Border.GestureRecognizers>
                         <TapGestureRecognizer Command="{Binding ToggleReasoningCommand}" />
                     </Border.GestureRecognizers>
@@ -139,20 +138,18 @@
                                IsVisible="{Binding IsReasoningExpanded}"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </VerticalStackLayout>
-                </Border>
-            </HorizontalStackLayout>
+            </Border>
         </DataTemplate>
 
         <!-- 审批卡：ItemType=approval，runtime-only 不持久化。Content 带状态图标+工具名（⏳等待/✅批准/❌拒绝）。
              修病灶 4：审批卡此前无模板落到 default 不渲染，现独立模板可见。 -->
         <DataTemplate x:Key="ApprovalTemplate" x:DataType="model:ChatMessageItem">
-            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
-                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
-                    <Label Text="{Binding Content}" FontSize="13" FontFamily="OpenSansSemibold"
-                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                </Border>
-            </HorizontalStackLayout>
+            <Border Margin="12,2" HorizontalOptions="Fill"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
+                    StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6">
+                <Label Text="{Binding Content}" FontSize="13" FontFamily="OpenSansSemibold"
+                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+            </Border>
         </DataTemplate>
 
         <views:ChatMessageTemplateSelector x:Key="ChatMessageSelector"
