@@ -2,11 +2,12 @@ using Acme.Agents.AI;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
 
-namespace Acme.Desktop.Shared.Hosting;
+namespace Acme.Shared.HostGlue;
 
 /// <summary>
-/// <see cref="IModelSource"/> 的桌面实现：把 <see cref="ILlmConfigService"/> 缓存的
-/// LLM 配置映射为 <see cref="CustomModelOption"/>，供专家编辑页下拉。首项为"默认"（Id 空）。
+/// <see cref="IModelSource"/> 的共享宿主实现（UI 无关，桌面/手机共用）：把 <see cref="ILlmConfigService"/>
+/// 缓存的 LLM 配置映射为 <see cref="CustomModelOption"/>，供专家/LLM 配置页下拉。首项为"默认"（Id 空）。
+/// 合并自原桌面 <c>LlmConfigModelSource</c> 与手机 <c>MobileLlmConfigModelSource</c>（逻辑一致）。
 /// </summary>
 public sealed class LlmConfigModelSource : IModelSource
 {
@@ -36,4 +37,7 @@ public sealed class LlmConfigModelSource : IModelSource
         _cache = list;
         return list;
     }
+
+    /// <summary>LLM 配置变更后失效缓存，下轮 GetModels 重建。</summary>
+    public void Invalidate() => _cache = null;
 }

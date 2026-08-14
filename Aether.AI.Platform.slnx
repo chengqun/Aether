@@ -28,6 +28,7 @@
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>
   <Folder Name="/apps/">
+    <Project Path="apps/Shared/Acme.Shared.HostGlue/Acme.Shared.HostGlue.csproj" />
   </Folder>
   <Folder Name="/apps/Desktop/">
     <Project Path="apps/Desktop/Acme.Desktop.Mvvm/Acme.Desktop.Mvvm.csproj" />

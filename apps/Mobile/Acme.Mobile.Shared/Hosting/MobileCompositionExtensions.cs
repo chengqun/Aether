@@ -6,9 +6,8 @@ using Acme.AppAuth.Infrastructure.DependencyInjection;
 using Acme.ChatSocial.Application.DependencyInjection;
 using Acme.ChatSocial.Domain;
 using Acme.ChatSocial.Infrastructure.DependencyInjection;
+using Acme.Llm.Application;
 using Acme.Llm.Application.DependencyInjection;
-using Acme.Llm.Domain;
-using Acme.Llm.Infrastructure;
 using Acme.Llm.Infrastructure.DependencyInjection;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Services;
@@ -28,6 +27,7 @@ using Acme.Video.Application.DependencyInjection;
 using Acme.Video.Infrastructure.DependencyInjection;
 using Acme.ServiceAccount.Application.DependencyInjection;
 using Acme.ServiceAccount.Infrastructure.DependencyInjection;
+using Acme.Shared.HostGlue;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Tools;
@@ -61,7 +61,7 @@ public static class MobileCompositionExtensions
         var aether = services.AddAetherAI();
 
         // LLM 配置引导：读 SQLite 活跃配置；无则从 env 种子（无 key 用 "dummy"，app 仍能启动，agent 待配置）。
-        var llm = MobileLlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"));
+        var llm = LlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"), "mobile-default");
         aether.Configure(o =>
         {
             o.OpenAI.ApiKey = llm.ApiKey;
@@ -77,7 +77,7 @@ public static class MobileCompositionExtensions
         services.AddAppAuthInfrastructure(o =>
         {
             o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL")
-                ?? ReadSavedServerUrl(tenantDir)
+                ?? PreferencesFileReader.ReadServerUrl(tenantDir)
                 ?? string.Empty;
             o.ClientId = Environment.GetEnvironmentVariable("APP_CLIENT_ID") ?? "alphaagent_chat";
             o.ClientSecret = Environment.GetEnvironmentVariable("APP_CLIENT_SECRET") ?? "chat_secret";
@@ -114,7 +114,7 @@ public static class MobileCompositionExtensions
         aether.AddNotesTools();
         aether.AddMemoryTools();
 
-        // ask_user 交互工具：手机端用简化实现（Stage 1 stub：返回用户取消 []; Stage 2 接 DisplayActionSheet）。
+        // ask_user 交互工具：手机端真实现（DisplayActionSheet/Prompt，见 MobileAskUserTool）。
         // AgentFactory 自动把 ask_user 纳入各 agent（免逐 agent 配置）。
         services.AddSingleton<MobileAskUserTool>();
         aether.ConfigureToolRegistry(reg => reg.Register(
@@ -124,14 +124,8 @@ public static class MobileCompositionExtensions
                 sp.GetRequiredService<MobileAskUserTool>(),
                 "ask_user")));
 
-        // 规则程序注册表 + run_rule 工具（YAML 规则；CodeRule 需 Roslyn，手机跳过）。
-        services.AddSingleton<RuleRegistry>();
-        aether.ConfigureToolRegistry(reg => reg.Register(
-            RuleTool.ToolName, "运行一个已注册的规则程序（确定性，无 LLM）。参数 name=规则名,input=查询。", "规则",
-            sp => RuleTool.Create(
-                sp.GetRequiredService<RuleRegistry>(),
-                name => sp.GetRequiredService<ToolRegistry>().ResolveAll(new[] { name }).FirstOrDefault()),
-            ToolApprovalLevel.Safe));
+        // 规则程序注册表 + run_rule 工具（共享宿主胶水；YAML 规则。CodeRule 需 Roslyn，手机跳过）。
+        aether.AddRunRuleTool();
 
         // skills（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(Path.Combine(tenantDir, "skills")));
@@ -140,19 +134,26 @@ public static class MobileCompositionExtensions
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
 
-        // 模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端（UI 无关，与桌面同逻辑）。
+        // 模型源/客户端工厂（共享宿主胶水 LlmConfigChatClientFactory/LlmConfigModelSource，UI 无关）。
+        // 手机端包一层 ToolHistorySanitizingChatClient（修孤儿 tool 消息防 DeepSeek 等 OpenAI 兼容端点 400）。
         // 先注册具体类型再别名接口——保证 MobileAgentConfigInitializer（依赖具体类型调 ClearCache/Invalidate）
         // 与 IChatClientFactory/IModelSource 消费方拿到同一个单例实例。
-        services.AddSingleton<MobileChatClientFactory>();
-        services.AddSingleton<IChatClientFactory>(sp => sp.GetRequiredService<MobileChatClientFactory>());
-        services.AddSingleton<MobileLlmConfigModelSource>();
-        services.AddSingleton<IModelSource>(sp => sp.GetRequiredService<MobileLlmConfigModelSource>());
+        services.AddSingleton<LlmConfigChatClientFactory>(sp => new LlmConfigChatClientFactory(
+            sp.GetRequiredService<IChatClient>(),
+            sp.GetRequiredService<ILlmConfigService>(),
+            sp.GetRequiredService<SelectedLlmHolder>(),
+            c => new ToolHistorySanitizingChatClient(c, "mobile")));
+        services.AddSingleton<IChatClientFactory>(sp => sp.GetRequiredService<LlmConfigChatClientFactory>());
+        services.AddSingleton<LlmConfigModelSource>();
+        services.AddSingleton<IModelSource>(sp => sp.GetRequiredService<LlmConfigModelSource>());
         // 会话 + 长期记忆持久化（SQLite，覆盖平台默认 InMemory）
         services.AddSingleton<IConversationStore>(sp => SqliteConversationStore.ForFile(Path.Combine(tenantDir, "conversations.db")));
         services.AddSingleton<IMemoryStore>(sp => SqliteMemoryStore.ForFile(Path.Combine(tenantDir, "memory.db")));
 
         // —— 手机平台抽象（MAUI 实现）——
         services.AddSingleton<IUIThreadDispatcher, MauiUIThreadDispatcher>();
+        // 工具审批对话框（HarnessAgent 协作式审批，按专家 RequireToolApproval 开启；MAUI DisplayActionSheet）
+        services.AddSingleton<IToolApprovalDialogService, MobileToolApprovalDialogService>();
         // MauiAppSettings ctor 取 tenantDir（string），DI 无法自动解析 → 用工厂注入实例
         services.AddSingleton<IAppSettings>(new MauiAppSettings(tenantDir));
         services.AddSingleton<IPlatformInfo, MauiPlatformInfo>();
@@ -188,48 +189,5 @@ public static class MobileCompositionExtensions
         services.AddSingleton<IPostLoginInitializer, MobilePostLoginInitializer>();
 
         return aether;
-    }
-
-    /// <summary>从 preferences.json 读 app.serverUrl（DI 未构建，不能注 IAppSettings）。</summary>
-    internal static string? ReadSavedServerUrl(string tenantDir)
-    {
-        try
-        {
-            var prefsFile = Path.Combine(tenantDir, "preferences.json");
-            if (!File.Exists(prefsFile)) return null;
-            var json = File.ReadAllText(prefsFile);
-            var match = System.Text.RegularExpressions.Regex.Match(json, @"""app\.serverUrl""\s*:\s*""([^""]+)""");
-            return match.Success ? match.Groups[1].Value : null;
-        }
-        catch { return null; }
-    }
-}
-
-/// <summary>
-/// 启动期 LLM 配置引导：读 SQLite 活跃配置；无则从 env 种子一条默认配置。
-/// 镜像桌面 <c>DesktopLlmBootstrap</c>（UI 无关，逻辑一致）。
-/// </summary>
-public static class MobileLlmBootstrap
-{
-    public static LlmConfig GetOrCreateActive(string dbPath)
-    {
-        var repo = SqliteLlmConfigRepository.ForFile(dbPath);
-        var all = repo.GetAllAsync().GetAwaiter().GetResult();
-        var active = all.FirstOrDefault(c => c.IsDefault) ?? all.FirstOrDefault();
-        if (active != null) return active;
-
-        var envKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        active = new LlmConfig
-        {
-            Id = Guid.NewGuid(),
-            Name = "mobile-default",
-            ModelName = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "deepseek-chat",
-            ApiKey = string.IsNullOrWhiteSpace(envKey) ? "dummy" : envKey,
-            Endpoint = Environment.GetEnvironmentVariable("OPENAI_ENDPOINT") ?? "https://api.deepseek.com",
-            Temperature = 0.5f,
-            IsDefault = true,
-        };
-        repo.UpsertRangeAsync(new[] { active }).GetAwaiter().GetResult();
-        return active;
     }
 }

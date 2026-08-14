@@ -19,7 +19,7 @@ public sealed class MauiUIThreadDispatcher : IUIThreadDispatcher
 
 /// <summary>
 /// 应用配置：JSON 文件落 <c>preferences.json</c> 于租户目录（与桌面 <c>JsonPreferencesStore</c> 同源，
-/// 启动期 bootstrap 的 <c>ReadSavedServerUrl</c> 也读此文件，保证一致）。
+/// 启动期 <c>PreferencesFileReader.ReadServerUrl</c> 也读此文件，保证一致）。
 /// ServerBaseAddress 读 <c>app.serverUrl</c>。
 /// </summary>
 public sealed class MauiAppSettings : IAppSettings

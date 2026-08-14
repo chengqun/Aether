@@ -26,9 +26,11 @@ public class AiChatSurfaceViewModel : AgentChatDetailViewModel
         IToastService? toastService = null,
         ISpeechRecognitionService? speechRecognitionService = null,
         IStreamingBackgroundService? streamingBackgroundService = null,
-        IConversationTitleService? titleService = null)
+        IConversationTitleService? titleService = null,
+        IToolApprovalDialogService? approvalDialog = null)
         : base(agentRunner, conversationStore, agentCatalog, eventBusService, uiThreadDispatcher,
-               clipboardService, toastService, speechRecognitionService, streamingBackgroundService, titleService)
+               clipboardService, toastService, speechRecognitionService, streamingBackgroundService, titleService,
+               approvalDialog)
     {
     }
 }

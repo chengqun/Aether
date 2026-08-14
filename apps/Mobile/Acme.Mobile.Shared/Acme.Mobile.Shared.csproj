@@ -48,6 +48,7 @@
     <ProjectReference Include="..\Acme.Mobile.Mvvm\Acme.Mobile.Mvvm.csproj" />
 
     <!-- Aether platform + agent-runtime (AddAetherAI / AddCustomAgents / IConversationStore Sqlite impl) -->
+    <ProjectReference Include="..\..\Shared\Acme.Shared.HostGlue\Acme.Shared.HostGlue.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory.Sqlite\Aether.AI.Memory.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />

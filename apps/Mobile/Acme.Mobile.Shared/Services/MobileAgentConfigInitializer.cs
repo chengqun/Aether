@@ -1,19 +1,19 @@
 using Acme.Mobile.Mvvm.Services;
-using Acme.Mobile.Shared.Hosting;
+using Acme.Shared.HostGlue;
 
 namespace Acme.Mobile.Shared.Services;
 
 /// <summary>
-/// LLM 配置变更后失效运行时缓存（<see cref="MobileChatClientFactory"/> 已建客户端 +
-/// <see cref="MobileLlmConfigModelSource"/> 模型列表），下轮 agent run / 下拉用新配置。
+/// LLM 配置变更后失效运行时缓存（<see cref="LlmConfigChatClientFactory"/> 已建客户端 +
+/// <see cref="LlmConfigModelSource"/> 模型列表），下轮 agent run / 下拉用新配置。
 /// 镜像桌面 <c>MainViewModelBase.RefreshLlmConfigsAsync</c>。
 /// </summary>
 public sealed class MobileAgentConfigInitializer : IAgentConfigInitializer
 {
-    private readonly MobileChatClientFactory _chatClientFactory;
-    private readonly MobileLlmConfigModelSource _modelSource;
+    private readonly LlmConfigChatClientFactory _chatClientFactory;
+    private readonly LlmConfigModelSource _modelSource;
 
-    public MobileAgentConfigInitializer(MobileChatClientFactory chatClientFactory, MobileLlmConfigModelSource modelSource)
+    public MobileAgentConfigInitializer(LlmConfigChatClientFactory chatClientFactory, LlmConfigModelSource modelSource)
     {
         _chatClientFactory = chatClientFactory;
         _modelSource = modelSource;

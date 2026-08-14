@@ -24,12 +24,11 @@ using Acme.DeviceConnect.Infrastructure.DependencyInjection;
 using Acme.DeviceManagement.Application.DependencyInjection;
 using Acme.DeviceManagement.Infrastructure.DependencyInjection;
 using Acme.Llm.Application.DependencyInjection;
-using Acme.Llm.Domain;
-using Acme.Llm.Infrastructure;
 using Acme.Llm.Infrastructure.DependencyInjection;
 using Acme.Notes.AI;
 using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
+using Acme.Shared.HostGlue;
 using Acme.SystemTools.AI;
 using Aether.AI.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,7 +53,7 @@ public static class DesktopCompositionExtensions
         CustomCertificateHandler.Initialize();
 
         // LLM 配置：读 SQLite 活跃配置；无则从 env 种子（无 key 用 "dummy"，shell 仍能启动，agent 待配置）。
-        var llm = DesktopLlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"));
+        var llm = LlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"), "desktop-default");
         var aether = services.AddAetherAI();
         aether.Configure(o =>
         {
@@ -85,7 +84,7 @@ public static class DesktopCompositionExtensions
         {
             // 优先级：env APP_BASEURL → preferences.json app.serverUrl → 空（登录窗口让用户填）
             o.BaseUrl = Environment.GetEnvironmentVariable("APP_BASEURL")
-                ?? ReadSavedServerUrl(tenantDir);
+                ?? PreferencesFileReader.ReadServerUrl(tenantDir);
             o.ClientId = Environment.GetEnvironmentVariable("APP_CLIENT_ID") ?? "alphaagent_chat";
             o.ClientSecret = Environment.GetEnvironmentVariable("APP_CLIENT_SECRET") ?? "chat_secret";
             o.Scope = "Abp alphaagent_chat";   // 必须带 Abp 受众，否则签发的 token 无 API 受众 → invalid_token
@@ -139,16 +138,9 @@ public static class DesktopCompositionExtensions
                 typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>(),
                 "ask_user")));
 
-        // 规则程序注册表 + run_rule 工具：规则 agent（Engine=Rule）的程序同时可被 LLM agent 经
-        // run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。RuleRegistry 由
-        // CustomAgentCatalog 在 ListAsync 时把每个 Engine=="Rule" 的 agent 按名注册其规则程序；run_rule 按名查表。标 Safe（规则是作者显式写的确定性流程）。
-        services.AddSingleton<RuleRegistry>();
-        aether.ConfigureToolRegistry(reg => reg.Register(
-            RuleTool.ToolName, "运行一个已注册的规则程序（确定性，无 LLM，适合机械的数据查询/工具编排）。参数 name=规则名,input=查询。", "规则",
-            sp => RuleTool.Create(
-                sp.GetRequiredService<RuleRegistry>(),
-                name => sp.GetRequiredService<ToolRegistry>().ResolveAll(new[] { name }).FirstOrDefault()),
-            ToolApprovalLevel.Safe));
+        // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
+        // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
+        aether.AddRunRuleTool();
         // —— 公共 AI skill（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）——
         var skillsDir = Path.Combine(tenantDir, "skills");
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));
@@ -164,9 +156,10 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<INoteNodeEditVmFactory, KnowledgeEditVmFactory>();
         // 策略表单工厂：NodeType=Strategy 派发。codec 由 Stockapp 注册（Qifu 不注册→工厂解析 null→无表单）。
         services.AddSingleton<INoteNodeEditVmFactory, StrategyEditVmFactory>();
-        // 桌面端模型源/客户端工厂：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端
+        // 桌面端模型源/客户端工厂（共享宿主胶水）：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端。
+        // 桌面不包 ToolHistorySanitizingChatClient（clientWrapper=null）。
         services.AddSingleton<IModelSource, LlmConfigModelSource>();
-        services.AddSingleton<IChatClientFactory, DesktopChatClientFactory>();
+        services.AddSingleton<IChatClientFactory, LlmConfigChatClientFactory>();
         // 会话持久化（覆盖平台默认的 InMemoryConversationStore）+ 偏好持久化（跨重启保留召唤/选中）
         services.AddSingleton<IConversationStore>(sp => SqliteConversationStore.ForFile(Path.Combine(tenantDir, "conversations.db")));
         // 长期记忆持久化（覆盖平台默认的 InMemoryMemoryStore）。桌面端单用户 → userId=null 即全局记忆。
@@ -193,48 +186,5 @@ public static class DesktopCompositionExtensions
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
-    }
-
-    /// <summary>从 preferences.json 读 app.serverUrl（DI 未构建，不能注 IPreferencesStore）。</summary>
-    private static string? ReadSavedServerUrl(string tenantDir)
-    {
-        try
-        {
-            var prefsFile = Path.Combine(tenantDir, "preferences.json");
-            if (!File.Exists(prefsFile)) return null;
-            var json = File.ReadAllText(prefsFile);
-            var match = System.Text.RegularExpressions.Regex.Match(json, @"""app\.serverUrl""\s*:\s*""([^""]+)""");
-            return match.Success ? match.Groups[1].Value : null;
-        }
-        catch { return null; }
-    }
-}
-
-/// <summary>
-/// 启动期 LLM 配置引导：读 SQLite 活跃配置；无则从 OPENAI_API_KEY/MODEL/ENDPOINT 种子一条默认配置（默认 DeepSeek）。
-/// 镜像 Sample.Console 的 bootstrap，供桌面端 AddAetherAI 配置 IChatClient。
-/// </summary>
-public static class DesktopLlmBootstrap
-{
-    public static LlmConfig GetOrCreateActive(string dbPath)
-    {
-        var repo = SqliteLlmConfigRepository.ForFile(dbPath);
-        var all = repo.GetAllAsync().GetAwaiter().GetResult();
-        var active = all.FirstOrDefault(c => c.IsDefault) ?? all.FirstOrDefault();
-        if (active != null) return active;
-
-        var envKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        active = new LlmConfig
-        {
-            Id = Guid.NewGuid(),
-            Name = "desktop-default",
-            ModelName = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "deepseek-chat",
-            ApiKey = string.IsNullOrWhiteSpace(envKey) ? "dummy" : envKey,
-            Endpoint = Environment.GetEnvironmentVariable("OPENAI_ENDPOINT") ?? "https://api.deepseek.com",
-            Temperature = 0.5f,
-            IsDefault = true,
-        };
-        repo.UpsertRangeAsync(new[] { active }).GetAwaiter().GetResult();
-        return active;
     }
 }

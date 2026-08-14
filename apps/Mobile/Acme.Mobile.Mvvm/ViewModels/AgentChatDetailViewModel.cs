@@ -39,6 +39,11 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     private readonly ISpeechRecognitionService? _speechRecognitionService;
     private readonly IStreamingBackgroundService? _streamingBackgroundService;
     private readonly IConversationTitleService? _titleService;
+    private readonly IToolApprovalDialogService? _approvalDialog;
+
+    /// <summary>当前流式轮内捕获的待审批请求（OnApprovalRequest 置位，审批循环读取）。
+    /// 仅在 RunStreamingAsync 执行期间被同一异步流读写，await 完成边界保证可见性。</summary>
+    private ToolApprovalRequest? _pendingApproval;
 
     private bool _isLoaded = false;
     private Guid _currentConversationId = Guid.Empty; // Guid.Empty = 未创建，首次发送时 lazy-create
@@ -172,7 +177,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                                     IToastService? toastService = null,
                                     ISpeechRecognitionService? speechRecognitionService = null,
                                     IStreamingBackgroundService? streamingBackgroundService = null,
-                                    IConversationTitleService? titleService = null)
+                                    IConversationTitleService? titleService = null,
+                                    IToolApprovalDialogService? approvalDialog = null)
     {
         _agentRunner = agentRunner;
         _conversationStore = conversationStore;
@@ -184,6 +190,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         _speechRecognitionService = speechRecognitionService;
         _streamingBackgroundService = streamingBackgroundService;
         _titleService = titleService;
+        _approvalDialog = approvalDialog;
         SendMessageCommand = new AsyncRelayCommand(SendMessageAsync, () => CanSendMessage);
     }
 
@@ -723,17 +730,34 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 OnApprovalRequest: (req, _) =>
                 {
                     if (_streamVersion != version) return Task.CompletedTask;
-                    // 手机端无工具审批 UI：明确提示而非静默断流。
-                    // 工具审批由 Agent 的 RequireToolApproval 触发；如需手机端执行工具，
-                    // 请在桌面专家编辑器关闭该 Agent 的「工具审批」开关。
+                    // 捕获待审批请求——审批循环（StreamResponseAsync 内）在 RunStreamingAsync 返回后读取。
+                    // 协作式审批：stream 发出 ToolApprovalRequestContent 后本轮结束，host 弹框拿决定，
+                    // 以 approvalResponse 重入同一会话恢复流（镜像桌面 RunSegmentedStreamAsync）。
+                    _pendingApproval = req;
                     _uiThreadDispatcher?.Post(() =>
                     {
+                        // 终结当前文本段 + 清残留 thinking（与工具卡前清理一致）
+                        if (_currentTextItem != null)
+                        {
+                            _currentTextItem.MarkdownContent = _currentTextItem.Content;
+                            _currentTextItem.IsStreaming = false;
+                            _currentTextItem = null;
+                        }
+                        if (_currentThinkingItem != null)
+                        {
+                            Messages.Remove(_currentThinkingItem);
+                            _currentThinkingItem = null;
+                        }
+                        _pendingReasoning.Clear();
                         Messages.Add(new ChatMessageItem
                         {
                             Id = Guid.NewGuid().ToString(),
-                            ItemType = "text",
+                            ItemType = "approval",
                             Role = "assistant",
-                            Content = $"⚠️ 工具「{req.ToolName}」需要审批，手机端暂不支持审批交互。请在桌面端专家编辑器关闭该 Agent 的工具审批后重试。",
+                            ToolName = req.ToolName,
+                            CallId = req.CallId,
+                            ApprovalState = 0, // 等待
+                            Content = $"⏳ 工具「{req.ToolName}」等待审批",
                             AuthorName = AgentName,
                             Timestamp = DateTime.Now
                         });
@@ -760,12 +784,42 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             // 在后台线程执行（避免 Android NetworkOnMainThreadException）
             await Task.Run(async () =>
             {
-                // desiredMode: 手机端无 plan/execute UI，强制 execute（自主执行），
-                // 否则启用了 AgentModeProvider 的 Agent 会停在默认 plan 模式等「接受计划」而断流。
-                // Agent 未启用 AgentModeProvider 时 TrySetModeAsync 为 no-op，无副作用。
-                await _agentRunner.RunStreamingAsync(
-                    _currentConversationId, _agentId, content, handlers,
-                    approvalResponse: null, desiredMode: "execute", ct);
+                // 协作式工具审批循环（镜像桌面 RunSegmentedStreamAsync）：RunStreamingAsync 遇需审批工具
+                // → 发 ToolApprovalRequestContent 后本轮结束 → 弹框拿决定 → 以 approvalResponse 重入同一会话恢复。
+                // desiredMode: 手机端无 plan/execute UI，强制 execute（自主执行）。
+                ToolApprovalDecision? approvalResponse = null;
+                while (true)
+                {
+                    _pendingApproval = null; // OnApprovalRequest 在 RunStreamingAsync 期间置位
+                    await _agentRunner.RunStreamingAsync(
+                        _currentConversationId, _agentId, content, handlers,
+                        approvalResponse, desiredMode: "execute", ct);
+
+                    if (_streamVersion != version) return;
+                    if (_pendingApproval is null) break; // 无审批请求 → 本轮完成
+                    if (_approvalDialog is null) break;  // 无审批 UI → 终止（防卡死）
+
+                    var req = _pendingApproval;
+                    // 弹审批框（ShowApprovalAsync 内部 marshal 到 UI 线程）；用户取消/Dismiss 返回 null
+                    var decision = await _approvalDialog.ShowApprovalAsync(req).ConfigureAwait(false);
+                    var state = decision is null ? 2 : (decision.Approved ? 1 : 2);
+                    _uiThreadDispatcher?.Post(() =>
+                    {
+                        for (int i = 0; i < Messages.Count; i++)
+                        {
+                            if (Messages[i].ItemType == "approval" && Messages[i].CallId == req.CallId)
+                            {
+                                Messages[i].ApprovalState = state;
+                                Messages[i].Content = state == 1
+                                    ? $"✅ 工具「{req.ToolName}」已批准"
+                                    : $"❌ 工具「{req.ToolName}」已拒绝";
+                                break;
+                            }
+                        }
+                    });
+                    if (decision is null) break; // 取消 → 终止本轮（不恢复）
+                    approvalResponse = decision;
+                }
             }, ct);
 
             if (_streamVersion != version) return;
@@ -823,6 +877,20 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         // 注意：此方法必须在 UI 线程调用（由 StreamHandlers 回调经 _uiThreadDispatcher.Post 调度）
         if (ev.Kind == ToolStreamEventKind.Call)
         {
+            // 审批恢复轮 MAF 会重新发出已批准工具的 Call（同 CallId）。第一轮（审批前）已建过同 CallId 的
+            // tool_call 卡（审批卡之前、无结果），若不处理会留 orphan + 恢复轮再建一张 → 两张卡、显示错乱。
+            // 移除旧 orphan，在当前位置（审批卡之后）重建，保证 Result 落在 Call 之后、时序正确（镜像桌面）。
+            if (!string.IsNullOrEmpty(ev.CallId))
+            {
+                for (int i = Messages.Count - 1; i >= 0; i--)
+                {
+                    if (Messages[i].ItemType == "tool_call" && ev.CallId.Equals(Messages[i].CallId, StringComparison.Ordinal))
+                    {
+                        Messages.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
             // 工具调用：终结当前文本段，添加 tool_call 卡片 + thinking 占位
             if (_currentTextItem != null)
             {
@@ -845,6 +913,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 ItemType = "tool_call",
                 Role = "assistant",
                 ToolName = ev.Name,
+                CallId = ev.CallId,
                 Input = ev.Input,
                 AuthorName = AgentName,
                 Timestamp = DateTime.Now
@@ -861,6 +930,15 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         }
         else // Result
         {
+            // 防御性去重：同 CallId 的 tool_result 已存在则跳过（恢复轮理论上只发一次）。
+            if (!string.IsNullOrEmpty(ev.CallId))
+            {
+                for (int i = 0; i < Messages.Count; i++)
+                {
+                    if (Messages[i].ItemType == "tool_result" && ev.CallId.Equals(Messages[i].CallId, StringComparison.Ordinal))
+                        return;
+                }
+            }
             // 工具结果：移除 thinking 占位，终结当前文本段，添加 tool_result 卡片
             if (_currentThinkingItem != null)
             {
@@ -880,6 +958,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 ItemType = "tool_result",
                 Role = "assistant",
                 ToolName = ev.Name,
+                CallId = ev.CallId,
                 Output = ev.Output,
                 AuthorName = AgentName,
                 Timestamp = DateTime.Now
@@ -921,8 +1000,9 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     /// <summary>
     /// 持久化本轮 transcript 到 <see cref="IConversationStore"/>（镜像桌面 PersistRunAsync，但走事件流模型）。
     /// 用户请求作为 <see cref="AgentRun.UserMessage"/>；本轮助手侧过程（思考 / 工具调用+结果 / 文本旁白 / 最终回答）
-    /// 按 <see cref="AgentEvent"/> 顺序写入，使查看历史与实时流式一致。mobile 无 CallId，用
-    /// <c>toolu_mobile_{n}</c> 合成（call 与其配对 result 共享同一 id，与 <see cref="ExpandRun"/> 还原对称）。
+    /// 按 <see cref="AgentEvent"/> 顺序写入，使查看历史与实时流式一致。工具卡用真实 <see cref="ChatMessageItem.CallId"/>
+    /// 配对（CallId 在事件写入时即匹配→结构不变量由构造保证）；空 CallId（异常情况）回退 <c>toolu_mobile_{n}</c> 合成。
+    /// 审批卡 runtime-only、不持久化（持久化会污染 LLM 历史→续聊 400/工具重执）。
     /// </summary>
     private async Task PersistRunAsync(string userContent, CancellationToken ct)
     {
@@ -960,21 +1040,24 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             {
                 switch (item.ItemType)
                 {
+                    case "approval":
+                        continue; // 审批卡 runtime-only，不持久化
                     case "thinking":
                         if (!string.IsNullOrEmpty(item.Content))
                             events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ReasoningChunk,
                                 new AgentEventPayload.ReasoningChunk(item.Content)));
                         break;
                     case "tool_call":
-                        toolCounter++;
-                        pendingCallId = $"toolu_mobile_{toolCounter}";
+                        pendingCallId = !string.IsNullOrEmpty(item.CallId) ? item.CallId : $"toolu_mobile_{++toolCounter}";
                         pendingToolName = item.ToolName ?? "tool";
                         events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolCall,
                             new AgentEventPayload.ToolCall(pendingCallId, pendingToolName, item.Input)));
                         break;
                     case "tool_result":
-                        // 与前一个未配对 tool_call 共享 callId；无前置（异常情况）则自合成一个。
-                        var callId = pendingCallId ?? $"toolu_mobile_{++toolCounter}";
+                        // 优先用真实 CallId；空则与前置未配对 tool_call 共享 pendingCallId；再无则自合成。
+                        var callId = !string.IsNullOrEmpty(item.CallId)
+                            ? item.CallId
+                            : pendingCallId ?? $"toolu_mobile_{++toolCounter}";
                         events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolResult,
                             new AgentEventPayload.ToolResult(callId, item.ToolName ?? pendingToolName ?? "tool", item.Output)));
                         pendingCallId = null;

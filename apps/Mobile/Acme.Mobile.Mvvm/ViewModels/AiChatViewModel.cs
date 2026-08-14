@@ -130,7 +130,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
     {
         SubscribeEvents();
         await LoadConversationsAsync();
-        // 首次激活加载 LLM 列表 + 恢复持久化的选择（写回 holder 让 MobileChatClientFactory 用上）。
+        // 首次激活加载 LLM 列表 + 恢复持久化的选择（写回 holder 让聊天客户端工厂用上）。
         if (!_isLlmLoaded)
         {
             _isLlmLoaded = true;
@@ -194,7 +194,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
         if (_llmHolder != null) _llmHolder.LlmConfigId = string.IsNullOrEmpty(id) ? null : id;
         try { _appSettings?.SetString("selectedLlmId", id); } catch { /* 无 store 则跳过持久化 */ }
         CurrentLlmName = config?.Name ?? "默认";
-        // Invalidate 当前 agent 缓存，让下一轮用新 LLM 重建（MobileChatClientFactory 读 holder）。
+        // Invalidate 当前 agent 缓存，让下一轮用新 LLM 重建（聊天客户端工厂读 holder）。
         var agentId = ChatSurface.AgentId;
         if (agentId != Guid.Empty) _agentRunner?.Invalidate(agentId);
     }

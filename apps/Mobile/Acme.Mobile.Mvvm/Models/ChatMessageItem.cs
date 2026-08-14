@@ -16,7 +16,7 @@ public partial class ChatMessageItem : ObservableObject
     private string _id = string.Empty;
 
     [ObservableProperty]
-    private string _itemType = "text"; // text, tool_call, tool_result, thinking
+    private string _itemType = "text"; // text, tool_call, tool_result, thinking, approval
 
     [ObservableProperty]
     private string _role = "user"; // user, assistant
@@ -54,6 +54,14 @@ public partial class ChatMessageItem : ObservableObject
     [ObservableProperty]
     private int _outputTokens;
 
+    /// <summary>工具调用的 CallId（MEAI FunctionCallContent.CallId）。审批恢复轮去重 + 持久化配对用。</summary>
+    [ObservableProperty]
+    private string? _callId;
+
+    /// <summary>审批卡状态：0=等待审批，1=已批准，2=已拒绝/取消（仅 ItemType=="approval" 有效）。</summary>
+    [ObservableProperty]
+    private int _approvalState;
+
     /// <summary>
     /// Token 用量信息，格式: "{InputTokens}→{OutputTokens} tokens"，仅在两者均 > 0 时显示。
     /// </summary>
@@ -78,6 +86,11 @@ public partial class ChatMessageItem : ObservableObject
     /// 是否为思考状态
     /// </summary>
     public bool IsThinking => ItemType == "thinking";
+
+    /// <summary>
+    /// 是否为工具审批卡
+    /// </summary>
+    public bool IsApprovalCard => ItemType == "approval";
 
     /// <summary>
     /// 是否为用户消息
