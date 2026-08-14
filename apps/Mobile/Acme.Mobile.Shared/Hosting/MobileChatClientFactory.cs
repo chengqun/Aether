@@ -58,9 +58,11 @@ public sealed class MobileChatClientFactory : IChatClientFactory
     /// 包一层 <see cref="ToolHistorySanitizingChatClient"/>：发请求前修孤儿 tool 消息，
     /// 防 DeepSeek 等 OpenAI 兼容端点报「tool must be a response to a preceding message with tool_calls」400
     /// （NoMemory 跨步重置 / 滑窗裁断 / 审批残留等都会造出孤儿 tool_result）。配对完整时原样放行。
+    /// <para>外层再叠 <see cref="ToolCallDiagnosticChatClient"/>（临时诊断：记录每次 LLM 响应里的工具调用，
+    /// 调查工具/ask_user 重复执行两遍；定位后移除）。</para>
     /// </summary>
     private static IChatClient Wrap(IChatClient inner, string label)
-        => new ToolHistorySanitizingChatClient(inner, label);
+        => new ToolCallDiagnosticChatClient(new ToolHistorySanitizingChatClient(inner, label), label);
 
     private LlmConfigDto? ResolveConfig(string configId)
     {
