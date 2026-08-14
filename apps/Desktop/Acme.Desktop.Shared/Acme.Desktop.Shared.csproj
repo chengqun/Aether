@@ -12,6 +12,8 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <!-- VSCode codicon 图标（矢量 geometry；Codicons.cs 经 PackIconDataFactory 取 path data 喂全 app <Path Fill>）。Workbench 经 ProjectReference 传递获得。 -->
+    <PackageReference Include="IconPacks.Avalonia.Codicons" Version="2.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Markdown.Avalonia.Tight" Version="12.0.0-a3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />

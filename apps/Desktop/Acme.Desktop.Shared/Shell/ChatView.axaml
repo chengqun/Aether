@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Desktop.Mvvm"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
@@ -50,8 +51,10 @@
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="思考中…" FontSize="12" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsStreamingExpanded}" />
-              <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsStreamingExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsStreamingExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsStreamingExpanded}" />
             </StackPanel>
             <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsStreamingExpanded}" Margin="0,2,0,0">
               <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
@@ -74,8 +77,10 @@
                          IsVisible="{Binding ElapsedText, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Run Text="· " /><Run Text="{Binding ElapsedText}" />
               </TextBlock>
-              <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-              <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
             <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
               <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -92,22 +97,27 @@
                 IsVisible="{Binding IsToolStep}" PointerPressed="OnToolCardTapped">
           <StackPanel Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="●" FontSize="9" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+              <Path Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="9" Height="9"
+                    Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
               <TextBlock Text="{Binding ToolName}" FontSize="13" FontWeight="SemiBold"
                          Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
               <TextBlock Text="{Binding MainArg}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
                          VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320" />
-              <TextBlock Text="✓" FontSize="12" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
-                         IsVisible="{Binding IsToolCompleted}" />
+              <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                    Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
+                    IsVisible="{Binding IsToolCompleted}" />
               <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.6" VerticalAlignment="Center"
                          IsVisible="{Binding !IsToolCompleted}" />
-              <TextBlock Text="→" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                         IsVisible="{Binding HasResultPreview}" />
+              <Path Data="{x:Static shell:Codicons.ArrowRight}" Stretch="Uniform" Width="11" Height="11"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                    IsVisible="{Binding HasResultPreview}" />
               <TextBlock Text="{Binding ResultPreview}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
                          VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320"
                          IsVisible="{Binding HasResultPreview}" />
-              <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-              <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="10" Height="10"
+                    Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
             </StackPanel>
             <Border Background="{DynamicResource CardBgBrush}" CornerRadius="6" Padding="8,6" IsVisible="{Binding IsExpanded}" Margin="0,2,0,0">
               <StackPanel Spacing="6">
@@ -160,10 +170,12 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-                    <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding !IsComplete}" />
-                    <TextBlock Text="✓" FontSize="12" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding IsComplete}" />
+                    <Path Data="{x:Static shell:Codicons.CircleOutline}" Stretch="Uniform" Width="12" Height="12"
+                          Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                          IsVisible="{Binding !IsComplete}" />
+                    <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                          Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
+                          IsVisible="{Binding IsComplete}" />
                     <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                IsVisible="{Binding !IsComplete}" />
@@ -181,9 +193,12 @@
         <!-- 审批卡 -->
         <Border Classes="msg-card" HorizontalAlignment="Stretch" IsVisible="{Binding IsApprovalCard}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="⏳" FontSize="12" VerticalAlignment="Center" IsVisible="{Binding IsApprovalPending}" />
-            <TextBlock Text="✅" FontSize="12" VerticalAlignment="Center" IsVisible="{Binding IsApprovalApproved}" />
-            <TextBlock Text="❌" FontSize="12" VerticalAlignment="Center" IsVisible="{Binding IsApprovalRejected}" />
+            <Path Data="{x:Static shell:Codicons.Loading}" Stretch="Uniform" Width="12" Height="12"
+                  Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" IsVisible="{Binding IsApprovalPending}" />
+            <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                  Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsApprovalApproved}" />
+            <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12"
+                  Fill="{DynamicResource DangerBrush}" VerticalAlignment="Center" IsVisible="{Binding IsApprovalRejected}" />
             <TextBlock Text="{Binding ToolName}" FontSize="13" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
             <TextBlock Text="等待审批…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
@@ -208,11 +223,13 @@
           </ItemsControl.ItemsPanel>
         </ItemsControl>
         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsWorking}">
-          <TextBlock Text="●" FontSize="9" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+          <Path Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="9" Height="9"
+                Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
           <TextBlock Text="运行中…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsDone}">
-          <TextBlock Text="✓" FontSize="11" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
+          <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="11" Height="11"
+                Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
           <TextBlock Text="完成" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
           <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.7" VerticalAlignment="Center"
                      IsVisible="{Binding ElapsedText, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -220,11 +237,13 @@
           </TextBlock>
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsError}">
-          <TextBlock Text="✕" FontSize="11" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
+          <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="11" Height="11"
+                Fill="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
           <TextBlock Text="出错" FontSize="11" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsAwaitingApproval}">
-          <TextBlock Text="⏳" FontSize="11" VerticalAlignment="Center" />
+          <Path Data="{x:Static shell:Codicons.Loading}" Stretch="Uniform" Width="11" Height="11"
+                Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
           <TextBlock Text="等待审批…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
         </StackPanel>
       </StackPanel>
@@ -254,7 +273,8 @@
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- 历史会话（Flyout 下拉） -->
           <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
-            <TextBlock Text="≡" FontSize="14"/>
+            <Path Data="{x:Static shell:Codicons.Menu}" Stretch="Uniform" Width="14" Height="14"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight">
                 <Border Width="280" MaxHeight="400">
@@ -303,7 +323,8 @@
           </Button>
           <!-- 新聊天 -->
           <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
-            <TextBlock Text="✚" FontSize="14"/>
+            <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="14" Height="14"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
           </Button>
         </StackPanel>
       </Grid>
@@ -314,9 +335,16 @@
         <!-- plan-accept 条：plan 模式下计划就绪后提示接受→执行 -->
         <Border Classes="chat-input-card" Padding="12,8" IsVisible="{Binding ShowPlanAccept}" CornerRadius="12">
           <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-            <TextBlock Text="📋" FontSize="14" VerticalAlignment="Center" />
+            <Path Data="{x:Static shell:Codicons.ListFlat}" Stretch="Uniform" Width="14" Height="14"
+                  Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
             <TextBlock Text="计划已就绪" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <Button Classes="primary" Content="✅ 接受，开始执行" Command="{Binding AcceptPlanCommand}" Padding="14,6" FontSize="12"/>
+            <Button Classes="primary" Command="{Binding AcceptPlanCommand}" Padding="14,6" FontSize="12">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+                <TextBlock Text="接受，开始执行" FontSize="12" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
           </StackPanel>
         </Border>
         <!-- 活动计划面板 + 输入卡：Spacing=0 紧贴，计划贴在输入框上沿 -->
@@ -330,10 +358,12 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="14,8" CornerRadius="10">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="{Binding PlanSummary}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                    <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding IsPlanExpanded}"/>
-                    <TextBlock Text="▸" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                               IsVisible="{Binding !IsPlanExpanded}"/>
+                    <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="10" Height="10"
+                          Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                          IsVisible="{Binding IsPlanExpanded}"/>
+                    <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="10" Height="10"
+                          Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                          IsVisible="{Binding !IsPlanExpanded}"/>
                   </StackPanel>
                 </Button>
                 <Button Grid.Column="1" Command="{Binding DismissPlanCommand}" IsVisible="{Binding ShowPlanDismiss}"
@@ -347,10 +377,12 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
                       <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3">
-                        <TextBlock Text="○" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                                   IsVisible="{Binding !IsComplete}"/>
-                        <TextBlock Text="✓" FontSize="12" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
-                                   IsVisible="{Binding IsComplete}"/>
+                        <Path Data="{x:Static shell:Codicons.CircleOutline}" Stretch="Uniform" Width="12" Height="12"
+                              Fill="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                              IsVisible="{Binding !IsComplete}"/>
+                        <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                              Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
+                              IsVisible="{Binding IsComplete}"/>
                         <TextBlock Text="{Binding Title}" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                    IsVisible="{Binding !IsComplete}"/>
@@ -395,7 +427,8 @@
                   <ComboBox.SelectionBoxItemTemplate>
                     <DataTemplate>
                       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <TextBlock Text="⚡" FontSize="11" /><TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
+                        <Path Data="{x:Static shell:Codicons.Sparkle}" Stretch="Uniform" Width="11" Height="11"
+                              Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" /><TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
                       </StackPanel>
                     </DataTemplate>
                   </ComboBox.SelectionBoxItemTemplate>
@@ -409,10 +442,12 @@
                             Classes="compact" Padding="8,4" FontSize="11" ToolTip.Tip="规划：先计划再执行 / 执行：直接自主执行">
                 <Panel>
                   <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPlanMode}">
-                    <TextBlock Text="📋" FontSize="11"/><TextBlock Text="规划" FontSize="11"/>
+                    <Path Data="{x:Static shell:Codicons.ListFlat}" Stretch="Uniform" Width="11" Height="11"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" VerticalAlignment="Center"/><TextBlock Text="规划" FontSize="11"/>
                   </StackPanel>
                   <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding !IsPlanMode}">
-                    <TextBlock Text="▶️" FontSize="11"/><TextBlock Text="执行" FontSize="11"/>
+                    <Path Data="{x:Static shell:Codicons.Play}" Stretch="Uniform" Width="11" Height="11"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" VerticalAlignment="Center"/><TextBlock Text="执行" FontSize="11"/>
                   </StackPanel>
                 </Panel>
               </ToggleButton>
@@ -428,7 +463,8 @@
               <Button Classes="send-btn" Command="{Binding SendInputCommand}" IsEnabled="{Binding CanSendInput}"
                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"
                       IsVisible="{Binding !IsAgentRunning}">
-                <PathIcon Width="16" Height="16"><PathIcon.Data><Geometry>M2 21l21-9L2 3v7l15 2-15 2v7z</Geometry></PathIcon.Data></PathIcon>
+                <Path Data="{x:Static shell:Codicons.Send}" Stretch="Uniform" Width="16" Height="16"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
               </Button>
               <Button Classes="send-btn" Command="{Binding StopGenerationCommand}"
                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"
@@ -489,7 +525,8 @@
               Width="36" Height="36" CornerRadius="18" Padding="0"
               Background="{DynamicResource AccentBrush}" BorderThickness="0"
               IsVisible="False" ToolTip.Tip="滚到底部">
-        <TextBlock Text="↓" FontSize="16" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Path Data="{x:Static shell:Codicons.ArrowDown}" Stretch="Uniform" Width="16" Height="16"
+              Fill="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Button>
     </Panel>
   </DockPanel>

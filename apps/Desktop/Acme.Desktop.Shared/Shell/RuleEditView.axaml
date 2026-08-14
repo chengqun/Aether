@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Desktop.Mvvm"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.RuleEditView"
              Classes="form-fields">
 
@@ -120,7 +121,7 @@
                           <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected}" Margin="0,1">
                               <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="🔧" FontSize="11"/>
+                                <Path Data="{x:Static shell:Codicons.Tools}" Stretch="Uniform" Width="11" Height="11" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding Description}" FontSize="10"
                                            Foreground="{DynamicResource TextSecondaryBrush}"

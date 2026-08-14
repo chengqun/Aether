@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.AskUserWindow"
         Title="待确认"
         Width="520" Height="480"
@@ -10,7 +11,7 @@
   <Grid RowDefinitions="Auto,*,Auto" Margin="24,20,24,18">
 
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-      <TextBlock Text="❓" FontSize="18" VerticalAlignment="Center" />
+      <Path Data="{x:Static shell:Codicons.Question}" Stretch="Uniform" Width="18" Height="18" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
       <TextBlock Text="需要你的确认" FontSize="16" FontWeight="SemiBold"
                  Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
       <TextBlock Text="{Binding Questions.Count, StringFormat={}({0} 个问题)}" FontSize="11"

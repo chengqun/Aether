@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Stockapp.Desktop.Views.TradingView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -22,7 +23,13 @@
   <TabControl Margin="8">
 
     <!-- 配置 -->
-    <TabItem Header="⚙ 配置">
+    <TabItem>
+      <TabItem.Header>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="配置" VerticalAlignment="Center"/>
+        </StackPanel>
+      </TabItem.Header>
       <ScrollViewer Padding="16">
         <StackPanel Spacing="10" MaxWidth="520">
 
@@ -34,7 +41,10 @@
 
           <!-- ── 回测配置 ── -->
           <StackPanel Spacing="10" IsVisible="{Binding !IsLiveMode}">
-            <TextBlock Text="📊 策略回测" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Data="{x:Static shell:Codicons.Graph}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+              <TextBlock Text="策略回测" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
             <StackPanel Spacing="4">
               <TextBlock Text="合约代码" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
               <TextBox Text="{Binding Symbol}" />
@@ -63,8 +73,11 @@
 
           <!-- ── 实盘配置 ── -->
           <StackPanel Spacing="10" IsVisible="{Binding IsLiveMode}">
-            <TextBlock Text="📡 实盘策略引擎（Lean 实时 · P1 仅信号不下单）" FontSize="14" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Data="{x:Static shell:Codicons.RadioTower}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+              <TextBlock Text="实盘策略引擎（Lean 实时 · P1 仅信号不下单）" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
             <TextBlock Text="先在「期货」页登录 CTP，再填合约点「启动」。P1 不下单，仅验证行情/信号链路。"
                        FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
 
@@ -96,7 +109,13 @@
     </TabItem>
 
     <!-- 策略参数 -->
-    <TabItem Header="🎯 策略">
+    <TabItem>
+      <TabItem.Header>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="{x:Static shell:Codicons.Target}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="策略" VerticalAlignment="Center"/>
+        </StackPanel>
+      </TabItem.Header>
       <ScrollViewer Padding="16">
         <StackPanel Spacing="10" MaxWidth="480">
           <TextBlock Text="策略选择与参数" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
@@ -148,7 +167,10 @@
             <Border Background="{DynamicResource DangerBrush}" Opacity="0.12" CornerRadius="6" Padding="10,8"
                     IsVisible="{Binding HasLeanLoadErrors}">
               <StackPanel Spacing="4">
-                <TextBlock Text="⚠ Lean 算法编译错误" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <Path Data="{x:Static shell:Codicons.Warning}" Stretch="Uniform" Width="12" Height="12" Fill="{DynamicResource DangerBrush}" VerticalAlignment="Center"/>
+                  <TextBlock Text="Lean 算法编译错误" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
+                </StackPanel>
                 <SelectableTextBlock Text="{Binding LeanLoadErrors}" FontSize="11" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" TextWrapping="Wrap"
                                      Foreground="{DynamicResource TextPrimaryBrush}" />
               </StackPanel>
@@ -176,19 +198,31 @@
     </TabItem>
 
     <!-- 统计（回测） -->
-    <TabItem Header="📈 统计">
+    <TabItem>
+      <TabItem.Header>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="{x:Static shell:Codicons.GraphLine}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="统计" VerticalAlignment="Center"/>
+        </StackPanel>
+      </TabItem.Header>
       <ScrollViewer Padding="16">
         <StackPanel Spacing="12">
           <Border Classes="card" IsVisible="{Binding HasError}">
             <StackPanel Spacing="6">
-              <TextBlock Text="❌ 回测失败" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="13" Height="13" Fill="{DynamicResource DangerBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="回测失败" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
+              </StackPanel>
               <TextBlock Text="{Binding Error}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
 
           <Border Classes="card" IsVisible="{Binding HasResult}">
             <StackPanel Spacing="8">
-              <TextBlock Text="📈 统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Path Data="{x:Static shell:Codicons.GraphLine}" Stretch="Uniform" Width="13" Height="13" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="统计指标" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+              </StackPanel>
               <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="总收益" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2" />
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Statistics.TotalReturn}" FontSize="11" Margin="8,2" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
@@ -212,7 +246,7 @@
 
           <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
             <StackPanel Spacing="8" HorizontalAlignment="Center">
-              <TextBlock Text="📈" FontSize="40" HorizontalAlignment="Center" />
+              <Path Data="{x:Static shell:Codicons.GraphLine}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               <TextBlock Text="回测后显示统计指标" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
             </StackPanel>
           </Border>
@@ -221,7 +255,13 @@
     </TabItem>
 
     <!-- 曲线（回测） -->
-    <TabItem Header="📊 曲线">
+    <TabItem>
+      <TabItem.Header>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="{x:Static shell:Codicons.Graph}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="曲线" VerticalAlignment="Center"/>
+        </StackPanel>
+      </TabItem.Header>
       <ScrollViewer Padding="16">
         <StackPanel Spacing="12">
           <Border Classes="card" IsVisible="{Binding HasResult}">
@@ -237,7 +277,7 @@
 
           <Border Classes="card" IsVisible="{Binding !HasResult}" HorizontalAlignment="Center" Margin="0,40">
             <StackPanel Spacing="8" HorizontalAlignment="Center">
-              <TextBlock Text="📊" FontSize="40" HorizontalAlignment="Center" />
+              <Path Data="{x:Static shell:Codicons.Graph}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               <TextBlock Text="回测后显示权益曲线" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
             </StackPanel>
           </Border>
@@ -246,7 +286,13 @@
     </TabItem>
 
     <!-- 日志（回测+实盘共用，按模式切换） -->
-    <TabItem Header="📋 日志">
+    <TabItem>
+      <TabItem.Header>
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Path Data="{x:Static shell:Codicons.ListFlat}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="日志" VerticalAlignment="Center"/>
+        </StackPanel>
+      </TabItem.Header>
       <ScrollViewer Padding="16">
         <StackPanel Spacing="12">
 

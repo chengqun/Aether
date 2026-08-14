@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.WorkflowsView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -15,8 +16,11 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="🔗 工作流" FontSize="15" FontWeight="SemiBold"
-                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Path Data="{x:Static shell:Codicons.Link}" Stretch="Uniform" Width="15" Height="15" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            <TextBlock Text="工作流" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
           <TextBlock Text="多 agent 转交编排" FontSize="12"
                      Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
         </StackPanel>

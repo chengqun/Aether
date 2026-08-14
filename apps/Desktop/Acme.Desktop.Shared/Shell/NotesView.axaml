@@ -108,7 +108,7 @@
           <!-- 空态：无笔记时提示（TreeView 空集合不渲染，此 TextBlock 占位） -->
           <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                       IsVisible="{Binding !Roots.Count}" Spacing="6">
-            <TextBlock Text="📝" FontSize="32" HorizontalAlignment="Center" Opacity="0.5" />
+            <Path Data="{x:Static shell:Codicons.Edit}" Stretch="Uniform" Width="32" Height="32" Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
             <TextBlock Text="暂无笔记" FontSize="13" HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextSecondaryBrush}" />
             <TextBlock Text="右键根节点或点上方「+」新建" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"

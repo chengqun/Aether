@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Acme.Desktop.Mvvm"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.StrategyEditView"
              Classes="form-fields">
 
@@ -70,9 +71,9 @@
                     <TextBox Grid.Column="0" Text="{Binding Key}" PlaceholderText="key（如 FastPeriod）" Margin="0,0,4,0"/>
                     <TextBox Grid.Column="1" Text="{Binding Label}" PlaceholderText="显示名" Margin="0,0,4,0"/>
                     <TextBox Grid.Column="2" Text="{Binding DefaultValue}" PlaceholderText="默认值" Margin="0,0,4,0"/>
-                    <Button Grid.Column="3" Content="✕"
+                    <Button Grid.Column="3"
                             Command="{Binding $parent[UserControl].DataContext.RemoveParamCommand}"
-                            CommandParameter="{Binding}" Padding="8,4"/>
+                            CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -92,9 +93,9 @@
                         <TextBox Grid.Column="0" Text="{Binding Name}" PlaceholderText="指标名（如 fast）" Margin="0,0,4,0"/>
                         <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:StrategyFormModel.IndicatorTypes}"
                                   SelectedItem="{Binding Type}" Margin="0,0,4,0"/>
-                        <Button Grid.Column="2" Content="✕"
+                        <Button Grid.Column="2"
                                 Command="{Binding $parent[UserControl].DataContext.RemoveIndicatorCommand}"
-                                CommandParameter="{Binding}" Padding="8,4"/>
+                                CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                       </Grid>
                       <!-- 指标参数键值行 -->
                       <ItemsControl ItemsSource="{Binding Args}">
@@ -103,9 +104,9 @@
                             <Grid ColumnDefinitions="*,*,Auto" Margin="0,0,0,2">
                               <TextBox Grid.Column="0" Text="{Binding Key}" PlaceholderText="参数键（如 period）" Margin="0,0,4,0"/>
                               <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="值（可填 {FastPeriod}）" Margin="0,0,4,0"/>
-                              <Button Grid.Column="2" Content="✕"
+                              <Button Grid.Column="2"
                                       Command="{Binding $parent[UserControl].DataContext.RemoveIndicatorArgCommand}"
-                                      CommandParameter="{Binding}" Padding="8,4"/>
+                                      CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                             </Grid>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -141,9 +142,9 @@
                           <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.ItemTemplate>
                           <ComboBox.SelectionBoxItemTemplate><DataTemplate><TextBlock Text="{Binding Display}"/></DataTemplate></ComboBox.SelectionBoxItemTemplate>
                         </ComboBox>
-                        <Button Grid.Column="3" Content="✕"
+                        <Button Grid.Column="3"
                                 Command="{Binding $parent[UserControl].DataContext.RemoveRuleCommand}"
-                                CommandParameter="{Binding}" Padding="8,4"/>
+                                CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                       </Grid>
 
                       <!-- 简单条件：子句列表 -->
@@ -157,9 +158,9 @@
                                           ItemsSource="{x:Static vm:StrategyFormModel.ComparisonOps}"
                                           SelectedItem="{Binding Op}" Margin="0,0,4,0"/>
                                 <ContentControl Grid.Column="2" Content="{Binding Right}" ContentTemplate="{StaticResource OperandTemplate}" Margin="0,0,4,0"/>
-                                <Button Grid.Column="3" Content="✕"
+                                <Button Grid.Column="3"
                                         Command="{Binding $parent[UserControl].DataContext.RemoveClauseCommand}"
-                                        CommandParameter="{Binding}" Padding="8,4"/>
+                                        CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                               </Grid>
                             </DataTemplate>
                           </ItemsControl.ItemTemplate>
@@ -171,8 +172,11 @@
 
                       <!-- 高级条件（not/深层嵌套）：原始 when YAML，编辑走下方源码 -->
                       <StackPanel Spacing="2" IsVisible="{Binding IsAdvanced}">
-                        <TextBlock Text="⚠ 条件较复杂（含 not 或深层嵌套），请在下方源码编辑 when 字段" FontSize="10"
-                                   Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
+                        <Grid ColumnDefinitions="Auto,*">
+                          <Path Grid.Column="0" Data="{x:Static shell:Codicons.Warning}" Stretch="Uniform" Width="10" Height="10" Fill="{DynamicResource WarningBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                          <TextBlock Grid.Column="1" Text="条件较复杂（含 not 或深层嵌套），请在下方源码编辑 when 字段" FontSize="10"
+                                     Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </Grid>
                         <TextBox Text="{Binding RawWhenYaml}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
                                  AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap"/>
                       </StackPanel>

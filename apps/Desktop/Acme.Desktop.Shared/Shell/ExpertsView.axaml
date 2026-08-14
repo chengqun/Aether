@@ -92,7 +92,7 @@
                     Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     HorizontalAlignment="Center" Margin="0,40">
               <StackPanel Spacing="8" HorizontalAlignment="Center">
-                <TextBlock Text="🧩" FontSize="40" HorizontalAlignment="Center" />
+                <Path Data="{x:Static shell:Codicons.Extensions}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
                 <TextBlock Text="点击右上角「+ 添加专家」创建 Agent" FontSize="12"
@@ -237,7 +237,7 @@
                   Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                   HorizontalAlignment="Center" Margin="0,40">
             <StackPanel Spacing="8" HorizontalAlignment="Center">
-              <TextBlock Text="🛒" FontSize="40" HorizontalAlignment="Center" />
+              <Path Data="{x:Static shell:Codicons.Megaphone}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               <TextBlock Text="市场暂无 agent" FontSize="15" FontWeight="SemiBold"
                          Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
               <TextBlock Text="服务端未就绪时无法拉取列表" FontSize="12"
@@ -257,7 +257,7 @@
                 <Border Classes="card" Margin="0,0,12,12" Width="300">
                   <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="🤖" FontSize="18" VerticalAlignment="Center" />
+                      <Path Data="{x:Static shell:Codicons.Hubot}" Stretch="Uniform" Width="18" Height="18" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                       <TextBlock Text="{Binding AgentName}" FontSize="15" FontWeight="SemiBold"
                                  Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis" />

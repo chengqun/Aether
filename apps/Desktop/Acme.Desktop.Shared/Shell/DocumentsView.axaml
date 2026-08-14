@@ -102,13 +102,23 @@
           <Grid ColumnDefinitions="Auto,*">
             <Menu Grid.Column="0" Classes="docs-menu">
               <MenuItem Header="文件" Classes="docs-menu-item">
-                <MenuItem Header="📂 打开项目目录" Click="OnOpenFolderClick"/>
-                <MenuItem Header="✕ 关闭项目" Command="{Binding CloseProjectCommand}"
-                          IsEnabled="{Binding HasProject}"/>
-                <MenuItem Header="📄 打开文件" Click="OnOpenFileClick"/>
+                <MenuItem Header="打开项目目录" Click="OnOpenFolderClick">
+                  <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="关闭项目" Command="{Binding CloseProjectCommand}"
+                          IsEnabled="{Binding HasProject}">
+                  <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="打开文件" Click="OnOpenFileClick">
+                  <MenuItem.Icon><Path Data="{x:Static shell:Codicons.File}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+                </MenuItem>
                 <Separator/>
-                <MenuItem Header="💾 保存 (Ctrl+S)" Command="{Binding SaveActiveCommand}"/>
-                <MenuItem Header="✕ 关闭标签" Click="OnCloseClick"/>
+                <MenuItem Header="保存 (Ctrl+S)" Command="{Binding SaveActiveCommand}">
+                  <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Save}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="关闭标签" Click="OnCloseClick">
+                  <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+                </MenuItem>
               </MenuItem>
             </Menu>
             <TextBlock Grid.Column="1" Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold"
@@ -142,7 +152,7 @@
         <!-- 空态：未打开目录 -->
         <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
                     IsVisible="{Binding !HasProject}" Spacing="8">
-          <TextBlock Text="📁" FontSize="36" HorizontalAlignment="Center" Opacity="0.5"/>
+          <Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource SecondaryTextBrush}" Opacity="0.5"/>
           <TextBlock Text="未打开项目目录" FontSize="13" HorizontalAlignment="Center"
                      Foreground="{DynamicResource SecondaryTextBrush}"/>
           <TextBlock Text="「文件 ▾ 打开项目目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
@@ -167,10 +177,8 @@
                     IsVisible="{Binding IsPreviewToggleVisible}"
                     ToolTip.Tip="切换仅看解析 / 上下双栏"
                     VerticalAlignment="Center" Margin="4,0,0,0">
-              <Path Data="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
-                    Stretch="Uniform" Width="16" Height="16" StrokeThickness="1.6"
-                    StrokeLineCap="Round" StrokeJoin="Round"
-                    Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+              <Path Data="{x:Static shell:Codicons.Eye}" Stretch="Uniform" Width="16" Height="16"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
             </ToggleButton>
             <TextBlock DockPanel.Dock="Right" Text="{Binding StatusMessage}"
                        VerticalAlignment="Center" Margin="8,0,6,0"
@@ -188,12 +196,16 @@
                 <DataTemplate>
                   <Grid ColumnDefinitions="*,Auto" Margin="8,4">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                      <TextBlock Text="●" FontSize="10" Foreground="{DynamicResource AccentBrush}"
-                                 IsVisible="{Binding IsDirty}" VerticalAlignment="Center"/>
+                      <Path Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="8" Height="8"
+                            Fill="{DynamicResource AccentBrush}"
+                            IsVisible="{Binding IsDirty}" VerticalAlignment="Center"/>
                       <TextBlock Text="{Binding FileName}" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
                     <Button Grid.Column="1" Classes="tab-close" Click="OnCloseTabClick"
-                            VerticalAlignment="Center" Margin="4,0,0,0">✕</Button>
+                            VerticalAlignment="Center" Margin="4,0,0,0">
+                      <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12"
+                            Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                    </Button>
                   </Grid>
                 </DataTemplate>
               </ListBox.ItemTemplate>
@@ -234,7 +246,7 @@
                     IsVisible="True">
               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                           Spacing="10" Opacity="0.6">
-                <TextBlock Text="📄" FontSize="42" HorizontalAlignment="Center"/>
+                <Path Data="{x:Static shell:Codicons.File}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource SecondaryTextBrush}"/>
                 <TextBlock Text="在左侧文件树点击文件打开" FontSize="14"
                            Foreground="{DynamicResource SecondaryTextBrush}"/>
                 <TextBlock Text="支持 .cs .py .json .md .yaml .sql .js .xml 等语法高亮" FontSize="12"

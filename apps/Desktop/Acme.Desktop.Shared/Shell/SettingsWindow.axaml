@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Acme.Desktop.Shared.Shell"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.SettingsWindow"
         Title="设置"
         Width="900" Height="550"
@@ -18,12 +19,22 @@
       <StackPanel Margin="8">
         <TextBlock Text="设置" FontSize="18" FontWeight="Bold" Margin="10,12,0,20"/>
         
-        <Button Classes="settings-nav" Content="⚙️ LLM 配置"
+        <Button Classes="settings-nav"
                 Command="{Binding SwitchTabCommand}" CommandParameter="llm"
-                IsEnabled="{Binding IsNotLlmTab}"/>
-        <Button Classes="settings-nav" Content="🔗 设备连接"
+                IsEnabled="{Binding IsNotLlmTab}">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+            <TextBlock Text="LLM 配置" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+        <Button Classes="settings-nav"
                 Command="{Binding SwitchTabCommand}" CommandParameter="device"
-                IsEnabled="{Binding IsNotDeviceTab}"/>
+                IsEnabled="{Binding IsNotDeviceTab}">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Path Data="{x:Static shell:Codicons.Link}" Stretch="Uniform" Width="14" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+            <TextBlock Text="设备连接" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
       </StackPanel>
     </Border>
 

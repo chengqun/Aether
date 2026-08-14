@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.AutomationEditWindow"
         Title="自动化任务"
         Width="520" Height="640"
@@ -11,8 +12,11 @@
 
     <!-- 标题 -->
     <Border Grid.Row="0" Padding="20,14">
-      <TextBlock Text="⏰ 定时任务配置" FontSize="17" FontWeight="SemiBold"
-                 Foreground="{DynamicResource TextPrimaryBrush}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Path Data="{x:Static shell:Codicons.Calendar}" Stretch="Uniform" Width="17" Height="17" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+        <TextBlock Text="定时任务配置" FontSize="17" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+      </StackPanel>
     </Border>
 
     <!-- 任务名 -->

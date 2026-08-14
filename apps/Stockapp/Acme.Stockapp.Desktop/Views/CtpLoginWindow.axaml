@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Stockapp.Desktop.Views.CtpLoginWindow"
         Title="CTP 期货连接" Width="420" Height="540"
         CanResize="False" WindowStartupLocation="CenterOwner"
@@ -8,7 +9,10 @@
   <Grid RowDefinitions="Auto,*,Auto">
     <!-- 标题 -->
     <Border Grid.Row="0" Padding="20,16" Background="{DynamicResource AccentBrush}">
-      <TextBlock Text="📈 CTP 期货连接" Foreground="{DynamicResource OnAccentBrush}" FontSize="16" FontWeight="SemiBold" />
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Path Data="{x:Static shell:Codicons.GraphLine}" Stretch="Uniform" Width="16" Height="16" Fill="{DynamicResource OnAccentBrush}" VerticalAlignment="Center"/>
+        <TextBlock Text="CTP 期货连接" Foreground="{DynamicResource OnAccentBrush}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+      </StackPanel>
     </Border>
 
     <!-- 表单 -->

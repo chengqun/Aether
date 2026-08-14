@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.RulesView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -25,7 +26,7 @@
                 Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 HorizontalAlignment="Center" Margin="0,40">
           <StackPanel Spacing="8" HorizontalAlignment="Center">
-            <TextBlock Text="⚙️" FontSize="40" HorizontalAlignment="Center" />
+            <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Text="还没有规则 Agent" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
             <TextBlock Text="点击右上角「+ 添加规则」创建确定性规则大脑" FontSize="12"

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.McpView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -27,7 +28,12 @@
                      FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-          <Button Content="↻ 刷新" Classes="ghost" Command="{Binding RefreshCommand}" Padding="12,5" FontSize="12"/>
+          <Button Classes="ghost" Command="{Binding RefreshCommand}" Padding="12,5" FontSize="12">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+              <TextBlock Text="刷新" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
           <Button Content="+ 添加" Classes="primary" Click="OnAddClick" Padding="14,5" FontSize="12"/>
         </StackPanel>
       </Grid>
@@ -69,8 +75,14 @@
                   <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
-                      <TextBlock Text="● 已连接" Foreground="{DynamicResource SuccessBrush}" FontSize="10" IsVisible="{Binding IsConnected}"/>
-                      <TextBlock Text="● 未连接" Foreground="{DynamicResource DangerBrush}" FontSize="10" IsVisible="{Binding !IsConnected}"/>
+                      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" IsVisible="{Binding IsConnected}">
+                        <Path Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="已连接" Foreground="{DynamicResource SuccessBrush}" FontSize="10" VerticalAlignment="Center"/>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" IsVisible="{Binding !IsConnected}">
+                        <Path Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="8" Height="8" Fill="{DynamicResource DangerBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="未连接" Foreground="{DynamicResource DangerBrush}" FontSize="10" VerticalAlignment="Center"/>
+                      </StackPanel>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                       <Button Content="编辑" Classes="ghost" Click="OnEditClick" Tag="{Binding}" Padding="10,3" FontSize="11"/>
@@ -92,7 +104,7 @@
                         <DataTemplate>
                           <Border Classes="tool-row">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                              <TextBlock Text="🔧" FontSize="11"/>
+                              <Path Data="{x:Static shell:Codicons.Tools}" Stretch="Uniform" Width="11" Height="11" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                               <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"/>
                               <TextBlock Text="{Binding Description}" FontSize="11"
                                          Foreground="{DynamicResource TextSecondaryBrush}"

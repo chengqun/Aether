@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wb="using:Acme.Desktop.Workbench"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Workbench.WorkbenchWindow"
         Title="Aether"
         Width="1280" Height="820"
@@ -27,24 +28,35 @@
         <Button DockPanel.Dock="Bottom" Classes="account-chip" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
-              <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
-              <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
-              <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
-              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
+              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="运行 Trace" Click="OnOpenTrace">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Search}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="重置布局" Command="{Binding ResetLayoutCommand}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.ColorMode}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
                 <MenuItem.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="✓" FontWeight="Bold" Width="14"
-                                 Foreground="{DynamicResource AccentBrush}"
-                                 IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
+                      <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                            Fill="{DynamicResource AccentBrush}"
+                            IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
                       <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
                   </DataTemplate>
                 </MenuItem.ItemTemplate>
               </MenuItem>
               <MenuItem Header="━" IsEnabled="False"/>
-              <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
-              <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
+              <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Key}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SignOut}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
           <StackPanel Orientation="Horizontal" Spacing="10">
@@ -115,24 +127,35 @@
         <Button Grid.Row="2" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
-              <MenuItem Header="⚙ 设置" Command="{Binding ShowSettingsCommand}"/>
-              <MenuItem Header="🔍 运行 Trace" Click="OnOpenTrace"/>
-              <MenuItem Header="↺ 重置布局" Command="{Binding ResetLayoutCommand}"/>
-              <MenuItem Header="🎨 主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
+              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="运行 Trace" Click="OnOpenTrace">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Search}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="重置布局" Command="{Binding ResetLayoutCommand}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.ColorMode}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
                 <MenuItem.ItemTemplate>
                   <DataTemplate>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="✓" FontWeight="Bold" Width="14"
-                                 Foreground="{DynamicResource AccentBrush}"
-                                 IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
+                      <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
+                            Fill="{DynamicResource AccentBrush}"
+                            IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
                       <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
                   </DataTemplate>
                 </MenuItem.ItemTemplate>
               </MenuItem>
               <MenuItem Header="━" IsEnabled="False"/>
-              <MenuItem Header="🔑 登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}"/>
-              <MenuItem Header="🚪 退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"/>
+              <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Key}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SignOut}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
           <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
