@@ -223,10 +223,10 @@
           <Grid Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
                 IsVisible="{Binding IsEditorPaneVisible}">
             <edit:TextEditor Name="CodeEditor"
-                             ShowLineNumbers="True" WordWrap="False"
+                             ShowLineNumbers="False" WordWrap="True"
                              FontFamily="Cascadia Code,Consolas,monospace"
                              FontSize="{Binding EditorFontSize}"
-                             Background="Transparent" Margin="4,2"
+                             Background="Transparent" Margin="8,6"
                              IsReadOnly="False"/>
             <Border Name="EmptyState" Background="{DynamicResource CardBgBrush}"
                     IsVisible="True">
