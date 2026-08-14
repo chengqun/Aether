@@ -221,6 +221,14 @@ public partial class AiChatViewModel : NavigableViewModelBase
         _eventBusService?.Subscribe<NewConversationEvent>(OnNewConversation);
         _eventBusService?.Subscribe<AgentPickedEvent>(OnAgentPicked);
         _eventBusService?.Subscribe<ConversationTitleUpdatedEvent>(OnConversationTitleUpdated);
+        _eventBusService?.Subscribe<LlmConfigsChangedEvent>(OnLlmConfigsChanged);
+    }
+
+    /// <summary>LLM 配置在设置 tab 变更后，重载下拉列表（保留当前选择：命中列表则保持，否则回退默认）。</summary>
+    private void OnLlmConfigsChanged(LlmConfigsChangedEvent @event)
+    {
+        // 属性设置（CurrentLlmName）需在 UI 线程；LoadLlmConfigsAsync 内部 Task.Run 读缓存。
+        _uiThreadDispatcher?.Post(async () => await LoadLlmConfigsAsync());
     }
 
     /// <summary>以当前 agent（不在名册则回退首个）在 surface 内开新对话；无可用 agent 时不动作并返回 false。</summary>
