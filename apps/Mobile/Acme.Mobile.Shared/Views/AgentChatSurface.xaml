@@ -29,48 +29,40 @@
             </Border>
         </DataTemplate>
 
-        <!-- 工具调用：紧凑卡片 + 参数详情 -->
-        <DataTemplate x:Key="ToolCallTemplate" x:DataType="model:ChatMessageItem">
+        <!-- 工具步：单卡（call+result 合并）。调用行常显（🔧 + ToolName + 参数）；结果行 IsToolCompleted 后显（✅ + Output）。
+             对齐桌面单卡模型：同一逻辑调用一张卡，result 到达原地回填而非新建。 -->
+        <DataTemplate x:Key="ToolTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
                         StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
                     <VerticalStackLayout Spacing="4">
+                        <!-- 调用行：🔧 + 工具名 + 参数详情 -->
                         <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
                             <Label Text="🔧" FontSize="13" />
                             <Label Text="{Binding ToolName, StringFormat='调用 {0}'}" FontSize="13" FontFamily="OpenSansSemibold"
                                    TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
                         </HorizontalStackLayout>
-                        <Label Text="{Binding ToolDetail}" FontSize="11" FontFamily="OpenSansRegular"
+                        <Label Text="{Binding InputDetail}" FontSize="11" FontFamily="OpenSansRegular"
                                LineBreakMode="CharacterWrap" MaxLines="6"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                               IsVisible="{Binding ToolDetail, Converter={StaticResource StringToBool}}" />
-                    </VerticalStackLayout>
-                </Border>
-            </HorizontalStackLayout>
-        </DataTemplate>
-
-        <!-- 工具结果：紧凑卡片 + 返回详情 -->
-        <DataTemplate x:Key="ToolResultTemplate" x:DataType="model:ChatMessageItem">
-            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
-                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
-                    <VerticalStackLayout Spacing="4">
-                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                               IsVisible="{Binding HasInputDetail}" />
+                        <!-- 结果行：✅ + 输出详情（IsToolCompleted 后才可见） -->
+                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center" IsVisible="{Binding IsToolCompleted}">
                             <Label Text="✅" FontSize="13" />
                             <Label Text="{Binding ToolName, StringFormat='结果 {0}'}" FontSize="13"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                         </HorizontalStackLayout>
-                        <Label Text="{Binding ToolDetail}" FontSize="11" FontFamily="OpenSansRegular"
+                        <Label Text="{Binding OutputDetail}" FontSize="11" FontFamily="OpenSansRegular"
                                LineBreakMode="CharacterWrap" MaxLines="8"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                               IsVisible="{Binding ToolDetail, Converter={StaticResource StringToBool}}" />
+                               IsVisible="{Binding HasOutputDetail}" />
                     </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 思考：斜体灰色 -->
-        <DataTemplate x:Key="ThinkingTemplate" x:DataType="model:ChatMessageItem">
+        <!-- 思考段：ItemType=text + IsReasoning（TextReasoningContent），斜体灰色 💭 -->
+        <DataTemplate x:Key="ReasoningTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
                         StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
@@ -80,12 +72,24 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
+        <!-- 审批卡：ItemType=approval，runtime-only 不持久化。Content 带状态图标+工具名（⏳等待/✅批准/❌拒绝）。
+             修病灶 4：审批卡此前无模板落到 default 不渲染，现独立模板可见。 -->
+        <DataTemplate x:Key="ApprovalTemplate" x:DataType="model:ChatMessageItem">
+            <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
+                    <Label Text="{Binding Content}" FontSize="13" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
         <views:ChatMessageTemplateSelector x:Key="ChatMessageSelector"
             UserTextTemplate="{StaticResource UserTextTemplate}"
             AssistantTextTemplate="{StaticResource AssistantTextTemplate}"
-            ToolCallTemplate="{StaticResource ToolCallTemplate}"
-            ToolResultTemplate="{StaticResource ToolResultTemplate}"
-            ThinkingTemplate="{StaticResource ThinkingTemplate}" />
+            ToolTemplate="{StaticResource ToolTemplate}"
+            ReasoningTemplate="{StaticResource ReasoningTemplate}"
+            ApprovalTemplate="{StaticResource ApprovalTemplate}" />
     </ContentView.Resources>
 
     <Grid RowDefinitions="*,Auto">

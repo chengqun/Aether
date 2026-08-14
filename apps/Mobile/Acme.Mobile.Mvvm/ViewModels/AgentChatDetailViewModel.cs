@@ -444,8 +444,9 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     }
 
     /// <summary>
-    /// 将一个 <see cref="AgentRun"/> + 其 <see cref="AgentEvent"/> 映射为 ChatMessageItem（用于恢复历史消息）。
-    /// 与实时流式保持一致：用户气泡 → 思考段→思考卡、工具 ToolCall→tool_call 卡 + ToolResult→tool_result 卡、TextChunk→文本气泡。
+    /// 将一个 <see cref="AgentRun"/> + 其 <see cref="AgentEvent"/> 映射为扁平 <see cref="ChatMessageItem"/> 序列（恢复历史消息）。
+    /// 镜像桌面 <c>BuildTurnsFromRuns</c>：用户气泡 → 思考段(text+IsReasoning) → 工具步(单卡，ToolCall+ToolResult 按 CallId 合并、
+    /// 恢复 CallId) → 文本答案段。plan/approval/error/usage 不渲染。CallId 在此恢复，使续聊 dedup 与持久化配对正常工作。
     /// </summary>
     private IEnumerable<ChatMessageItem> ExpandRun(AgentRun run, IReadOnlyList<AgentEvent>? events)
     {
@@ -463,6 +464,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
         if (events == null) yield break;
 
+        // CallId → 工具卡，result 到来时回填 Output + IsToolCompleted（合并、恢复 CallId）。
+        var toolCardsByCallId = new Dictionary<string, ChatMessageItem>();
         foreach (var e in events.OrderBy(x => x.Seq))
         {
             switch (e.EventType)
@@ -488,9 +491,11 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                         yield return new ChatMessageItem
                         {
                             Id = Guid.NewGuid().ToString(),
-                            ItemType = "thinking",
+                            ItemType = "text",
                             Role = "assistant",
                             Content = rtext,
+                            IsReasoning = true,
+                            IsReasoningContent = true,
                             AuthorName = agentName,
                             Timestamp = e.CreatedAt.LocalDateTime
                         };
@@ -498,33 +503,50 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
                 case AgentEventType.ToolCall:
                     var tc = AgentEventPayload.Deserialize<AgentEventPayload.ToolCall>(e.Payload);
-                    yield return new ChatMessageItem
+                    var card = new ChatMessageItem
                     {
                         Id = Guid.NewGuid().ToString(),
-                        ItemType = "tool_call",
+                        ItemType = "tool",
                         Role = "assistant",
                         ToolName = tc?.Name ?? "tool",
+                        CallId = tc?.CallId,
                         Input = tc?.Input,
+                        IsToolCompleted = false,
                         AuthorName = agentName,
                         Timestamp = e.CreatedAt.LocalDateTime
                     };
+                    if (!string.IsNullOrEmpty(card.CallId)) toolCardsByCallId[card.CallId!] = card;
+                    yield return card;
                     break;
 
                 case AgentEventType.ToolResult:
                     var tr = AgentEventPayload.Deserialize<AgentEventPayload.ToolResult>(e.Payload);
-                    yield return new ChatMessageItem
+                    var cid = tr?.CallId;
+                    if (!string.IsNullOrEmpty(cid) && toolCardsByCallId.TryGetValue(cid!, out var existing))
                     {
-                        Id = Guid.NewGuid().ToString(),
-                        ItemType = "tool_result",
-                        Role = "assistant",
-                        ToolName = tr?.Name ?? "tool",
-                        Output = tr?.Output,
-                        AuthorName = agentName,
-                        Timestamp = e.CreatedAt.LocalDateTime
-                    };
+                        // 合并到前置 call 卡（恢复 CallId）——与实时单卡模型一致。
+                        existing.Output = tr?.Output;
+                        existing.IsToolCompleted = true;
+                    }
+                    else
+                    {
+                        // 无前置 call（不应发生）——单独 completed 工具卡。
+                        yield return new ChatMessageItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            ItemType = "tool",
+                            Role = "assistant",
+                            ToolName = tr?.Name ?? "tool",
+                            CallId = cid,
+                            Output = tr?.Output,
+                            IsToolCompleted = true,
+                            AuthorName = agentName,
+                            Timestamp = e.CreatedAt.LocalDateTime
+                        };
+                    }
                     break;
 
-                // plan/approval/error/usage：手机端不渲染，跳过。
+                // plan/approval/error/usage：手机端不渲染，跳过（与桌面一致）。
                 case AgentEventType.PlanUpdated:
                 case AgentEventType.ApprovalRequested:
                 case AgentEventType.ApprovalDecision:
@@ -553,70 +575,169 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         await StreamResponseAsync(query);
     }
 
-    // —— 流式回复的 UI 状态（必须在 UI 线程访问）——
-    private ChatMessageItem? _currentTextItem;
-    private ChatMessageItem? _currentThinkingItem;
+    // —— 分段流式光标（镜像桌面 StreamCursor）：指向"当前正在追加 token 的消息项"；PendingTools 按 CallId 配对调用与结果。
+    //    扁平 Messages 下 cursor.Current 指向 Messages 中的项；插入/移除须经 _uiThreadDispatcher 在 UI 线程。 ——
+    private StreamCursor? _streamCursor;
 
     // —— Token 批量刷新（避免逐 token Post 到 UI 线程导致假死，镜像桌面 50ms 批量 flush）——
     private readonly StringBuilder _pendingTokens = new();
     private readonly StringBuilder _pendingReasoning = new();
     private Timer? _flushTimer;
 
+    /// <summary>流式分段光标：指向当前正在追加 token 的消息项；PendingTools 按 CallId 配对调用与结果。</summary>
+    private sealed class StreamCursor
+    {
+        public ChatMessageItem Current;
+        public readonly Dictionary<string, ChatMessageItem> PendingTools = new();
+        public StreamCursor(ChatMessageItem initial) => Current = initial;
+    }
+
     private void EnsureFlushTimer()
     {
         _flushTimer ??= new Timer(_ => _uiThreadDispatcher?.Post(() =>
         {
-            // 直接读 _streamVersion（而非闭包捕获），确保会话切换后新会话的 flush 不被旧版本号拦截
+            var cursor = _streamCursor;
+            if (cursor is null) return;
             if (_pendingTokens.Length > 0)
             {
-                EnsureTextItem();
-                _currentTextItem!.Content += _pendingTokens.ToString();
-                _currentTextItem.MarkdownContent = _currentTextItem.Content;
+                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: false);
+                cursor.Current.Content += _pendingTokens.ToString();
+                cursor.Current.MarkdownContent = cursor.Current.Content;
                 _pendingTokens.Clear();
                 StreamingContentUpdated?.Invoke();
             }
             if (_pendingReasoning.Length > 0)
             {
-                EnsureThinkingItem();
-                _currentThinkingItem!.Content += _pendingReasoning.ToString();
+                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: true);
+                cursor.Current.Content += _pendingReasoning.ToString();
                 _pendingReasoning.Clear();
             }
         }), null, Timeout.Infinite, Timeout.Infinite);
     }
 
-    private void EnsureTextItem()
+    /// <summary>新建一个文本段（答案/思考），Role=assistant、IsStreaming=true。isReasoningContent 区分 TextReasoningContent（思考）与 TextContent（答案）。</summary>
+    private static ChatMessageItem NewTextSegment(string senderName, bool isReasoningContent) => new()
     {
-        if (_currentTextItem != null) return;
-        _currentTextItem = new ChatMessageItem
+        Id = Guid.NewGuid().ToString(),
+        ItemType = "text",
+        Role = "assistant",
+        Content = string.Empty,
+        IsStreaming = true,
+        AuthorName = senderName,
+        Timestamp = DateTime.Now,
+        // 只有 TextReasoningContent（真·思考）才 IsReasoning=true；TextContent（可见叙述/答案）IsReasoning=false。
+        IsReasoning = isReasoningContent,
+        IsReasoningContent = isReasoningContent,
+    };
+
+    /// <summary>确保当前段是目标类型（TextContent 答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。须在 UI 线程调用。</summary>
+    private void EnsureTextSegment(StreamCursor cursor, IList<ChatMessageItem> items, string senderName, bool isReasoningContent)
+    {
+        if (cursor.Current.IsText && cursor.Current.IsReasoningContent == isReasoningContent) return;
+        var idx = items.IndexOf(cursor.Current);
+        if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
         {
-            Id = Guid.NewGuid().ToString(),
-            ItemType = "text",
-            Role = "assistant",
-            Content = string.Empty,
-            IsStreaming = true,
-            AuthorName = AgentName,
-            Timestamp = DateTime.Now
-        };
-        Messages.Add(_currentTextItem);
+            items.RemoveAt(idx); // 空段不留
+        }
+        else
+        {
+            if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空异类段
+            idx++;
+        }
+        var seg = NewTextSegment(senderName, isReasoningContent);
+        items.Insert(idx, seg);
+        cursor.Current = seg;
     }
 
-    private void EnsureThinkingItem()
+    /// <summary>工具事件处理（单卡原地 mutate，镜像桌面 HandleToolEventSegmented）：Call 冻结当前段并插一条工具步（带 CallId）；
+    /// Result 按 CallId 回填到同一条，再开新答案段。审批恢复轮重发同 CallId 的 Call → 移除旧 orphan 卡再建。</summary>
+    private void HandleToolEventSegmented(StreamCursor cursor, IList<ChatMessageItem> items, ToolStreamEvent ev, string senderName)
     {
-        if (_currentThinkingItem != null) return;
-        _currentThinkingItem = new ChatMessageItem
+        if (ev.Kind == ToolStreamEventKind.Call)
         {
-            Id = $"thinking_{Guid.NewGuid()}",
-            ItemType = "thinking",
-            Role = "assistant",
-            AuthorName = AgentName,
-            Timestamp = DateTime.Now
-        };
-        Messages.Add(_currentThinkingItem);
+            // 审批恢复轮 MAF 会重新发出已批准工具的 Call（同 CallId）。第一轮已建过同 CallId 的工具卡
+            // （在审批卡之前），若不处理会留 orphan 卡 + 恢复轮再建一张 → 同一逻辑调用两张卡、显示错乱。
+            // 移除旧 orphan，在当前位置（审批卡之后）新建一张，保证后续 Result 落在审批卡之后、时序正确。
+            if (!string.IsNullOrEmpty(ev.CallId) && cursor.PendingTools.TryGetValue(ev.CallId, out var stale))
+            {
+                cursor.PendingTools.Remove(ev.CallId);
+                items.Remove(stale);
+            }
+            var idx = items.IndexOf(cursor.Current);
+            if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
+            {
+                items.RemoveAt(idx); // 空段不留
+            }
+            else
+            {
+                if (cursor.Current.IsText) cursor.Current.IsStreaming = false; // 冻结非空段
+                idx++;
+            }
+            var tool = new ChatMessageItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                ItemType = "tool",
+                Role = "assistant",
+                AuthorName = senderName,
+                ToolName = ev.Name,
+                CallId = ev.CallId,
+                Input = ev.Input,
+                Timestamp = DateTime.Now,
+            };
+            items.Insert(idx, tool);
+            cursor.Current = tool;
+            if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
+        }
+        else // Result：回填到对应工具步（合并为一条），再开新答案段
+        {
+            ChatMessageItem? tool = null;
+            if (!string.IsNullOrEmpty(ev.CallId) && cursor.PendingTools.TryGetValue(ev.CallId, out var t))
+            {
+                tool = t;
+                cursor.PendingTools.Remove(ev.CallId);
+            }
+            else if (cursor.Current.IsToolStep)
+            {
+                tool = cursor.Current; // 退路：顺序配对
+            }
+            if (tool is null) return;
+
+            tool.Output = ev.Output;
+            tool.IsToolCompleted = true;
+
+            var idx = items.IndexOf(tool);
+            if (idx < 0) idx = items.Count - 1;
+            var next = NewTextSegment(senderName, isReasoningContent: false);
+            items.Insert(idx + 1, next);
+            cursor.Current = next;
+        }
+    }
+
+    /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
+    /// TextReasoningContent 末段保持思考卡。须在 UI 线程调用。</summary>
+    private void FinalizeSegment(ChatMessageItem last, IList<ChatMessageItem> items)
+    {
+        if (!last.IsText) return;
+        if (string.IsNullOrWhiteSpace(last.Content))
+        {
+            items.Remove(last);
+        }
+        else
+        {
+            last.IsStreaming = false;
+            if (!last.IsReasoningContent)
+            {
+                last.IsReasoning = false; // 末段 TextContent = 最终回答
+                last.MarkdownContent = last.Content; // 终态 markdown 对齐，避免流式末帧与最终气泡不一致
+            }
+        }
     }
 
     /// <summary>
     /// 流式回复核心逻辑（用户消息已添加后调用）。
-    /// 镜像桌面 MainViewModelBase：lazy-create conversation → RunStreamingAsync(callbacks) → persist。
+    /// 镜像桌面 <c>RunSegmentedStreamAsync</c> 的分段模型：lazy-create conversation → RunStreamingAsync(分段回调) → persist。
+    /// 分段交错：推理进思考段、答案进 markdown 气泡、工具单卡(call+result 合并)、审批卡 runtime-only。
+    /// 协作式审批：stream 发 ToolApprovalRequestContent 后本轮结束 → 弹框拿 ToolApprovalDecision → 以 approvalResponse 重入同一会话恢复。
     /// </summary>
     private async Task StreamResponseAsync(string content)
     {
@@ -641,7 +762,11 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             IsLoading = true;
             ErrorMessage = null;
 
-            // 本地显示用户消息（右侧气泡）
+            // 清空上一轮残留的 token 缓冲（会话切换/重发时旧缓冲不应流入新段）。
+            _pendingTokens.Clear();
+            _pendingReasoning.Clear();
+
+            // 本地显示用户消息（右侧气泡）+ 开首个答案段（cursor 指向它）
             _uiThreadDispatcher?.Post(() =>
             {
                 Messages.Add(new ChatMessageItem
@@ -652,8 +777,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     Content = content,
                     Timestamp = DateTime.Now
                 });
-                _currentTextItem = null;
-                _currentThinkingItem = null;
+                _streamCursor = new StreamCursor(NewTextSegment(AgentName, isReasoningContent: false));
+                Messages.Add(_streamCursor.Current);
             });
 
             // 启动后台保活（Android 前台服务 + WakeLock，iOS BeginBackgroundTask）
@@ -689,12 +814,12 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     IsStockMode ? $"stock:{StockId}:{StockName}" : null);
             }
 
-            // 准备批量刷新定时器
+            // 准备批量刷新定时器 + 答案全文（标题生成用）
             EnsureFlushTimer();
             var fullText = new StringBuilder();
+            var firstTokenReceived = false;
 
             // 构建 StreamHandlers（回调在后台线程执行，UI 更新经 _uiThreadDispatcher.Post 调度）
-            var firstTokenReceived = false;
             var handlers = new StreamHandlers(
                 OnToken: (token, _) =>
                 {
@@ -702,7 +827,6 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     fullText.Append(token);
                     _pendingTokens.Append(token);
                     _flushTimer?.Change(50, Timeout.Infinite);
-
                     if (!firstTokenReceived)
                     {
                         firstTokenReceived = true;
@@ -720,11 +844,15 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 OnToolEvent: (ev, _) =>
                 {
                     if (_streamVersion != version) return Task.CompletedTask;
-                    // todos_* 调用由 OnTodoList 处理，不重复出工具卡
+                    // todos_* 调用由 OnTodoList 处理（手机端暂不渲染计划），不重复出工具卡。
                     if (ev.Name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
                         return Task.CompletedTask;
                     var capturedEv = ev;
-                    _uiThreadDispatcher?.Post(() => ProcessToolEvent(capturedEv));
+                    _uiThreadDispatcher?.Post(() =>
+                    {
+                        if (_streamCursor is null) return;
+                        HandleToolEventSegmented(_streamCursor, Messages, capturedEv, AgentName);
+                    });
                     return Task.CompletedTask;
                 },
                 OnApprovalRequest: (req, _) =>
@@ -734,33 +862,38 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     // 协作式审批：stream 发出 ToolApprovalRequestContent 后本轮结束，host 弹框拿决定，
                     // 以 approvalResponse 重入同一会话恢复流（镜像桌面 RunSegmentedStreamAsync）。
                     _pendingApproval = req;
+                    var capturedReq = req;
                     _uiThreadDispatcher?.Post(() =>
                     {
-                        // 终结当前文本段 + 清残留 thinking（与工具卡前清理一致）
-                        if (_currentTextItem != null)
+                        var cursor = _streamCursor;
+                        if (cursor is null) return;
+                        // 收尾当前段（冻结），插审批卡（runtime-only，不持久化）。
+                        var idx = Messages.IndexOf(cursor.Current);
+                        if (idx < 0) idx = Messages.Count - 1;
+                        else if (cursor.Current.IsText && string.IsNullOrWhiteSpace(cursor.Current.Content))
                         {
-                            _currentTextItem.MarkdownContent = _currentTextItem.Content;
-                            _currentTextItem.IsStreaming = false;
-                            _currentTextItem = null;
+                            Messages.RemoveAt(idx); // 空段不留
                         }
-                        if (_currentThinkingItem != null)
+                        else
                         {
-                            Messages.Remove(_currentThinkingItem);
-                            _currentThinkingItem = null;
+                            if (cursor.Current.IsText) cursor.Current.IsStreaming = false;
+                            idx++;
                         }
-                        _pendingReasoning.Clear();
-                        Messages.Add(new ChatMessageItem
+                        var card = new ChatMessageItem
                         {
                             Id = Guid.NewGuid().ToString(),
                             ItemType = "approval",
                             Role = "assistant",
-                            ToolName = req.ToolName,
-                            CallId = req.CallId,
+                            ToolName = capturedReq.ToolName,
+                            CallId = capturedReq.CallId,
+                            Input = capturedReq.Input,
                             ApprovalState = 0, // 等待
-                            Content = $"⏳ 工具「{req.ToolName}」等待审批",
+                            Content = $"⏳ 工具「{capturedReq.ToolName}」等待审批",
                             AuthorName = AgentName,
                             Timestamp = DateTime.Now
-                        });
+                        };
+                        Messages.Insert(idx, card);
+                        cursor.Current = card;
                     });
                     return Task.CompletedTask;
                 },
@@ -770,8 +903,9 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     if (_streamVersion != version) return Task.CompletedTask;
                     _uiThreadDispatcher?.Post(() =>
                     {
-                        EnsureTextItem();
-                        _currentTextItem!.Content += $"\n\n[错误：{text}]";
+                        if (_streamCursor is null) return;
+                        EnsureTextSegment(_streamCursor, Messages, AgentName, isReasoningContent: false);
+                        _streamCursor.Current.Content += $"\n\n[错误：{text}]";
                     });
                     return Task.CompletedTask;
                 },
@@ -803,11 +937,13 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                     // 弹审批框（ShowApprovalAsync 内部 marshal 到 UI 线程）；用户取消/Dismiss 返回 null
                     var decision = await _approvalDialog.ShowApprovalAsync(req).ConfigureAwait(false);
                     var state = decision is null ? 2 : (decision.Approved ? 1 : 2);
+                    var approved = decision is not null && decision.Approved;
                     _uiThreadDispatcher?.Post(() =>
                     {
+                        // 更新审批卡状态（按 CallId 定位）
                         for (int i = 0; i < Messages.Count; i++)
                         {
-                            if (Messages[i].ItemType == "approval" && Messages[i].CallId == req.CallId)
+                            if (Messages[i].IsApprovalCard && req.CallId == Messages[i].CallId)
                             {
                                 Messages[i].ApprovalState = state;
                                 Messages[i].Content = state == 1
@@ -815,6 +951,16 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                                     : $"❌ 工具「{req.ToolName}」已拒绝";
                                 break;
                             }
+                        }
+                        // 开新答案段承接恢复流（镜像桌面 289-294）
+                        if (decision is not null && _streamCursor is not null)
+                        {
+                            var seg = NewTextSegment(AgentName, isReasoningContent: false);
+                            var idx = Messages.IndexOf(_streamCursor.Current);
+                            if (idx < 0) idx = Messages.Count - 1;
+                            else idx++;
+                            Messages.Insert(idx, seg);
+                            _streamCursor.Current = seg;
                         }
                     });
                     if (decision is null) break; // 取消 → 终止本轮（不恢复）
@@ -824,9 +970,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
 
             if (_streamVersion != version) return;
 
-            // 刷新剩余未 flush 的 token 到 UI（此处已在 UI 线程，直接调 FinalizeStreaming，
-            // 确保最终文本段已落地 Messages，随后持久化读取的 transcript 完整）
-            _flushTimer?.Change(0, Timeout.Infinite);
+            // 停止定时器 + drain 残留 token 到段 + finalize 末段（此处已在 UI 线程，直接操作 Messages）。
+            _flushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             FinalizeStreaming();
 
             // 持久化本轮 transcript（思考 / 工具 / 文本，与实时流式一致）
@@ -869,132 +1014,29 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         }
     }
 
-    /// <summary>
-    /// 处理工具事件（Call/Result），在 UI 线程调用。
-    /// </summary>
-    private void ProcessToolEvent(ToolStreamEvent ev)
-    {
-        // 注意：此方法必须在 UI 线程调用（由 StreamHandlers 回调经 _uiThreadDispatcher.Post 调度）
-        if (ev.Kind == ToolStreamEventKind.Call)
-        {
-            // 审批恢复轮 MAF 会重新发出已批准工具的 Call（同 CallId）。第一轮（审批前）已建过同 CallId 的
-            // tool_call 卡（审批卡之前、无结果），若不处理会留 orphan + 恢复轮再建一张 → 两张卡、显示错乱。
-            // 移除旧 orphan，在当前位置（审批卡之后）重建，保证 Result 落在 Call 之后、时序正确（镜像桌面）。
-            if (!string.IsNullOrEmpty(ev.CallId))
-            {
-                for (int i = Messages.Count - 1; i >= 0; i--)
-                {
-                    if (Messages[i].ItemType == "tool_call" && ev.CallId.Equals(Messages[i].CallId, StringComparison.Ordinal))
-                    {
-                        Messages.RemoveAt(i);
-                        break;
-                    }
-                }
-            }
-            // 工具调用：终结当前文本段，添加 tool_call 卡片 + thinking 占位
-            if (_currentTextItem != null)
-            {
-                _currentTextItem.MarkdownContent = _currentTextItem.Content;
-                _currentTextItem.IsStreaming = false;
-                _currentTextItem = null;
-            }
-            // 清掉残留的 thinking（来自 OnReasoning）
-            if (_currentThinkingItem != null)
-            {
-                Messages.Remove(_currentThinkingItem);
-                _currentThinkingItem = null;
-            }
-            // 清掉待 flush 的 reasoning
-            _pendingReasoning.Clear();
-
-            Messages.Add(new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "tool_call",
-                Role = "assistant",
-                ToolName = ev.Name,
-                CallId = ev.CallId,
-                Input = ev.Input,
-                AuthorName = AgentName,
-                Timestamp = DateTime.Now
-            });
-            _currentThinkingItem = new ChatMessageItem
-            {
-                Id = $"thinking_{ev.Name}",
-                ItemType = "thinking",
-                Role = "assistant",
-                AuthorName = AgentName,
-                Timestamp = DateTime.Now
-            };
-            Messages.Add(_currentThinkingItem);
-        }
-        else // Result
-        {
-            // 防御性去重：同 CallId 的 tool_result 已存在则跳过（恢复轮理论上只发一次）。
-            if (!string.IsNullOrEmpty(ev.CallId))
-            {
-                for (int i = 0; i < Messages.Count; i++)
-                {
-                    if (Messages[i].ItemType == "tool_result" && ev.CallId.Equals(Messages[i].CallId, StringComparison.Ordinal))
-                        return;
-                }
-            }
-            // 工具结果：移除 thinking 占位，终结当前文本段，添加 tool_result 卡片
-            if (_currentThinkingItem != null)
-            {
-                Messages.Remove(_currentThinkingItem);
-                _currentThinkingItem = null;
-            }
-            if (_currentTextItem != null)
-            {
-                _currentTextItem.MarkdownContent = _currentTextItem.Content;
-                _currentTextItem.IsStreaming = false;
-                _currentTextItem = null;
-            }
-
-            Messages.Add(new ChatMessageItem
-            {
-                Id = Guid.NewGuid().ToString(),
-                ItemType = "tool_result",
-                Role = "assistant",
-                ToolName = ev.Name,
-                CallId = ev.CallId,
-                Output = ev.Output,
-                AuthorName = AgentName,
-                Timestamp = DateTime.Now
-            });
-        }
-    }
-
+    /// <summary>运行结束收尾：drain 残留 token/reasoning 到当前段，finalize 末段，清空 cursor。须在 UI 线程调用。</summary>
     private void FinalizeStreaming()
     {
-        // 注意：此方法必须在 UI 线程调用
-        // 先 flush 残留 token
+        var cursor = _streamCursor;
+        if (cursor is null) return;
+
         if (_pendingTokens.Length > 0)
         {
-            EnsureTextItem();
-            _currentTextItem!.Content += _pendingTokens.ToString();
-            _currentTextItem.MarkdownContent = _currentTextItem.Content;
+            EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: false);
+            cursor.Current.Content += _pendingTokens.ToString();
+            cursor.Current.MarkdownContent = cursor.Current.Content;
             _pendingTokens.Clear();
             StreamingContentUpdated?.Invoke();
         }
-
-        if (_currentThinkingItem != null)
+        if (_pendingReasoning.Length > 0)
         {
-            // 有内容的 reasoning 保留为可折叠思考泡；空的移除
-            if (string.IsNullOrEmpty(_currentThinkingItem.Content))
-            {
-                Messages.Remove(_currentThinkingItem);
-            }
-            _currentThinkingItem = null;
+            EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: true);
+            cursor.Current.Content += _pendingReasoning.ToString();
+            _pendingReasoning.Clear();
         }
 
-        if (_currentTextItem != null)
-        {
-            _currentTextItem.MarkdownContent = _currentTextItem.Content;
-            _currentTextItem.IsStreaming = false;
-            _currentTextItem = null;
-        }
+        FinalizeSegment(cursor.Current, Messages);
+        _streamCursor = null;
     }
 
     /// <summary>
@@ -1017,7 +1059,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             var seq = runs.Count == 0 ? 1 : runs.Max(r => r.Seq) + 1;
 
             var turnItems = CollectCurrentTurnAssistantItems();
-            var hasAnswer = turnItems.Any(i => i.ItemType == "text" && !string.IsNullOrWhiteSpace(i.Content));
+            var hasAnswer = turnItems.Any(i => i.IsText && !i.IsReasoning && !string.IsNullOrWhiteSpace(i.Content));
             var now = DateTimeOffset.UtcNow;
             var run = new AgentRun
             {
@@ -1031,44 +1073,33 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 FinishedAt = now,
             };
 
+            // 事件映射对齐桌面 PersistRunAsync：用户消息已在 run.UserMessage；审批卡 runtime-only 不持久化；
+            // 跳过空思考段；工具单卡双事件（ToolCall + IsToolCompleted 时追加 ToolResult，CallId 写入即配对）。
             var events = new List<AgentEvent>();
             var eventSeq = 1;
-            int toolCounter = 0;
-            string? pendingCallId = null;
-            string? pendingToolName = null;
+            int toolCounter = 0; // 兜底：异常空 CallId 时合成，正常路径卡上已有真实 CallId
             foreach (var item in turnItems)
             {
-                switch (item.ItemType)
+                // 用户消息已在 run.UserMessage；审批卡运行期态不持久化；跳过空思考段。
+                if (item.IsUser || item.IsApprovalCard) continue;
+                if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue;
+
+                if (item.IsToolStep)
                 {
-                    case "approval":
-                        continue; // 审批卡 runtime-only，不持久化
-                    case "thinking":
-                        if (!string.IsNullOrEmpty(item.Content))
-                            events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ReasoningChunk,
-                                new AgentEventPayload.ReasoningChunk(item.Content)));
-                        break;
-                    case "tool_call":
-                        pendingCallId = !string.IsNullOrEmpty(item.CallId) ? item.CallId : $"toolu_mobile_{++toolCounter}";
-                        pendingToolName = item.ToolName ?? "tool";
-                        events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolCall,
-                            new AgentEventPayload.ToolCall(pendingCallId, pendingToolName, item.Input)));
-                        break;
-                    case "tool_result":
-                        // 优先用真实 CallId；空则与前置未配对 tool_call 共享 pendingCallId；再无则自合成。
-                        var callId = !string.IsNullOrEmpty(item.CallId)
-                            ? item.CallId
-                            : pendingCallId ?? $"toolu_mobile_{++toolCounter}";
+                    var callId = !string.IsNullOrEmpty(item.CallId) ? item.CallId! : $"toolu_mobile_{++toolCounter}";
+                    events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolCall,
+                        new AgentEventPayload.ToolCall(callId, item.ToolName ?? "tool", item.Input)));
+                    // 未完成的工具步（中断）只存 call，无 result——重建时为孤儿 call，LLM 历史重建时丢弃。
+                    if (item.IsToolCompleted)
                         events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ToolResult,
-                            new AgentEventPayload.ToolResult(callId, item.ToolName ?? pendingToolName ?? "tool", item.Output)));
-                        pendingCallId = null;
-                        pendingToolName = null;
-                        break;
-                    default: // text（旁白 / 最终回答）
-                        if (!string.IsNullOrWhiteSpace(item.Content))
-                            events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.TextChunk,
-                                new AgentEventPayload.TextChunk(item.Content)));
-                        break;
+                            new AgentEventPayload.ToolResult(callId, item.ToolName ?? "tool", item.Output)));
                 }
+                else if (item.IsReasoning)
+                    events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.ReasoningChunk,
+                        new AgentEventPayload.ReasoningChunk(item.Content ?? string.Empty)));
+                else
+                    events.Add(MakeEvent(run.Id, ref eventSeq, AgentEventType.TextChunk,
+                        new AgentEventPayload.TextChunk(item.Content ?? string.Empty)));
             }
 
             await _conversationStore.AppendRunAsync(run, events, ct);
