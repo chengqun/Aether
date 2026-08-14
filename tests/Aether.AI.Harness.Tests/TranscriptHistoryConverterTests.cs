@@ -322,3 +322,88 @@ public class TranscriptHistorySanitizeTests
         Assert.Equal(once.Count, twice.Count);
     }
 }
+
+/// <summary>
+/// <see cref="TranscriptHistoryConverter.SanitizeProviderHistory"/> 专用测试——活路径
+/// <c>RestoringChatHistoryProvider.ProvideChatHistoryAsync</c> 用它净化历史。
+/// 核心回归守卫：活路径 FICC 循环里，最近一轮的 tool_call 在 Provide 时尚无 result
+/// （result 下一轮 Store 才落地），<see cref="TranscriptHistoryConverter.Sanitize"/>/
+/// <see cref="TranscriptHistoryConverter.SanitizeLive"/> 会把它当孤儿丢弃 → 下一轮请求变
+/// 「有 result 无 call」→ GLM 重调同一工具（每个工具执行两遍）。SanitizeProviderHistory 必须保留它。
+/// </summary>
+public class TranscriptHistoryProviderSanitizeTests
+{
+    [Fact]
+    public void InProgress_tool_call_without_result_is_preserved()
+    {
+        // 活路径：assistant 刚发了 tool_call，result 尚未落地（FICC 即将执行/已执行但下一轮才 Store）。
+        var assistant = new ChatMessage { Role = ChatRole.Assistant };
+        assistant.Contents.Add(new TextContent("我来查询"));
+        assistant.Contents.Add(new FunctionCallContent("call-1", "QuerySecurity",
+            new Dictionary<string, object?> { ["keyword"] = "大全能源" }));
+        var history = new List<ChatMessage> { new(ChatRole.User, "查大全能源"), assistant };
+
+        var result = TranscriptHistoryConverter.SanitizeProviderHistory(history);
+
+        // tool_call 必须保留——否则下一轮请求变孤儿 result → 模型重调工具（重复执行）。
+        var call = result.SelectMany(m => m.Contents.OfType<FunctionCallContent>()).Single();
+        Assert.Equal("call-1", call.CallId);
+        Assert.Equal("QuerySecurity", call.Name);
+    }
+
+    [Fact]
+    public void Sanitize_drops_in_progress_call_but_provider_sanitize_keeps_it()
+    {
+        // 对照：Sanitize / SanitizeLive 把「无 result 的 call」当孤儿丢弃（工具重复执行的根因）；
+        // SanitizeProviderHistory 保留。这是本 bug 的核心回归守卫。
+        var msg = new ChatMessage { Role = ChatRole.Assistant };
+        msg.Contents.Add(new FunctionCallContent("call-1", "QuerySecurity", null));
+
+        Assert.Empty(TranscriptHistoryConverter.Sanitize(new[] { msg })
+            .SelectMany(m => m.Contents.OfType<FunctionCallContent>()));
+        Assert.Empty(TranscriptHistoryConverter.SanitizeLive(new[] { msg })
+            .SelectMany(m => m.Contents.OfType<FunctionCallContent>()));
+        Assert.Single(TranscriptHistoryConverter.SanitizeProviderHistory(new[] { msg })
+            .SelectMany(m => m.Contents.OfType<FunctionCallContent>()));
+    }
+
+    [Fact]
+    public void Orphan_tool_result_without_call_is_still_dropped()
+    {
+        // 孤儿 tool_result（无前置 call）仍是结构非法（OpenAI 兼容端点会 400）→ 丢弃。
+        var msg = new ChatMessage { Role = ChatRole.Tool };
+        msg.Contents.Add(new FunctionResultContent("call-1", "result"));
+
+        var result = TranscriptHistoryConverter.SanitizeProviderHistory(new[] { msg });
+
+        Assert.Empty(result.SelectMany(m => m.Contents.OfType<FunctionResultContent>()));
+    }
+
+    [Fact]
+    public void Paired_call_and_result_pass_through_unchanged()
+    {
+        var call = new ChatMessage { Role = ChatRole.Assistant };
+        call.Contents.Add(new FunctionCallContent("call-1", "Tool", null));
+        var res = new ChatMessage { Role = ChatRole.Tool };
+        res.Contents.Add(new FunctionResultContent("call-1", "r"));
+
+        var result = TranscriptHistoryConverter.SanitizeProviderHistory(new[] { call, res });
+
+        Assert.Single(result.SelectMany(m => m.Contents.OfType<FunctionCallContent>()));
+        Assert.Single(result.SelectMany(m => m.Contents.OfType<FunctionResultContent>()));
+    }
+
+    [Fact]
+    public void Provider_sanitize_is_idempotent()
+    {
+        var assistant = new ChatMessage { Role = ChatRole.Assistant };
+        assistant.Contents.Add(new FunctionCallContent("call-1", "Tool", null));
+        var history = new List<ChatMessage> { new(ChatRole.User, "q"), assistant };
+
+        var once = TranscriptHistoryConverter.SanitizeProviderHistory(history);
+        var twice = TranscriptHistoryConverter.SanitizeProviderHistory(once);
+
+        Assert.Equal(once.Count, twice.Count);
+        Assert.Single(twice.SelectMany(m => m.Contents.OfType<FunctionCallContent>()));
+    }
+}

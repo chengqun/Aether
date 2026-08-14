@@ -105,6 +105,52 @@ public static class TranscriptHistoryConverter
         return list;
     }
 
+    /// <summary>
+    /// <see cref="RestoringChatHistoryProvider.ProvideChatHistoryAsync"/> 专用活路径净化。与
+    /// <see cref="SanitizeLive"/> 的关键区别：<b>不丢弃孤儿 tool_call</b>，只丢弃孤儿 tool_result。
+    /// <para>
+    /// 活路径 FICC 循环里，<see cref="RestoringChatHistoryProvider.StoreChatHistoryAsync"/> 在每轮 LLM
+    /// 调用<em>之后</em>才落地消息——故 <c>ProvideChatHistoryAsync</c> 被调用时，最近一轮的 tool_call
+    /// 必然<em>尚无</em>配对 result（result 要等下一轮 Store 从 FICC 追加的请求消息里落地）。若按
+    /// <see cref="DropOrphanToolContents"/> 把这个「当前进行中」的 call 当孤儿丢弃，下一轮请求就变成
+    /// 「有 tool_result 无前置 tool_call」→ GLM 见不到自己发过的调用 → 重调同一工具（每个工具执行两遍）。
+    /// </para>
+    /// <para>
+    /// 故此处只修真正结构非法的孤儿 tool_result（无前置 call——OpenAI 兼容端点会 400），保留所有
+    /// tool_call：当前轮的 call 由 FICC 随后追加 result 配对，历史轮的 call 本就该有 result（无则属异常，
+    /// 保留比误删更安全——模型见到无 result 的旧 call 顶多重调，而误删当前 call 必致重调）。
+    /// </para>
+    /// </summary>
+    public static List<ChatMessage> SanitizeProviderHistory(IEnumerable<ChatMessage>? messages)
+    {
+        var list = (messages ?? Enumerable.Empty<ChatMessage>()).Select(Clone).ToList();
+        if (list.Count == 0) return list;
+
+        SynthesizeEmptyCallIds(list);
+        DropOrphanToolResults(list);
+        FixEmptyToolResults(list);
+        RemoveEmptyMessages(list);
+        return list;
+    }
+
+    /// <summary>只丢弃孤儿 tool_result（无匹配 call），<b>保留所有 tool_call</b>。
+    /// 与 <see cref="DropOrphanToolContents"/> 的区别：不丢 tool_call——活路径当前轮的 call 尚无 result 是正常的。</summary>
+    private static void DropOrphanToolResults(List<ChatMessage> list)
+    {
+        var callIds = new HashSet<string>();
+        foreach (var msg in list)
+            foreach (var c in msg.Contents)
+                if (c is FunctionCallContent fc) callIds.Add(fc.CallId ?? string.Empty);
+
+        foreach (var msg in list)
+            for (int i = msg.Contents.Count - 1; i >= 0; i--)
+            {
+                if (msg.Contents[i] is FunctionResultContent fr
+                    && (string.IsNullOrEmpty(fr.CallId) || !callIds.Contains(fr.CallId)))
+                    msg.Contents.RemoveAt(i);
+            }
+    }
+
     // 浅拷贝：Sanitize 会就地改 Contents（删/替换 content），不能改到调用方持有的原始消息。
     private static ChatMessage Clone(ChatMessage src)
     {

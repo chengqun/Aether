@@ -57,12 +57,14 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
         // 从内存返回历史
         var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
 
-        // 应用 reducer（SlidingWindow 截断），再净化——内存累积路径可能混入孤儿 tool_use
-        // （审批挂起/出错时模型发了 tool_use 但无 tool_result 落地）或残留尾部 user，Sanitize 兜底防 400。
+        // 应用 reducer（SlidingWindow 截断），再净化。用 SanitizeProviderHistory（非 Sanitize）——
+        // 活路径 FICC 循环里最近一轮的 tool_call 在 Provide 时尚无 result（下一轮 Store 才落地），
+        // Sanitize 会把它当孤儿丢弃 → 下一轮请求变成「有 result 无 call」→ 模型重调工具（重复执行两遍）。
+        // SanitizeProviderHistory 只丢孤儿 tool_result，保留进行中的 tool_call。
         IEnumerable<ChatMessage> history = list;
         if (_reducer is not null)
             history = await _reducer.ReduceAsync(list, cancellationToken).ConfigureAwait(false);
-        return TranscriptHistoryConverter.Sanitize(history);
+        return TranscriptHistoryConverter.SanitizeProviderHistory(history);
     }
 
     /// <summary>

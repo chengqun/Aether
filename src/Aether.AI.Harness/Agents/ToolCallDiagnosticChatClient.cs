@@ -49,8 +49,34 @@ public sealed class ToolCallDiagnosticChatClient : IChatClient
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         var seq = Interlocked.Increment(ref _seq);
+        // 记录「请求」侧：GLM 这一轮到底看到了什么历史——尤其工具调用是否带着配对的结果。
+        // 据此判定重复调用的根因：若 req#2 里 #1 的 call 仍带 ✓(有结果) → GLM 见到结果仍重调（quirk，去重守卫修）；
+        // 若带 ✗(孤儿) → 结果没回喂给模型（历史 bug，修历史而非去重）。
+        LogRequest(seq, messages);
         var stream = _inner.GetStreamingResponseAsync(messages, options, cancellationToken);
         return WithDiag(stream, seq);
+    }
+
+    private static void LogRequest(int seq, IEnumerable<ChatMessage> messages)
+    {
+        var msgs = messages as IList<ChatMessage> ?? messages.ToList();
+        var calls = new List<(string Name, string Id)>();
+        var resultIds = new HashSet<string>();
+        foreach (var m in msgs)
+            foreach (var c in m.Contents)
+            {
+                if (c is FunctionCallContent fc)
+                    calls.Add((fc.Name ?? "?", fc.CallId ?? ""));
+                else if (c is FunctionResultContent fr && !string.IsNullOrEmpty(fr.CallId))
+                    resultIds.Add(fr.CallId);
+            }
+        var orphan = calls.Count(c => !resultIds.Contains(c.Id));
+        var detail = string.Join(",", calls.Select(c =>
+            $"{c.Name}[{(resultIds.Contains(c.Id) ? "ok" : "ORPHAN")}]"));
+        var line = $"[req] #{seq}: {msgs.Count}msgs {calls.Count}calls {resultIds.Count}results {orphan}orphan | {detail}";
+        Console.WriteLine(line);
+        Debug.WriteLine(line);
+        Trace.WriteLine(line);
     }
 
     private async IAsyncEnumerable<ChatResponseUpdate> WithDiag(
