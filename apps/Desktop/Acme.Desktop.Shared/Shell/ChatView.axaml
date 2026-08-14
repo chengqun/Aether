@@ -469,11 +469,16 @@
             </StackPanel>
           </Border>
 
-          <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}" Margin="0,0,16,0">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><VirtualizingStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-          </ItemsControl>
+          <!--
+            非虚拟化是有意为之。Avalonia 中 VSP 仅当 ItemsPresenter 是 ScrollViewer 的直接内容时才激活
+            （ItemsPresenter 实现 ILogicalScrollable，ItemsControl/Border 都不实现）。这里 ScrollViewer
+            的直接内容是 Border（为绕开 12.0.4 ScrollContentPresenter.Measure 不扣 Padding 的 bug），
+            故 VSP 永不生效——曾写过 <VirtualizingStackPanel/> 声明但实为死代码，已移除。
+            真正限流的是分页（ChatWorkspaceViewModel: HistoryInitialBatch=10，上滚 LoadMoreHistory +10），
+            渲染集已被限定在 ~10-50 轮，无需虚拟化。若未来需虚拟化，须改 ListBox 式自持 ScrollViewer
+            并把 TryLoadHistory 偏移补偿迁到逻辑滚动单位（中风险，需重测贴底/历史加载）。
+          -->
+          <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource TurnTemplate}" Margin="0,0,16,0" />
         </Panel>
         </Border>
       </ScrollViewer>
