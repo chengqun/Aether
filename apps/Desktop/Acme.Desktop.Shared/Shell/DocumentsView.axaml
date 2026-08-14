@@ -123,16 +123,18 @@
                   SelectionChanged="OnTreeSelectionChanged">
           <TreeView.ItemTemplate>
             <TreeDataTemplate ItemsSource="{Binding Children}">
-              <Grid ColumnDefinitions="20,*" Background="Transparent">
+              <!-- Auto 列：文件夹图标不显时列宽自动收 0（不占空位），文件有图标时自动撑开。
+                   用 Grid（非 StackPanel）保 * 列 TextTrimming 生效——长文件名以 … 截断不撑宽行。 -->
+              <Grid ColumnDefinitions="Auto,*" Background="Transparent">
                 <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                      Fill="{Binding IconColor}" IsVisible="{Binding IconIsFill}"
+                      Margin="0,0,6,0" Fill="{Binding IconColor}" IsVisible="{Binding ShowFillIcon}"
                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
-                      StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                      Stroke="{Binding IconColor}" IsVisible="{Binding !IconIsFill}"
+                      Margin="0,0,6,0" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                      Stroke="{Binding IconColor}" IsVisible="{Binding ShowStrokeIcon}"
                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="1" Text="{Binding Name}"
-                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
               </Grid>
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
@@ -211,7 +213,7 @@
           <Border Grid.Row="0" Grid.RowSpan="{Binding PreviewRowSpan}"
                   Background="{DynamicResource ContentBgBrush}"
                   IsVisible="{Binding IsPreviewPaneVisible}">
-            <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"/>
+            <ctl:SelectableMarkdownViewer Markdown="{Binding PreviewMarkdown}" Margin="4,2"/>
           </Border>
 
           <!-- 中：上下分隔条（md 双栏时显示） -->

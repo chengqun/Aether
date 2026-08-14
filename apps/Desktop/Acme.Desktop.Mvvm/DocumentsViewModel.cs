@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -70,6 +71,21 @@ public partial class DocumentsViewModel : ObservableObject
     /// <summary>markdown「仅看解析」模式（眼睛切换）：true=仅上栏预览全屏，false=上下双栏（上预览/下源码）。
     /// 仅活动 tab 是 .md 时有意义；镜像 NotesView 的 IsPreviewOnly。</summary>
     [ObservableProperty] private bool _isPreviewOnly;
+
+    // —— markdown 预览防抖 ——
+    // SelectableMarkdownViewer.Markdown 每次变化都同步全量重解析+重建控件树（Markdown.Avalonia，UI 线程，无增量）。
+    // 若预览直绑 ActiveTab.Content，而编辑器 TextChanged 每键写回 tab.Content → 每敲一个字预览重解析一次 → 卡。
+    // 改用 PreviewMarkdown 中转：ActiveTab.Content 变化后延迟 300ms 才把内容推给预览，停顿期间连续编辑只算一次。
+    private string? _previewMarkdown;
+    private DocumentTab? _previewTab;          // 当前订阅 Content 变化的 tab（切换 tab 时换订阅源）
+    private CancellationTokenSource? _previewCts;
+
+    /// <summary>预览实际渲染的 markdown 文本（防抖后跟随 ActiveTab.Content）。View 预览绑此，不直绑 ActiveTab.Content。</summary>
+    public string? PreviewMarkdown
+    {
+        get => _previewMarkdown;
+        private set => SetProperty(ref _previewMarkdown, value);
+    }
 
     // —— markdown 上下分栏布局派生属性（镜像 NotesView 的 EditorRow/EditorRowSpan/SplitterVisible 体系）——
 
@@ -307,6 +323,37 @@ public partial class DocumentsViewModel : ObservableObject
         // 切换标签时重置为双栏（新 md 文件默认上预览/下源码；非 md 则 IsPreviewOnly 无意义）。
         IsPreviewOnly = false;
         RaiseLayout();
+        // 预览防抖：换订阅源到新 tab，并按需排程解析（非 md 不解析，预览不可见省 CPU）。
+        if (_previewTab is not null) _previewTab.PropertyChanged -= OnPreviewTabContentChanged;
+        _previewTab = value;
+        if (value is not null) value.PropertyChanged += OnPreviewTabContentChanged;
+        if (IsMarkdownMode) SchedulePreview(value?.Content);
+        else { _previewCts?.Cancel(); PreviewMarkdown = null; }
+    }
+
+    private void OnPreviewTabContentChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // 仅 md tab 的 Content 编辑才排程预览刷新（非 md 预览不可见，跳过）。
+        if (e.PropertyName == nameof(DocumentTab.Content) && IsMarkdownMode)
+            SchedulePreview(_previewTab?.Content);
+    }
+
+    /// <summary>防抖排程预览解析：取消上次待触发的，300ms 后把最新内容推给 PreviewMarkdown。
+    /// 连续编辑期间不断取消重排，只有停顿 300ms 才真正触发一次 Markdown.Avalonia 解析。</summary>
+    private void SchedulePreview(string? markdown)
+    {
+        _previewCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+        _ = SchedulePreviewAsync(markdown, cts.Token);
+    }
+
+    private async Task SchedulePreviewAsync(string? markdown, CancellationToken ct)
+    {
+        try { await Task.Delay(300, ct); }
+        catch (TaskCanceledException) { return; }
+        // Task.Delay 的 continuation 回 UI 线程 SynchronizationContext，直接设值触发绑定更新。
+        PreviewMarkdown = markdown;
     }
 
     partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
