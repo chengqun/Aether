@@ -4,14 +4,23 @@ using System.Text.RegularExpressions;
 namespace Acme.Mobile.Shared.Converters;
 
 /// <summary>
-/// 预处理 Markdown 文本：把 pipe 表格中的空单元格填入不间断空格（ ）。
-/// 修 Indiko.Maui.Controls.Markdown 的 RenderTable 跳过空单元格（continue）→ 该格位置露出
-/// Grid 硬编码的 Colors.Gray 背景（显示为灰色色块）的 bug：填入内容后渲染器会为之创建带
-/// 行/表头背景色的 Label，与有数据的单元格一致。仅处理「以 | 开头并以 | 结尾、且非分隔行」
-/// 的行；非表格内容不动。对已在流式中的部分表格同样安全（不完整的行不匹配，原样放行）。
+/// 预处理 Markdown 文本：把 pipe 表格中的空单元格填入零宽空格（U+200B ZWSP）。
+/// 修 Indiko.Maui.Controls.Markdown 的 RenderTable 对空单元格的渲染问题：空单元格的 Label
+/// 拿到空 FormattedString（零内容高度）→ 行背景色不撑满 Grid 单元格 → 露出 RenderTable Grid
+/// 硬编码的 Colors.Gray 背景（显示为灰色色块 / 行高错位）。
+/// 填入内容后渲染器会为之创建带行/表头背景色、有真实行高的 Label，与有数据的单元格一致。
+/// **必须用 ZWSP（U+200B）而非 NBSP（U+00A0）**：NBSP 在 .NET 里是空白符
+///（char.IsWhiteSpace(' ')==true），Markdig pipe-table 解析会 trim 掉→单元格仍空；
+/// ZWSP 不是空白符（char.IsWhiteSpace('​')==false）→Markdig 不 trim→内容保留，
+/// 且零宽渲染不可见（不显多余空格）。仅处理「以 | 开头并以 | 结尾、且非分隔行」的行；
+/// 非表格内容不动。对已在流式中的部分表格同样安全（不完整的行不匹配，原样放行）。
 /// </summary>
 public class MarkdownTableFillConverter : IValueConverter
 {
+    // 零宽空格 U+200B：非空白符（char.IsWhiteSpace==false），Markdig 不 trim；零宽不可见，
+    // 但给 Label 真实行高撑满单元格背景。
+    private const string EmptyCellFill = "​";
+
     // 分隔行：|---|:--:|---|（只含空格/冒号/竖线/横线）
     private static readonly Regex SeparatorRow = new(@"^\s*\|[\s:|\-]+\|\s*$", RegexOptions.Compiled);
     // 表格行：以 | 开头并以 | 结尾，中间至少一个字符
@@ -52,7 +61,7 @@ public class MarkdownTableFillConverter : IValueConverter
         {
             if (string.IsNullOrWhiteSpace(parts[i]))
             {
-                parts[i] = " ";
+                parts[i] = EmptyCellFill;
                 changed = true;
             }
         }

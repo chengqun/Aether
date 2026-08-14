@@ -29,33 +29,82 @@
             </Border>
         </DataTemplate>
 
-        <!-- 工具步：单卡（call+result 合并）。调用行常显（🔧 + ToolName + 参数）；结果行 IsToolCompleted 后显（✅ + Output）。
-             对齐桌面单卡模型：同一逻辑调用一张卡，result 到达原地回填而非新建。 -->
+        <!-- 工具步：单卡（call+result 合并），对齐桌面紧凑摘要 + 点按展开 + 类型化结果渲染。
+             折叠态一行：VerbIcon + ToolName + MainArg(截断) + ✓ + ▸；完成且非展开时显 → 结果预览。
+             展开态：输入(JSON) + 结果按 ResultKind 分支（text/code/error/table/json）。点卡片切 IsExpanded。 -->
         <DataTemplate x:Key="ToolTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="320">
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="340">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleExpandCommand}" />
+                    </Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="4">
-                        <!-- 调用行：🔧 + 工具名 + 参数详情 -->
-                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
-                            <Label Text="🔧" FontSize="13" />
-                            <Label Text="{Binding ToolName, StringFormat='调用 {0}'}" FontSize="13" FontFamily="OpenSansSemibold"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        </HorizontalStackLayout>
-                        <Label Text="{Binding InputDetail}" FontSize="11" FontFamily="OpenSansRegular"
-                               LineBreakMode="CharacterWrap" MaxLines="6"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                               IsVisible="{Binding HasInputDetail}" />
-                        <!-- 结果行：✅ + 输出详情（IsToolCompleted 后才可见） -->
-                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center" IsVisible="{Binding IsToolCompleted}">
-                            <Label Text="✅" FontSize="13" />
-                            <Label Text="{Binding ToolName, StringFormat='结果 {0}'}" FontSize="13"
+                        <!-- 折叠态一行摘要 -->
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="{Binding VerbIcon}" FontSize="13" VerticalOptions="Center" />
+                            <Label Grid.Column="1" Text="{Binding ToolName}" FontSize="13" FontFamily="OpenSansSemibold"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                                   VerticalOptions="Center" />
+                            <Label Grid.Column="2" Text="{Binding MainArg}" FontSize="11" LineBreakMode="TailTruncation" MaxLines="1"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                   VerticalOptions="Center" />
+                            <Label Grid.Column="3" Text="✓" FontSize="12" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource StatusSuccess}, Dark={StaticResource StatusSuccessDark}}"
+                                   IsVisible="{Binding IsToolCompleted}" />
+                            <Label Grid.Column="4" Text="▸" FontSize="10" VerticalOptions="Center" IsVisible="{Binding !IsExpanded}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Grid.Column="4" Text="▾" FontSize="10" VerticalOptions="Center" IsVisible="{Binding IsExpanded}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </Grid>
+                        <!-- 折叠态结果预览（完成 + 有预览 + 未展开） -->
+                        <HorizontalStackLayout Spacing="4" IsVisible="{Binding HasResultPreview}">
+                            <Label Text="→" FontSize="11" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Text="{Binding ResultPreview}" FontSize="11" LineBreakMode="TailTruncation" MaxLines="1"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                         </HorizontalStackLayout>
-                        <Label Text="{Binding OutputDetail}" FontSize="11" FontFamily="OpenSansRegular"
-                               LineBreakMode="CharacterWrap" MaxLines="8"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                               IsVisible="{Binding HasOutputDetail}" />
+                        <!-- 展开态：输入 + 类型化结果 -->
+                        <VerticalStackLayout Spacing="6" IsVisible="{Binding IsExpanded}">
+                            <VerticalStackLayout Spacing="2" IsVisible="{Binding HasInputDetail}">
+                                <Label Text="输入" FontSize="10"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                <Label Text="{Binding InputDetail}" FontSize="11" LineBreakMode="CharacterWrap"
+                                       FontFamily="OpenSansRegular"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="2" IsVisible="{Binding IsToolCompleted}">
+                                <HorizontalStackLayout Spacing="6">
+                                    <Label Text="结果" FontSize="10"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                    <Label FontSize="10" IsVisible="{Binding IsResultLong}"
+                                           Text="{Binding ResultLineCount, StringFormat='· {0} 行'}"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                </HorizontalStackLayout>
+                                <!-- text -->
+                                <Label Text="{Binding ResultText}" FontSize="12" LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                                       IsVisible="{Binding IsResultText}" />
+                                <!-- code（等宽/限高） -->
+                                <Label Text="{Binding ResultText}" FontSize="11" LineBreakMode="CharacterWrap" MaxLines="14"
+                                       FontFamily="OpenSansRegular"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                                       IsVisible="{Binding IsResultCode}" />
+                                <!-- error（红） -->
+                                <Label Text="{Binding ResultText}" FontSize="12" LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                                       IsVisible="{Binding IsResultError}" />
+                                <!-- table / json（mono JSON 兜底） -->
+                                <Label Text="{Binding OutputDetail}" FontSize="11" LineBreakMode="CharacterWrap" MaxLines="14"
+                                       FontFamily="OpenSansRegular"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                                       IsVisible="{Binding IsResultTable}" />
+                                <Label Text="{Binding OutputDetail}" FontSize="11" LineBreakMode="CharacterWrap" MaxLines="14"
+                                       FontFamily="OpenSansRegular"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                                       IsVisible="{Binding IsResultJson}" />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
