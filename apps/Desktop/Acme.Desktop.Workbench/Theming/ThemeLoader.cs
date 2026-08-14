@@ -14,7 +14,7 @@ namespace Acme.Desktop.Workbench.Theming;
 
 /// <summary>
 /// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
-/// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置主题（light/dark + Catppuccin Latte/Frappé/Macchiato + Nord/Dracula/Tokyo Night）
+/// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置主题（light/dark）
 /// 同为 JSON overlay——换 JSON 即换肤，无需重编；用户可在 &lt;tenantDir&gt;/themes/*.json 放自定义主题，或同名 JSON 覆盖内置。
 /// 全部经 {DynamicResource} 消费 → overlay merge 后全量重染（颜色/字体/圆角/间距/背景）。
 /// </summary>
@@ -29,13 +29,7 @@ public static class ThemeLoader
     public static readonly (string Name, string Description)[] BuiltInThemes =
     {
         ("light", "内置浅色"),
-        ("dark", "Catppuccin Mocha"),
-        ("latte", "Catppuccin Latte（浅）"),
-        ("frappe", "Catppuccin Frappé"),
-        ("macchiato", "Catppuccin Macchiato"),
-        ("nord", "Nord"),
-        ("dracula", "Dracula"),
-        ("tokyo-night", "Tokyo Night"),
+        ("dark", "内置深色"),
     };
 
     /// <summary>判断 name 是否为内置主题名。</summary>
@@ -59,7 +53,7 @@ public static class ThemeLoader
         return r.ReadToEnd();
     }
 
-    /// <summary>读内嵌 dark 主题（Assets/dark.json，Catppuccin Mocha）。委托 <see cref="GetBuiltInJson"/>。</summary>
+    /// <summary>读内嵌 dark 主题（Assets/dark.json，内置深色）。委托 <see cref="GetBuiltInJson"/>。</summary>
     public static string? GetDarkJson() => GetBuiltInJson("dark");
 
     /// <summary>读内嵌 light 主题（Assets/light.json）。委托 <see cref="GetBuiltInJson"/>。

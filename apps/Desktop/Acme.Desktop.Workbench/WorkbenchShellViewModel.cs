@@ -214,7 +214,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     }
 
     /// <summary>选中主题：设 overlay JSON + 当前名 + IsCurrent 高亮 + IsDarkVariant + 持久化。供 RelayCommand 与 IThemeHost.SelectThemeAsync 共用。
-    /// 内置主题（light/dark/latte/frappe/macchiato/nord/dracula/tokyo-night）= 内嵌 Assets/{name}.json 的 JSON overlay；
+    /// 内置主题（light/dark）= 内嵌 Assets/{name}.json 的 JSON overlay；
     /// 用户可在 &lt;tenantDir&gt;/themes/{name}.json 放同名文件覆盖内置（免重编）。用户自定义主题 = 读文件。</summary>
     private async Task SelectThemeCoreAsync(string name, CancellationToken ct)
     {
