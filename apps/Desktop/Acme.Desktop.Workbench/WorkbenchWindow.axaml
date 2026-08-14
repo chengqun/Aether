@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:nav="using:Acme.Desktop.Mvvm"
+        xmlns:wb="using:Acme.Desktop.Workbench"
         x:Class="Acme.Desktop.Workbench.WorkbenchWindow"
         Title="Aether"
         Width="1280" Height="820"
@@ -63,9 +63,8 @@
           <DockPanel>
             <Button DockPanel.Dock="Right" Command="{Binding ToggleSidebarCommand}" Classes="settings-nav"
                     ToolTip.Tip="收起侧边栏" HorizontalAlignment="Right">
-              <Path Data="{x:Static nav:NavIcons.Menu}" Stretch="Uniform" Width="18" Height="18"
-                    StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                    Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+              <Path Data="{x:Static wb:IconLoader.CodiconMenu}" Stretch="Uniform" Width="16" Height="16"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
             </Button>
           </DockPanel>
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
@@ -74,9 +73,9 @@
                 <Button Classes="settings-nav" Command="{Binding Command}" CommandParameter="{Binding Key}"
                         ToolTip.Tip="{Binding Title}">
                   <StackPanel Orientation="Horizontal" Spacing="10">
-                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="18" Height="18"
-                          StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    <!-- codicon 是填充型 glyph → Fill 渲染（非 Lucide 描边）；IconLoader 解析 key→codicon path data -->
+                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding Title}" FontSize="14"/>
                   </StackPanel>
@@ -97,18 +96,16 @@
       <Grid RowDefinitions="Auto,*,Auto">
         <StackPanel Grid.Row="0" Margin="0,10,0,0">
           <Button Command="{Binding ToggleSidebarCommand}" Classes="nav-rail" ToolTip.Tip="展开侧边栏">
-            <Path Data="{x:Static nav:NavIcons.Menu}" Stretch="Uniform" Width="18" Height="18"
-                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Path Data="{x:Static wb:IconLoader.CodiconMenu}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
           </Button>
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
                         ToolTip.Tip="{Binding Title}">
-                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="18" Height="18"
-                        StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <!-- VSCode codicon 图标（矢量 geometry；经 PackIconCodiconsDataFactory.Create(kind) 取 path data 喂侧边栏 <Path>，不引控件免 Avalonia 11/12 控件层兼容风险）。 -->
+    <PackageReference Include="IconPacks.Avalonia.Codicons" Version="2.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
   </ItemGroup>
