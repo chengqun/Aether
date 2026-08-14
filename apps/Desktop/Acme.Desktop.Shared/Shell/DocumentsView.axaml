@@ -213,7 +213,7 @@
           <Border Grid.Row="0" Grid.RowSpan="{Binding PreviewRowSpan}"
                   Background="{DynamicResource ContentBgBrush}"
                   IsVisible="{Binding IsPreviewPaneVisible}">
-            <ctl:SelectableMarkdownViewer Markdown="{Binding PreviewMarkdown}" Margin="4,2"/>
+            <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"/>
           </Border>
 
           <!-- 中：上下分隔条（md 双栏时显示） -->
