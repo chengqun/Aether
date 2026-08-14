@@ -145,7 +145,7 @@ public partial class NotesViewModel : ObservableObject
     public event Action? NotesChanged;
 
     /// <summary>编辑器字体大小（持久化到偏好，重启保留）。</summary>
-    [ObservableProperty] private double _editorFontSize = 13;
+    [ObservableProperty] private double _editorFontSize = 14;
     private bool _loadingPref;
 
     partial void OnEditorFontSizeChanged(double value)

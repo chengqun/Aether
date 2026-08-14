@@ -158,7 +158,7 @@
               <edit:TextEditor Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
                        x:Name="CodeEditor" IsVisible="{Binding EditorVisible}"
                        ShowLineNumbers="False" WordWrap="True"
-                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="{Binding EditorFontSize}"
+                       FontFamily="Menlo,Monaco,Consolas,monospace" FontSize="{Binding EditorFontSize}"
                        Background="Transparent" Margin="8,6" />
               <!-- 中：可拖动分隔条（上下） -->
               <GridSplitter Grid.Row="1" IsVisible="{Binding SplitterVisible}" ResizeDirection="Rows"

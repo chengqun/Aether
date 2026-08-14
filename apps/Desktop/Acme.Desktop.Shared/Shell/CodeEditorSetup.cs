@@ -12,7 +12,7 @@ using AvaloniaEdit.Search;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 共享 AvaloniaEdit 编辑器设置：语法高亮（按语法 key / 文件扩展名）+ VSCode Light+/Dark+ 双配色 +
+/// 共享 AvaloniaEdit 编辑器设置：语法高亮（按语法 key / 文件扩展名）+ VSCode 2026 主题双配色（2026-light / 2026-dark）+
 /// 当前行/选中主题色 + 代码折叠。从 <c>NotesView.axaml.cs</c> 抽出，<see cref="NotesView"/> 与
 /// <see cref="DocumentsView"/> 共用——是「文档/代码编辑」面（未来 AI 编程）的可复用编辑器设施。
 /// 全部静态、无状态：颜色在 <see cref="HighlightingManager"/> 缓存实例上原地改，主题是 app 级全窗一致故全局重染无冲突。
@@ -37,17 +37,19 @@ internal static class CodeEditorSetup
         catch { /* 控件未就绪则跳过 */ }
     }
 
-    /// <summary>编辑器主题色（当前行底 + 选中底/前景）。随 ActualThemeVariant 切——Loaded 与主题切换都调。</summary>
+    /// <summary>编辑器主题色（当前行底 + 选中底/前景）。随 ActualThemeVariant 切——Loaded 与主题切换都调。
+    /// 配色取自 VSCode 2026 内置主题（2026-light.json / 2026-dark.json）：当前行 #EAEAEA40/#242526、
+    /// 选区 #0069CC40/#276782dd、选区前景 = editor.foreground。alpha 用 #AARRGGBB（Avalonia Color.Parse 格式）。</summary>
     public static void ApplyTheme(AvaloniaEdit.TextEditor editor)
     {
         try
         {
             var dark = IsDark(editor);
             var tv = editor.TextArea.TextView;
-            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(dark ? "#2a2b3e" : "#F0F0F4"));
+            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(dark ? "#242526" : "#40EAEAEA"));
             tv.CurrentLineBorder = null;
-            editor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(dark ? "#264f78" : "#ADD6FF"));
-            editor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(dark ? "#cdd6f4" : "#1A1A1F"));
+            editor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(dark ? "#DD276782" : "#400069CC"));
+            editor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(dark ? "#BBBEBF" : "#202020"));
         }
         catch { /* 控件未就绪则跳过 */ }
     }
@@ -147,11 +149,10 @@ internal static class CodeEditorSetup
 
     private static IHighlightingDefinition BuildYaml(bool dark)
     {
-        // Light+ : Comment 绿 / String 暗红 / Keyword 蓝 / Key 青
-        // Dark+  : Comment 暗绿 / String 橙 / Key 浅蓝（深底高对比，暗红在深底不可读）
+        // VSCode 2026 配色：Comment 灰 / String 蓝 / Keyword 红 / Key 蓝（与内置语言一致）
         var (comment, str, num, kw, key, doc) = dark
-            ? ("#6A9955", "#CE9178", "#B5CEA8", "#569CD6", "#9CDCFE", "#6A9955")
-            : ("#008000", "#A31515", "#098658", "#0000FF", "#267F99", "#808080");
+            ? ("#8b949e", "#a5d6ff", "#79c0ff", "#ff7b72", "#79c0ff", "#8b949e")
+            : ("#6e7781", "#0a3069", "#0550ae", "#cf222e", "#0550ae", "#6e7781");
         var xshd = $@"<SyntaxDefinition name=""YAML"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
   <Color name=""Comment"" foreground=""{comment}""/>
   <Color name=""String"" foreground=""{str}""/>
@@ -188,26 +189,28 @@ internal static class CodeEditorSetup
         return def;
     }
 
-    /// <summary>把内置定义的颜色重映射为 VSCode 配色（Light+ 浅底 / Dark+ 深底）。深底用亮色语法 token 保对比度。</summary>
+    /// <summary>把内置定义的颜色重映射为 VSCode 2026 主题配色（2026-light 浅底 / 2026-dark 深底）。
+    /// 2026 是 GitHub 风格：关键字红、字符串蓝、函数紫、类型棕、标签绿、注释灰——区别于经典 Light+/Dark+（蓝关键字/红字符串/棕函数/青类型）。
+    /// 深底用亮色 token 保对比度。色值取自 VSCode app bundle 内 2026-light.json / 2026-dark.json 的 tokenColors。</summary>
     private static void ApplyVscodeColors(IHighlightingDefinition def, bool dark)
     {
         foreach (var c in def.NamedHighlightingColors)
         {
             var n = (c.Name ?? "").ToUpperInvariant();
             string? hex = null;
-            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = dark ? "#6A9955" : "#008000";
-            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = dark ? "#CE9178" : "#A31515";
-            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = dark ? "#B5CEA8" : "#098658";
-            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = dark ? "#DCDCAA" : "#795E26";
-            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = dark ? "#4EC9B0" : "#267F99";
-            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = dark ? "#569CD6" : "#800000";
-            else if (n.Contains("ATTRIBUT")) hex = dark ? "#9CDCFE" : "#FF0000";
+            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = dark ? "#8b949e" : "#6e7781";
+            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = dark ? "#a5d6ff" : "#0a3069";
+            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = dark ? "#79c0ff" : "#0550ae";
+            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = dark ? "#d2a8ff" : "#8250df";
+            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = dark ? "#ffa657" : "#953800";
+            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = dark ? "#7ee787" : "#116329";
+            else if (n.Contains("ATTRIBUT")) hex = dark ? "#79c0ff" : "#0550ae";
             else if (n.Contains("KEYWORD") || n.Contains("VISIBILITY") || n.Contains("MODIFIER")
                 || n.Contains("REFERENCE") || n.Contains("VALUE") || n.Contains("EXCEPTION")
                 || n.Contains("GOTO") || n.Contains("CONTEXT") || n.Contains("OPERATOR")
                 || n.Contains("PARAMETER") || n.Contains("NAMESPACE") || n.Contains("GETSET")
                 || n.Contains("TRUEFALSE") || n.Contains("SEMANTIC") || n.Contains("CHECKED")
-                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = dark ? "#569CD6" : "#0000FF";
+                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = dark ? "#ff7b72" : "#cf222e";
             if (hex is not null)
             {
                 c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));

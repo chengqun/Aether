@@ -238,7 +238,7 @@
                 IsVisible="{Binding IsEditorPaneVisible}">
             <edit:TextEditor Name="CodeEditor"
                              ShowLineNumbers="False" WordWrap="True"
-                             FontFamily="Cascadia Code,Consolas,monospace"
+                             FontFamily="Menlo,Monaco,Consolas,monospace"
                              FontSize="{Binding EditorFontSize}"
                              Background="Transparent" Margin="8,6"
                              IsReadOnly="False"/>

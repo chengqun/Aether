@@ -62,7 +62,7 @@ public partial class DocumentsViewModel : ObservableObject
     [ObservableProperty] private DocumentTab? _activeTab;
 
     /// <summary>编辑器字体大小（持久化到偏好 <c>docs.editorFontSize</c>，重启保留）。</summary>
-    [ObservableProperty] private double _editorFontSize = 13;
+    [ObservableProperty] private double _editorFontSize = 14;
 
     /// <summary>状态消息（保存成功/失败、打开提示等）。</summary>
     [ObservableProperty] private string _statusMessage = string.Empty;
