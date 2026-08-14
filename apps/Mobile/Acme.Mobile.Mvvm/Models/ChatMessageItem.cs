@@ -93,6 +93,17 @@ public partial class ChatMessageItem : ObservableObject
     [ObservableProperty]
     private int _resultLineCount;
 
+    /// <summary>流式思考段是否展开（流式中可折叠，默认展开）。完成态用 <see cref="IsExpanded"/>。</summary>
+    [ObservableProperty]
+    private bool _isStreamingExpanded = true;
+
+    /// <summary>流式停止后填入的耗时摘要（如 "2s"，含 s 后缀），仅展示用。对齐桌面推理卡"思考 · 2s"。</summary>
+    [ObservableProperty]
+    private string? _elapsedText;
+
+    /// <summary>段创建时刻，用于计算推理/答案耗时。非 observable（纯展示用）。</summary>
+    private DateTime _startedAt = DateTime.Now;
+
     // —— 派生布尔（驱动 XAML 模板选择 / 可见性）——
 
     /// <summary>文本段（答案或思考）。</summary>
@@ -125,6 +136,11 @@ public partial class ChatMessageItem : ObservableObject
     public bool IsApprovalApproved => IsApprovalCard && ApprovalState == 1;
     /// <summary>审批状态派生：已拒绝。</summary>
     public bool IsApprovalRejected => IsApprovalCard && ApprovalState == 2;
+
+    /// <summary>思考卡当前是否展开（body 可见 + ▾ 指示）。
+    /// 流式段看 <see cref="IsStreamingExpanded"/>（默认展开，可折叠）；完成段看 <see cref="IsExpanded"/>（默认折叠）。
+    /// 对齐桌面：流式思考 / 完成思考 都是可折叠 pill。</summary>
+    public bool IsReasoningExpanded => IsReasoning && (IsStreaming ? IsStreamingExpanded : IsExpanded);
 
     /// <summary>结果渲染分支（按 ResultKind 挑模板，XAML 用 IsVisible 绑定）。</summary>
     public bool IsResultText => IsToolStep && ResultKind == "text";
@@ -201,9 +217,30 @@ public partial class ChatMessageItem : ObservableObject
         OnPropertyChanged(nameof(HasOutputDetail));
     }
 
+    /// <summary>流式停止时计算耗时摘要（供完成思考卡"思考 · 2s"展示）。</summary>
+    partial void OnIsStreamingChanged(bool value)
+    {
+        if (!value) ElapsedText = $"{(DateTime.Now - _startedAt).TotalSeconds:F0}s";
+        OnPropertyChanged(nameof(IsReasoningExpanded));
+    }
+
+    partial void OnIsStreamingExpandedChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
+
+    partial void OnIsReasoningChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
+
     /// <summary>点击工具卡切换展开/折叠（XAML TapGestureRecognizer 绑定）。</summary>
     [RelayCommand]
     private void ToggleExpand() => IsExpanded = !IsExpanded;
+
+    /// <summary>点击思考卡切换展开/折叠：流式段切 <see cref="IsStreamingExpanded"/>，完成段切 <see cref="IsExpanded"/>。</summary>
+    [RelayCommand]
+    private void ToggleReasoning()
+    {
+        if (IsStreaming) IsStreamingExpanded = !IsStreamingExpanded;
+        else IsExpanded = !IsExpanded;
+    }
 
     /// <summary>
     /// 据 Output 字典归一结果展示信息：取主结果字符串（result/output/content/text/value/message/data 键），

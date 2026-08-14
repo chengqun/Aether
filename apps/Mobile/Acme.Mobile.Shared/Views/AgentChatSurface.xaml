@@ -110,13 +110,35 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 思考段：ItemType=text + IsReasoning（TextReasoningContent），斜体灰色 💭 -->
+        <!-- 思考段：ItemType=text + IsReasoning（TextReasoningContent）。对齐桌面可折叠 pill：
+             流式"思考中…"默认展开(切 IsStreamingExpanded)；完成"思考 · Xs"默认折叠(切 IsExpanded)。
+             点卡片切换；body 展开时显 Content 全文。 -->
         <DataTemplate x:Key="ReasoningTemplate" x:DataType="model:ChatMessageItem">
             <HorizontalStackLayout Margin="12,2" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleThinking}, Dark={StaticResource BubbleThinkingDark}}"
-                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="300">
-                    <Label Text="{Binding Content, StringFormat='💭 {0}'}" FontSize="13" FontAttributes="Italic"
-                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="10,6" MaximumWidthRequest="340">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleReasoningCommand}" />
+                    </Border.GestureRecognizers>
+                    <VerticalStackLayout Spacing="4">
+                        <!-- pill 头 -->
+                        <HorizontalStackLayout Spacing="6">
+                            <Label Text="思考中…" FontSize="12" FontAttributes="Italic" IsVisible="{Binding IsStreaming}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Text="思考" FontSize="12" IsVisible="{Binding !IsStreaming}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Text="{Binding ElapsedText, StringFormat='· {0}'}" FontSize="11" IsVisible="{Binding !IsStreaming}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Text="▸" FontSize="10" IsVisible="{Binding !IsReasoningExpanded}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                            <Label Text="▾" FontSize="10" IsVisible="{Binding IsReasoningExpanded}"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </HorizontalStackLayout>
+                        <!-- body：思考全文，展开时可见 -->
+                        <Label Text="{Binding Content}" FontSize="12" FontAttributes="Italic" LineBreakMode="WordWrap" MaxLines="18"
+                               IsVisible="{Binding IsReasoningExpanded}"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>
