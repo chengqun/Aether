@@ -34,6 +34,23 @@
       <Setter Property="Padding" Value="12,4"/>
       <Setter Property="FontSize" Value="12"/>
     </Style>
+
+    <!-- 树样式写在 UserControl 级（非 TreeView.Styles）：Avalonia 控件自身 .Styles 里的 /template/
+         选择器作用于自己模板部件不可靠，横向滚动禁用会失效——选中长标题子节点时 BringIntoView 把树横向
+         推走、根节点跟着位移（这正是「Note 点击树会动、Document 不动」的根因）。移到 UserControl 级 +
+         带 class 选择器（镜像 DocumentsView 的 docs-tree 写法）后禁用真正生效。 -->
+    <Style Selector="TreeView.notes-tree /template/ ScrollViewer">
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+    </Style>
+    <Style Selector="TreeViewItem">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+    </Style>
+    <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
+      <Setter Property="IsVisible" Value="{Binding Children.Count, Converter={x:Static shell:CountToBoolConverter.Instance}}"/>
+    </Style>
   </UserControl.Styles>
 
   <DockPanel>
@@ -47,7 +64,7 @@
       <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="0,0,1,0">
         <Grid>
-          <TreeView x:Name="NotesTree" Margin="4,4"
+          <TreeView x:Name="NotesTree" Classes="notes-tree" Margin="4,4"
                     ItemsSource="{Binding Roots}"
                     SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
             <TreeView.ContextMenu>
@@ -87,24 +104,6 @@
                 </Grid>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
-            <TreeView.Styles>
-              <Style Selector="TreeViewItem">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-              </Style>
-              <!-- 禁用横向滚动：树列较窄时，长名子节点被选中会触发 BringIntoView 横向滚动，把父节点的
-                   展开/收起箭头挤出视口左侧。禁用横向滚动后选中只竖向滚入视野、不再横向位移（标题已
-                   用 TextTrimming 截断，不会溢出，故横向滚动本就无需要）。 -->
-              <Style Selector="TreeView /template/ ScrollViewer">
-                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
-              </Style>
-              <!-- 无子节点的项隐藏展开箭头：按 NoteNodeVM.Children.Count 判定（折叠父节点的生成容器数
-                   ItemCount=0 会误判为叶子，故用数据子节点数）。沿用默认 TreeViewItem 模板——箭头在其
-                   自有固定列内，不受节点宽度影响，展开也不移动箭头位置（正常树行为）。ItemTemplate 根
-                   Grid 的 Background=Transparent 让整行内容可 hit-test，点行即选中（不必只点箭头）。 -->
-              <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
-                <Setter Property="IsVisible" Value="{Binding Children.Count, Converter={x:Static shell:CountToBoolConverter.Instance}}"/>
-              </Style>
-            </TreeView.Styles>
           </TreeView>
           <!-- 空态：无笔记时提示（TreeView 空集合不渲染，此 TextBlock 占位） -->
           <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
