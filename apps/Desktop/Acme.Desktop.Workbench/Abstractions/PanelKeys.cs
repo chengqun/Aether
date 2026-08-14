@@ -17,6 +17,9 @@ public static class PanelKeys
     /// <summary>笔记面板（NotesView + AvaloniaEdit + form 节点两栏）。</summary>
     public const string Notes = "notes";
 
+    /// <summary>打开文档面板（DocumentsView，多标签 AvaloniaEdit 编辑器，打开磁盘文件）。</summary>
+    public const string Documents = "documents";
+
     /// <summary>专家面板（ExpertsView，6 tab）。</summary>
     public const string Experts = "experts";
 

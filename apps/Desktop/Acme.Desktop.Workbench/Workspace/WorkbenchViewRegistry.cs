@@ -27,6 +27,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new NotesView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Notes);
 
+        // 打开文档：共享 DocumentsView（多标签 AvaloniaEdit 编辑器，打开磁盘文件）。
+        Register(PanelKeys.Documents,
+            () => new DocumentsView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
+
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,
             () => new ExpertsView(),

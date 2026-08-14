@@ -210,160 +210,24 @@ public partial class NotesView : UserControl
     private void ApplyHighlighting()
     {
         if (_vm?.SelectedNode is not { } node) return;
-        var dark = IsDarkEditor;
-        var def = HighlightingFor(node, dark);
-        // 语法定义是 HighlightingManager 缓存的同一实例，颜色在 ApplyVscodeColors 里原地改——
-        // 设同一引用不触发重绘，须先置 null 再设回强制 TextArea 刷新（主题切换场景）。
-        if (def is not null && ReferenceEquals(CodeEditor.SyntaxHighlighting, def))
-        {
-            CodeEditor.SyntaxHighlighting = null;
-            CodeEditor.SyntaxHighlighting = def;
-        }
-        else
-        {
-            CodeEditor.SyntaxHighlighting = def;
-        }
+        var syntax = (NoteNodeTypeRegistry.Get(node.NodeType).Syntax ?? node.Syntax)?.ToLowerInvariant();
+        CodeEditorSetup.ApplyHighlighting(CodeEditor, syntax);
     }
 
-    /// <summary>编辑器当前是否深色主题——读 <see cref="StyledElement.ActualThemeVariant"/>
-    /// （WorkbenchWindow 设 Application.RequestedThemeVariant 后向下传播到编辑器）。</summary>
-    private bool IsDarkEditor => CodeEditor.ActualThemeVariant == ThemeVariant.Dark;
-
-    /// <summary>节点 → 高亮定义：类型强制语法优先（Agent=YAML/Workflow=Json），否则按节点语法映射。
-    /// 统一 VSCode 配色（Light+ / Dark+ 随主题切换）。</summary>
-    private static IHighlightingDefinition? HighlightingFor(NoteNodeVM node, bool dark)
-    {
-        var forced = NoteNodeTypeRegistry.Get(node.NodeType).Syntax;
-        var syntax = (forced ?? node.Syntax)?.ToLowerInvariant();
-        if (syntax == "yaml") return LoadYaml(dark);
-        return Load(syntax switch
-        {
-            "markdown" => "MarkDown",
-            "sql" => "TSQL",
-            "python" => "Python",
-            "javascript" => "JavaScript",
-            "json" => "Json",
-            "csharp" => "C#",
-            "html" => "HTML",
-            "css" => "CSS",
-            "xml" => "XML",
-            "java" => "Java",
-            "cpp" => "C++",
-            "vb" => "VB",
-            "powershell" => "PowerShell",
-            _ => null,
-        }, dark);
-    }
-
-    // YAML 内联 .xshd 两套缓存（AvaloniaEdit 无内置 YAML 高亮）：light / dark 各一份，切主题不重建。
-    private static IHighlightingDefinition? _yamlLight, _yamlDark;
-
-    /// <summary>自定义 YAML 高亮（AvaloniaEdit 无内置；内联 .xshd）。配色随主题——VSCode Light+ / Dark+。</summary>
-    private static IHighlightingDefinition LoadYaml(bool dark)
-    {
-        if (dark) return _yamlDark ??= BuildYaml(dark);
-        return _yamlLight ??= BuildYaml(dark);
-    }
-
-    private static IHighlightingDefinition BuildYaml(bool dark)
-    {
-        // Light+ : Comment 绿 / String 暗红 / Keyword 蓝 / Key 青
-        // Dark+  : Comment 暗绿 / String 橙 / Key 浅蓝（深底高对比，暗红在深底不可读）
-        var (comment, str, num, kw, key, doc) = dark
-            ? ("#6A9955", "#CE9178", "#B5CEA8", "#569CD6", "#9CDCFE", "#6A9955")
-            : ("#008000", "#A31515", "#098658", "#0000FF", "#267F99", "#808080");
-        var xshd = $@"<SyntaxDefinition name=""YAML"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
-  <Color name=""Comment"" foreground=""{comment}""/>
-  <Color name=""String"" foreground=""{str}""/>
-  <Color name=""Number"" foreground=""{num}""/>
-  <Color name=""Keyword"" foreground=""{kw}""/>
-  <Color name=""Key"" foreground=""{key}""/>
-  <Color name=""DocMarker"" foreground=""{doc}""/>
-  <RuleSet>
-    <Rule color=""DocMarker"">^---\s*$</Rule>
-    <Rule color=""DocMarker"">^\.\.\.\s*$</Rule>
-    <Rule color=""Comment"">\#.*</Rule>
-    <Rule color=""Key"">^\s*[\w-]+(?=\s*:)</Rule>
-    <Rule color=""Key"">\b[\w-]+(?=\s*:)</Rule>
-    <Span color=""String""><Begin>&quot;</Begin><End>&quot;</End></Span>
-    <Span color=""String""><Begin>'</Begin><End>'</End></Span>
-    <Rule color=""Number"">\b\d+(\.\d+)?\b</Rule>
-    <Keywords color=""Keyword"">
-      <Word>true</Word><Word>false</Word><Word>null</Word>
-      <Word>yes</Word><Word>no</Word><Word>on</Word><Word>off</Word>
-    </Keywords>
-  </RuleSet>
-</SyntaxDefinition>";
-        using var reader = XmlReader.Create(new StringReader(xshd));
-        return HighlightingLoader.Load(reader, HighlightingManager.Instance);
-    }
-
-    private static IHighlightingDefinition? Load(string? name, bool dark)
-    {
-        if (name is null) return null;
-        // GetDefinition 返回 HighlightingManager 缓存的同一实例——颜色在 ApplyVscodeColors 里原地改。
-        // 主题是 app 级（全窗一致），故全局重染无冲突；切主题后 ApplyHighlighting 先置 null 再设回强制重绘。
-        var def = HighlightingManager.Instance.GetDefinition(name);
-        if (def is not null) ApplyVscodeColors(def, dark);
-        return def;
-    }
-
-    /// <summary>VSCode 质感：当前行高亮 + 选中色 + 括号匹配 + 搜索面板。仅 Loaded 调一次（避免重复装 SearchPanel/Folding）。</summary>
+    /// <summary>VSCode 质感：当前行高亮 + 选中色 + 搜索面板。仅 Loaded 调一次（避免重复装 SearchPanel/Folding）。
+    /// 共享逻辑见 <see cref="CodeEditorSetup"/>；此处仅安装折叠管理器（实例字段，UpdateFoldings 复用）。</summary>
     private void ConfigureEditorAppearance()
     {
         try
         {
-            CodeEditor.Options.HighlightCurrentLine = true;
-            // 安装搜索替换面板（Ctrl+F 呼出）+ 代码折叠（基于 {} 配对）——一次性，不可在主题切换时重复调。
-            SearchPanel.Install(CodeEditor);
             _foldingManager = FoldingManager.Install(CodeEditor.TextArea);
-            ApplyEditorTheme();
+            CodeEditorSetup.ConfigureAppearance(CodeEditor);
         }
         catch { /* 控件未就绪则跳过 */ }
     }
 
-    /// <summary>编辑器主题色（当前行底 + 选中底/前景）。随 ActualThemeVariant 切——Loaded 与主题切换都调。</summary>
-    private void ApplyEditorTheme()
-    {
-        try
-        {
-            var dark = IsDarkEditor;
-            var tv = CodeEditor.TextArea.TextView;
-            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(dark ? "#2a2b3e" : "#F0F0F4"));
-            tv.CurrentLineBorder = null;
-            CodeEditor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(dark ? "#264f78" : "#ADD6FF"));
-            CodeEditor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(dark ? "#cdd6f4" : "#1A1A1F"));
-        }
-        catch { /* 控件未就绪则跳过 */ }
-    }
-
-    /// <summary>把内置定义的颜色重映射为 VSCode 配色（Light+ 浅底 / Dark+ 深底）。深底用亮色语法 token 保对比度。</summary>
-    private static void ApplyVscodeColors(IHighlightingDefinition def, bool dark)
-    {
-        foreach (var c in def.NamedHighlightingColors)
-        {
-            var n = (c.Name ?? "").ToUpperInvariant();
-            string? hex = null;
-            if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = dark ? "#6A9955" : "#008000";
-            else if (n.Contains("STRING") || n.Contains("CHAR")) hex = dark ? "#CE9178" : "#A31515";
-            else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = dark ? "#B5CEA8" : "#098658";
-            else if (n.Contains("METHOD") || n.Contains("CALL") || n.Contains("FUNCTION")) hex = dark ? "#DCDCAA" : "#795E26";
-            else if (n.Contains("TYPE") || n.Contains("CLASS")) hex = dark ? "#4EC9B0" : "#267F99";
-            else if (n.Contains("TAG") || n.Contains("ELEMENT")) hex = dark ? "#569CD6" : "#800000";
-            else if (n.Contains("ATTRIBUT")) hex = dark ? "#9CDCFE" : "#FF0000";
-            else if (n.Contains("KEYWORD") || n.Contains("VISIBILITY") || n.Contains("MODIFIER")
-                || n.Contains("REFERENCE") || n.Contains("VALUE") || n.Contains("EXCEPTION")
-                || n.Contains("GOTO") || n.Contains("CONTEXT") || n.Contains("OPERATOR")
-                || n.Contains("PARAMETER") || n.Contains("NAMESPACE") || n.Contains("GETSET")
-                || n.Contains("TRUEFALSE") || n.Contains("SEMANTIC") || n.Contains("CHECKED")
-                || n.Contains("UNSAFE") || n.Contains("DECLARATION")) hex = dark ? "#569CD6" : "#0000FF";
-            if (hex is not null)
-            {
-                c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));
-                c.FontWeight = null; // VSCode 关键字不加粗
-            }
-        }
-    }
+    /// <summary>编辑器主题色（当前行底 + 选中底/前景）。委托 <see cref="CodeEditorSetup"/>——随 ActualThemeVariant 切。</summary>
+    private void ApplyEditorTheme() => CodeEditorSetup.ApplyTheme(CodeEditor);
 
     private void OnCodeEditorTextChanged(object? sender, EventArgs e)
     {
@@ -451,64 +315,13 @@ public partial class NotesView : UserControl
         area.Caret.BringCaretToView();
     }
 
-    /// <summary>按语法类型生成折叠区域：大括号语言折叠 {}、SQL 折叠 ()、YAML 折叠 --- 文档段。</summary>
+    /// <summary>按语法类型生成折叠区域。委托 <see cref="CodeEditorSetup"/>（大括号语言折叠 {}、SQL 折叠 ()、YAML 折叠 --- 文档段）。</summary>
     private void UpdateFoldings()
     {
-        if (_foldingManager is null) return;
-        var text = CodeEditor.Document.Text;
-        var foldings = new List<NewFolding>();
-
-        var nodeType = _vm?.SelectedNode?.NodeType ?? NoteNodeType.Note;
-        var forced = NoteNodeTypeRegistry.Get(nodeType).Syntax;
-        var kind = forced ?? _vm?.SelectedNode?.Syntax?.ToLowerInvariant();
-
-        if (kind == "yaml")
-            FoldYamlDocuments(text, foldings);
-        else if (kind == "sql")
-            FoldPairs(text, foldings, '(', ')');
-        else
-            FoldPairs(text, foldings, '{', '}'); // C 风格 + JSON
-
-        foldings.Sort((a, b) => a.StartOffset.CompareTo(b.StartOffset));
-        _foldingManager.UpdateFoldings(foldings, -1);
-    }
-
-    /// <summary>配对字符折叠（{} 或 ()），超过 2 字符才折。</summary>
-    private static void FoldPairs(string text, List<NewFolding> foldings, char open, char close)
-    {
-        var starts = new Stack<int>();
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] == open) starts.Push(i);
-            else if (text[i] == close && starts.Count > 0)
-            {
-                var start = starts.Pop();
-                if (i - start > 2)
-                    foldings.Add(new NewFolding(start, i + 1));
-            }
-        }
-    }
-
-    /// <summary>YAML 文档段折叠：--- 到下一个 ---/... 之间。</summary>
-    private static void FoldYamlDocuments(string text, List<NewFolding> foldings)
-    {
-        var marks = new List<int>();
-        var lineStart = 0;
-        for (var i = 0; i <= text.Length; i++)
-        {
-            if (i == text.Length || text[i] == '\n')
-            {
-                var line = text.AsSpan(lineStart, i - lineStart).Trim('\r').Trim();
-                if (line is "---" or "...")
-                    marks.Add(lineStart);
-                lineStart = i + 1;
-            }
-        }
-        for (var i = 0; i + 1 < marks.Count; i++)
-        {
-            if (marks[i + 1] - marks[i] > 4)
-                foldings.Add(new NewFolding(marks[i], marks[i + 1]));
-        }
+        if (_foldingManager is null || _vm?.SelectedNode is not { } node) return;
+        var forced = NoteNodeTypeRegistry.Get(node.NodeType).Syntax;
+        var syntax = (forced ?? node.Syntax)?.ToLowerInvariant();
+        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, syntax);
     }
 
     /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48，持久化）。</summary>

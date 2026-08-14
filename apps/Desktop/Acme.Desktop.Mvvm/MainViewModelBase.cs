@@ -49,6 +49,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         var workflowRunner = serviceProvider.GetRequiredService<ICustomWorkflowRunner>();
 
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
+        Documents = new DocumentsViewModel(serviceProvider, _dispatcher);
         Automation = new AutomationViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             serviceProvider.GetRequiredService<IAutomationService>(),
@@ -128,6 +129,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
+
+    /// <summary>打开文档页 ViewModel（多标签磁盘文件编辑器）</summary>
+    public DocumentsViewModel Documents { get; }
 
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }
