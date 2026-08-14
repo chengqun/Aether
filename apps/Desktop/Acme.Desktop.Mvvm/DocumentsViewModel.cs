@@ -115,6 +115,7 @@ public partial class DocumentsViewModel : ObservableObject
         _serviceProvider = serviceProvider;
         _dispatcher = dispatcher;
         LoadFontSizeAsync().SafeFireAndForget();
+        LoadLastProjectAsync().SafeFireAndForget(); // 恢复上次打开的项目目录（VSCode 式记住工作区）
     }
 
     partial void OnEditorFontSizeChanged(double value)
@@ -179,9 +180,16 @@ public partial class DocumentsViewModel : ObservableObject
         return false;
     }
 
-    /// <summary>打开项目目录：清旧树+旧标签，后台递归扫描构建文件树，回 UI 线程挂根节点并展开。</summary>
+    /// <summary>打开项目目录：清旧树+旧标签，后台递归扫描构建文件树，回 UI 线程挂根节点并展开。
+    /// 成功后持久化路径到偏好（<c>docs.projectPath</c>），app 重启自动恢复——VSCode 式记住上次工作区。</summary>
     public async Task OpenFolderAsync(string path)
     {
+        if (!Directory.Exists(path))
+        {
+            StatusMessage = "目录不存在";
+            await ClearPersistedProjectAsync();
+            return;
+        }
         Roots.Clear();
         Tabs.Clear();
         ActiveTab = null;
@@ -194,11 +202,58 @@ public partial class DocumentsViewModel : ObservableObject
             Roots.Add(root);
             root.IsExpanded = true;
             StatusMessage = $"已打开 {ProjectName}";
+            await PersistProjectPathAsync(path);
         }
         catch (Exception ex)
         {
             StatusMessage = $"打开目录失败：{ex.Message}";
         }
+    }
+
+    /// <summary>关闭项目：清树+清标签+清持久化路径（重启不再恢复）。</summary>
+    [RelayCommand]
+    private void CloseProject()
+    {
+        Roots.Clear();
+        Tabs.Clear();
+        ActiveTab = null;
+        RootPath = null;
+        StatusMessage = string.Empty;
+        ClearPersistedProjectAsync().SafeFireAndForget();
+    }
+
+    private async Task PersistProjectPathAsync(string path)
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null) await store.SetAsync("docs.projectPath", path);
+        }
+        catch { /* 偏好存储失败不影响使用 */ }
+    }
+
+    private async Task ClearPersistedProjectAsync()
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is not null) await store.SetAsync("docs.projectPath", string.Empty);
+        }
+        catch { /* 忽略 */ }
+    }
+
+    /// <summary>启动期恢复上次打开的项目目录（读 <c>docs.projectPath</c>，存在且目录仍在则重新扫描）。</summary>
+    private async Task LoadLastProjectAsync()
+    {
+        try
+        {
+            var store = _serviceProvider.GetService<IPreferencesStore>();
+            if (store is null) return;
+            var path = await store.GetAsync("docs.projectPath");
+            if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+                await OpenFolderAsync(path);
+        }
+        catch { /* 恢复失败不影响使用 */ }
     }
 
     /// <summary>递归构建文件树节点。文件夹：先子目录后文件，各按名排序；跳过 <see cref="ExcludedDirs"/>/<see cref="ExcludedFiles"/>。</summary>

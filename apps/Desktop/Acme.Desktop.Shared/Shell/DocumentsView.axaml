@@ -103,6 +103,8 @@
             <Menu Grid.Column="0" Classes="docs-menu">
               <MenuItem Header="文件" Classes="docs-menu-item">
                 <MenuItem Header="📂 打开项目目录" Click="OnOpenFolderClick"/>
+                <MenuItem Header="✕ 关闭项目" Command="{Binding CloseProjectCommand}"
+                          IsEnabled="{Binding HasProject}"/>
                 <MenuItem Header="📄 打开文件" Click="OnOpenFileClick"/>
                 <Separator/>
                 <MenuItem Header="💾 保存 (Ctrl+S)" Command="{Binding SaveActiveCommand}"/>
