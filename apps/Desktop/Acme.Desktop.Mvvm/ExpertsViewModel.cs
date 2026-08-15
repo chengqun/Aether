@@ -52,9 +52,7 @@ public partial class ExpertsViewModel : ObservableObject
 
     public ObservableCollection<ExpertItem> Experts { get; } = new();
     public ObservableCollection<ExpertItem> VisibleExperts { get; } = new();
-    public ObservableCollection<string> Categories { get; } = new();
 
-    [ObservableProperty] private string _selectedCategory = "全部";
     [ObservableProperty] private string _statusMessage = string.Empty;
 
     /// <summary>当前 tab。</summary>
@@ -125,7 +123,6 @@ public partial class ExpertsViewModel : ObservableObject
                 // 保留召唤状态：NotesChanged 等触发 reload 时按 Id 迁移 IsSummoned 到新实例。
                 var prevSummoned = Experts.Where(e => e.IsSummoned).Select(e => e.Id).ToHashSet();
                 Experts.Clear();
-                var catSet = new List<string>();
 
                 foreach (var def in all)
                 {
@@ -163,15 +160,7 @@ public partial class ExpertsViewModel : ObservableObject
                     };
                     if (prevSummoned.Contains(item.Id)) item.IsSummoned = true;
                     Experts.Add(item);
-
-                    var cat = item.Category;
-                    if (!catSet.Contains(cat)) catSet.Add(cat);
                 }
-
-                Categories.Clear();
-                Categories.Add("全部");
-                foreach (var c in catSet.OrderBy(c => c)) Categories.Add(c);
-                if (!Categories.Contains(SelectedCategory)) SelectedCategory = "全部";
 
                 RefreshVisibleExperts();
             });
@@ -185,16 +174,12 @@ public partial class ExpertsViewModel : ObservableObject
         try { await Mcp.LoadAsync(); } catch { }
     }
 
+    /// <summary>刷新可见专家列表：专家页已去掉类别 tab，所有专家平铺显示。</summary>
     private void RefreshVisibleExperts()
     {
         VisibleExperts.Clear();
-        var filtered = SelectedCategory == "全部"
-            ? Experts
-            : Experts.Where(e => e.Category == SelectedCategory);
-        foreach (var e in filtered) VisibleExperts.Add(e);
+        foreach (var e in Experts) VisibleExperts.Add(e);
     }
-
-    partial void OnSelectedCategoryChanged(string value) => RefreshVisibleExperts();
 
     /// <summary>创建新专家（仅在用户点保存后才落库）。</summary>
     public ExpertItem CreateNew()
@@ -321,12 +306,6 @@ public partial class ExpertsViewModel : ObservableObject
         item.IsSummoned = !item.IsSummoned;
         StatusMessage = item.IsSummoned ? $"已召唤：{item.Name}" : $"已取消召唤：{item.Name}";
         SummonChanged?.Invoke();
-    }
-
-    [RelayCommand]
-    private void SelectCategory(string category)
-    {
-        SelectedCategory = category;
     }
 
     /// <summary>获取已召唤的专家列表。</summary>

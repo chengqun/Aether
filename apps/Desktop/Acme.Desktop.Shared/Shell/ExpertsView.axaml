@@ -5,23 +5,6 @@
              x:Class="Acme.Desktop.Shared.Shell.ExpertsView"
              Background="{DynamicResource ContentBgBrush}">
 
-  <UserControl.Styles>
-    <Style Selector="ListBox.cat-tabs">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-    </Style>
-    <Style Selector="ListBoxItem.cat-tab-item">
-      <Setter Property="Padding" Value="14,6"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-      <Setter Property="Background" Value="Transparent"/>
-    </Style>
-    <Style Selector="ListBoxItem.cat-tab-item:selected">
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-  </UserControl.Styles>
-
   <DockPanel>
     <!-- 顶部标题栏 + tab -->
     <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
@@ -63,27 +46,6 @@
     <!-- ===== Agent 面板 ===== -->
     <Panel IsVisible="{Binding IsAgentTab}">
       <DockPanel>
-        <!-- 类别 Tab -->
-        <Border DockPanel.Dock="Top" Padding="20,12,20,0" Background="{DynamicResource CardBgBrush}">
-          <ListBox Classes="cat-tabs" ItemsSource="{Binding Categories}"
-                   SelectedItem="{Binding SelectedCategory}">
-            <ListBox.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" Spacing="8" />
-              </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
-            <ListBox.ItemContainerTheme>
-              <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                <Setter Property="Padding" Value="14,6"/>
-                <Setter Property="FontSize" Value="13"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-              </ControlTheme>
-            </ListBox.ItemContainerTheme>
-          </ListBox>
-        </Border>
-
         <!-- 专家卡片列表 -->
         <ScrollViewer Padding="20,16">
           <StackPanel>
