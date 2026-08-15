@@ -55,7 +55,14 @@ public sealed record DiffModel(
 public sealed record CommitInfo(string Sha, string ShaShort, string Message, string Author, DateTimeOffset When);
 
 /// <summary>指向某 commit 的引用（分支/标签）。用于图上徽标。</summary>
-public sealed record CommitRef(string Name, bool IsHead, bool IsRemote, bool IsTag);
+/// <param name="IsHead">当前 HEAD 分支（绿徽标「HEAD → name」）。</param>
+/// <param name="IsRemote">远端分支（如 origin/main，琥珀徽标）。</param>
+/// <param name="IsTag">标签（中性徽标）。</param>
+public sealed record CommitRef(string Name, bool IsHead, bool IsRemote, bool IsTag)
+{
+    /// <summary>本地分支且非 HEAD（紫徽标；HEAD 分支单独绿徽标显示）。</summary>
+    public bool IsLocalBranch => !IsHead && !IsRemote && !IsTag;
+}
 
 /// <summary>一个 commit 的原始拓扑数据（喂 <see cref="CommitGraphBuilder"/>）。</summary>
 /// <param name="Info">元信息。</param>

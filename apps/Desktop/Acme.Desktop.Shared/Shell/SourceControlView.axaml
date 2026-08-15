@@ -52,20 +52,54 @@
       </Grid>
     </DataTemplate>
 
-    <!-- 提交历史行：色点(lane色) + 消息 + 短日期；单击 → 选中提交看其改动 -->
+    <!-- ref 徽标（分支/标签）：按类型着色，对齐 VSCode Git Graph。
+         HEAD(绿,「HEAD → name」) → 本地分支(紫) → 远端分支(琥珀) → 标签(中性)。 -->
+    <DataTemplate x:Key="RefBadgeTemplate">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Border Background="{DynamicResource SuccessBgBrush}" CornerRadius="3" Padding="5,1"
+                Margin="0,0,4,0" IsVisible="{Binding IsHead}">
+          <TextBlock FontSize="10" VerticalAlignment="Center"
+                     Foreground="{DynamicResource SuccessBrush}"
+                     Text="{Binding Name, StringFormat='HEAD → {0}'}"/>
+        </Border>
+        <Border Background="{DynamicResource AccentTintBgBrush}" CornerRadius="3" Padding="5,1"
+                Margin="0,0,4,0" IsVisible="{Binding IsLocalBranch}">
+          <TextBlock Text="{Binding Name}" FontSize="10" VerticalAlignment="Center"
+                     Foreground="{DynamicResource AccentBrush}"/>
+        </Border>
+        <Border Background="{DynamicResource WarningBgBrush}" CornerRadius="3" Padding="5,1"
+                Margin="0,0,4,0" IsVisible="{Binding IsRemote}">
+          <TextBlock Text="{Binding Name}" FontSize="10" VerticalAlignment="Center"
+                     Foreground="{DynamicResource WarningBrush}"/>
+        </Border>
+        <Border Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,4,0" IsVisible="{Binding IsTag}">
+          <TextBlock Text="{Binding Name}" FontSize="10" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Border>
+      </StackPanel>
+    </DataTemplate>
+
+    <!-- 提交历史行：色点(lane色) + ref徽标 + 消息 + 短日期；单击 → 选中提交看其改动 -->
     <DataTemplate x:Key="CommitRowTemplate">
       <Button Classes="scm-row-btn" Margin="2,1"
               Command="{Binding $parent[UserControl].DataContext.SelectCommitCommand}"
               CommandParameter="{Binding}"
               ToolTip.Tip="{Binding Info.Message}"
               HorizontalAlignment="Stretch">
-        <Grid ColumnDefinitions="12,*,Auto" VerticalAlignment="Center">
+        <Grid ColumnDefinitions="12,Auto,*,Auto" VerticalAlignment="Center">
           <TextBlock Grid.Column="0" Text="●" FontSize="10"
                      Foreground="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
                      VerticalAlignment="Center" HorizontalAlignment="Center"/>
-          <TextBlock Grid.Column="1" Text="{Binding Info.Message}" FontSize="12" Margin="6,0,0,0"
+          <ItemsControl Grid.Column="1" ItemsSource="{Binding Refs}"
+                        ItemTemplate="{StaticResource RefBadgeTemplate}" Margin="6,0,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+          <TextBlock Grid.Column="2" Text="{Binding Info.Message}" FontSize="12" Margin="6,0,0,0"
                      TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-          <TextBlock Grid.Column="2" Text="{Binding Info.When, StringFormat='{}{0:MM-dd}'}"
+          <TextBlock Grid.Column="3" Text="{Binding Info.When, StringFormat='{}{0:MM-dd}'}"
                      FontSize="10" Opacity="0.5" Margin="6,0,4,0" VerticalAlignment="Center"
                      Foreground="{DynamicResource TextSecondaryBrush}"/>
         </Grid>

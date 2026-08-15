@@ -111,7 +111,10 @@ public sealed class GitService : IGitService
                 c.Author?.When ?? DateTimeOffset.Now);
             var parents = c.Parents.Select(p => p.Sha).ToArray();
             refsBySha.TryGetValue(sha, out var refs);
-            list.Add(new CommitNode(info, parents, (IReadOnlyList<CommitRef>?)refs ?? Array.Empty<CommitRef>()));
+            // 徽标排序对齐 VSCode：HEAD → 本地分支 → 远端分支 → 标签（同组按名）。
+            var sorted = (refs is null || refs.Count == 0) ? Array.Empty<CommitRef>()
+                : refs.OrderBy(RefOrder).ThenBy(r => r.Name, StringComparer.Ordinal).ToArray();
+            list.Add(new CommitNode(info, parents, sorted));
         }
         return list;
     }
@@ -350,6 +353,9 @@ public sealed class GitService : IGitService
         return new DiffModel(oldText, newText, oldLines, newLines, IsBinary: false)
         { SyntaxKey = syntaxKey, FilePath = filePath };
     }
+
+    /// <summary>徽标排序键：HEAD(0) → 本地分支(1) → 远端分支(2) → 标签(3)。</summary>
+    private static int RefOrder(CommitRef r) => r.IsHead ? 0 : r.IsTag ? 3 : r.IsRemote ? 2 : 1;
 
     /// <summary>建 sha → 指向它的分支/标签 映射（IsHead=当前 HEAD 分支，IsRemote=远端分支，IsTag=标签）。</summary>
     private static Dictionary<string, List<CommitRef>> BuildRefsMap(Repository repo)
