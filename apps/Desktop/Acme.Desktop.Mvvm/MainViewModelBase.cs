@@ -114,20 +114,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     /// <summary>LLM 配置变更后刷新聊天页模型下拉（设置页新增/编辑/删除后经 DI 解析本类调用）。透传到 <see cref="Chat"/>。</summary>
     public Task RefreshLlmConfigsAsync() => Chat.RefreshLlmConfigsAsync();
 
-    // —— 侧边栏（原样：展开/收起）——
-    [ObservableProperty]
-    private double _sidebarWidth = 220;
-
-    [ObservableProperty]
-    private bool _isSidebarExpanded = true;
-
-    [RelayCommand]
-    private void ToggleSidebar()
-    {
-        IsSidebarExpanded = !IsSidebarExpanded;
-        SidebarWidth = IsSidebarExpanded ? 220 : 48;
-    }
-
     /// <summary>笔记页 ViewModel</summary>
     public NotesViewModel Notes { get; }
 

@@ -20,98 +20,13 @@
   </Window.Resources>
 
   <DockPanel>
-    <!-- ═══ 展开态侧边栏（200px） ═══ -->
-    <Border DockPanel.Dock="Left" Width="200" IsVisible="{Binding IsSidebarExpanded}"
-            Background="{DynamicResource SidebarBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <DockPanel>
-        <Button DockPanel.Dock="Bottom" Classes="account-chip" ToolTip.Tip="{Binding UserName}">
-          <Button.Flyout>
-            <MenuFlyout Placement="Top">
-              <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-              </MenuItem>
-              <MenuItem Header="运行 Trace" Click="OnOpenTrace">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Search}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-              </MenuItem>
-              <MenuItem Header="重置布局" Command="{Binding ResetLayoutCommand}">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-              </MenuItem>
-              <MenuItem Header="主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.ColorMode}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-                <MenuItem.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="12" Height="12"
-                            Fill="{DynamicResource AccentBrush}"
-                            IsVisible="{Binding IsCurrent}" VerticalAlignment="Center"/>
-                      <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"/>
-                    </StackPanel>
-                  </DataTemplate>
-                </MenuItem.ItemTemplate>
-              </MenuItem>
-              <MenuItem Header="━" IsEnabled="False"/>
-              <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Key}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-              </MenuItem>
-              <MenuItem Header="退出登录" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}">
-                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.SignOut}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
-              </MenuItem>
-            </MenuFlyout>
-          </Button.Flyout>
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
-              <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
-                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <StackPanel Orientation="Vertical" Spacing="1">
-              <TextBlock Text="{Binding UserName}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-              <TextBlock Text="{Binding Tenant}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
-            </StackPanel>
-          </StackPanel>
-        </Button>
-
-        <StackPanel DockPanel.Dock="Top" Margin="0,10,0,0">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Command="{Binding ToggleSidebarCommand}" Classes="settings-nav"
-                    ToolTip.Tip="收起侧边栏" HorizontalAlignment="Right">
-              <Path Data="{x:Static wb:IconLoader.CodiconMenu}" Stretch="Uniform" Width="16" Height="16"
-                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-            </Button>
-          </DockPanel>
-          <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Button Classes="settings-nav" Command="{Binding Command}" CommandParameter="{Binding Key}"
-                        ToolTip.Tip="{Binding Title}">
-                  <StackPanel Orientation="Horizontal" Spacing="10">
-                    <!-- codicon 是填充型 glyph → Fill 渲染（非 Lucide 描边）；IconLoader 解析 key→codicon path data -->
-                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
-                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                          VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Title}" FontSize="14"/>
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-
-        <Border/>
-      </DockPanel>
-    </Border>
-
-    <!-- ═══ 收起态侧边栏（48px） ═══ -->
-    <Border DockPanel.Dock="Left" Width="48" IsVisible="{Binding !IsSidebarExpanded}"
+    <!-- ═══ 侧边栏（48px 图标导航栏，常驻不展开） ═══ -->
+    <Border DockPanel.Dock="Left" Width="48"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*,Auto">
         <StackPanel Grid.Row="0" Margin="0,10,0,0">
-          <Button Command="{Binding ToggleSidebarCommand}" Classes="nav-rail" ToolTip.Tip="展开侧边栏">
-            <Path Data="{x:Static wb:IconLoader.CodiconMenu}" Stretch="Uniform" Width="16" Height="16"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-          </Button>
-          <ItemsControl ItemsSource="{Binding WorkbenchNavItems}" Margin="0,6,0,0">
+          <ItemsControl ItemsSource="{Binding WorkbenchNavItems}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
