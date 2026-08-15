@@ -139,10 +139,6 @@
                 </MenuItem>
               </MenuItem>
             </Menu>
-            <TextBlock Grid.Column="1" Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold"
-                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="6,0,4,0"
-                       Foreground="{DynamicResource TextPrimaryBrush}"
-                       IsVisible="{Binding HasProject}"/>
           </Grid>
         </Border>
         <TreeView Grid.Row="1" x:Name="FileTree" Classes="docs-tree" Margin="4,4"

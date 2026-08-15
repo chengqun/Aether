@@ -82,4 +82,15 @@ public static class Codicons
     public static readonly string Book = R(PackIconCodiconsKind.Book);
     public static readonly string Files = R(PackIconCodiconsKind.Files);
     public static readonly string CommentDiscussion = R(PackIconCodiconsKind.CommentDiscussion);
+
+    // —— SCM 源代码管理 ——
+    public static readonly string RepoPull = R(PackIconCodiconsKind.RepoPull);       // ↓ 拉取
+    public static readonly string RepoPush = R(PackIconCodiconsKind.RepoPush);       // ↑ 推送
+    public static readonly string Sync = R(PackIconCodiconsKind.Sync);               // ⟳ 同步（pull+push）
+    public static readonly string GitCommit = R(PackIconCodiconsKind.GitCommit);     // ● 提交节点/提交
+    public static readonly string Diff = R(PackIconCodiconsKind.Diff);               // ∓ 对比差异
+    public static readonly string Discard = R(PackIconCodiconsKind.Discard);         // ↺ 撤销改动
+    public static readonly string Remove = R(PackIconCodiconsKind.Remove);           // － 取消暂存
+    public static readonly string History = R(PackIconCodiconsKind.History);         // 🕘 提交历史
+    public static readonly string ArrowUp = R(PackIconCodiconsKind.ArrowUp);         // ↑ ahead
 }

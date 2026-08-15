@@ -29,24 +29,28 @@
           <Button Classes="scm-act" ToolTip.Tip="对比差异"
                   Command="{Binding $parent[UserControl].DataContext.OpenDiffCommand}"
                   CommandParameter="{Binding}">
-            <TextBlock Text="∓" FontSize="12"/>
+            <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="13" Height="13"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
           </Button>
           <Button Classes="scm-act" ToolTip.Tip="暂存"
                   IsVisible="{Binding !IsStaged}"
                   Command="{Binding $parent[UserControl].DataContext.StageCommand}"
                   CommandParameter="{Binding}">
-            <TextBlock Text="＋" FontSize="12"/>
+            <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="13" Height="13"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
           </Button>
           <Button Classes="scm-act" ToolTip.Tip="取消暂存"
                   IsVisible="{Binding IsStaged}"
                   Command="{Binding $parent[UserControl].DataContext.UnstageCommand}"
                   CommandParameter="{Binding}">
-            <TextBlock Text="－" FontSize="12"/>
+            <Path Data="{x:Static shell:Codicons.Remove}" Stretch="Uniform" Width="13" Height="13"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
           </Button>
           <Button Classes="scm-act" ToolTip.Tip="撤销改动"
                   Command="{Binding $parent[UserControl].DataContext.DiscardCommand}"
                   CommandParameter="{Binding}">
-            <TextBlock Text="↺" FontSize="12"/>
+            <Path Data="{x:Static shell:Codicons.Discard}" Stretch="Uniform" Width="13" Height="13"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
           </Button>
         </StackPanel>
       </Grid>
@@ -88,9 +92,9 @@
               ToolTip.Tip="{Binding Info.Message}"
               HorizontalAlignment="Stretch">
         <Grid ColumnDefinitions="12,Auto,*,Auto" VerticalAlignment="Center">
-          <TextBlock Grid.Column="0" Text="●" FontSize="10"
-                     Foreground="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
-                     VerticalAlignment="Center" HorizontalAlignment="Center"/>
+          <Path Grid.Column="0" Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="9" Height="9"
+                Fill="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
+                VerticalAlignment="Center" HorizontalAlignment="Center"/>
           <ItemsControl Grid.Column="1" ItemsSource="{Binding Refs}"
                         ItemTemplate="{StaticResource RefBadgeTemplate}" Margin="6,0,0,0">
             <ItemsControl.ItemsPanel>
@@ -127,10 +131,11 @@
     <Style Selector="Button.scm-act">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="4,1"/>
+      <Setter Property="Padding" Value="2"/>
       <Setter Property="Width" Value="20"/>
       <Setter Property="Height" Value="20"/>
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.scm-act:pointerover">
@@ -180,22 +185,25 @@
     <!-- ═══ 左：SCM 面板 ═══ -->
     <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,Auto,*">
-        <!-- 头：项目名 + 远程同步按钮 + 刷新 -->
-        <Border Grid.Row="0" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-          <StackPanel Spacing="2">
-            <DockPanel>
-              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <!-- 远程设置（GitHub 用户名 + PAT） -->
+      <Grid RowDefinitions="Auto,*">
+        <!-- 提交框 + 远程同步工具栏（顶部） -->
+        <Border Grid.Row="0" Padding="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                IsVisible="{Binding IsRepository}">
+          <StackPanel Spacing="6">
+            <!-- 远程同步 / 刷新工具栏 -->
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <!-- 远程设置 -->
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="远程设置"
                         Command="{Binding OpenRemoteSettingsCommand}" IsVisible="{Binding IsRepository}">
-                  <TextBlock Text="⚙" FontSize="13"/>
+                  <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
                 <!-- 同步（pull + push） -->
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="同步（拉取并推送）"
                         Command="{Binding SyncCommand}" IsVisible="{Binding IsRepository}"
                         IsEnabled="{Binding !IsBusy}">
-                  <TextBlock Text="⟳" FontSize="13"/>
+                  <Path Data="{x:Static shell:Codicons.Sync}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
                 <!-- ahead/behind 徽标（本地领先↑ / 落后↓ 上游） -->
                 <TextBlock Text="{Binding Ahead, StringFormat='↑{0}'}" FontSize="10" VerticalAlignment="Center"
@@ -209,43 +217,42 @@
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="拉取（pull）"
                         Command="{Binding PullCommand}" IsVisible="{Binding IsRepository}"
                         IsEnabled="{Binding !IsBusy}">
-                  <TextBlock Text="↓" FontSize="14"/>
+                  <Path Data="{x:Static shell:Codicons.RepoPull}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="推送（push）"
                         Command="{Binding PushCommand}" IsVisible="{Binding IsRepository}"
                         IsEnabled="{Binding !IsBusy}">
-                  <TextBlock Text="↑" FontSize="14"/>
+                  <Path Data="{x:Static shell:Codicons.RepoPush}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="刷新"
                         Command="{Binding RefreshCommand}">
-                  <TextBlock Text="↻" FontSize="13"/>
+                  <Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
+            </StackPanel>
+            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
+                     TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+            <Button Classes="primary" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Command="{Binding CommitCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="13" Height="13"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+                <TextBlock Text="提交" VerticalAlignment="Center"/>
               </StackPanel>
-              <TextBlock Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold"
-                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-            </DockPanel>
+            </Button>
             <TextBlock Text="{Binding StatusMessage}" FontSize="10" Opacity="0.75" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource TextSecondaryBrush}"
                        IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
           </StackPanel>
         </Border>
 
-        <!-- 提交框（VSCode 式：顶部） -->
-        <Border Grid.Row="1" Padding="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-                IsVisible="{Binding IsRepository}">
-          <StackPanel Spacing="6">
-            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
-                     TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-            <Button Classes="primary" Content="✓ 提交" HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Center"
-                    Command="{Binding CommitCommand}"/>
-          </StackPanel>
-        </Border>
-
         <!-- 变更 / 历史 / 空态 -->
-        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
           <Panel>
             <!-- 未开项目 -->
             <StackPanel IsVisible="{Binding !HasProject}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Opacity="0.6">
@@ -267,16 +274,21 @@
               <Grid ColumnDefinitions="*,Auto">
                 <Button Grid.Column="0" Classes="scm-section-header" Command="{Binding ToggleChangesCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="5">
-                    <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsChangesExpanded}"/>
-                    <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsChangesExpanded}"/>
-                    <TextBlock Text="更改" FontSize="11" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding Changes.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7"/>
+                    <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="11" Height="11"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          VerticalAlignment="Center" IsVisible="{Binding IsChangesExpanded}"/>
+                    <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="11" Height="11"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          VerticalAlignment="Center" IsVisible="{Binding !IsChangesExpanded}"/>
+                    <TextBlock Text="更改" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Changes.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Button>
                 <Button Grid.Column="1" Classes="scm-act" Width="22" Height="22" Margin="0,0,4,0"
                         ToolTip.Tip="全部暂存" IsVisible="{Binding IsChangesExpanded}"
                         Command="{Binding StageAllCommand}">
-                  <TextBlock Text="＋" FontSize="13"/>
+                  <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="13" Height="13"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
               </Grid>
               <ItemsControl IsVisible="{Binding IsChangesExpanded}" ItemsSource="{Binding Changes}"
@@ -289,10 +301,14 @@
               <!-- 暂存的更改段（可折叠头） -->
               <Button Classes="scm-section-header" Command="{Binding ToggleStagedCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="5">
-                  <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsStagedExpanded}"/>
-                  <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsStagedExpanded}"/>
-                  <TextBlock Text="暂存的更改" FontSize="11" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding StagedChanges.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7"/>
+                  <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="11" Height="11"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        VerticalAlignment="Center" IsVisible="{Binding IsStagedExpanded}"/>
+                  <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="11" Height="11"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        VerticalAlignment="Center" IsVisible="{Binding !IsStagedExpanded}"/>
+                  <TextBlock Text="暂存的更改" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  <TextBlock Text="{Binding StagedChanges.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
                 </StackPanel>
               </Button>
               <ItemsControl IsVisible="{Binding IsStagedExpanded}" ItemsSource="{Binding StagedChanges}"
@@ -305,10 +321,16 @@
               <!-- 历史段（可折叠头，带图标；首次展开懒加载） -->
               <Button Classes="scm-section-header" Command="{Binding ToggleHistoryCommand}" Margin="0,6,0,0">
                 <StackPanel Orientation="Horizontal" Spacing="5">
-                  <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsHistoryExpanded}"/>
-                  <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsHistoryExpanded}"/>
-                  <TextBlock Text="🕘" FontSize="11"/>
-                  <TextBlock Text="历史" FontSize="11" FontWeight="SemiBold"/>
+                  <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="11" Height="11"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        VerticalAlignment="Center" IsVisible="{Binding IsHistoryExpanded}"/>
+                  <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="11" Height="11"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        VerticalAlignment="Center" IsVisible="{Binding !IsHistoryExpanded}"/>
+                  <Path Data="{x:Static shell:Codicons.History}" Stretch="Uniform" Width="13" Height="13"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        VerticalAlignment="Center" Margin="2,0,0,0"/>
+                  <TextBlock Text="历史" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
               </Button>
               <ItemsControl IsVisible="{Binding IsHistoryExpanded}" ItemsSource="{Binding HistoryGraph.Commits}"
@@ -332,9 +354,9 @@
       <Panel IsVisible="{Binding !HasSelectedCommit}">
         <StackPanel IsVisible="{Binding !HasActiveDiff}"
                     VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Opacity="0.6">
-          <TextBlock Text="∓" FontSize="40" HorizontalAlignment="Center"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <TextBlock Text="选择一个变更查看差异" FontSize="14"
+          <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="36" Height="36"
+                HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
+          <TextBlock Text="选择一个变更查看差异" FontSize="13"
                      Foreground="{DynamicResource TextSecondaryBrush}"/>
         </StackPanel>
         <DockPanel IsVisible="{Binding HasActiveDiff}">
@@ -355,7 +377,8 @@
           <DockPanel>
             <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24" ToolTip.Tip="关闭"
                     Command="{Binding ClearSelectedCommitCommand}">
-              <TextBlock Text="✕" FontSize="13"/>
+              <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
             </Button>
             <StackPanel Spacing="2">
               <StackPanel Orientation="Horizontal" Spacing="8">
@@ -387,8 +410,8 @@
         <Grid Grid.Row="3">
           <StackPanel IsVisible="{Binding !HasCommitDiff}" VerticalAlignment="Center" HorizontalAlignment="Center"
                       Spacing="8" Opacity="0.6">
-            <TextBlock Text="∓" FontSize="32" HorizontalAlignment="Center"
-                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="28" Height="28"
+                  HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
             <TextBlock Text="选择一个改动文件查看差异" FontSize="13"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
           </StackPanel>
