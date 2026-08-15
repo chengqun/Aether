@@ -20,6 +20,11 @@ public partial class SourceControlViewModel : ObservableObject
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
     private string? _projectDir;
 
+    // 工作区文件监听：用户改文件（Aether 编辑器或外部工具）后自动刷新变更列表。
+    // 去抖 + 噪音过滤（.git/bin/obj/node_modules 等）避免频繁刷新。
+    private FileSystemWatcher? _watcher;
+    private CancellationTokenSource? _debounceCts;
+
     public SourceControlViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider)
     {
         _serviceProvider = serviceProvider;
@@ -38,8 +43,22 @@ public partial class SourceControlViewModel : ObservableObject
     private void OnGitChangedExternally()
     {
         var ui = _serviceProvider.GetService<IUiDispatcher>();
-        if (ui is not null) ui.Post(() => RefreshAsync().SafeFireAndForget());
-        else RefreshAsync().SafeFireAndForget();
+        async Task RefreshAllAsync()
+        {
+            await RefreshAsync();
+            // AI 提交/pull 等外部改动后，历史 section 已展开则重载（否则保持旧图，用户看不到新提交）。
+            await ReloadHistoryIfExpandedAsync();
+        }
+        if (ui is not null) ui.Post(() => RefreshAllAsync().SafeFireAndForget());
+        else RefreshAllAsync().SafeFireAndForget();
+    }
+
+    /// <summary>历史 section 已展开时重载提交历史（提交/pull/外部改动后保持新鲜）。
+    /// 折叠时不加载——下次展开由 <see cref="OnIsHistoryExpandedChanged"/> 懒加载。</summary>
+    private async Task ReloadHistoryIfExpandedAsync()
+    {
+        if (IsHistoryExpanded && IsRepository)
+            await LoadHistoryAsync();
     }
 
     /// <summary>未暂存变更（工作区 vs index）。</summary>
@@ -232,6 +251,8 @@ public partial class SourceControlViewModel : ObservableObject
 
     private async Task SetProjectAsync(string? dir)
     {
+        // 切项目 → 先停旧监听（避免监听已离开的仓库）。
+        StopWatcher();
         _projectDir = dir;
         HasProject = !string.IsNullOrEmpty(dir);
         ProjectName = HasProject ? Path.GetFileName(dir!.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) : null;
@@ -250,9 +271,83 @@ public partial class SourceControlViewModel : ObservableObject
         RemoteStatus = null;
         if (IsRepository)
         {
+            StartWatcher(dir!);
             await RefreshAsync();
             if (IsHistoryExpanded) await LoadHistoryAsync();
         }
+    }
+
+    // ── 工作区文件监听（自动刷新变更列表）──
+
+    /// <summary>启动 <see cref="FileSystemWatcher"/> 递归监听仓库工作区。文件增删改后去抖刷新。
+    /// 无权限等异常静默——用户仍可手动点刷新。</summary>
+    private void StartWatcher(string repoRoot)
+    {
+        try
+        {
+            _watcher = new FileSystemWatcher(repoRoot)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+                              | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                InternalBufferSize = 16 * 1024, // 增大缓冲减少 overflow
+            };
+            _watcher.Changed += (_, e) => OnFileChangedCore(e.FullPath);
+            _watcher.Created += (_, e) => OnFileChangedCore(e.FullPath);
+            _watcher.Deleted += (_, e) => OnFileChangedCore(e.FullPath);
+            _watcher.Renamed += (_, e) => OnFileChangedCore(e.FullPath);
+            _watcher.Error += (_, _) => ScheduleRefresh(); // 缓冲溢出等 → 尽力刷一次。
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch { /* 无权限/路径无效 → 静默，手动刷新兜底 */ }
+    }
+
+    private void StopWatcher()
+    {
+        if (_watcher is not null)
+        {
+            try { _watcher.EnableRaisingEvents = false; _watcher.Dispose(); }
+            catch { /* 忽略 */ }
+            _watcher = null;
+        }
+        _debounceCts?.Cancel();
+        _debounceCts = null;
+    }
+
+    /// <summary>文件变化回调（FSW 后台线程触发）：噪音过滤 + 去抖后 marshal UI 线程刷新。</summary>
+    private void OnFileChangedCore(string fullPath)
+    {
+        if (IsNoisePath(fullPath)) return;
+        ScheduleRefresh();
+    }
+
+    /// <summary>去抖 400ms 后刷新（批量改动只刷一次）。</summary>
+    private void ScheduleRefresh()
+    {
+        _debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(400, cts.Token); }
+            catch (TaskCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            var ui = _serviceProvider.GetService<IUiDispatcher>();
+            if (ui is not null) ui.Post(() => RefreshAsync().SafeFireAndForget());
+            else RefreshAsync().SafeFireAndForget();
+        });
+    }
+
+    /// <summary>高 churn 噪音目录（.git/bin/obj/node_modules/.vs 等）——其变化不反映用户业务改动，忽略。</summary>
+    private static bool IsNoisePath(string fullPath)
+    {
+        var p = fullPath.Replace('\\', '/');
+        return p.Contains("/.git/", StringComparison.OrdinalIgnoreCase)
+            || p.EndsWith("/.git", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("/bin/", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("/node_modules/", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("/.vs/", StringComparison.OrdinalIgnoreCase);
     }
 
     [RelayCommand]
@@ -368,7 +463,7 @@ public partial class SourceControlViewModel : ObservableObject
             var (ok, msg) = await Task.Run(() => git.Push(_projectDir));
             StatusMessage = msg;
             await RefreshAsync();
-            if (ok) HistoryGraph = null; // 远程 ref 变化，历史图可能过期。
+            if (ok) await ReloadHistoryIfExpandedAsync(); // 远端跟踪 ref 变化，历史图徽标刷新。
         }
         catch (Exception ex) { StatusMessage = $"推送失败：{ex.Message}"; }
         finally { IsBusy = false; }
@@ -387,7 +482,7 @@ public partial class SourceControlViewModel : ObservableObject
             var (ok, msg) = await Task.Run(() => git.Pull(_projectDir));
             StatusMessage = msg;
             await RefreshAsync();
-            if (ok) HistoryGraph = null;
+            if (ok) await ReloadHistoryIfExpandedAsync(); // 拉取可能合入新提交，历史图刷新。
         }
         catch (Exception ex) { StatusMessage = $"拉取失败：{ex.Message}"; }
         finally { IsBusy = false; }
@@ -414,7 +509,7 @@ public partial class SourceControlViewModel : ObservableObject
                 StatusMessage = pullMsg;
             }
             await RefreshAsync();
-            HistoryGraph = null;
+            await ReloadHistoryIfExpandedAsync();
         }
         catch (Exception ex) { StatusMessage = $"同步失败：{ex.Message}"; }
         finally { IsBusy = false; }
@@ -447,9 +542,9 @@ public partial class SourceControlViewModel : ObservableObject
             if (ok)
             {
                 CommitMessage = string.Empty;
-                HistoryGraph = null; // 新提交使历史图过期，下次进历史模式重载。
             }
             await RefreshAsync();
+            if (ok) await ReloadHistoryIfExpandedAsync(); // 新提交进历史图（展开时即时刷新）。
         }
         catch (Exception ex) { StatusMessage = $"提交失败：{ex.Message}"; }
     }

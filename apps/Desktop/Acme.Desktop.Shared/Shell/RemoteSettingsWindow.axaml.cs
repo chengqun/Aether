@@ -38,7 +38,8 @@ public partial class RemoteSettingsWindow : ThemedWindow
             TokenBox.Text = _prefs.GetAsync("git.token").GetAwaiter().GetResult();
         }
         // 探测系统 git credential helper 是否已认证（macOS keychain 等）→ 显示真实认证状态。
-        await ProbeAuthStatusAsync();
+        try { await ProbeAuthStatusAsync(); }
+        catch (Exception ex) { SetAuthBanner(false, $"凭证检测失败：{ex.Message}"); }
     }
 
     /// <summary>探测当前项目的系统凭证状态，更新顶部状态条（已认证=绿/未认证=黄）。</summary>
@@ -72,11 +73,11 @@ public partial class RemoteSettingsWindow : ThemedWindow
 
     private async void OnTestClick(object? sender, RoutedEventArgs e)
     {
-        if (!await SaveFieldsAsync()) return;
-        StatusText.Text = "测试中…";
         TestButton.IsEnabled = false;
         try
         {
+            if (!await SaveFieldsAsync()) return;
+            StatusText.Text = "测试中…";
             var dir = _projectDir?.CurrentDirectory;
             if (string.IsNullOrEmpty(dir) || _git is null || !_git.IsRepository(dir))
             {
@@ -86,13 +87,18 @@ public partial class RemoteSettingsWindow : ThemedWindow
             var (ok, msg) = await Task.Run(() => _git.Fetch(dir));
             StatusText.Text = msg;
         }
+        catch (Exception ex) { StatusText.Text = $"测试失败：{ex.Message}"; }
         finally { TestButton.IsEnabled = true; }
     }
 
     private async void OnSaveClick(object? sender, RoutedEventArgs e)
     {
-        if (!await SaveFieldsAsync()) return;
-        Close();
+        try
+        {
+            if (!await SaveFieldsAsync()) return;
+            Close();
+        }
+        catch (Exception ex) { StatusText.Text = $"保存失败：{ex.Message}"; }
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
@@ -105,11 +111,15 @@ public partial class RemoteSettingsWindow : ThemedWindow
             StatusText.Text = "偏好存储未就绪。";
             return false;
         }
+        // 控件 Text 必须在 UI 线程读（Avalonia 控件线程亲和，后台线程读 .Text 会抛
+        // InvalidOperationException→async void 未捕获→崩溃）。先在 UI 线程取值，再传后台写盘。
+        var user = string.IsNullOrWhiteSpace(UsernameBox.Text) ? null : UsernameBox.Text?.Trim();
+        var token = string.IsNullOrWhiteSpace(TokenBox.Text) ? null : TokenBox.Text?.Trim();
         // SetAsync 真异步（File.WriteAllTextAsync），用 Task.Run 避开 UI 线程 SynchronizationContext 死锁。
         await Task.Run(async () =>
         {
-            await _prefs.SetAsync("git.username", string.IsNullOrWhiteSpace(UsernameBox.Text) ? null : UsernameBox.Text?.Trim());
-            await _prefs.SetAsync("git.token", string.IsNullOrWhiteSpace(TokenBox.Text) ? null : TokenBox.Text?.Trim());
+            await _prefs.SetAsync("git.username", user);
+            await _prefs.SetAsync("git.token", token);
         });
         StatusText.Text = "已保存。";
         return true;
