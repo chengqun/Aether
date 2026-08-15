@@ -69,17 +69,17 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>「暂存的更改」段是否展开（折叠头）。</summary>
     [ObservableProperty] private bool _isStagedExpanded = true;
 
-    // ── 历史模式（提交拓扑图）──
+    // ── 历史（提交列表 section，与「更改」「暂存的更改」平级）──
 
-    /// <summary>是否在「历史」视图（false=「更改」工作区面板）。</summary>
-    [ObservableProperty] private bool _isHistoryView;
+    /// <summary>「历史」section 是否展开（首次展开懒加载提交历史）。</summary>
+    [ObservableProperty] private bool _isHistoryExpanded;
 
-    /// <summary>当前历史拓扑图（驱动图渲染）；切仓库/刷新时重载。</summary>
+    /// <summary>当前历史提交列表（驱动 section 渲染）；切仓库/刷新时重载。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHistory))]
     private CommitGraphModel? _historyGraph;
 
-    /// <summary>选中的 commit（驱动右侧元信息 + 改动文件）。</summary>
+    /// <summary>选中的 commit（驱动右侧元信息 + 改动文件）。非空时右侧切换为「提交详情」布局。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedCommit))]
     private LaidOutCommit? _selectedCommit;
@@ -106,7 +106,7 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>历史图是否已加载。</summary>
     public bool HasHistory => HistoryGraph is not null && HistoryGraph.Commits.Count > 0;
 
-    /// <summary>是否选中了 commit（驱动右侧元信息/空态）。</summary>
+    /// <summary>是否选中了 commit（驱动右侧元信息/空态 + 工作区/历史布局切换）。</summary>
     public bool HasSelectedCommit => SelectedCommit is not null;
 
     /// <summary>是否有 commit 文件 diff 展示。</summary>
@@ -118,9 +118,10 @@ public partial class SourceControlViewModel : ObservableObject
 
     [RelayCommand] private void ToggleChanges() => IsChangesExpanded = !IsChangesExpanded;
     [RelayCommand] private void ToggleStaged() => IsStagedExpanded = !IsStagedExpanded;
+    [RelayCommand] private void ToggleHistory() => IsHistoryExpanded = !IsHistoryExpanded;
 
-    /// <summary>切到「历史」视图时按需加载历史图。</summary>
-    partial void OnIsHistoryViewChanged(bool value)
+    /// <summary>首次展开「历史」section 时懒加载提交历史。</summary>
+    partial void OnIsHistoryExpandedChanged(bool value)
     {
         if (value && IsRepository && HistoryGraph is null)
             LoadHistoryAsync().SafeFireAndForget();
@@ -182,6 +183,16 @@ public partial class SourceControlViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
+    /// <summary>取消选中提交，回到工作区 diff 层（历史元信息头 ✕ 按钮）。</summary>
+    [RelayCommand]
+    private void ClearSelectedCommit()
+    {
+        SelectedCommit = null;
+        ActiveCommitDiff = null;
+        ActiveCommitDiffPath = null;
+        CommitFiles.Clear();
+    }
+
     /// <summary>项目目录变化（文档页打开/切换项目）→ 切仓库 + 刷新。</summary>
     private void OnProjectDirChanged(string? dir) => SetProjectAsync(dir).SafeFireAndForget();
 
@@ -204,8 +215,8 @@ public partial class SourceControlViewModel : ObservableObject
         ActiveCommitDiffPath = null;
         if (IsRepository)
         {
-            if (IsHistoryView) await LoadHistoryAsync();
-            else await RefreshAsync();
+            await RefreshAsync();
+            if (IsHistoryExpanded) await LoadHistoryAsync();
         }
     }
 
@@ -235,13 +246,17 @@ public partial class SourceControlViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    /// <summary>点击变更行 → 取 diff 填 <see cref="ActiveDiff"/>。</summary>
+    /// <summary>点击变更行 → 取 diff 填 <see cref="ActiveDiff"/>。同时清历史选中（切回工作区 diff 层）。</summary>
     [RelayCommand]
     private async Task OpenDiffAsync(ChangeItem? item)
     {
         if (item is null || string.IsNullOrEmpty(_projectDir)) return;
         var git = _serviceProvider.GetService<IGitService>();
         if (git is null) return;
+        SelectedCommit = null;
+        ActiveCommitDiff = null;
+        ActiveCommitDiffPath = null;
+        CommitFiles.Clear();
         IsBusy = true;
         try
         {

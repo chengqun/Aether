@@ -8,7 +8,6 @@
     <!-- 变更行模板：状态字母(着色) + 文件名 + 暗色路径 + 行内操作 -->
     <DataTemplate x:Key="ChangeRowTemplate">
       <Grid ColumnDefinitions="18,*" Margin="2,1" Classes="scm-row">
-        <!-- 单击行 = 对比差异；操作按钮以 overlay 浮于文件名右侧（hover 才显示，不引发布局抖动） -->
         <Button Grid.Column="0" Grid.ColumnSpan="2" Classes="scm-row-btn"
                 Command="{Binding $parent[UserControl].DataContext.OpenDiffCommand}"
                 CommandParameter="{Binding}"
@@ -24,7 +23,6 @@
             </StackPanel>
           </Grid>
         </Button>
-        <!-- overlay 操作区：右对齐浮于文件名之上，bg 与行 hover 同色，无缝融入 -->
         <StackPanel Grid.Column="1" Classes="scm-actions" Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center" HorizontalAlignment="Right"
                     Background="{DynamicResource AccentTintBrush}">
@@ -33,7 +31,6 @@
                   CommandParameter="{Binding}">
             <TextBlock Text="∓" FontSize="12"/>
           </Button>
-          <!-- 未暂存行：暂存；已暂存行：取消暂存 -->
           <Button Classes="scm-act" ToolTip.Tip="暂存"
                   IsVisible="{Binding !IsStaged}"
                   Command="{Binding $parent[UserControl].DataContext.StageCommand}"
@@ -54,6 +51,42 @@
         </StackPanel>
       </Grid>
     </DataTemplate>
+
+    <!-- 提交历史行：色点(lane色) + 消息 + 短日期；单击 → 选中提交看其改动 -->
+    <DataTemplate x:Key="CommitRowTemplate">
+      <Button Classes="scm-row-btn" Margin="2,1"
+              Command="{Binding $parent[UserControl].DataContext.SelectCommitCommand}"
+              CommandParameter="{Binding}"
+              ToolTip.Tip="{Binding Info.Message}"
+              HorizontalAlignment="Stretch">
+        <Grid ColumnDefinitions="12,*,Auto" VerticalAlignment="Center">
+          <TextBlock Grid.Column="0" Text="●" FontSize="10"
+                     Foreground="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
+                     VerticalAlignment="Center" HorizontalAlignment="Center"/>
+          <TextBlock Grid.Column="1" Text="{Binding Info.Message}" FontSize="12" Margin="6,0,0,0"
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="2" Text="{Binding Info.When, StringFormat='{}{0:MM-dd}'}"
+                     FontSize="10" Opacity="0.5" Margin="6,0,4,0" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Grid>
+      </Button>
+    </DataTemplate>
+
+    <!-- 提交改动文件行：状态字母(着色) + 文件名；单击 → 看该文件 commit diff -->
+    <DataTemplate x:Key="CommitFileTemplate">
+      <Button Classes="scm-row-btn" Margin="2,1"
+              Command="{Binding $parent[UserControl].DataContext.OpenCommitFileDiffCommand}"
+              CommandParameter="{Binding}"
+              HorizontalAlignment="Stretch">
+        <Grid ColumnDefinitions="18,*">
+          <TextBlock Grid.Column="0" Text="{Binding StatusLetter}" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{Binding Kind, Converter={x:Static shell:ChangeKindToBrushConverter.Instance}}"
+                     VerticalAlignment="Center" HorizontalAlignment="Center"/>
+          <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Margin="6,0,0,0"
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+    </DataTemplate>
   </UserControl.Resources>
 
   <UserControl.Styles>
@@ -70,12 +103,6 @@
       <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
-    <Style Selector="TextBlock.scm-section">
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-      <Setter Property="Margin" Value="8,8,8,2"/>
-    </Style>
     <Style Selector="Button.scm-section-header">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
@@ -87,7 +114,6 @@
     <Style Selector="Button.scm-section-header:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
     </Style>
-    <!-- 变更行：hover 高亮 + 行单击按钮（透明扁平） -->
     <Style Selector="Grid.scm-row">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
@@ -97,68 +123,52 @@
     <Style Selector="Button.scm-row-btn">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Padding" Value="6,2"/>
+      <Setter Property="MinHeight" Value="22"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
     <Style Selector="Button.scm-row-btn:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
     </Style>
     <Style Selector="Button.scm-row-btn:pressed /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
-    <!-- 操作区：默认隐藏，行 hover 才显示 -->
     <Style Selector="Grid.scm-row StackPanel.scm-actions">
       <Setter Property="IsVisible" Value="False"/>
     </Style>
     <Style Selector="Grid.scm-row:pointerover StackPanel.scm-actions">
       <Setter Property="IsVisible" Value="True"/>
     </Style>
-    <!-- 历史图 commit 行：透明扁平，hover/选中高亮 -->
-    <Style Selector="Button.graph-row">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="0"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-    </Style>
-    <Style Selector="Button.graph-row:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
-    </Style>
-    <Style Selector="Button.graph-row.selected /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
-    </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*">
-    <!-- ═══ 顶栏：模式切换（更改 / 历史） ═══ -->
-    <Border Grid.Row="0" Padding="8,4" Background="{DynamicResource SidebarBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <RadioButton Content="更改" GroupName="ScmMode" IsChecked="{Binding !IsHistoryView}" Padding="6,2"/>
-          <RadioButton Content="历史" GroupName="ScmMode" IsChecked="{Binding IsHistoryView}" Padding="6,2"/>
-        </StackPanel>
-        <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24"
-                ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
-          <TextBlock Text="↻" FontSize="13"/>
-        </Button>
-        <TextBlock Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold" Margin="2,0,0,0"
-                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-      </DockPanel>
-    </Border>
-
-    <!-- ═══ body：更改面板 / 历史图 叠加切换 ═══ -->
-    <Panel Grid.Row="1">
-    <Grid ColumnDefinitions="260,4,*" IsVisible="{Binding !IsHistoryView}">
+  <Grid ColumnDefinitions="260,4,*">
     <!-- ═══ 左：SCM 面板 ═══ -->
     <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*">
+      <Grid RowDefinitions="Auto,Auto,*">
+        <!-- 头：项目名 + 状态 + 刷新 -->
+        <Border Grid.Row="0" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <StackPanel Spacing="2">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24"
+                      ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+                <TextBlock Text="↻" FontSize="13"/>
+              </Button>
+              <TextBlock Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            </DockPanel>
+            <TextBlock Text="{Binding StatusMessage}" FontSize="10" Opacity="0.75" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
+          </StackPanel>
+        </Border>
+
         <!-- 提交框（VSCode 式：顶部） -->
-        <Border Grid.Row="0" Padding="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+        <Border Grid.Row="1" Padding="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
                 IsVisible="{Binding IsRepository}">
           <StackPanel Spacing="6">
-            <TextBox Text="{Binding CommitMessage}" Watermark="提交消息…" AcceptsReturn="True"
+            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
                      TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"/>
@@ -168,8 +178,8 @@
           </StackPanel>
         </Border>
 
-        <!-- 变更列表 / 空态 -->
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+        <!-- 变更 / 历史 / 空态 -->
+        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
           <Panel>
             <!-- 未开项目 -->
             <StackPanel IsVisible="{Binding !HasProject}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Opacity="0.6">
@@ -185,7 +195,7 @@
                          Foreground="{DynamicResource TextSecondaryBrush}"/>
             </StackPanel>
 
-            <!-- 变更区 -->
+            <!-- 变更 + 历史 -->
             <StackPanel IsVisible="{Binding IsRepository}">
               <!-- 更改段（可折叠头） -->
               <Button Classes="scm-section-header" Command="{Binding ToggleChangesCommand}">
@@ -221,6 +231,24 @@
                   <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
               </ItemsControl>
+
+              <!-- 历史段（可折叠头，带图标；首次展开懒加载） -->
+              <Button Classes="scm-section-header" Command="{Binding ToggleHistoryCommand}" Margin="0,6,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsHistoryExpanded}"/>
+                  <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsHistoryExpanded}"/>
+                  <TextBlock Text="🕘" FontSize="11"/>
+                  <TextBlock Text="历史" FontSize="11" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding HistoryGraph.Commits.Count, StringFormat='{}· {0}'}"
+                             FontSize="11" Opacity="0.7" IsVisible="{Binding HasHistory}"/>
+                </StackPanel>
+              </Button>
+              <ItemsControl IsVisible="{Binding IsHistoryExpanded}" ItemsSource="{Binding HistoryGraph.Commits}"
+                            ItemTemplate="{StaticResource CommitRowTemplate}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
             </StackPanel>
           </Panel>
         </ScrollViewer>
@@ -230,35 +258,86 @@
     <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
                   Background="{DynamicResource BorderBrush}" Cursor="SizeWestEast"/>
 
-    <!-- ═══ 右：diff 区 ═══ -->
+    <!-- ═══ 右：diff 区（工作区 diff / 提交详情 叠加） ═══ -->
     <Grid Grid.Column="2">
-      <!-- 空态 -->
-      <StackPanel IsVisible="{Binding !HasActiveDiff}"
-                  VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Opacity="0.6">
-        <TextBlock Text="∓" FontSize="40" HorizontalAlignment="Center"
-                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-        <TextBlock Text="选择一个变更查看差异" FontSize="14"
-                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-      </StackPanel>
+      <!-- 工作区 diff 层（未选中提交） -->
+      <Panel IsVisible="{Binding !HasSelectedCommit}">
+        <StackPanel IsVisible="{Binding !HasActiveDiff}"
+                    VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Opacity="0.6">
+          <TextBlock Text="∓" FontSize="40" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBlock Text="选择一个变更查看差异" FontSize="14"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+        <DockPanel IsVisible="{Binding HasActiveDiff}">
+          <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="danger" Content="丢弃更改" Margin="6,0,0,0"
+                      Command="{Binding DiscardActiveCommand}"/>
+              <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            </DockPanel>
+          </Border>
+          <shell:DiffView DataContext="{Binding ActiveDiff}"/>
+        </DockPanel>
+      </Panel>
 
-      <!-- diff：头 + DiffView -->
-      <DockPanel IsVisible="{Binding HasActiveDiff}">
-        <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
+      <!-- 提交详情层（选中提交：元信息 + 改动文件 + 文件 diff） -->
+      <Grid IsVisible="{Binding HasSelectedCommit}" RowDefinitions="Auto,*,4,*">
+        <!-- 元信息头（✕ 回工作区层） -->
+        <Border Grid.Row="0" Padding="10,6" Background="{DynamicResource SidebarBgBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Classes="danger" Content="丢弃更改" Margin="6,0,0,0"
-                    Command="{Binding DiscardActiveCommand}"/>
-            <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
-                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24" ToolTip.Tip="关闭"
+                    Command="{Binding ClearSelectedCommitCommand}">
+              <TextBlock Text="✕" FontSize="13"/>
+            </Button>
+            <StackPanel Spacing="2">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding SelectedCommit.Info.ShaShort}"
+                           FontFamily="Menlo,Monaco,Consolas,monospace" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrush}"/>
+                <TextBlock Text="{Binding SelectedCommit.Info.Author}" FontSize="12" Opacity="0.8"/>
+                <TextBlock Text="{Binding SelectedCommit.Info.When, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                           FontSize="11" Opacity="0.6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+              </StackPanel>
+              <TextBlock Text="{Binding SelectedCommit.Info.Message}" FontSize="13" TextWrapping="Wrap"/>
+            </StackPanel>
           </DockPanel>
         </Border>
-        <shell:DiffView DataContext="{Binding ActiveDiff}"/>
-      </DockPanel>
-    </Grid>
-    </Grid>
 
-    <!-- 历史图（拓扑） -->
-    <shell:HistoryView IsVisible="{Binding IsHistoryView}"/>
-    </Panel>
+        <!-- 改动文件 -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <TextBlock Text="改动文件" FontSize="11" FontWeight="SemiBold" Margin="10,8,8,2"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <ItemsControl ItemsSource="{Binding CommitFiles}" ItemTemplate="{StaticResource CommitFileTemplate}"/>
+          </StackPanel>
+        </ScrollViewer>
+
+        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
+                      Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
+
+        <!-- 提交文件 diff -->
+        <Grid Grid.Row="3">
+          <StackPanel IsVisible="{Binding !HasCommitDiff}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                      Spacing="8" Opacity="0.6">
+            <TextBlock Text="∓" FontSize="32" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBlock Text="选择一个改动文件查看差异" FontSize="13"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+          </StackPanel>
+          <DockPanel IsVisible="{Binding HasCommitDiff}">
+            <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SidebarBgBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+              <TextBlock Text="{Binding ActiveCommitDiffPath}" FontSize="12" FontWeight="SemiBold"
+                         TextTrimming="CharacterEllipsis"/>
+            </Border>
+            <shell:DiffView DataContext="{Binding ActiveCommitDiff}"/>
+          </DockPanel>
+        </Grid>
+      </Grid>
+    </Grid>
   </Grid>
 </UserControl>
