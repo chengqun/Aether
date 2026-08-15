@@ -8,8 +8,4 @@ public sealed class DesktopOptions
 {
     /// <summary>用户主题 JSON 文件目录（&lt;tenantDir&gt;/themes）。内置 light/dark 不依赖此目录。</summary>
     public string? ThemesDirectory { get; set; }
-
-    /// <summary>租户数据目录绝对路径（存 sqlite/preferences/skills/themes/mcp-servers 等的根）。
-    /// 文档页据此自动展开「应用数据」树。</summary>
-    public string? DataDirectory { get; set; }
 }

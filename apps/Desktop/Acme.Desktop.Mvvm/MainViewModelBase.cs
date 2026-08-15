@@ -49,7 +49,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         var workflowRunner = serviceProvider.GetRequiredService<ICustomWorkflowRunner>();
 
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
-        Documents = new DocumentsViewModel(serviceProvider, _dispatcher,
+        Documents = new DocumentsViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         Automation = new AutomationViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),

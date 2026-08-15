@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Acme.Desktop.Mvvm;
 
@@ -20,7 +19,6 @@ namespace Acme.Desktop.Mvvm;
 public partial class DocumentsViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IUiDispatcher _dispatcher;
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
     private bool _loadingPref;
 
@@ -39,9 +37,6 @@ public partial class DocumentsViewModel : ObservableObject
 
     /// <summary>文件树根节点（打开项目目录后填充；空 = 未打开目录）。</summary>
     public ObservableCollection<FileNode> Roots { get; } = new();
-
-    /// <summary>应用数据目录（tenantDir）树根节点——app 启动自动加载，供浏览/编辑 sqlite/preferences/skills 等数据文件。</summary>
-    public ObservableCollection<FileNode> TenantRoot { get; } = new();
 
     /// <summary>树中选中的节点（双绑 TreeView.SelectedItem）。View 据此：文件→读取并打开标签，文件夹→忽略。</summary>
     [ObservableProperty] private FileNode? _selectedNode;
@@ -115,15 +110,13 @@ public partial class DocumentsViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewRowSpan));
     }
 
-    public DocumentsViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher,
+    public DocumentsViewModel(IServiceProvider serviceProvider,
         ICurrentProjectDirectoryProvider projectDirProvider)
     {
         _serviceProvider = serviceProvider;
-        _dispatcher = dispatcher;
         _projectDirProvider = projectDirProvider;
         LoadFontSizeAsync().SafeFireAndForget();
         LoadLastProjectAsync().SafeFireAndForget(); // 恢复上次打开的项目目录（VSCode 式记住工作区）
-        LoadTenantDirAsync().SafeFireAndForget();   // 自动展开应用数据目录（tenantDir）树
     }
 
     partial void OnEditorFontSizeChanged(double value)
@@ -266,25 +259,6 @@ public partial class DocumentsViewModel : ObservableObject
                 await OpenFolderAsync(path);
         }
         catch { /* 恢复失败不影响使用 */ }
-    }
-
-    /// <summary>自动加载应用数据目录（tenantDir）树。app 启动即展开，供浏览/编辑 sqlite/preferences/skills 等数据文件。
-    /// 路径取自 <see cref="DesktopOptions.DataDirectory"/>（= tenantDir）；空或不存在则静默跳过。</summary>
-    private async Task LoadTenantDirAsync()
-    {
-        try
-        {
-            var dir = _serviceProvider.GetService<IOptions<DesktopOptions>>()?.Value?.DataDirectory;
-            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
-            var root = await Task.Run(() => BuildNode(dir, isRoot: true));
-            await _dispatcher.InvokeAsync(() =>
-            {
-                TenantRoot.Clear();
-                TenantRoot.Add(root);
-                root.IsExpanded = true;
-            });
-        }
-        catch { /* 应用数据树加载失败不影响文档页使用 */ }
     }
 
     /// <summary>递归构建文件树节点。文件夹：先子目录后文件，各按名排序；跳过 <see cref="ExcludedDirs"/>/<see cref="ExcludedFiles"/>。</summary>
