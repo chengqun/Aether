@@ -24,6 +24,7 @@ public static class IconLoader
         ["experts"] = PackIconCodiconsKind.Hubot,
         ["notes"] = PackIconCodiconsKind.Book,
         ["documents"] = PackIconCodiconsKind.Files,
+        ["sourcecontrol"] = PackIconCodiconsKind.SourceControl,
         ["automation"] = PackIconCodiconsKind.Calendar,
         ["futures"] = PackIconCodiconsKind.GraphLine,
         ["backtest"] = PackIconCodiconsKind.Beaker,

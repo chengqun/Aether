@@ -51,6 +51,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         Notes = new NotesViewModel(serviceProvider, _dispatcher);
         Documents = new DocumentsViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
+        SourceControl = new SourceControlViewModel(serviceProvider,
+            serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         Automation = new AutomationViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             serviceProvider.GetRequiredService<IAutomationService>(),
@@ -119,6 +121,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>打开文档页 ViewModel（多标签磁盘文件编辑器）</summary>
     public DocumentsViewModel Documents { get; }
+
+    /// <summary>源代码管理页 ViewModel（git status/diff/stage/commit/discard，读文档页打开的项目目录）</summary>
+    public SourceControlViewModel SourceControl { get; }
 
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }

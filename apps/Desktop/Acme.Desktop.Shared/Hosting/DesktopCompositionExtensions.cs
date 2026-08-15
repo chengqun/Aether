@@ -142,6 +142,7 @@ public static class DesktopCompositionExtensions
         // .app 启动 CWD=/，SystemTools 的 Glob/Grep/Shell 默认 path 打不到用户打开的项目；此工具经
         // ICurrentProjectDirectoryProvider（DocumentsViewModel.RootPath 变化时回写）取真实目录。标 Safe（只读）。
         services.AddSingleton<ICurrentProjectDirectoryProvider, CurrentProjectDirectoryProvider>();
+        services.AddSingleton<Acme.Desktop.Mvvm.Git.IGitService, Acme.Desktop.Mvvm.Git.GitService>();
         services.AddTransient<GetCurrentProjectDirectoryTool>();
         aether.ConfigureToolRegistry(reg => reg.Register(
             "GetCurrentProjectDirectory", "获取文档页当前打开的项目目录路径与顶层文件/目录结构", "系统工具",

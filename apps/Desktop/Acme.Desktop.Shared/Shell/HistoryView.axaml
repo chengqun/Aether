@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.HistoryView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Resources>
+    <!-- commit 改动文件行：状态字母(着色) + 文件名；单击 = 看该文件 diff -->
+    <DataTemplate x:Key="CommitFileTemplate">
+      <Button Classes="cfile-row" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+              Command="{Binding $parent[UserControl].DataContext.OpenCommitFileDiffCommand}"
+              CommandParameter="{Binding}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="{Binding StatusLetter}" FontSize="12" FontWeight="SemiBold" Width="14"
+                     Foreground="{Binding Kind, Converter={x:Static shell:ChangeKindToBrushConverter.Instance}}"
+                     VerticalAlignment="Center" HorizontalAlignment="Center"/>
+          <TextBlock Text="{Binding FileName}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Button>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Button.cfile-row">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,3"/>
+      <Setter Property="MinHeight" Value="24"/>
+    </Style>
+    <Style Selector="Button.cfile-row:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+    </Style>
+    <Style Selector="Border.ref-badge">
+      <Setter Property="CornerRadius" Value="3"/>
+      <Setter Property="Padding" Value="4,1"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="*,4,*">
+    <!-- ═══ 左：提交拓扑图 ═══ -->
+    <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="*,Auto">
+        <Panel Grid.Row="0">
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <Canvas x:Name="GraphCanvas" Background="Transparent"/>
+          </ScrollViewer>
+          <TextBlock IsVisible="{Binding !HasHistory}" Text="无提交历史"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Panel>
+        <Border Grid.Row="1" Padding="8,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+          <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Border>
+      </Grid>
+    </Border>
+
+    <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                  Background="{DynamicResource BorderBrush}" Cursor="SizeWestEast"/>
+
+    <!-- ═══ 右：commit 详情（元信息 + 改动文件 + diff） ═══ -->
+    <Grid Grid.Column="2" RowDefinitions="Auto,*,4,*">
+      <!-- 元信息 -->
+      <Border Grid.Row="0" Padding="10,6" Background="{DynamicResource SidebarBgBrush}"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Panel>
+          <StackPanel IsVisible="{Binding HasSelectedCommit}" Spacing="2">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding SelectedCommit.Info.ShaShort}" FontFamily="Menlo,Monaco,Consolas,monospace"
+                         FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/>
+              <TextBlock Text="{Binding SelectedCommit.Info.Author}" FontSize="12" Opacity="0.8"/>
+              <TextBlock Text="{Binding SelectedCommit.Info.When, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                         FontSize="11" Opacity="0.6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding SelectedCommit.Info.Message}" FontSize="13" TextWrapping="Wrap"/>
+          </StackPanel>
+          <TextBlock IsVisible="{Binding !HasSelectedCommit}" Text="选择一个提交查看详情"
+                     FontSize="13" Opacity="0.6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Panel>
+      </Border>
+
+      <!-- 改动文件 -->
+      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+          <TextBlock Text="改动文件" FontSize="11" FontWeight="SemiBold" Margin="10,8,8,2"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     IsVisible="{Binding HasSelectedCommit}"/>
+          <ItemsControl ItemsSource="{Binding CommitFiles}" ItemTemplate="{StaticResource CommitFileTemplate}"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
+                    Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
+
+      <!-- diff -->
+      <Grid Grid.Row="3">
+        <StackPanel IsVisible="{Binding !HasCommitDiff}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Spacing="8" Opacity="0.6">
+          <TextBlock Text="∓" FontSize="32" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBlock Text="选择一个改动文件查看差异" FontSize="13"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+        <DockPanel IsVisible="{Binding HasCommitDiff}">
+          <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SidebarBgBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <TextBlock Text="{Binding ActiveCommitDiffPath}" FontSize="12" FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis"/>
+          </Border>
+          <shell:DiffView DataContext="{Binding ActiveCommitDiff}"/>
+        </DockPanel>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

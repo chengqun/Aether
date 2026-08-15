@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- git 源代码管理（status/diff/stage/commit/discard）。跨平台 native-binding，含 win/linux/osx runtimes。 -->
+    <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
   </ItemGroup>
 
   <ItemGroup>
