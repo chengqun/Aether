@@ -273,14 +273,15 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         }
     }
 
-    /// <summary>两棵布局树覆盖相同的 region id 集合（面板增删会不等 → 回退默认，免用过期结构）。</summary>
+    /// <summary>两棵布局树覆盖相同的 region id 序列（有序比较：面板增删或 tab 顺序变更都会不等 → 回退默认）。
+    /// 有序而非集合：当代码默认 tab 顺序变化（如某面板提首位），旧持久化布局顺序不匹配 → 回退新默认，免被旧顺序覆盖。</summary>
     private static bool CoversSameRegions(LayoutNode a, LayoutNode b)
-        => CollectRegions(a).SetEquals(CollectRegions(b));
+        => CollectRegions(a).SequenceEqual(CollectRegions(b));
 
-    /// <summary>收集布局树中所有 region id（LayoutRegion.RegionId + LayoutTabbed.RegionIds）。</summary>
-    private static HashSet<string> CollectRegions(LayoutNode n)
+    /// <summary>按遍历顺序收集布局树中所有 region id（LayoutSplit 按 Children 顺序、LayoutTabbed 按 RegionIds 数组顺序）。</summary>
+    private static List<string> CollectRegions(LayoutNode n)
     {
-        var set = new HashSet<string>();
+        var list = new List<string>();
         void Walk(LayoutNode x)
         {
             switch (x)
@@ -289,15 +290,15 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
                     foreach (var c in s.Children) Walk(c);
                     break;
                 case LayoutRegion r:
-                    set.Add(r.RegionId);
+                    list.Add(r.RegionId);
                     break;
                 case LayoutTabbed t:
-                    foreach (var id in t.RegionIds) set.Add(id);
+                    foreach (var id in t.RegionIds) list.Add(id);
                     break;
             }
         }
         Walk(n);
-        return set;
+        return list;
     }
 
     /// <summary>清除已保存的布局并重新激活默认工作台（重置 GridSplitter 位置 + tab 选择）。
