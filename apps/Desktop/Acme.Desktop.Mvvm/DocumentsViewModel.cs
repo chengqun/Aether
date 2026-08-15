@@ -20,6 +20,7 @@ public partial class DocumentsViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IUiDispatcher _dispatcher;
+    private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
     private bool _loadingPref;
 
     /// <summary>目录树扫描时跳过的子目录（构建产物 / VCS / 依赖缓存，体积大且无编辑价值）。</summary>
@@ -110,10 +111,12 @@ public partial class DocumentsViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewRowSpan));
     }
 
-    public DocumentsViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher)
+    public DocumentsViewModel(IServiceProvider serviceProvider, IUiDispatcher dispatcher,
+        ICurrentProjectDirectoryProvider projectDirProvider)
     {
         _serviceProvider = serviceProvider;
         _dispatcher = dispatcher;
+        _projectDirProvider = projectDirProvider;
         LoadFontSizeAsync().SafeFireAndForget();
         LoadLastProjectAsync().SafeFireAndForget(); // 恢复上次打开的项目目录（VSCode 式记住工作区）
     }
@@ -122,6 +125,10 @@ public partial class DocumentsViewModel : ObservableObject
     {
         if (!_loadingPref) PersistFontSizeAsync(value).SafeFireAndForget();
     }
+
+    /// <summary>RootPath 变化时回写到 DI holder，让 AI 工具能查到当前打开的项目目录。</summary>
+    partial void OnRootPathChanged(string? value)
+        => _projectDirProvider.CurrentDirectory = value;
 
     private async Task PersistFontSizeAsync(double value)
     {

@@ -138,6 +138,18 @@ public static class DesktopCompositionExtensions
                 typeof(AskUserTool).GetMethod(nameof(AskUserTool.AskAsync))!, sp.GetRequiredService<AskUserTool>(),
                 "ask_user")));
 
+        // GetCurrentProjectDirectory：让 agent 查文档页当前打开的项目目录路径与顶层结构。
+        // .app 启动 CWD=/，SystemTools 的 Glob/Grep/Shell 默认 path 打不到用户打开的项目；此工具经
+        // ICurrentProjectDirectoryProvider（DocumentsViewModel.RootPath 变化时回写）取真实目录。标 Safe（只读）。
+        services.AddSingleton<ICurrentProjectDirectoryProvider, CurrentProjectDirectoryProvider>();
+        services.AddTransient<GetCurrentProjectDirectoryTool>();
+        aether.ConfigureToolRegistry(reg => reg.Register(
+            "GetCurrentProjectDirectory", "获取文档页当前打开的项目目录路径与顶层文件/目录结构", "系统工具",
+            sp => AIFunctionFactory.Create(
+                typeof(GetCurrentProjectDirectoryTool).GetMethod(nameof(GetCurrentProjectDirectoryTool.GetCurrentProjectDirectory))!,
+                sp.GetRequiredService<GetCurrentProjectDirectoryTool>(),
+                "GetCurrentProjectDirectory")));
+
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();
