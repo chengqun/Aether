@@ -32,6 +32,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new DocumentsView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
 
+        // 源代码管理：共享 SourceControlView（git 变更列表 + 左右并排 diff）。
+        Register(PanelKeys.SourceControl,
+            () => new SourceControlView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().SourceControl);
+
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,
             () => new ExpertsView(),
