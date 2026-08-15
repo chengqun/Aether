@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,7 +51,11 @@ public class ShellCommandTool
             }
             else
             {
-                psi.FileName = "/bin/bash";
+                // 登录 shell（-l）：source 用户 profile 拿到完整 PATH。GUI 启动的 .app 继承受限 PATH
+                // （缺 /usr/local/share/dotnet、/opt/homebrew/bin 等），非登录 bash 找不到 dotnet/npx/python3。
+                // 镜像 McpServerRegistry.ConnectAsync 的相对命令处理。ArgumentList 逐参传递，命令串原样进 -c。
+                psi.FileName = ResolveLoginShell();
+                psi.ArgumentList.Add("-l");
                 psi.ArgumentList.Add("-c");
                 psi.ArgumentList.Add(command);
             }
@@ -138,6 +143,15 @@ public class ShellCommandTool
                 process.Dispose();
             }
         }
+    }
+
+    /// <summary>取用户登录 shell（$SHELL），空或不存在回退 zsh→bash。让子命令经登录 shell source profile 拿到完整 PATH。</summary>
+    private static string ResolveLoginShell()
+    {
+        var shell = Environment.GetEnvironmentVariable("SHELL");
+        if (!string.IsNullOrEmpty(shell) && File.Exists(shell)) return shell;
+        if (File.Exists("/bin/zsh")) return "/bin/zsh";
+        return "/bin/bash";
     }
 
     private static string Truncate(string text, int maxLength)

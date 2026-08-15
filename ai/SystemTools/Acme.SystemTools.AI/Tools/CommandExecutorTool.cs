@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -32,7 +33,7 @@ public class CommandExecutorTool
 
             var processStartInfo = new ProcessStartInfo
             {
-                FileName = command,
+                FileName = ResolveCommandPath(command),
                 Arguments = arguments ?? string.Empty,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -141,5 +142,31 @@ public class CommandExecutorTool
                 process.Dispose();
             }
         }
+    }
+
+    /// <summary>把相对命令名解析成绝对路径（镜像 GitService.FindGitExecutable）。
+    /// GUI 启动的 .app 继承受限 PATH，<see cref="Process.Start"/> 用父进程 PATH 解析相对 FileName——
+    /// 本工具无 shell 不走登录 shell，故扫 PATH + 常见安装目录兜底，让 dotnet/npx 等被直接进程找到。
+    /// 绝对路径原样返回；未找到返回原名让 Process.Start 报原生错误（Windows 无 .app PATH 问题且需 PATHEXT，此函数对其基本是 no-op）。</summary>
+    private static string ResolveCommandPath(string command)
+    {
+        if (string.IsNullOrEmpty(command) || Path.IsPathRooted(command)) return command;
+        var dirs = new List<string>();
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrEmpty(pathEnv))
+            foreach (var d in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+                dirs.Add(d);
+        // .app 受限 PATH 兜底：补常见 bin 目录（macOS homebrew / Linux）。
+        dirs.AddRange(new[] { "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin" });
+        foreach (var d in dirs)
+        {
+            try
+            {
+                var full = Path.Combine(d.Trim('"'), command);
+                if (File.Exists(full)) return full;
+            }
+            catch { /* 脏 PATH 段跳过 */ }
+        }
+        return command;
     }
 }
