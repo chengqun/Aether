@@ -45,7 +45,7 @@ public interface IGitService
     /// <summary>系统 git credential helper（如 macOS keychain）是否已存有当前远程的凭证（免填 PAT 判断）。不联网，仅查 helper。</summary>
     bool HasSystemCredentials(string repoPath);
 
-    /// <summary>从远程拉取更新（fetch）但不合并。凭证从 preferences 读（git.username/git.token）。</summary>
+    /// <summary>从远程拉取更新（fetch）但不合并。凭证复用系统 git credential helper（不读应用内存储）。</summary>
     (bool Success, string Message) Fetch(string repoPath);
 
     /// <summary>拉取并合并远程更新到当前分支。可能产生冲突——Message 含冲突文件列表。</summary>

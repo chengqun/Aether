@@ -11,11 +11,6 @@ namespace Acme.Desktop.Mvvm.Git;
 /// native lib（osx/linux/win）随 LibGit2Sharp runtimes 部署，不依赖系统 git CLI（避 .app PATH 受限坑）。</summary>
 public sealed class GitService : IGitService
 {
-    private readonly IPreferencesStore? _prefs;
-
-    /// <param name="prefs">偏好存储（读 GitHub 凭证 git.username/git.token；桌面端注入，测试可 null）。</param>
-    public GitService(IPreferencesStore? prefs = null) => _prefs = prefs;
-
     public bool IsRepository(string path) => Discover(path) is not null;
 
     public string? Discover(string path)
@@ -179,7 +174,7 @@ public sealed class GitService : IGitService
         using var repo = Open(repoPath);
         if (repo is null) return (false, "未找到 git 仓库。");
         var creds = ResolveCredentials(GetRemoteUrl(repo));
-        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret）未返回凭证。请在终端执行一次 git push 让 git 保存凭证（macOS 存入 keychain），或确认系统已配 credential helper。");
 
         var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin") ?? repo.Network.Remotes.FirstOrDefault();
         if (remote is null) return (false, "仓库未配置远程（origin）。");
@@ -197,7 +192,7 @@ public sealed class GitService : IGitService
         using var repo = Open(repoPath);
         if (repo is null) return (false, "未找到 git 仓库。");
         var creds = ResolveCredentials(GetRemoteUrl(repo));
-        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret）未返回凭证。请在终端执行一次 git push 让 git 保存凭证（macOS 存入 keychain），或确认系统已配 credential helper。");
         var head = repo.Head;
         if (head is null || !head.IsTracking)
             return (false, "当前分支未设置上游跟踪，无法 pull（请先 push 建立跟踪）。");
@@ -230,7 +225,7 @@ public sealed class GitService : IGitService
         using var repo = Open(repoPath);
         if (repo is null) return (false, "未找到 git 仓库。");
         var creds = ResolveCredentials(GetRemoteUrl(repo));
-        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret）未返回凭证。请在终端执行一次 git push 让 git 保存凭证（macOS 存入 keychain），或确认系统已配 credential helper。");
         var head = repo.Head;
         if (head is null || head.Tip is null) return (false, "当前分支无提交，无法 push。");
 
@@ -256,23 +251,12 @@ public sealed class GitService : IGitService
     }
 
     // —— 远程凭证 ——
-    // 优先级：① 系统 git credential helper（复用 macOS keychain / Windows manager / Linux libsecret
-    //    等已存凭证，VSCode 式免填）→ ② 本地 preferences 的 PAT（fallback，helper 未配/失败时）。
+    // 仅复用系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret
+    // 等已存凭证，VSCode 式免填）。不在应用内存储 PAT——未配置时引导用户在终端配 credential helper。
 
-    /// <summary>解析 GitHub 凭证：先试系统 git credential helper（复用 keychain），再 fallback 到本地 PAT。未配置返回 null。</summary>
-    private UsernamePasswordCredentials? ResolveCredentials(string? url)
-    {
-        // ① 系统 git credential helper（git credential fill 读 keychain 等已存凭证）。
-        var fromHelper = TryGetCredentialsFromHelper(url);
-        if (fromHelper is not null) return fromHelper;
-
-        // ② 本地 preferences PAT。
-        if (_prefs is null) return null;
-        var token = _prefs.GetAsync("git.token").GetAwaiter().GetResult();
-        if (string.IsNullOrWhiteSpace(token)) return null;
-        var user = _prefs.GetAsync("git.username").GetAwaiter().GetResult();
-        return new UsernamePasswordCredentials { Username = string.IsNullOrWhiteSpace(user) ? "token" : user!, Password = token! };
-    }
+    /// <summary>解析 GitHub 凭证：复用系统 git credential helper 已存凭证。未配置返回 null（上层引导用户配 helper）。</summary>
+    private static UsernamePasswordCredentials? ResolveCredentials(string? url)
+        => TryGetCredentialsFromHelper(url);
 
     /// <summary>调系统 <c>git credential fill</c> 读 credential helper（如 macOS keychain）已存的凭证。免填 PAT。</summary>
     /// <param name="url">远程 URL（push/fetch 时的实际地址）；null 时用 protocol=https + host=github.com。</param>

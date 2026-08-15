@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
 using Acme.Desktop.Mvvm.Git;
@@ -9,11 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>Git 远程设置窗口（GitHub 用户名 + PAT）。经 <see cref="DesktopApp.Services"/> 解析
-/// <see cref="IPreferencesStore"/>（持久化 git.username/git.token）+ <see cref="IGitService"/>（测试连接）。</summary>
+/// <summary>Git 远程凭证诊断窗口。不存储任何 PAT——凭证完全由系统 git credential helper
+/// 管理（macOS keychain / Windows Credential Manager / Linux libsecret）。此窗口仅：
+/// ① 探测系统凭证状态（已认证/未认证）② 未认证时给出终端配置指引 ③ 测试连接（fetch 验证）。
+/// 经 <see cref="DesktopApp.Services"/> 解析 <see cref="IGitService"/> + <see cref="ICurrentProjectDirectoryProvider"/>。</summary>
 public partial class RemoteSettingsWindow : ThemedWindow
 {
-    private IPreferencesStore? _prefs;
     private IGitService? _git;
     private ICurrentProjectDirectoryProvider? _projectDir;
 
@@ -25,31 +25,23 @@ public partial class RemoteSettingsWindow : ThemedWindow
     protected override async void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        // 从 DI 解析服务（DesktopApp.Services 由租户 App 构建容器后赋值；设计期 null 跳过）。
         var sp = DesktopApp.Services;
         if (sp is null) return;
-        _prefs = sp.GetService<IPreferencesStore>();
         _git = sp.GetService<IGitService>();
         _projectDir = sp.GetService<ICurrentProjectDirectoryProvider>();
-        // 预填已存 PAT（仅后备用）。
-        if (_prefs is not null)
-        {
-            UsernameBox.Text = _prefs.GetAsync("git.username").GetAwaiter().GetResult();
-            TokenBox.Text = _prefs.GetAsync("git.token").GetAwaiter().GetResult();
-        }
-        // 探测系统 git credential helper 是否已认证（macOS keychain 等）→ 显示真实认证状态。
         try { await ProbeAuthStatusAsync(); }
         catch (Exception ex) { SetAuthBanner(false, $"凭证检测失败：{ex.Message}"); }
     }
 
-    /// <summary>探测当前项目的系统凭证状态，更新顶部状态条（已认证=绿/未认证=黄）。</summary>
+    /// <summary>探测当前项目的系统凭证状态，更新状态条 + 详情/指引。</summary>
     private async Task ProbeAuthStatusAsync()
     {
-        if (_git is null) { SetAuthBanner(false, "凭证服务未就绪。"); return; }
+        if (_git is null) { SetAuthBanner(false, "凭证服务未就绪。"); HelpBox.IsVisible = false; return; }
         var dir = _projectDir?.CurrentDirectory;
         if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
         {
-            SetAuthBanner(false, "当前未打开 git 项目，无法检测系统凭证。请先在文档页打开项目。");
+            SetAuthBanner(false, "当前未打开 git 项目，无法检测凭证。请先在文档页打开项目。");
+            HelpBox.IsVisible = false;
             return;
         }
         bool hasSystem;
@@ -57,9 +49,18 @@ public partial class RemoteSettingsWindow : ThemedWindow
         catch { hasSystem = false; }
 
         if (hasSystem)
-            SetAuthBanner(true, "已通过系统 git 凭证认证（如 macOS keychain）。push/pull/sync 直接可用，无需填写下方 PAT。");
+        {
+            SetAuthBanner(true, "已通过系统 git 凭证认证。push / pull / sync 直接可用。");
+            DetailText.Text = "凭证由系统 git credential helper 管理（macOS keychain / Windows Credential Manager / Linux libsecret）。Aether 不存储任何 GitHub 密码或 PAT，与命令行 git 共用同一凭证。";
+            HelpBox.IsVisible = false;
+        }
         else
-            SetAuthBanner(false, "系统未找到 git 凭证。请填写下方 GitHub 用户名 + PAT（生成方法见说明），保存后即可用。");
+        {
+            SetAuthBanner(false, "系统未找到 git 凭证。");
+            DetailText.Text = "Aether 复用系统 git 的凭证（与命令行 git push 同源），不在应用内存储 PAT。请先在终端让 git 保存一次凭证：";
+            HelpBox.IsVisible = true;
+            HelpCmd.Text = "git push";
+        }
     }
 
     private void SetAuthBanner(bool ok, string text)
@@ -71,57 +72,25 @@ public partial class RemoteSettingsWindow : ThemedWindow
                                  : this.FindResource("WarningBrush") as Avalonia.Media.IBrush;
     }
 
+    /// <summary>测试连接：fetch 验证当前系统凭证是否可用。结果回显到状态条（成功绿/失败黄）。</summary>
     private async void OnTestClick(object? sender, RoutedEventArgs e)
     {
         TestButton.IsEnabled = false;
         try
         {
-            if (!await SaveFieldsAsync()) return;
-            StatusText.Text = "测试中…";
             var dir = _projectDir?.CurrentDirectory;
             if (string.IsNullOrEmpty(dir) || _git is null || !_git.IsRepository(dir))
             {
-                StatusText.Text = "当前未打开 git 项目，无法测试（请先在文档页打开项目）。";
+                SetAuthBanner(false, "当前未打开 git 项目，无法测试（请先在文档页打开项目）。");
                 return;
             }
+            SetAuthBanner(true, "测试中…");
             var (ok, msg) = await Task.Run(() => _git.Fetch(dir));
-            StatusText.Text = msg;
+            SetAuthBanner(ok, msg);
         }
-        catch (Exception ex) { StatusText.Text = $"测试失败：{ex.Message}"; }
+        catch (Exception ex) { SetAuthBanner(false, $"测试失败：{ex.Message}"); }
         finally { TestButton.IsEnabled = true; }
     }
 
-    private async void OnSaveClick(object? sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (!await SaveFieldsAsync()) return;
-            Close();
-        }
-        catch (Exception ex) { StatusText.Text = $"保存失败：{ex.Message}"; }
-    }
-
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
-
-    /// <summary>把当前输入框值写入 preferences。返回是否已配置服务（否则提示）。</summary>
-    private async Task<bool> SaveFieldsAsync()
-    {
-        if (_prefs is null)
-        {
-            StatusText.Text = "偏好存储未就绪。";
-            return false;
-        }
-        // 控件 Text 必须在 UI 线程读（Avalonia 控件线程亲和，后台线程读 .Text 会抛
-        // InvalidOperationException→async void 未捕获→崩溃）。先在 UI 线程取值，再传后台写盘。
-        var user = string.IsNullOrWhiteSpace(UsernameBox.Text) ? null : UsernameBox.Text?.Trim();
-        var token = string.IsNullOrWhiteSpace(TokenBox.Text) ? null : TokenBox.Text?.Trim();
-        // SetAsync 真异步（File.WriteAllTextAsync），用 Task.Run 避开 UI 线程 SynchronizationContext 死锁。
-        await Task.Run(async () =>
-        {
-            await _prefs.SetAsync("git.username", user);
-            await _prefs.SetAsync("git.token", token);
-        });
-        StatusText.Text = "已保存。";
-        return true;
-    }
 }
