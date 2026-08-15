@@ -151,6 +151,24 @@ public static class DesktopCompositionExtensions
                 sp.GetRequiredService<GetCurrentProjectDirectoryTool>(),
                 "GetCurrentProjectDirectory")));
 
+        // git 工具（git_status 只读 / git_commit 暂存全部并提交）：让 agent 查看与提交文档页当前项目的 git 变更。
+        // git 无业务上下文、GitService 在宿主 VM 库 → 走宿主层注册（同 ask_user/GetCurrentProjectDirectory），非 ai/ 适配器。
+        // git_commit 不可逆（创建提交）→ 标 Dangerous，专家开启 RequireToolApproval 时弹审批红徽。
+        services.AddTransient<GitTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("git_status", "查看当前项目（文档页打开的目录）的 git 工作区状态：已暂存/未暂存的变更文件列表。只读。", "Git",
+                sp => AIFunctionFactory.Create(
+                    typeof(GitTool).GetMethod(nameof(GitTool.GitStatus))!, sp.GetRequiredService<GitTool>(),
+                    "git_status"),
+                ToolApprovalLevel.Safe);
+            reg.Register("git_commit", "将当前项目所有变更（含未跟踪文件）暂存并提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。", "Git",
+                sp => AIFunctionFactory.Create(
+                    typeof(GitTool).GetMethod(nameof(GitTool.GitCommitAsync))!, sp.GetRequiredService<GitTool>(),
+                    "git_commit"),
+                ToolApprovalLevel.Dangerous);
+        });
+
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();

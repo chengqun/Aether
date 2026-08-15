@@ -197,24 +197,28 @@
 
             <!-- 变更 + 历史 -->
             <StackPanel IsVisible="{Binding IsRepository}">
-              <!-- 更改段（可折叠头） -->
-              <Button Classes="scm-section-header" Command="{Binding ToggleChangesCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                  <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsChangesExpanded}"/>
-                  <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsChangesExpanded}"/>
-                  <TextBlock Text="更改" FontSize="11" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding Changes.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7"/>
-                </StackPanel>
-              </Button>
+              <!-- 更改段（可折叠头 + 全部暂存图标） -->
+              <Grid ColumnDefinitions="*,Auto">
+                <Button Grid.Column="0" Classes="scm-section-header" Command="{Binding ToggleChangesCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="▾" FontSize="10" IsVisible="{Binding IsChangesExpanded}"/>
+                    <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsChangesExpanded}"/>
+                    <TextBlock Text="更改" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Changes.Count, StringFormat='{}· {0}'}" FontSize="11" Opacity="0.7"/>
+                  </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Classes="scm-act" Width="22" Height="22" Margin="0,0,4,0"
+                        ToolTip.Tip="全部暂存" IsVisible="{Binding IsChangesExpanded}"
+                        Command="{Binding StageAllCommand}">
+                  <TextBlock Text="＋" FontSize="13"/>
+                </Button>
+              </Grid>
               <ItemsControl IsVisible="{Binding IsChangesExpanded}" ItemsSource="{Binding Changes}"
                             ItemTemplate="{StaticResource ChangeRowTemplate}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
               </ItemsControl>
-              <Button Classes="scm-act" Content="全部暂存" Margin="8,2" HorizontalAlignment="Left"
-                      IsVisible="{Binding IsChangesExpanded}"
-                      Command="{Binding StageAllCommand}"/>
 
               <!-- 暂存的更改段（可折叠头） -->
               <Button Classes="scm-section-header" Command="{Binding ToggleStagedCommand}">
@@ -272,12 +276,8 @@
         <DockPanel IsVisible="{Binding HasActiveDiff}">
           <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
                   BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="danger" Content="丢弃更改" Margin="6,0,0,0"
-                      Command="{Binding DiscardActiveCommand}"/>
-              <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
-                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-            </DockPanel>
+            <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
           </Border>
           <shell:DiffView DataContext="{Binding ActiveDiff}"/>
         </DockPanel>

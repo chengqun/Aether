@@ -1,4 +1,8 @@
 ## .NET
+## macOS
+.DS_Store
+
+
 bin/
 obj/
 *.user
