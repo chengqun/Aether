@@ -151,10 +151,16 @@ public static class DesktopCompositionExtensions
                 sp.GetRequiredService<GetCurrentProjectDirectoryTool>(),
                 "GetCurrentProjectDirectory")));
 
-        // git 工具（git_status 只读 / git_commit 暂存全部并提交）：让 agent 查看与提交文档页当前项目的 git 变更。
-        // git 无业务上下文、GitService 在宿主 VM 库 → 走宿主层注册（同 ask_user/GetCurrentProjectDirectory），非 ai/ 适配器。
-        // git_commit 不可逆（创建提交）→ 标 Dangerous，专家开启 RequireToolApproval 时弹审批红徽。
+        // git 工具（git_status 只读 / git_commit 暂存全部并提交 / git_push 推送 / git_pull 拉取合并）：
+        // 让 agent 查看与提交、同步文档页当前项目的 git 变更。git 无业务上下文、GitService 在宿主 VM 库 →
+        // 走宿主层注册（同 ask_user/GetCurrentProjectDirectory），非 ai/ 适配器。
+        // git_commit/git_push/git_pull 不可逆（创建提交 / 公开到远程 / 改本地工作区）→ 标 Dangerous，
+        // 专家开启 RequireToolApproval 时弹审批红徽。git_status 只读标 Safe。
         services.AddTransient<GitTool>();
+        // git 仓库变更通知（AI 工具后台提交/同步后 → SCM 页刷新）。
+        services.AddSingleton<Acme.Desktop.Mvvm.Git.IGitRepositoryNotifier, Acme.Desktop.Mvvm.Git.GitRepositoryNotifier>();
+        // 远程设置对话框（GitHub 用户名 + PAT）端口实现：SCM 页「远程设置」按钮经此弹窗。
+        services.AddSingleton<Acme.Desktop.Mvvm.Git.IRemoteSettingsDialogService, RemoteSettingsDialogService>();
         aether.ConfigureToolRegistry(reg =>
         {
             reg.Register("git_status", "查看当前项目（文档页打开的目录）的 git 工作区状态：已暂存/未暂存的变更文件列表。只读。", "Git",
@@ -166,6 +172,16 @@ public static class DesktopCompositionExtensions
                 sp => AIFunctionFactory.Create(
                     typeof(GitTool).GetMethod(nameof(GitTool.GitCommitAsync))!, sp.GetRequiredService<GitTool>(),
                     "git_commit"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("git_push", "推送当前分支提交到远程仓库（如 GitHub）。不可逆——公开本地提交到远程。需用户审批确认。", "Git",
+                sp => AIFunctionFactory.Create(
+                    typeof(GitTool).GetMethod(nameof(GitTool.GitPushAsync))!, sp.GetRequiredService<GitTool>(),
+                    "git_push"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("git_pull", "从远程仓库拉取并合并更新到当前分支。会修改本地工作区，可能产生冲突。需用户审批确认。", "Git",
+                sp => AIFunctionFactory.Create(
+                    typeof(GitTool).GetMethod(nameof(GitTool.GitPullAsync))!, sp.GetRequiredService<GitTool>(),
+                    "git_pull"),
                 ToolApprovalLevel.Dangerous);
         });
 

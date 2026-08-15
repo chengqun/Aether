@@ -95,3 +95,13 @@ public sealed record GraphSegment(SegmentKind Kind, int FromLane, int ToLane, in
 
 /// <summary>整张提交历史拓扑图（节点 + 连线 + lane 总数）。</summary>
 public sealed record CommitGraphModel(IReadOnlyList<LaidOutCommit> Commits, IReadOnlyList<GraphSegment> Segments, int LaneCount);
+
+// ── 远程同步 ──
+
+/// <summary>当前分支相对其上游的领先/落后状态（本地计算，不联网；需先 fetch 才准确）。</summary>
+/// <param name="UpstreamBranch">上游分支规范名（如 refs/remotes/origin/main）；无上游时为 null。</param>
+/// <param name="Ahead">本地领先上游的提交数。</param>
+/// <param name="Behind">本地落后上游的提交数。</param>
+/// <param name="HasUpstream">当前分支是否已设置上游跟踪。</param>
+/// <param name="RemoteUrl">远程仓库 URL（如 https://github.com/...）；无远程时为 null。</param>
+public sealed record RemoteStatus(string? UpstreamBranch, int Ahead, int Behind, bool HasUpstream, string? RemoteUrl);

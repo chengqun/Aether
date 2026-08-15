@@ -147,14 +147,46 @@
     <Border Grid.Column="0" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,Auto,*">
-        <!-- 头：项目名 + 状态 + 刷新 -->
+        <!-- 头：项目名 + 远程同步按钮 + 刷新 -->
         <Border Grid.Row="0" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
           <StackPanel Spacing="2">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24"
-                      ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
-                <TextBlock Text="↻" FontSize="13"/>
-              </Button>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <!-- 远程设置（GitHub 用户名 + PAT） -->
+                <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="远程设置"
+                        Command="{Binding OpenRemoteSettingsCommand}" IsVisible="{Binding IsRepository}">
+                  <TextBlock Text="⚙" FontSize="13"/>
+                </Button>
+                <!-- 同步（pull + push） -->
+                <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="同步（拉取并推送）"
+                        Command="{Binding SyncCommand}" IsVisible="{Binding IsRepository}"
+                        IsEnabled="{Binding !IsBusy}">
+                  <TextBlock Text="⟳" FontSize="13"/>
+                </Button>
+                <!-- ahead/behind 徽标（本地领先↑ / 落后↓ 上游） -->
+                <TextBlock Text="{Binding Ahead, StringFormat='↑{0}'}" FontSize="10" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SuccessBrush}"
+                           IsVisible="{Binding IsRepository}"
+                           Margin="2,0,0,0"/>
+                <TextBlock Text="{Binding Behind, StringFormat='↓{0}'}" FontSize="10" VerticalAlignment="Center"
+                           Foreground="{DynamicResource WarningBrush}"
+                           IsVisible="{Binding IsRepository}"
+                           Margin="2,0,4,0"/>
+                <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="拉取（pull）"
+                        Command="{Binding PullCommand}" IsVisible="{Binding IsRepository}"
+                        IsEnabled="{Binding !IsBusy}">
+                  <TextBlock Text="↓" FontSize="14"/>
+                </Button>
+                <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="推送（push）"
+                        Command="{Binding PushCommand}" IsVisible="{Binding IsRepository}"
+                        IsEnabled="{Binding !IsBusy}">
+                  <TextBlock Text="↑" FontSize="14"/>
+                </Button>
+                <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="刷新"
+                        Command="{Binding RefreshCommand}">
+                  <TextBlock Text="↻" FontSize="13"/>
+                </Button>
+              </StackPanel>
               <TextBlock Text="{Binding ProjectName}" FontSize="13" FontWeight="SemiBold"
                          TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
             </DockPanel>

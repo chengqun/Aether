@@ -25,9 +25,21 @@ public partial class SourceControlViewModel : ObservableObject
         _serviceProvider = serviceProvider;
         _projectDirProvider = projectDirProvider;
         _projectDirProvider.DirectoryChanged += OnProjectDirChanged;
+        // AI 工具（git_commit/git_push/git_pull）在后台改仓库后经此通知刷新——否则 SCM 页停留旧值。
+        var gitNotifier = _serviceProvider.GetService<IGitRepositoryNotifier>();
+        if (gitNotifier is not null)
+            gitNotifier.GitChanged += OnGitChangedExternally;
         // 启动期若文档页已恢复上次项目，holder 已有值 → 立即同步一次。
         if (!string.IsNullOrEmpty(_projectDirProvider.CurrentDirectory))
             SetProjectAsync(_projectDirProvider.CurrentDirectory).SafeFireAndForget();
+    }
+
+    /// <summary>AI 工具在后台线程提交/推送/拉取后触发 → marshal 到 UI 线程刷新。</summary>
+    private void OnGitChangedExternally()
+    {
+        var ui = _serviceProvider.GetService<IUiDispatcher>();
+        if (ui is not null) ui.Post(() => RefreshAsync().SafeFireAndForget());
+        else RefreshAsync().SafeFireAndForget();
     }
 
     /// <summary>未暂存变更（工作区 vs index）。</summary>
@@ -94,8 +106,18 @@ public partial class SourceControlViewModel : ObservableObject
 
     [ObservableProperty] private string? _activeCommitDiffPath;
 
-    /// <summary>能否提交：有暂存项且消息非空。</summary>
-    public bool CanCommit => StagedChanges.Count > 0 && !string.IsNullOrWhiteSpace(CommitMessage);
+    // ── 远程同步（push/pull/sync）──
+
+    /// <summary>当前分支相对上游的领先/落后状态（本地计算）。null=未开仓库/非仓库。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpstream))]
+    [NotifyPropertyChangedFor(nameof(Ahead))]
+    [NotifyPropertyChangedFor(nameof(Behind))]
+    [NotifyPropertyChangedFor(nameof(HasRemoteCommits))]
+    private RemoteStatus? _remoteStatus;
+
+    /// <summary>能否提交：有变更（暂存或未暂存均可——无暂存时自动暂存全部）且消息非空。</summary>
+    public bool CanCommit => (StagedChanges.Count > 0 || Changes.Count > 0) && !string.IsNullOrWhiteSpace(CommitMessage);
 
     /// <summary>当前是否有 diff 展示（驱动右栏 diff/空态切换）。</summary>
     public bool HasActiveDiff => ActiveDiff is not null;
@@ -111,6 +133,18 @@ public partial class SourceControlViewModel : ObservableObject
 
     /// <summary>是否有 commit 文件 diff 展示。</summary>
     public bool HasCommitDiff => ActiveCommitDiff is not null;
+
+    /// <summary>当前分支是否已设上游跟踪（驱动 push/pull/sync 按钮可用性）。</summary>
+    public bool HasUpstream => RemoteStatus?.HasUpstream ?? false;
+
+    /// <summary>本地领先上游的提交数（push 待推送）。</summary>
+    public int Ahead => RemoteStatus?.Ahead ?? 0;
+
+    /// <summary>本地落后上游的提交数（pull 待拉取）。</summary>
+    public int Behind => RemoteStatus?.Behind ?? 0;
+
+    /// <summary>是否有待推送/待拉取的提交（驱动同步徽标显示）。</summary>
+    public bool HasRemoteCommits => Ahead > 0 || Behind > 0;
 
     private bool CanStageAll => Changes.Count > 0;
 
@@ -213,6 +247,7 @@ public partial class SourceControlViewModel : ObservableObject
         CommitFiles.Clear();
         ActiveCommitDiff = null;
         ActiveCommitDiffPath = null;
+        RemoteStatus = null;
         if (IsRepository)
         {
             await RefreshAsync();
@@ -241,6 +276,8 @@ public partial class SourceControlViewModel : ObservableObject
             if (ActiveDiffPath is not null && !status.Any(c => c.Path == ActiveDiffPath))
             { ActiveDiff = null; ActiveDiffPath = null; }
             StatusMessage = status.Count == 0 ? "无变更" : $"{status.Count} 个变更";
+            // 远程领先/落后状态（本地计算，不联网）。
+            RemoteStatus = git.GetRemoteStatus(_projectDir);
         }
         catch (Exception ex) { StatusMessage = $"刷新失败：{ex.Message}"; }
         finally { IsBusy = false; }
@@ -316,6 +353,83 @@ public partial class SourceControlViewModel : ObservableObject
         if (item is not null) await DiscardAsync(item);
     }
 
+    // ── 远程同步命令 ──
+
+    /// <summary>推送当前分支到远程（不可逆）。</summary>
+    [RelayCommand]
+    private async Task PushAsync()
+    {
+        if (string.IsNullOrEmpty(_projectDir)) return;
+        var git = _serviceProvider.GetService<IGitService>();
+        if (git is null) return;
+        IsBusy = true;
+        try
+        {
+            var (ok, msg) = await Task.Run(() => git.Push(_projectDir));
+            StatusMessage = msg;
+            await RefreshAsync();
+            if (ok) HistoryGraph = null; // 远程 ref 变化，历史图可能过期。
+        }
+        catch (Exception ex) { StatusMessage = $"推送失败：{ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>拉取并合并远程更新到当前分支（可能产生冲突）。</summary>
+    [RelayCommand]
+    private async Task PullAsync()
+    {
+        if (string.IsNullOrEmpty(_projectDir)) return;
+        var git = _serviceProvider.GetService<IGitService>();
+        if (git is null) return;
+        IsBusy = true;
+        try
+        {
+            var (ok, msg) = await Task.Run(() => git.Pull(_projectDir));
+            StatusMessage = msg;
+            await RefreshAsync();
+            if (ok) HistoryGraph = null;
+        }
+        catch (Exception ex) { StatusMessage = $"拉取失败：{ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>同步：先 pull 再 push（VSCode 式 sync）。</summary>
+    [RelayCommand]
+    private async Task SyncAsync()
+    {
+        if (string.IsNullOrEmpty(_projectDir)) return;
+        var git = _serviceProvider.GetService<IGitService>();
+        if (git is null) return;
+        IsBusy = true;
+        try
+        {
+            var (pullOk, pullMsg) = await Task.Run(() => git.Pull(_projectDir));
+            if (pullOk)
+            {
+                var (pushOk, pushMsg) = await Task.Run(() => git.Push(_projectDir));
+                StatusMessage = $"pull: {pullMsg} | push: {pushMsg}";
+            }
+            else
+            {
+                StatusMessage = pullMsg;
+            }
+            await RefreshAsync();
+            HistoryGraph = null;
+        }
+        catch (Exception ex) { StatusMessage = $"同步失败：{ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>打开远程设置对话框（GitHub 用户名 + PAT）。关闭后刷新远程状态。</summary>
+    [RelayCommand]
+    private async Task OpenRemoteSettingsAsync()
+    {
+        var dlg = _serviceProvider.GetService<IRemoteSettingsDialogService>();
+        if (dlg is null) return;
+        await dlg.ShowAsync();
+        await RefreshAsync();
+    }
+
     [RelayCommand(CanExecute = nameof(CanCommit))]
     private async Task CommitAsync()
     {
@@ -324,6 +438,10 @@ public partial class SourceControlViewModel : ObservableObject
         if (git is null) return;
         try
         {
+            // 无暂存项时自动暂存全部（含未跟踪），符合多数 git GUI 直觉——输入消息即可提交全部改动。
+            if (StagedChanges.Count == 0)
+                foreach (var c in Changes.ToList())
+                    await Task.Run(() => git.Stage(_projectDir!, c.Path));
             var ok = await Task.Run(() => git.Commit(_projectDir!, CommitMessage.Trim()));
             StatusMessage = ok ? "已提交" : "提交失败";
             if (ok)

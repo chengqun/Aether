@@ -38,4 +38,19 @@ public interface IGitService
 
     /// <summary>取某 commit 某文件 相对首父的左右并排 diff（parent 旧 / commit 新）。二进制/无变化返回 null。</summary>
     DiffModel? GetCommitFileDiff(string repoPath, string sha, string filePath);
+
+    /// <summary>当前分支相对上游的领先/落后状态（本地计算，不联网）。</summary>
+    RemoteStatus GetRemoteStatus(string repoPath);
+
+    /// <summary>系统 git credential helper（如 macOS keychain）是否已存有当前远程的凭证（免填 PAT 判断）。不联网，仅查 helper。</summary>
+    bool HasSystemCredentials(string repoPath);
+
+    /// <summary>从远程拉取更新（fetch）但不合并。凭证从 preferences 读（git.username/git.token）。</summary>
+    (bool Success, string Message) Fetch(string repoPath);
+
+    /// <summary>拉取并合并远程更新到当前分支。可能产生冲突——Message 含冲突文件列表。</summary>
+    (bool Success, string Message) Pull(string repoPath);
+
+    /// <summary>推送当前分支到上游（无上游时推到 origin 并设置跟踪）。不可逆。</summary>
+    (bool Success, string Message) Push(string repoPath);
 }

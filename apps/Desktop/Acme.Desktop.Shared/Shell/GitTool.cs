@@ -15,11 +15,13 @@ public sealed class GitTool
 {
     private readonly IGitService _git;
     private readonly ICurrentProjectDirectoryProvider _projectDir;
+    private readonly IGitRepositoryNotifier? _notifier;
 
-    public GitTool(IGitService git, ICurrentProjectDirectoryProvider projectDir)
+    public GitTool(IGitService git, ICurrentProjectDirectoryProvider projectDir, IGitRepositoryNotifier? notifier = null)
     {
         _git = git;
         _projectDir = projectDir;
+        _notifier = notifier;
     }
 
     /// <summary>一条变更记录（路径 + 状态字母 + 是否已暂存）。</summary>
@@ -68,6 +70,13 @@ public sealed class GitTool
         return Task.FromResult(output);
     }
 
+    public sealed class RemoteOpOutput
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string? Error { get; set; }
+    }
+
     [Description("将当前项目所有变更（含未跟踪文件）暂存并提交。message 为提交说明（首行，简明描述本次改动）。" +
                  "此操作不可逆——会创建新提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。")]
     public Task<CommitOutput> GitCommitAsync(
@@ -89,6 +98,7 @@ public sealed class GitTool
             if (!c.IsStaged) _git.Stage(dir, c.Path);
 
         var ok = _git.Commit(dir, message.Trim());
+        if (ok) _notifier?.NotifyChanged(); // 通知 SCM 页刷新（AI 后台提交后界面同步）。
         return Task.FromResult(new CommitOutput
         {
             Success = ok,
@@ -96,6 +106,30 @@ public sealed class GitTool
             FilesCommitted = ok ? status.Count : 0,
             Error = ok ? null : "提交失败（GitService.Commit 返回 false）。",
         });
+    }
+
+    [Description("推送当前分支的提交到远程仓库（如 GitHub）。不可逆——会公开本地提交到远程。" +
+                 "需要用户审批确认。凭证（GitHub 用户名 + PAT）需先在源代码管理页「远程设置」配置。")]
+    public Task<RemoteOpOutput> GitPushAsync(CancellationToken cancellationToken = default)
+    {
+        var dir = _projectDir.CurrentDirectory;
+        if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
+            return Task.FromResult(new RemoteOpOutput { Success = false, Error = "当前未打开 git 项目目录。" });
+        var (ok, msg) = _git.Push(dir);
+        if (ok) _notifier?.NotifyChanged();
+        return Task.FromResult(new RemoteOpOutput { Success = ok, Message = ok ? msg : null, Error = ok ? null : msg });
+    }
+
+    [Description("从远程仓库拉取并合并更新到当前分支。会修改本地工作区——若远程有更新则合并到本地。" +
+                 "可能产生合并冲突（返回 Message 含冲突文件列表）。需要用户审批确认。凭证需先在「远程设置」配置。")]
+    public Task<RemoteOpOutput> GitPullAsync(CancellationToken cancellationToken = default)
+    {
+        var dir = _projectDir.CurrentDirectory;
+        if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
+            return Task.FromResult(new RemoteOpOutput { Success = false, Error = "当前未打开 git 项目目录。" });
+        var (ok, msg) = _git.Pull(dir);
+        if (ok) _notifier?.NotifyChanged();
+        return Task.FromResult(new RemoteOpOutput { Success = ok, Message = ok ? msg : null, Error = ok ? null : msg });
     }
 
     private static string Letter(ChangeKind kind) => kind switch

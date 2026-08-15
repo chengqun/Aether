@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.RemoteSettingsWindow"
+        Title="Git 远程设置" Width="500" Height="400"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ContentBgBrush}"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
+
+    <!-- 认证状态条：显示当前凭证来源（系统 keychain 已认证 / 需填 PAT） -->
+    <Border Grid.Row="0" x:Name="AuthBanner" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock x:Name="AuthIcon" Text="●" FontSize="13" VerticalAlignment="Center"/>
+        <TextBlock x:Name="AuthStatusText" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Row="1" Spacing="14">
+      <StackPanel Spacing="4">
+        <TextBlock Text="GitHub 用户名" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        <TextBox x:Name="UsernameBox" Watermark="your-github-username"/>
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Text="Personal Access Token (PAT)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        <TextBox x:Name="TokenBox" Watermark="ghp_xxxxxxxxxxxx" PasswordChar="•"/>
+        <TextBlock Text="仅当系统未找到 git 凭证时才需填写。优先使用系统 git credential helper（macOS keychain / Windows manager 等）已存的凭证。PAT 在 GitHub → Settings → Developer settings → Personal access tokens 生成（需 repo 权限）。"
+                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+      </StackPanel>
+      <TextBlock x:Name="StatusText" FontSize="11" TextWrapping="Wrap"
+                 Foreground="{DynamicResource TextSecondaryBrush}"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="测试连接" Click="OnTestClick" x:Name="TestButton" Padding="14,6"/>
+      <Button Content="保存" Click="OnSaveClick" Classes="primary" Padding="18,6"/>
+      <Button Content="关闭" Click="OnCloseClick" Padding="18,6" Margin="8,0,0,0"/>
+    </StackPanel>
+  </Grid>
+</Window>

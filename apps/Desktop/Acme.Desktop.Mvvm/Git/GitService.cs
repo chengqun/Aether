@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using LibGit2Sharp;
@@ -10,6 +11,11 @@ namespace Acme.Desktop.Mvvm.Git;
 /// native lib（osx/linux/win）随 LibGit2Sharp runtimes 部署，不依赖系统 git CLI（避 .app PATH 受限坑）。</summary>
 public sealed class GitService : IGitService
 {
+    private readonly IPreferencesStore? _prefs;
+
+    /// <param name="prefs">偏好存储（读 GitHub 凭证 git.username/git.token；桌面端注入，测试可 null）。</param>
+    public GitService(IPreferencesStore? prefs = null) => _prefs = prefs;
+
     public bool IsRepository(string path) => Discover(path) is not null;
 
     public string? Discover(string path)
@@ -144,6 +150,204 @@ public sealed class GitService : IGitService
         var newText = TreeBlobText(commitTree, filePath);
         var patch = CompareTreePatch(repo, parentTree, commitTree, filePath);
         return BuildDiffModel(oldText, newText, patch, filePath, syntaxKey);
+    }
+
+    public RemoteStatus GetRemoteStatus(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return new RemoteStatus(null, 0, 0, false, null);
+
+        var remoteUrl = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin")?.Url
+                         ?? repo.Network.Remotes.FirstOrDefault()?.Url;
+        var head = repo.Head;
+        if (head is null || !head.IsTracking)
+            return new RemoteStatus(null, 0, 0, false, remoteUrl);
+
+        var td = head.TrackingDetails;
+        return new RemoteStatus(head.UpstreamBranchCanonicalName, td.AheadBy ?? 0, td.BehindBy ?? 0, true, remoteUrl);
+    }
+
+    public bool HasSystemCredentials(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return false;
+        return TryGetCredentialsFromHelper(GetRemoteUrl(repo)) is not null;
+    }
+
+    public (bool Success, string Message) Fetch(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return (false, "未找到 git 仓库。");
+        var creds = ResolveCredentials(GetRemoteUrl(repo));
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+
+        var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin") ?? repo.Network.Remotes.FirstOrDefault();
+        if (remote is null) return (false, "仓库未配置远程（origin）。");
+        try
+        {
+            LibGit2Sharp.Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(r => r.Specification),
+                new FetchOptions { CredentialsProvider = (_, _, _) => creds }, null);
+            return (true, "已拉取远程更新。");
+        }
+        catch (Exception ex) { return (false, $"拉取失败：{ex.Message}"); }
+    }
+
+    public (bool Success, string Message) Pull(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return (false, "未找到 git 仓库。");
+        var creds = ResolveCredentials(GetRemoteUrl(repo));
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+        var head = repo.Head;
+        if (head is null || !head.IsTracking)
+            return (false, "当前分支未设置上游跟踪，无法 pull（请先 push 建立跟踪）。");
+        if (repo.RetrieveStatus().IsDirty)
+            return (false, "工作区有未提交改动，请先提交或暂存后再 pull。");
+
+        var sig = new Signature("Aether", "aether@local", DateTimeOffset.Now);
+        try
+        {
+            var result = LibGit2Sharp.Commands.Pull(repo, sig, new PullOptions
+            {
+                FetchOptions = new FetchOptions { CredentialsProvider = (_, _, _) => creds },
+                MergeOptions = new MergeOptions { FailOnConflict = false },
+            });
+            return result.Status switch
+            {
+                MergeStatus.UpToDate => (true, "已是最新，无需更新。"),
+                MergeStatus.FastForward => (true, "已快进合并远程更新。"),
+                MergeStatus.NonFastForward => (true, "已合并远程更新（三方合并）。"),
+                MergeStatus.Conflicts => (false, "拉取完成但有冲突，请手动解决：\n" +
+                    string.Join("\n", repo.Index.Conflicts.Select(c => c.Ancestor?.Path ?? c.Ours?.Path ?? c.Theirs?.Path ?? "?"))),
+                _ => (true, $"拉取完成（{result.Status}）。"),
+            };
+        }
+        catch (Exception ex) { return (false, $"拉取失败：{ex.Message}"); }
+    }
+
+    public (bool Success, string Message) Push(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return (false, "未找到 git 仓库。");
+        var creds = ResolveCredentials(GetRemoteUrl(repo));
+        if (creds is null) return (false, "未配置 GitHub 凭证：系统 git credential helper（如 macOS keychain）未返回凭证，且本地未填 PAT。请在源代码管理页点「远程设置」填写 PAT，或确认系统 git 已配 credential helper 且能 push。");
+        var head = repo.Head;
+        if (head is null || head.Tip is null) return (false, "当前分支无提交，无法 push。");
+
+        var pushOpts = new PushOptions { CredentialsProvider = (_, _, _) => creds };
+        try
+        {
+            if (head.IsTracking)
+            {
+                repo.Network.Push(head, pushOpts);
+            }
+            else
+            {
+                var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin") ?? repo.Network.Remotes.FirstOrDefault();
+                if (remote is null) return (false, "仓库未配置远程（origin）。");
+                var refspec = $"+{head.CanonicalName}:refs/heads/{head.FriendlyName}";
+                repo.Network.Push(remote, refspec, pushOpts);
+                // 建立上游跟踪，后续 pull/push 无需再指定。
+                repo.Branches.Update(head, b => b.TrackedBranch = $"{remote.Name}/{head.FriendlyName}");
+            }
+            return (true, $"已推送 {head.FriendlyName} 到远程。");
+        }
+        catch (Exception ex) { return (false, $"推送失败：{ex.Message}"); }
+    }
+
+    // —— 远程凭证 ——
+    // 优先级：① 系统 git credential helper（复用 macOS keychain / Windows manager / Linux libsecret
+    //    等已存凭证，VSCode 式免填）→ ② 本地 preferences 的 PAT（fallback，helper 未配/失败时）。
+
+    /// <summary>解析 GitHub 凭证：先试系统 git credential helper（复用 keychain），再 fallback 到本地 PAT。未配置返回 null。</summary>
+    private UsernamePasswordCredentials? ResolveCredentials(string? url)
+    {
+        // ① 系统 git credential helper（git credential fill 读 keychain 等已存凭证）。
+        var fromHelper = TryGetCredentialsFromHelper(url);
+        if (fromHelper is not null) return fromHelper;
+
+        // ② 本地 preferences PAT。
+        if (_prefs is null) return null;
+        var token = _prefs.GetAsync("git.token").GetAwaiter().GetResult();
+        if (string.IsNullOrWhiteSpace(token)) return null;
+        var user = _prefs.GetAsync("git.username").GetAwaiter().GetResult();
+        return new UsernamePasswordCredentials { Username = string.IsNullOrWhiteSpace(user) ? "token" : user!, Password = token! };
+    }
+
+    /// <summary>调系统 <c>git credential fill</c> 读 credential helper（如 macOS keychain）已存的凭证。免填 PAT。</summary>
+    /// <param name="url">远程 URL（push/fetch 时的实际地址）；null 时用 protocol=https + host=github.com。</param>
+    private static UsernamePasswordCredentials? TryGetCredentialsFromHelper(string? url)
+    {
+        var git = FindGitExecutable();
+        if (git is null) return null;
+        try
+        {
+            var input = string.IsNullOrEmpty(url)
+                ? "protocol=https\nhost=github.com\n\n"
+                : $"url={url}\n\n";
+            var psi = new ProcessStartInfo
+            {
+                FileName = git,
+                Arguments = "credential fill",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            // 禁止交互式提示（askpass / 终端），避免进程挂起等待输入。keychain/libsecret/manager 均非交互。
+            psi.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            using var p = Process.Start(psi);
+            if (p is null) return null;
+            p.StandardInput.Write(input);
+            p.StandardInput.Close();
+            var output = p.StandardOutput.ReadToEnd();
+            if (!p.WaitForExit(8000)) { try { p.Kill(); } catch { /* 忽略 */ } return null; }
+            if (p.ExitCode != 0) return null;
+
+            string? user = null, pass = null;
+            foreach (var line in output.Replace("\r\n", "\n").Split('\n'))
+            {
+                if (line.StartsWith("username=")) user = line["username=".Length..];
+                else if (line.StartsWith("password=")) pass = line["password=".Length..];
+            }
+            if (string.IsNullOrEmpty(pass)) return null;
+            return new UsernamePasswordCredentials { Username = string.IsNullOrEmpty(user) ? "token" : user!, Password = pass! };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>定位系统 git 可执行文件。.app 启动 PATH 受限时逐个尝试常见安装路径兜底。</summary>
+    private static string? FindGitExecutable()
+    {
+        // PATH 里的 git（从终端 dotnet run 启动时有）。
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrEmpty(pathEnv))
+        {
+            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                try
+                {
+                    var full = Path.Combine(dir.Trim('"'), "git");
+                    if (File.Exists(full)) return full;
+                }
+                catch { /* 忽略非法路径段 */ }
+            }
+        }
+        // 常见安装路径兜底（macOS Xcode CLI / Apple Silicon homebrew / Intel homebrew / Linux）。
+        foreach (var candidate in new[] { "/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git" })
+            if (File.Exists(candidate)) return candidate;
+        return null;
+    }
+
+    /// <summary>当前分支跟踪的远程 URL（无跟踪时回退 origin/首个远程）。用于凭证解析的 url 参数。</summary>
+    private static string? GetRemoteUrl(Repository repo)
+    {
+        var head = repo.Head;
+        var remoteName = !string.IsNullOrEmpty(head?.RemoteName) ? head!.RemoteName : null;
+        var remote = remoteName is not null ? repo.Network.Remotes[remoteName] : null;
+        return (remote ?? repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin")
+                       ?? repo.Network.Remotes.FirstOrDefault())?.Url;
     }
 
     // —— helpers ——
