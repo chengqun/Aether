@@ -100,6 +100,9 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>「暂存的更改」段是否展开（折叠头）。</summary>
     [ObservableProperty] private bool _isStagedExpanded = true;
 
+    /// <summary>提交框是否展开（折叠头；收起后只留工具栏 + 折叠条，腾出空间给变更列表）。</summary>
+    [ObservableProperty] private bool _isCommitExpanded = true;
+
     // ── 历史（提交列表 section，与「更改」「暂存的更改」平级）──
 
     /// <summary>「历史」section 是否展开（首次展开懒加载提交历史）。</summary>
@@ -172,6 +175,7 @@ public partial class SourceControlViewModel : ObservableObject
     [RelayCommand] private void ToggleChanges() => IsChangesExpanded = !IsChangesExpanded;
     [RelayCommand] private void ToggleStaged() => IsStagedExpanded = !IsStagedExpanded;
     [RelayCommand] private void ToggleHistory() => IsHistoryExpanded = !IsHistoryExpanded;
+    [RelayCommand] private void ToggleCommit() => IsCommitExpanded = !IsCommitExpanded;
 
     /// <summary>首次展开「历史」section 时懒加载提交历史。</summary>
     partial void OnIsHistoryExpandedChanged(bool value)
@@ -390,7 +394,6 @@ public partial class SourceControlViewModel : ObservableObject
         ActiveCommitDiff = null;
         ActiveCommitDiffPath = null;
         CommitFiles.Clear();
-        IsBusy = true;
         try
         {
             var diff = await Task.Run(() => git.GetDiff(_projectDir, item.Path));
@@ -398,7 +401,6 @@ public partial class SourceControlViewModel : ObservableObject
             ActiveDiffPath = item.Path;
         }
         catch (Exception ex) { StatusMessage = $"读取差异失败：{ex.Message}"; }
-        finally { IsBusy = false; }
     }
 
     [RelayCommand]

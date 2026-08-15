@@ -191,7 +191,7 @@
                 IsVisible="{Binding IsRepository}">
           <StackPanel Spacing="6">
             <!-- 远程同步 / 刷新工具栏 -->
-            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left" VerticalAlignment="Center">
                 <!-- 远程设置 -->
                 <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="远程设置"
                         Command="{Binding OpenRemoteSettingsCommand}" IsVisible="{Binding IsRepository}">
@@ -232,13 +232,27 @@
                         Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
                 </Button>
             </StackPanel>
+            <!-- 提交折叠头（收起后只留工具栏 + 此头 + 状态行，腾出空间给变更列表） -->
+            <Button Classes="scm-section-header" Command="{Binding ToggleCommitCommand}" Padding="0,2">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="11" Height="11"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      VerticalAlignment="Center" IsVisible="{Binding IsCommitExpanded}"/>
+                <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="11" Height="11"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      VerticalAlignment="Center" IsVisible="{Binding !IsCommitExpanded}"/>
+                <TextBlock Text="提交" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
             <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
                      TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     IsVisible="{Binding IsCommitExpanded}"/>
             <Button Classes="primary" HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Center"
-                    Command="{Binding CommitCommand}">
+                    Command="{Binding CommitCommand}"
+                    IsVisible="{Binding IsCommitExpanded}">
               <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                 <Path Data="{x:Static shell:Codicons.Check}" Stretch="Uniform" Width="13" Height="13"
                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
