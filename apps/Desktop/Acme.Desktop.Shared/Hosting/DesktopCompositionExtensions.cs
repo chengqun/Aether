@@ -185,6 +185,24 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Dangerous);
         });
 
+        // build/test 结构化反馈工具：让 agent 拿到结构化编译错误/测试失败，而非裸 dotnet 输出（弱模型从
+        // 上千行 MSBuild 输出找错易漏）。需项目目录（同 git_*）→ 宿主层注册。标 Safe：agentic 编程闭环核心
+        // 高频动作，低摩擦。命令执行复用 ShellCommandTool（登录 shell 解决 .app 受限 PATH）。
+        services.AddTransient<BuildTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("get_build_errors", "编译当前项目并返回结构化编译错误/警告列表（file/line/错误码/消息）。改完代码用此工具确认能否编译。", "编程",
+                sp => AIFunctionFactory.Create(
+                    typeof(BuildTool).GetMethod(nameof(BuildTool.GetBuildErrors))!, sp.GetRequiredService<BuildTool>(),
+                    "get_build_errors"),
+                ToolApprovalLevel.Safe);
+            reg.Register("run_tests", "运行当前项目单元测试并返回结构化结果（通过/失败数 + 失败用例错误消息与堆栈）。", "编程",
+                sp => AIFunctionFactory.Create(
+                    typeof(BuildTool).GetMethod(nameof(BuildTool.RunTests))!, sp.GetRequiredService<BuildTool>(),
+                    "run_tests"),
+                ToolApprovalLevel.Safe);
+        });
+
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();
