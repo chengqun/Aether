@@ -157,6 +157,17 @@
                              Foreground="{DynamicResource TextPrimaryBrush}"
                              IsVisible="{Binding IsResultJson}" />
                 </StackPanel>
+                <!-- 文件编辑：改前/改后并排 diff（agentic 事后 diff） -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasFileDiff}" Margin="0,2,0,0">
+                  <TextBlock Text="改动" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" MaxHeight="300" ClipToBounds="True">
+                    <shell:DiffView DataContext="{Binding DiffPreview}" />
+                  </Border>
+                </StackPanel>
+                <!-- 一键撤销：写回改前内容（新建文件撤销=删除） -->
+                <Button Command="{Binding UndoCommand}" Padding="10,3" FontSize="11"
+                        Content="↩ 撤销此步" HorizontalAlignment="Left"
+                        IsVisible="{Binding HasUndo}" Margin="0,2,0,0" />
               </StackPanel>
             </Border>
           </StackPanel>
@@ -190,7 +201,7 @@
           </StackPanel>
         </Border>
 
-        <!-- 审批卡 -->
+        <!-- 审批卡：header（图标+工具名+状态）。审批走模态对话框，卡片只显状态记录。 -->
         <Border Classes="msg-card" HorizontalAlignment="Stretch" IsVisible="{Binding IsApprovalCard}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <Path Data="{x:Static shell:Codicons.Loading}" Stretch="Uniform" Width="12" Height="12"

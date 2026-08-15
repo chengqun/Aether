@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using Acme.Agents.AI;
 using Acme.DeviceConnect.Domain;
@@ -10,6 +11,7 @@ using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Hosting;
 using Aether.AI.Memory;
+using Acme.Desktop.Mvvm.Git;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +34,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly IConversationTitleService _titleService;
     private readonly IDeviceAutoConnectService _autoConnect;
     private readonly IApprovalDialogService? _approvalDialog;
+
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
     private readonly IServiceProvider _serviceProvider;
@@ -271,8 +274,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
                 if (pendingApproval is null) break;
 
-                // 弹审批框等用户决定
+                // 审批等用户决定：统一走模态对话框（文件编辑工具已改 Safe 自动跑，不再走审批）。
                 var decision = _approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false);
+
                 if (decision is null)
                 {
                     _dispatcher.Post(() => { if (approvalCard is not null) approvalCard.ApprovalState = 2; });
@@ -403,6 +407,23 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             items.Insert(idx, tool);
             cursor.Current = tool;
             if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
+
+            // 文件编辑工具：call 阶段读盘快照 old（供事后算 diff + 一键撤销写回）。后台读盘避免大文件阻塞 UI。
+            // 撤销按钮建卡即注入（点按 → UndoFileEdit 写回 old）。
+            if (AgentEditPreview.IsFileEditTool(ev.Name))
+            {
+                var input = ev.Input;
+                var cardRef = tool;
+                cardRef.UndoCommand = new RelayCommand(() => UndoFileEdit(cardRef));
+                _ = Task.Run(() =>
+                {
+                    var fp = AgentEditPreview.TryGetFilePath(input);
+                    if (fp is null) return;
+                    bool existed = File.Exists(fp);
+                    string? old = existed ? TryReadAllText(fp) : null;
+                    _dispatcher.Post(() => cardRef.FileEdit = new FileEditSnapshot(fp, old, existed));
+                });
+            }
         }
         else // Result：回填到对应工具步（合并为一条），再开新答案段
         {
@@ -421,12 +442,59 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             tool.Output = ev.Output;
             tool.IsToolCompleted = true;
 
+            // 文件编辑工具：result 阶段读盘 new + 快照 old 算事后并排 diff 挂卡。后台读盘。
+            if (tool.FileEdit is { } snap)
+            {
+                var cardRef = tool;
+                _ = Task.Run(() =>
+                {
+                    bool newExists = File.Exists(snap.FilePath);
+                    string? newText = newExists ? TryReadAllText(snap.FilePath) : null;
+                    DiffModel? diff = null;
+                    // old 或 new 任一存在即有可展示 diff（新建文件 old="" → 全增；删除结果 new="" → 全删）。
+                    if (snap.OldExisted || newExists)
+                    {
+                        var syntax = GitService.SyntaxForExtension(Path.GetExtension(snap.FilePath));
+                        diff = LineDiffBuilder.Build(snap.OldContent ?? "", newText ?? "", snap.FilePath, syntax);
+                    }
+                    _dispatcher.Post(() => cardRef.DiffPreview = diff);
+                });
+            }
+
             var idx = items.IndexOf(tool);
             if (idx < 0) idx = items.Count - 1;
             var next = NewTextSegment(senderName, isReasoningContent: false);
             items.Insert(idx + 1, next);
             cursor.Current = next;
         }
+    }
+
+    /// <summary>撤销一步文件编辑：写回 call 阶段快照的 old 内容（工具新建的文件 → 撤销 = 删除）。
+    /// 写盘后 <c>DocumentsViewModel</c> 的 FileSystemWatcher 自动重载编辑器。朴素单步语义——写回该步 old；
+    /// 多步同文件撤销中间步会破坏后续步基准（边缘情况，用户多半撤销最后一步或整体重来）。</summary>
+    private void UndoFileEdit(ChatMessageItem card)
+    {
+        var snap = card.FileEdit;
+        if (snap is null || card.IsUndone) return;
+        try
+        {
+            if (snap.OldExisted)
+                File.WriteAllText(snap.FilePath, snap.OldContent ?? "");
+            else if (File.Exists(snap.FilePath))
+                File.Delete(snap.FilePath); // 工具新建的文件 → 撤销 = 删除
+            card.IsUndone = true;
+        }
+        catch
+        {
+            // 撤销失败（文件锁定/权限）忽略，用户可去 SCM 页手动恢复。
+        }
+    }
+
+    /// <summary>读文本文件全文，失败返回 null（二进制/锁定/权限）。</summary>
+    private static string? TryReadAllText(string path)
+    {
+        try { return File.ReadAllText(path); }
+        catch { return null; }
     }
 
     /// <summary>todos_* 调用后更新浮动计划面板（ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。

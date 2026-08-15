@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Windows.Input;
+using Acme.Desktop.Mvvm.Git;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Acme.Desktop.Mvvm;
@@ -133,6 +135,31 @@ public partial class ChatMessageItem : ObservableObject
     public bool IsApprovalPending => IsApprovalCard && ApprovalState == 0;
     public bool IsApprovalApproved => IsApprovalCard && ApprovalState == 1;
     public bool IsApprovalRejected => IsApprovalCard && ApprovalState == 2;
+
+    /// <summary>文件编辑工具执行后的改前/改后并排 diff（call 阶段快照 old、result 阶段读 new 算出，挂工具卡）。
+    /// null = 非文件编辑工具或 diff 构建失败 → 工具卡不显 diff 区。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFileDiff))]
+    private DiffModel? _diffPreview;
+
+    /// <summary>工具卡有改前/改后 diff 可展示（驱动工具卡内 DiffView 可见）。</summary>
+    public bool HasFileDiff => IsToolStep && DiffPreview is not null;
+
+    /// <summary>文件编辑快照（call 阶段读盘 old 存入，供事后算 diff + 一键撤销写回）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUndo))]
+    private FileEditSnapshot? _fileEdit;
+
+    /// <summary>该步已撤销（撤销按钮点击后置 true，按钮隐藏）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUndo))]
+    private bool _isUndone;
+
+    /// <summary>工具卡可撤销（文件编辑工具 + 有快照 + 未撤销）。</summary>
+    public bool HasUndo => IsToolStep && FileEdit is not null && !IsUndone;
+
+    /// <summary>撤销命令——由 ChatWorkspaceViewModel 注入（写回 old 内容），镜像 ConversationItem.ResumeCommand 外部注入模式。</summary>
+    public ICommand? UndoCommand { get; set; }
 
     /// <summary>结果渲染分支（按 ResultKind 挑模板，XAML 用 IsVisible 绑定）。</summary>
     public bool IsResultText => IsToolStep && ResultKind == "text";
@@ -333,3 +360,7 @@ public partial class ChatMessageItem : ObservableObject
         OnPropertyChanged(nameof(IsAgentStreamingAnswer));
     }
 }
+
+/// <summary>文件编辑工具的改前快照：call 阶段读盘 old 内容存入，供事后算 diff + 一键撤销写回。
+/// <see cref="OldExisted"/>=false 表示工具执行前文件不存在（WriteFile 新建）→ 撤销 = 删除该文件。</summary>
+public sealed record FileEditSnapshot(string FilePath, string? OldContent, bool OldExisted);

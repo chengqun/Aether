@@ -48,11 +48,11 @@ public static class SystemToolsAIBuilderExtensions
             reg.Register("ReadFile", "读取文件内容（文本/图片）", cat,
                 sp => CreateTool<FileReadTool>(sp, "ReadFile"));
             reg.Register("WriteFile", "写入文件内容", cat,
-                sp => CreateTool<FileWriteTool>(sp, "WriteFile"), ToolApprovalLevel.Confirm);
+                sp => CreateTool<FileWriteTool>(sp, "WriteFile")); // Safe：自动跑 + 事后 diff + 一键撤销
             reg.Register("EditFile", "编辑文件（字符串替换）", cat,
-                sp => CreateTool<FileEditTool>(sp, "EditFile"), ToolApprovalLevel.Confirm);
+                sp => CreateTool<FileEditTool>(sp, "EditFile")); // Safe：自动跑 + 事后 diff + 一键撤销
             reg.Register("LineEditFile", "按行编辑文件", cat,
-                sp => CreateTool<FileLineEditTool>(sp, "LineEditFile"), ToolApprovalLevel.Confirm);
+                sp => CreateTool<FileLineEditTool>(sp, "LineEditFile")); // Safe：自动跑 + 事后 diff + 一键撤销
             reg.Register("DeleteFile", "删除文件", cat,
                 sp => CreateTool<FileDeleteTool>(sp, "DeleteFile"), ToolApprovalLevel.Dangerous);
             reg.Register("MoveFile", "移动或重命名文件", cat,

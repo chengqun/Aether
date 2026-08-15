@@ -539,8 +539,9 @@ public sealed class GitService : IGitService
 
     private static bool IsBinary(string text) => text.Contains('\0');
 
-    /// <summary>扩展名 → 语法 key（镜像 CodeEditorSetup.SyntaxForExtension，但 Mvvm 不能引 Shared）。</summary>
-    private static string? SyntaxForExtension(string ext)
+    /// <summary>扩展名 → 语法 key（镜像 CodeEditorSetup.SyntaxForExtension，但 Mvvm 不能引 Shared）。
+    /// internal 供 <see cref="AgentEditPreview"/> 复用（agent 编辑审批 diff 也需按扩展名上色）。</summary>
+    internal static string? SyntaxForExtension(string ext)
     {
         return ext.ToLowerInvariant() switch
         {

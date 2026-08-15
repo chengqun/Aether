@@ -64,13 +64,26 @@ public partial class DocumentsView : UserControl
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (_vm != null) _vm.PropertyChanged -= OnVmPropertyChanged;
+        if (_vm != null)
+        {
+            _vm.PropertyChanged -= OnVmPropertyChanged;
+            _vm.TabExternallyReloaded -= OnTabExternallyReloaded;
+        }
         _vm = DataContext as DocumentsViewModel;
         if (_vm != null)
         {
             _vm.PropertyChanged += OnVmPropertyChanged;
+            _vm.TabExternallyReloaded += OnTabExternallyReloaded;
             SyncEditor();
         }
+    }
+
+    /// <summary>外部（agent/外部编辑器）写盘后标签静默重载：若重载的是当前活动标签且非用户正在输入，把编辑器刷新到新内容。
+    /// 用户键入走 OnCodeEditorTextChanged→tab.Content=，不发此事件，故不打架。</summary>
+    private void OnTabExternallyReloaded(DocumentTab tab)
+    {
+        if (_vm is null || !_syncing && ReferenceEquals(_vm.ActiveTab, tab))
+            SyncEditor();
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -235,6 +248,13 @@ public partial class DocumentsView : UserControl
     {
         if (sender is Button b && b.DataContext is DocumentTab tab && _vm is not null)
             _vm.CloseTab(tab);
+    }
+
+    /// <summary>标签上「重载」按钮：丢弃本地改动，用磁盘内容覆盖（处理 IsStale 冲突）。</summary>
+    private void OnReloadStaleTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DocumentTab tab && _vm is not null)
+            _vm.ReloadStaleTabCommand.Execute(tab);
     }
 
     // —— 文件树宽度持久化（镜像 NotesView：Loaded 恢复 / 宿主窗 Closing 落盘）——

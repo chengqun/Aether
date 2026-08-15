@@ -26,13 +26,32 @@ public partial class DocumentTab : ObservableObject
     /// <summary>未保存修改标记（标签显示圆点）。</summary>
     [ObservableProperty] private bool _isDirty;
 
+    /// <summary>磁盘文件已变更而本标签有未存改动（外部写盘冲突）——标签显 ⚠ + 重载按钮，不静默覆盖用户改动。</summary>
+    [ObservableProperty] private bool _isStale;
+
+    /// <summary>上次载入/保存时记录的磁盘最后写入时间（<see cref="FileSystemWatcher"/> 重载判定基准）。</summary>
+    public DateTime LastDiskWrite { get; set; }
+
     public DocumentTab(string filePath, string content, string? syntaxKey)
     {
         FilePath = filePath;
         FileName = Path.GetFileName(filePath);
         SyntaxKey = syntaxKey;
         _content = content; // 字段直赋值不触发 OnContentChanged → IsDirty 保持 false
+        try { LastDiskWrite = File.GetLastWriteTime(filePath); }
+        catch { LastDiskWrite = DateTime.MinValue; }
     }
 
     partial void OnContentChanged(string value) => IsDirty = true;
+
+    /// <summary>外部（agent/外部编辑器）写盘后重载内容，不置 <see cref="IsDirty"/>。
+    /// 直接赋 _content 字段 + 手发 PropertyChanged，绕过生成的 setter（其会调 OnContentChanged→IsDirty=true）。
+    /// 仅用于 watcher 触发的非 dirty 标签静默刷新；dirty 标签走 <see cref="IsStale"/> 提示由用户决定。</summary>
+    public void SetContentSilently(string content)
+    {
+#pragma warning disable MVVMTK0034 // 故意直赋 _content 字段绕过生成的 setter（其调 OnContentChanged→IsDirty=true）；外部重载不应置 dirty。
+        _content = content;
+#pragma warning restore MVVMTK0034
+        OnPropertyChanged(nameof(Content));
+    }
 }

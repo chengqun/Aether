@@ -22,6 +22,9 @@ public partial class DocumentsViewModel : ObservableObject
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
     private bool _loadingPref;
 
+    private FileSystemWatcher? _watcher;
+    private CancellationTokenSource? _reloadCts;
+
     /// <summary>目录树扫描时跳过的子目录（构建产物 / VCS / 依赖缓存，体积大且无编辑价值）。</summary>
     private static readonly HashSet<string> ExcludedDirs = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -57,6 +60,11 @@ public partial class DocumentsViewModel : ObservableObject
 
     /// <summary>已打开的文档标签。</summary>
     public ObservableCollection<DocumentTab> Tabs { get; } = new();
+
+    /// <summary>某标签被外部（agent/外部编辑器）写盘后静默重载时引发。
+    /// 仅 <see cref="DocumentTab.SetContentSilently"/> 路径引发（用户键入不引发）；View 据此对 ActiveTab 重载编辑器，
+    /// 避免与用户输入打架（用户键入走 OnCodeEditorTextChanged→tab.Content=，不发此事件）。</summary>
+    public event Action<DocumentTab>? TabExternallyReloaded;
 
     /// <summary>当前活动标签（编辑器显示其内容）。null = 无标签（空态）。</summary>
     [ObservableProperty] private DocumentTab? _activeTab;
@@ -199,6 +207,7 @@ public partial class DocumentsViewModel : ObservableObject
         Tabs.Clear();
         ActiveTab = null;
         RootPath = path;
+        StartWatcher(path);
         StatusMessage = "加载中…";
         try
         {
@@ -223,6 +232,7 @@ public partial class DocumentsViewModel : ObservableObject
         Tabs.Clear();
         ActiveTab = null;
         RootPath = null;
+        StopWatcher();
         StatusMessage = string.Empty;
         ClearPersistedProjectAsync().SafeFireAndForget();
     }
@@ -298,6 +308,9 @@ public partial class DocumentsViewModel : ObservableObject
         {
             await File.WriteAllTextAsync(tab.FilePath, tab.Content);
             tab.IsDirty = false;
+            tab.IsStale = false;
+            try { tab.LastDiskWrite = File.GetLastWriteTime(tab.FilePath); }
+            catch { /* 忽略 */ }
             StatusMessage = $"已保存 {tab.FileName}";
         }
         catch (Exception ex)
@@ -324,5 +337,119 @@ public partial class DocumentsViewModel : ObservableObject
         Tabs.RemoveAt(idx);
         if (ReferenceEquals(ActiveTab, tab))
             ActiveTab = Tabs.Count > 0 ? Tabs[Math.Min(idx, Tabs.Count - 1)] : null;
+    }
+
+    // —— 实时重载：FileSystemWatcher 透明捕获 agent/外部编辑器写盘 → 刷新开着该文件的标签 ——
+    // 不引入 IFileEditNotifier 跨层通知（ai/ 工具层不可引 apps/）：watcher 对所有盘变更一视同仁，零跨层依赖。
+    // 不与用户输入打架：dirty 标签置 IsStale 提示而非覆盖；非 dirty 标签 SetContentSilently（不置 dirty）+ 发事件让 View 重载编辑器。
+
+    /// <summary>启动 <see cref="FileSystemWatcher"/> 递归监听项目目录。文件增删改后去抖重载受影响标签。
+    /// 镜像 <see cref="SourceControlViewModel"/> 的 watcher 模式。</summary>
+    private void StartWatcher(string root)
+    {
+        StopWatcher();
+        try
+        {
+            _watcher = new FileSystemWatcher(root)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+                              | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                InternalBufferSize = 16 * 1024,
+            };
+            _watcher.Changed += (_, e) => ScheduleReload();
+            _watcher.Created += (_, e) => ScheduleReload();
+            _watcher.Deleted += (_, e) => ScheduleReload();
+            _watcher.Renamed += (_, e) => ScheduleReload();
+            _watcher.Error += (_, _) => ScheduleReload(); // 缓冲溢出 → 尽力刷一次
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch { /* 无权限/路径无效 → 静默，无自动重载 */ }
+    }
+
+    private void StopWatcher()
+    {
+        if (_watcher is not null)
+        {
+            try { _watcher.EnableRaisingEvents = false; _watcher.Dispose(); }
+            catch { /* 忽略 */ }
+            _watcher = null;
+        }
+        _reloadCts?.Cancel();
+        _reloadCts = null;
+    }
+
+    /// <summary>去抖 400ms 后重载受影响标签（批量改动只刷一次）。FSW 后台线程触发 → marshal UI 线程。</summary>
+    private void ScheduleReload()
+    {
+        _reloadCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _reloadCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(400, cts.Token); }
+            catch (TaskCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            var ui = _serviceProvider.GetService<IUiDispatcher>();
+            if (ui is not null) ui.Post(ReloadChangedTabs);
+            else ReloadChangedTabs();
+        });
+    }
+
+    /// <summary>遍历打开的标签，按磁盘 mtime 判定是否需重载。
+    /// 非 dirty → SetContentSilently + 发事件（View 重载编辑器）；dirty → IsStale 提示不覆盖；文件已删 → IsStale。</summary>
+    private void ReloadChangedTabs()
+    {
+        foreach (var tab in Tabs)
+        {
+            DateTime diskWrite;
+            try { diskWrite = File.GetLastWriteTime(tab.FilePath); }
+            catch { diskWrite = DateTime.MinValue; }
+
+            var exists = File.Exists(tab.FilePath);
+            if (!exists)
+            {
+                if (!tab.IsStale) tab.IsStale = true; // 文件被删 → 提示（不关标签，用户可放弃改动）
+                continue;
+            }
+
+            if (diskWrite <= tab.LastDiskWrite) continue; // mtime 未变 → 跳过
+
+            tab.LastDiskWrite = diskWrite;
+            if (tab.IsDirty)
+            {
+                tab.IsStale = true; // 用户有未存改动 → 不覆盖，提示磁盘已变
+                continue;
+            }
+
+            try
+            {
+                var newContent = File.ReadAllText(tab.FilePath);
+                tab.SetContentSilently(newContent); // 不置 dirty
+                TabExternallyReloaded?.Invoke(tab); // View 据此对 ActiveTab 重载编辑器
+            }
+            catch { /* 读失败忽略，下次再试 */ }
+        }
+    }
+
+    /// <summary>用户主动重载 stale 标签：丢弃本地改动，用盘内容覆盖。</summary>
+    [RelayCommand]
+    private void ReloadStaleTab(DocumentTab? tab)
+    {
+        if (tab is null) return;
+        try
+        {
+            tab.SetContentSilently(File.ReadAllText(tab.FilePath));
+            tab.IsDirty = false;
+            tab.IsStale = false;
+            try { tab.LastDiskWrite = File.GetLastWriteTime(tab.FilePath); }
+            catch { /* 忽略 */ }
+            TabExternallyReloaded?.Invoke(tab);
+            if (ReferenceEquals(ActiveTab, tab)) StatusMessage = $"已重载 {tab.FileName}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"重载失败：{ex.Message}";
+        }
     }
 }
