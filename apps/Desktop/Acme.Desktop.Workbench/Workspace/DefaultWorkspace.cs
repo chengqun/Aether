@@ -25,6 +25,7 @@ public static class DefaultWorkspace
                 new LayoutTabbed(RegionIds: new[] { PanelKeys.Notes, PanelKeys.Experts }, SelectedIndex: 0),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
-            // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 固定（可拖 GridSplitter 改，不跨重启持久）。
+            // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 默认（首次/重置布局时）。
+            // 实际拖拽位置经 WorkspaceView.Serialize 序列化到 IPreferencesStore(LayoutPrefKey) 跨重启恢复（见 WorkbenchShellViewModel.Deserialize）。
             Pixels: new double[] { 0, 420 }));
 }

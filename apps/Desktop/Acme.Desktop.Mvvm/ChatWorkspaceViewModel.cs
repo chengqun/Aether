@@ -1410,10 +1410,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var hasAnswer = runItems.Any(i => i.IsText && !i.IsReasoning && !string.IsNullOrWhiteSpace(i.Content));
             var status = hasAnswer ? RunStatus.Completed : RunStatus.Interrupted;
 
+            // 原子取号再构建——关闭 _nextRunSeq 跨 await AppendRunAsync 的并发窗口（两轮 persist 并发会撞 Seq）。
+            // 失败时已消耗的序号留空隙无害（seq 仅用于排序，不要求稠密）。
+            var runSeq = System.Threading.Interlocked.Increment(ref _nextRunSeq) - 1;
             var run = new AgentRun
             {
                 ConversationId = _currentConversationId,
-                Seq = _nextRunSeq,
+                Seq = runSeq,
                 Status = status,
                 AgentId = conv.AgentId,
                 AgentName = conv.AgentName,
@@ -1454,7 +1457,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             }
 
             await _conversationStore.AppendRunAsync(run, events);
-            _nextRunSeq++;
 
             await _dispatcher.InvokeAsync(() =>
             {
