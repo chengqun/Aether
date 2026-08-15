@@ -309,8 +309,6 @@
                   <TextBlock Text="▸" FontSize="10" IsVisible="{Binding !IsHistoryExpanded}"/>
                   <TextBlock Text="🕘" FontSize="11"/>
                   <TextBlock Text="历史" FontSize="11" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding HistoryGraph.Commits.Count, StringFormat='{}· {0}'}"
-                             FontSize="11" Opacity="0.7" IsVisible="{Binding HasHistory}"/>
                 </StackPanel>
               </Button>
               <ItemsControl IsVisible="{Binding IsHistoryExpanded}" ItemsSource="{Binding HistoryGraph.Commits}"

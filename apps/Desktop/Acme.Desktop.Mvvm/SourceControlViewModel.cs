@@ -192,7 +192,8 @@ public partial class SourceControlViewModel : ObservableObject
         {
             var nodes = await Task.Run(() => git.GetHistory(_projectDir, 200));
             HistoryGraph = CommitGraphBuilder.Build(nodes);
-            StatusMessage = HistoryGraph.Commits.Count == 0 ? "无提交" : $"{HistoryGraph.Commits.Count} 个提交";
+            // 固定上限 200，显示个数无信息量（小仓库另说）——仅空仓库提示。
+            StatusMessage = HistoryGraph.Commits.Count == 0 ? "无提交" : null;
         }
         catch (Exception ex) { StatusMessage = $"加载历史失败：{ex.Message}"; }
         finally { IsBusy = false; }
