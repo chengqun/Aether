@@ -77,7 +77,11 @@ public static class DesktopCompositionExtensions
         services.Configure<NotesEditorOptions>(o => o.ImageRoot = Path.Combine(tenantDir, "notes-media"));
 
         // 主题：用户主题 JSON 目录（<tenantDir>/themes/*.json）。内置 light/dark 不依赖此目录。
-        services.Configure<DesktopOptions>(o => o.ThemesDirectory = Path.Combine(tenantDir, "themes"));
+        services.Configure<DesktopOptions>(o =>
+        {
+            o.ThemesDirectory = Path.Combine(tenantDir, "themes");
+            o.DataDirectory = tenantDir;
+        });
 
         // —— 公共业务上下文（两租户共用）——
         services.AddAppAuthInfrastructure(o =>

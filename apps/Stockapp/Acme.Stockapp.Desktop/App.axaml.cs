@@ -88,9 +88,13 @@ public partial class App : global::Avalonia.Application
 
     private static IServiceProvider ConfigureServices()
     {
-        var tenantDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Library", "Application Support", "Aether", "Desktop-Stockapp");
+        // 租户数据目录（绝对路径：.app 双击启动 CWD=/ 不可写）。Mac 用 ~/Library/Application Support（保数据连续），
+        // Windows/Linux 用 %LOCALAPPDATA%（系统标准应用数据目录）。
+        var tenantDir = OperatingSystem.IsMacOS()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Library", "Application Support", "Aether", "Desktop-Stockapp")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Aether", "Desktop-Stockapp");
 
         var services = new ServiceCollection();
 
