@@ -22,9 +22,10 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new ChatView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
 
-        // 笔记：共享 NotesView（含 AvaloniaEdit + form 节点两栏）。
+        // 笔记编辑器：共享 NotesEditorView（从原 NotesView col2 拆出——标题栏 + 上下分栏 + 6 种 form 节点视图）。
+        // 笔记树在 LeftTreePanelView（notes tab 时切显），两者共享同一 NotesViewModel 单例。
         Register(PanelKeys.Notes,
-            () => new NotesView(),
+            () => new NotesEditorView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Notes);
 
         // 打开文档编辑器：共享 DocumentsEditorView（多标签 AvaloniaEdit 编辑器，从原 DocumentsView col2 拆出）。
@@ -32,11 +33,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new DocumentsEditorView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
 
-        // 文档页文件树：shell 级独立左栏（FileTreeView，从原 DocumentsView col0 拆出），占满高度。
-        // 与 documents 共享同一 DocumentsViewModel 单例（vmFactory 同上）——树点文件→VM.Open→编辑器响应。
-        Register(PanelKeys.FileTree,
-            () => new FileTreeView(),
-            () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
+        // shell 级左栏切换层：LeftTreePanelView 叠放文件树 + 笔记树，按 tab 切显隐（documents→FileTreeView / notes→NotesTreeView）。
+        // DataContext = MainViewModelBase 本身（子 view 各绑 Documents/Notes 共享 VM 单例）。
+        Register(PanelKeys.LeftTree,
+            () => new LeftTreePanelView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>());
 
         // 源代码管理：共享 SourceControlView（git 变更列表 + 左右并排 diff）。
         Register(PanelKeys.SourceControl,

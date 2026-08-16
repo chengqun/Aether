@@ -47,14 +47,20 @@ public partial class WorkspaceView : UserControl
     private GridLength _terminalExpandedHeight = new(220, GridUnitType.Pixel); // 展开行高（折叠前记实际值，含拖动后）
     private ITerminalService? _terminalService;
 
-    // ── 文件树 shell 级左栏条件可见（VSCode 式）：记 filetree region 宿主 + 父 split Grid + 列位置，仅 documents tab 可见 ──
-    private ContentControl? _fileTreeHost;           // filetree region 的 ContentControl（BuildRegion 时记）
-    private Grid? _fileTreeSplitGrid;                // 含 filetree 的外层水平 split Grid
-    private int _fileTreeCol = -1;                   // filetree 在 grid 的 child col（= i*2）
-    private int _fileTreeSplitterCol = -1;           // filetree 前的 GridSplitter col（= i*2-1）
-    private GridLength _fileTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后）
-    private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 documents tab → 树永不显）
-    private INotifyPropertyChanged? _workspaceNpc;   // 订阅 SelectedTabIndex 变化切树显隐（重建时解订阅旧 workspace）
+    // ── 侧栏 shell 级左栏条件可见（VSCode 式）：记 lefttree region 宿主 + 父 split Grid + 列位置，
+    //    叠放文件树+笔记树，documents/notes tab 可见并切对应树，其余 tab 隐藏列宽 0 ──
+    private ContentControl? _leftTreeHost;           // lefttree region 的 ContentControl（BuildRegion 时记）
+    private Grid? _leftTreeSplitGrid;                // 含 lefttree 的外层水平 split Grid
+    private int _leftTreeCol = -1;                   // lefttree 在 grid 的 child col（= i*2）
+    private int _leftTreeSplitterCol = -1;           // lefttree 前的 GridSplitter col（= i*2-1）
+    private GridLength _leftTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后）
+    private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
+    private int _notesTabIndex = -1;                 // notes 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显笔记树）
+    private INotifyPropertyChanged? _workspaceNpc;   // 订阅 SelectedTabIndex 变化切侧栏显隐（重建时解订阅旧 workspace）
+
+    /// <summary>隐藏宿主尺寸记忆表：折叠/切 tab 隐藏后子控件 Bounds=0，ReadPixels 用此记忆的展开尺寸替换，防持久化 0。
+    /// key=隐藏的 ContentControl（terminal/lefttree host），value=隐藏前的展开尺寸（像素值）。显隐时增删。</summary>
+    private readonly Dictionary<Control, double> _hiddenSizes = new();
 
     private bool _persistWired;
 
@@ -73,10 +79,11 @@ public partial class WorkspaceView : UserControl
         _terminalSplitGrid = null;
         _terminalRow = -1;
         _terminalSplitterRow = -1;
-        _fileTreeHost = null;
-        _fileTreeSplitGrid = null;
-        _fileTreeCol = -1;
-        _fileTreeSplitterCol = -1;
+        _leftTreeHost = null;
+        _leftTreeSplitGrid = null;
+        _leftTreeCol = -1;
+        _leftTreeSplitterCol = -1;
+        _hiddenSizes.Clear();
         // 解订阅旧 workspace 的 SelectedTabIndex 通知（重建/切换工作台时）。
         if (_workspaceNpc is not null)
         {
@@ -103,20 +110,24 @@ public partial class WorkspaceView : UserControl
             ApplyTerminalVisibility(_terminalService.IsPanelVisible);
         }
 
-        // 文件树 shell 级左栏条件可见（VSCode 式）：仅 documents tab 选中时显示树列，其余 tab 隐藏列宽 0。
+        // 侧栏 shell 级左栏条件可见（VSCode 式）：documents tab→文件树 / notes tab→笔记树 / 其余 tab→列宽 0 隐藏。
         var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
         _documentsTabIndex = -1;
+        _notesTabIndex = -1;
         if (tabbed is not null)
         {
             for (int i = 0; i < tabbed.RegionIds.Count; i++)
-                if (tabbed.RegionIds[i] == PanelKeys.Documents) { _documentsTabIndex = i; break; }
+            {
+                if (tabbed.RegionIds[i] == PanelKeys.Documents) _documentsTabIndex = i;
+                else if (tabbed.RegionIds[i] == PanelKeys.Notes) _notesTabIndex = i;
+            }
         }
         if (_workspace is INotifyPropertyChanged pc)
         {
             _workspaceNpc = pc;
             pc.PropertyChanged += OnWorkspaceSelectedTabChanged;
         }
-        ApplyFileTreeVisibility(_workspace.SelectedTabIndex == _documentsTabIndex);
+        ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
     }
 
     private void EnsureServices()
@@ -148,7 +159,7 @@ public partial class WorkspaceView : UserControl
         if (panel is not null)
             _regionManager?.AddToRegion(r.RegionId, panel); // 初始内容走与插件注入相同的路径
         if (r.RegionId == PanelKeys.Terminal) _terminalHost = cc; // 记终端宿主，折叠时改其父 Grid 行高
-        if (r.RegionId == PanelKeys.FileTree) _fileTreeHost = cc; // 记文件树宿主，切 tab 时改其父 Grid 列宽
+        if (r.RegionId == PanelKeys.LeftTree) _leftTreeHost = cc; // 记侧栏宿主，切 tab 时改其父 Grid 列宽 + SetActiveTree
         return cc;
     }
 
@@ -191,13 +202,13 @@ public partial class WorkspaceView : UserControl
                 _terminalSplitterRow = i * 2 - 1; // terminal 前的 splitter（terminal 非首 child 时存在）
                 _terminalExpandedHeight = grid.RowDefinitions[i * 2].Height;
             }
-            // 含 filetree region 的外层水平 split：记 Grid + filetree 的列位置，用于切 tab 时显隐左栏（VSCode 式）。
-            if (ReferenceEquals(child, _fileTreeHost) && _fileTreeSplitGrid is null && horiz)
+            // 含 lefttree region 的外层水平 split：记 Grid + lefttree 的列位置，用于切 tab 时显隐左栏（VSCode 式）。
+            if (ReferenceEquals(child, _leftTreeHost) && _leftTreeSplitGrid is null && horiz)
             {
-                _fileTreeSplitGrid = grid;
-                _fileTreeCol = i * 2;
-                _fileTreeSplitterCol = i * 2 - 1; // filetree 前的 splitter（filetree 非首 child 时存在）
-                _fileTreeExpandedWidth = grid.ColumnDefinitions[i * 2].Width;
+                _leftTreeSplitGrid = grid;
+                _leftTreeCol = i * 2;
+                _leftTreeSplitterCol = i * 2 - 1; // lefttree 前的 splitter（lefttree 非首 child 时存在）
+                _leftTreeExpandedWidth = grid.ColumnDefinitions[i * 2].Width;
             }
             int idx = i * 2;
             if (horiz) Grid.SetColumn(child, idx); else Grid.SetRow(child, idx);
@@ -300,12 +311,10 @@ public partial class WorkspaceView : UserControl
             if (s.Pixels[i] > 0 && i < st.Children.Count) // 仅 Pixel 列读实际宽
             {
                 var child = st.Children[i];
-                // 隐藏宿主守卫：折叠/切 tab 隐藏后 Bounds=0，用记忆的展开尺寸替换。
+                // 隐藏宿主守卫：折叠/切 tab 隐藏后 Bounds=0，用 _hiddenSizes 记忆的展开尺寸替换。
                 double fallback = 0;
-                if (ReferenceEquals(child, _terminalHost) && !_terminalHost!.IsVisible)
-                    fallback = _terminalExpandedHeight.Value > 0 ? _terminalExpandedHeight.Value : 220;
-                else if (ReferenceEquals(child, _fileTreeHost) && !_fileTreeHost!.IsVisible)
-                    fallback = _fileTreeExpandedWidth.Value > 0 ? _fileTreeExpandedWidth.Value : 240;
+                if (!child.IsVisible && _hiddenSizes.TryGetValue(child, out var remembered))
+                    fallback = remembered;
 
                 var sz = s.Orientation == SplitOrientation.Horizontal
                     ? child.Bounds.Width : child.Bounds.Height;
@@ -364,7 +373,11 @@ public partial class WorkspaceView : UserControl
             if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后的实际值）
             row.Height = new GridLength(0);
             SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, false);
-            if (_terminalHost is not null) _terminalHost.IsVisible = false;
+            if (_terminalHost is not null)
+            {
+                _hiddenSizes[_terminalHost] = _terminalExpandedHeight.Value > 0 ? _terminalExpandedHeight.Value : 220;
+                _terminalHost.IsVisible = false;
+            }
         }
         else
         {
@@ -372,7 +385,11 @@ public partial class WorkspaceView : UserControl
                 ? _terminalExpandedHeight
                 : new GridLength(220, GridUnitType.Pixel);
             SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, true);
-            if (_terminalHost is not null) _terminalHost.IsVisible = true;
+            if (_terminalHost is not null)
+            {
+                _hiddenSizes.Remove(_terminalHost);
+                _terminalHost.IsVisible = true;
+            }
         }
     }
 
@@ -385,36 +402,54 @@ public partial class WorkspaceView : UserControl
                 c.IsVisible = visible;
     }
 
-    // ── 文件树 shell 级左栏条件可见（VSCode 式：仅 documents tab 选中时显示，切其它 tab 隐藏列宽 0） ──
+    // ── 侧栏 shell 级左栏条件可见（VSCode 式：documents/notes tab 显示对应树，切其它 tab 隐藏列宽 0） ──
 
-    /// <summary>workspace SelectedTabIndex 变化 → 文件树列显隐（documents tab 可见则显，否则隐）。</summary>
+    /// <summary>workspace SelectedTabIndex 变化 → 侧栏显隐 + 切对应树（documents→文件树 / notes→笔记树 / 其它→隐藏）。</summary>
     private void OnWorkspaceSelectedTabChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IWorkspace.SelectedTabIndex) || _workspace is null) return;
-        ApplyFileTreeVisibility(_workspace.SelectedTabIndex == _documentsTabIndex);
+        ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
     }
 
-    /// <summary>显/隐文件树左栏列：改其父 Grid 列宽（0 ↔ 展开宽度）+ splitter 显隐 + content 显隐。
-    /// 隐藏时仅收起列空间（VSCode 式切到非编辑器页时目录栏消失）；恢复时用记忆的展开宽度（含用户拖动后的实际值）。</summary>
-    private void ApplyFileTreeVisibility(bool visible)
+    /// <summary>当前 tab → 侧栏活动树：documents→"documents" / notes→"notes" / 其它→null（隐藏左栏）。</summary>
+    private string? ResolveLeftTreeKind(int tabIndex)
     {
-        if (_fileTreeSplitGrid is null || _fileTreeCol < 0) return;
-        // 无 documents tab（_documentsTabIndex=-1）→ 永不显示（visible 必为 false）。
-        var col = _fileTreeSplitGrid.ColumnDefinitions[_fileTreeCol];
-        if (!visible)
+        if (tabIndex == _documentsTabIndex) return "documents";
+        if (tabIndex == _notesTabIndex) return "notes";
+        return null;
+    }
+
+    /// <summary>显/隐侧栏左栏列并切对应树：kind 非空→恢复列宽 + splitter 显 + content 显 + SetActiveTree(kind)；
+    /// kind=null→记展开宽 + 列宽 0 + splitter 隐 + content 隐（VSCode 式切到非编辑器页时目录栏消失）。
+    /// 恢复时用记忆的展开宽度（含用户拖动后的实际值）。</summary>
+    private void ApplyLeftTreeVisibility(string? kind)
+    {
+        if (_leftTreeSplitGrid is null || _leftTreeCol < 0) return;
+        // 无 documents 且无 notes tab（两者均 -1）→ ResolveLeftTreeKind 恒 null → 永不显示。
+        var col = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol];
+        if (kind is null)
         {
-            if (col.Width.Value > 0) _fileTreeExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后的实际值）
+            if (col.Width.Value > 0) _leftTreeExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后的实际值）
+            if (_leftTreeHost is not null)
+            {
+                _hiddenSizes[_leftTreeHost] = _leftTreeExpandedWidth.Value > 0 ? _leftTreeExpandedWidth.Value : 240;
+                _leftTreeHost.IsVisible = false;
+            }
             col.Width = new GridLength(0);
-            SetSplitterVisibleCol(_fileTreeSplitGrid, _fileTreeSplitterCol, false);
-            if (_fileTreeHost is not null) _fileTreeHost.IsVisible = false;
+            SetSplitterVisibleCol(_leftTreeSplitGrid, _leftTreeSplitterCol, false);
         }
         else
         {
-            col.Width = _fileTreeExpandedWidth.Value > 0
-                ? _fileTreeExpandedWidth
+            col.Width = _leftTreeExpandedWidth.Value > 0
+                ? _leftTreeExpandedWidth
                 : new GridLength(240, GridUnitType.Pixel);
-            SetSplitterVisibleCol(_fileTreeSplitGrid, _fileTreeSplitterCol, true);
-            if (_fileTreeHost is not null) _fileTreeHost.IsVisible = true;
+            SetSplitterVisibleCol(_leftTreeSplitGrid, _leftTreeSplitterCol, true);
+            if (_leftTreeHost is not null)
+            {
+                _hiddenSizes.Remove(_leftTreeHost);
+                _leftTreeHost.IsVisible = true;
+            }
+            (_leftTreeHost?.Content as LeftTreePanelView)?.SetActiveTree(kind);
         }
     }
 

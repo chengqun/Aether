@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             xmlns:edit="using:AvaloniaEdit"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+             x:Class="Acme.Desktop.Shared.Shell.NotesEditorView"
+             Background="{DynamicResource CardBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Border.note-card">
+      <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="16,14"/>
+    </Style>
+    <Style Selector="Button.notes-tool">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="Button.notes-tool:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    </Style>
+    <Style Selector="Button.notes-primary">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="12,4"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource CardBgBrush}">
+    <Grid>
+      <DockPanel IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+        <Border DockPanel.Dock="Top" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{Binding SelectedNode.IconColor}" IsVisible="{Binding SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
+              <Path Data="{Binding SelectedNode.Icon}" Stretch="Uniform" Width="15" Height="15"
+                    StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                    Stroke="{Binding SelectedNode.IconColor}" IsVisible="{Binding !SelectedNode.IconIsFill}" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding SelectedNode.Title}" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11"
+                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
+            <Button Grid.Column="2" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
+                    Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示上栏 / 上下双栏">
+              <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
+                    Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
+                    StrokeLineCap="Round" StrokeJoin="Round"
+                    Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            </Button>
+          </Grid>
+        </Border>
+
+        <Grid x:Name="SplitGrid">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="4"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <!-- 下：源码编辑器 -->
+          <edit:TextEditor Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
+                   x:Name="CodeEditor" IsVisible="{Binding EditorVisible}"
+                   ShowLineNumbers="False" WordWrap="True"
+                   FontFamily="Menlo,Monaco,Consolas,monospace" FontSize="{Binding EditorFontSize}"
+                   Background="Transparent" Margin="8,6" />
+          <!-- 中：可拖动分隔条（上下） -->
+          <GridSplitter Grid.Row="1" IsVisible="{Binding SplitterVisible}" ResizeDirection="Rows"
+                        Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                        Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth" />
+          <!-- 上栏容器：预览/表单（仅显示模式时跨满） -->
+          <Grid Grid.Row="0" Grid.RowSpan="{Binding RightPaneRowSpan}"
+                IsVisible="{Binding RightPaneVisible}">
+            <!-- markdown 渲染 -->
+            <ctl:SelectableMarkdownViewer IsVisible="{Binding IsMarkdownNode}"
+                   Markdown="{Binding SelectedNode.Content}"
+                   AssetPathRoot="{Binding ImageRoot}"/>
+            <!-- Agent 表单 -->
+            <Border IsVisible="{Binding IsAgentNode}">
+              <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+            <!-- 规则表单（独立 RuleEditView，单 YAML 文档） -->
+            <Border IsVisible="{Binding IsRuleNode}">
+              <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+            <!-- 代码规则表单（复用 RuleEditView；NodeType=CodeRule，下栏为 C# 源码） -->
+            <Border IsVisible="{Binding IsCodeRuleNode}">
+              <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+            <!-- Workflow 表单 -->
+            <Border IsVisible="{Binding IsWorkflowNode}">
+              <shell:WorkflowEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+            <!-- 知识对象表单 -->
+            <Border IsVisible="{Binding IsKnowledgeNode}">
+              <shell:KnowledgeEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+            <!-- 策略表单（YAML 声明式；NodeType=Strategy，下栏为 YAML 源码） -->
+            <Border IsVisible="{Binding IsStrategyNode}">
+              <shell:StrategyEditView DataContext="{Binding ActiveEditVm}"/>
+            </Border>
+          </Grid>
+        </Grid>
+      </DockPanel>
+    </Grid>
+  </Border>
+</UserControl>
