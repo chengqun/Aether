@@ -27,6 +27,7 @@ public class KnowledgeTool
 
     public class KnowledgeSummary
     {
+        public string? Id { get; set; }
         public string? Name { get; set; }
         public string? Kind { get; set; }
         public string? BodyPreview { get; set; }
@@ -40,6 +41,7 @@ public class KnowledgeTool
 
     public class ReadKnowledgeOutput
     {
+        public string? Id { get; set; }
         public string? Name { get; set; }
         public string? Kind { get; set; }
         /// <summary>组装后的完整知识（kind + 正文 + 各 link 指向的子笔记内容）。</summary>
@@ -79,6 +81,7 @@ public class KnowledgeTool
                 if (!_parser.TryParse(note.Content, out var def, out _)) continue;
                 result.Add(new KnowledgeSummary
                 {
+                    Id = note.Id,
                     Name = note.Title,
                     Kind = def?.Kind,
                     BodyPreview = string.IsNullOrWhiteSpace(def?.Body) ? null : Truncate(def.Body, 80),
@@ -113,9 +116,10 @@ public class KnowledgeTool
 
             return new ReadKnowledgeOutput
             {
+                Id = note.Id,
                 Name = note.Title,
                 Kind = def.Kind,
-                Definition = await FormatAsync(def, note.Title, all, cancellationToken),
+                Definition = await FormatAsync(def, note.Id, note.Title, all, cancellationToken),
             };
         }
         catch (Exception ex)
@@ -129,7 +133,7 @@ public class KnowledgeTool
         [Description("知识对象名称（笔记标题，需唯一）")] string name,
         [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
         [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
-        [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"target\":\"情报分析表\"}]，target 为目标笔记标题（按标题解析为 id）")] string? linksJson = null,
+        [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"targetId\":\"<guid>\"}] 或 [{\"role\":\"uses\",\"target\":\"情报分析表\"}]。优先 targetId（真实节点 id，权威，改名不断链）；回退 target（标题，按标题解析为 id）。先用 ListKnowledgeObjects/ReadKnowledgeObject 取目标 id")] string? linksJson = null,
         [Description("父节点 id（可选，不传则建到根节点下）。要建到指定 folder 下时，先用 ListNotes 查目标 folder 的 id 再传入")] string? parentId = null,
         CancellationToken cancellationToken = default)
     {
@@ -167,7 +171,7 @@ public class KnowledgeTool
         [Description("知识对象名称（笔记标题）")] string name,
         [Description("新 kind（可选，不传保留原值）")] string? kind = null,
         [Description("新 markdown 正文（可选，不传保留原值）")] string? body = null,
-        [Description("新 links（可选，JSON 数组，全量替换原 links；不传保留原 links）")] string? linksJson = null,
+        [Description("新 links（可选，JSON 数组，全量替换原 links；不传保留原 links）。支持 targetId（真实节点 id，权威）或 target（标题）；如 [{\"role\":\"uses\",\"targetId\":\"<guid>\"}]")] string? linksJson = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -205,7 +209,8 @@ public class KnowledgeTool
         }
     }
 
-    /// <summary>解析 links JSON（[{role,target}]），按 target 标题查笔记 id。解析失败返回空列表（容错）。</summary>
+    /// <summary>解析 links JSON。优先 <c>targetId</c>（真实节点 id，权威，改名不断链，按 id 反查标题）；
+    /// 回退 <c>target</c>（标题，按标题解析 id）。两者都无则跳过。解析失败返回空列表（容错）。</summary>
     private static List<KnowledgeLink> ParseLinks(string? linksJson, IReadOnlyList<NoteDto> all)
     {
         var result = new List<KnowledgeLink>();
@@ -216,14 +221,31 @@ public class KnowledgeTool
             foreach (var el in doc.RootElement.EnumerateArray())
             {
                 var role = el.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "";
-                var target = el.TryGetProperty("target", out var t) ? t.GetString() ?? "" : "";
-                if (string.IsNullOrWhiteSpace(target)) continue;
-                var node = all.FirstOrDefault(n => string.Equals(n.Title, target, StringComparison.OrdinalIgnoreCase));
+
+                Guid? targetId = null;
+                string targetTitle = "";
+
+                // 优先 targetId：真实节点 id（权威，改名不断链），按 id 反查标题
+                if (el.TryGetProperty("targetId", out var tidEl) && Guid.TryParse(tidEl.GetString(), out var parsedId))
+                {
+                    targetId = parsedId;
+                    var node = all.FirstOrDefault(n => Guid.TryParse(n.Id, out var nid) && nid == parsedId);
+                    targetTitle = node?.Title ?? "";
+                }
+                // 回退 target：标题，按标题解析 id（兼容旧用法/手写）
+                else if (el.TryGetProperty("target", out var tEl))
+                {
+                    targetTitle = tEl.GetString() ?? "";
+                    var node = all.FirstOrDefault(n => string.Equals(n.Title, targetTitle, StringComparison.OrdinalIgnoreCase));
+                    targetId = node is not null && Guid.TryParse(node.Id, out var nid) ? nid : null;
+                }
+
+                if (targetId is null && string.IsNullOrWhiteSpace(targetTitle)) continue;
                 result.Add(new KnowledgeLink
                 {
                     Role = role,
-                    Target = target,
-                    TargetId = node is not null && Guid.TryParse(node.Id, out var nid) ? nid : null,
+                    Target = targetTitle,
+                    TargetId = targetId,
                 });
             }
         }
@@ -231,10 +253,11 @@ public class KnowledgeTool
         return result;
     }
 
-    /// <summary>组装：kind + name + 正文 + 各 link 指向子笔记的内容。</summary>
-    private async Task<string> FormatAsync(KnowledgeObjectDefinition def, string title, IReadOnlyList<NoteDto> all, CancellationToken ct)
+    /// <summary>组装：id + kind + name + 正文 + 各 link 指向子笔记的内容（含 target 真实节点 id）。</summary>
+    private async Task<string> FormatAsync(KnowledgeObjectDefinition def, string id, string title, IReadOnlyList<NoteDto> all, CancellationToken ct)
     {
         var sb = new StringBuilder();
+        sb.AppendLine($"id: {id}");
         sb.AppendLine($"kind: {def.Kind}");
         sb.AppendLine($"name: {title}");
         if (!string.IsNullOrWhiteSpace(def.Body))
@@ -250,7 +273,10 @@ public class KnowledgeTool
                     ? all.FirstOrDefault(n => Guid.TryParse(n.Id, out var nid) && nid == l.TargetId.Value)
                     : null;
                 target ??= all.FirstOrDefault(n => string.Equals(n.Title, l.Target, StringComparison.OrdinalIgnoreCase));
-                sb.AppendLine($"[{l.Role}] {l.Target}:");
+                // 输出 target 真实节点 id（数据现成：target 已查到），让 agent 能用权威 id 引用子笔记
+                sb.AppendLine(target is not null
+                    ? $"[{l.Role}] {l.Target} (id:{target.Id}):"
+                    : $"[{l.Role}] {l.Target}:");
                 if (target is null)
                     sb.AppendLine("  （找不到笔记）");
                 else
