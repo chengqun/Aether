@@ -5,6 +5,7 @@ using Aether.AI.Harness.Sessions;
 using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 using Aether.AI.Hosting.Agents;
+using Aether.AI.Hosting.Tools;
 using Aether.AI.Memory;
 using Aether.AI.Memory.Stores;
 using Microsoft.Agents.AI;
@@ -67,6 +68,9 @@ public static class AetherAIServiceCollectionExtensions
         // when resolving tools for an agent, so GetAllMetas() never instantiates
         // AIFunction and never fails due to missing DI dependencies.
         services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp));
+
+        // 工具等级查询（Core 契约）：UI 层 AutoEdit 模式按等级区分自动批/弹框，不经此不直引 Harness。
+        services.AddSingleton<IToolApprovalLevelLookup>(sp => new ToolApprovalLevelLookup(sp.GetRequiredService<ToolRegistry>()));
 
         // Skills — SkillRegistry 收集各适配器通过 ISkillRegistryContributor 注册的提示词级 skill。
         services.AddSingleton<SkillRegistry>(sp => new SkillRegistry(sp));

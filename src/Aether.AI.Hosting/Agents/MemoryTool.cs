@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Aether.AI.Core.Memory;
-using Aether.AI.Harness.Tools;
+using Aether.AI.Core.Agents;
 using Aether.AI.Memory;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;

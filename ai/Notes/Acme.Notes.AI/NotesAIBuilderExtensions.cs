@@ -1,7 +1,7 @@
 using System.Reflection;
 using Acme.Notes.AI.Tools;
 using Aether.AI.Hosting;
-using Aether.AI.Harness.Tools;
+using Aether.AI.Core.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 

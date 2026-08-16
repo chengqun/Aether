@@ -34,6 +34,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly IConversationTitleService _titleService;
     private readonly IDeviceAutoConnectService _autoConnect;
     private readonly IApprovalDialogService? _approvalDialog;
+    private readonly IToolApprovalLevelLookup? _levelLookup; // AutoEdit 模式按工具等级区分自动批/弹框；null 退化为全弹（Manual 语义）
 
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
@@ -47,7 +48,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
     private Guid _currentConversationId = Guid.Empty;
     private bool _isInitializing;
-    private bool _syncingMode; // 程序化刷新 SelectedMode 时置 true，避免 OnSelectedModeChanged 回触 SetMode
+    private bool _syncingMode; // 程序化刷新 SelectedChatMode 时置 true，避免 OnSelectedChatModeChanged 回触 SetMode
     private CancellationTokenSource? _runCts; // 当前流式运行的取消令牌（停止生成用）
 
     // —— 历史增量加载：切换会话时只渲染最近若干轮，更早的暂存，滚到顶部再加载 ——
@@ -78,6 +79,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
+        _levelLookup = serviceProvider.GetService<IToolApprovalLevelLookup>();
         _experts = experts;
         _workflows = workflows;
         _rules = rules;
@@ -206,6 +208,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             {
                 ToolApprovalRequest? pendingApproval = null;
                 ChatMessageItem? approvalCard = null;
+                ToolApprovalDecision? autoDecision = null; // 模式自动批（Auto/AutoEdit-非Dangerous）；非 null 则跳过对话框+审批卡
                 // answerTokens 节流已由 50ms 批量 flush 替代
 
                 var handlers = new StreamHandlers(
@@ -233,6 +236,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     OnApprovalRequest: (req, _) =>
                     {
                         pendingApproval = req;
+                        // 按当前模式算自动决定（Auto 全自动批；AutoEdit 自动批非 Dangerous；Manual/Plan 弹框）。
+                        // 读 SelectedChatMode 是逐工具调用即时生效——运行中切档立即影响下一个工具（解决中途切模式）。
+                        autoDecision = TryAutoApprove(req);
+                        if (autoDecision is not null)
+                            return Task.CompletedTask; // 自动批：不插审批卡，工具 call+result 仍经 OnToolEvent 正常渲染
                         var card = new ChatMessageItem
                         {
                             Side = ChatMessageSide.Left,
@@ -274,28 +282,37 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
                 if (pendingApproval is null) break;
 
-                // 审批等用户决定：统一走模态对话框（文件编辑工具已改 Safe 自动跑，不再走审批）。
-                var decision = _approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false);
-
-                if (decision is null)
+                ToolApprovalDecision decision;
+                if (autoDecision is not null)
                 {
-                    _dispatcher.Post(() => { if (approvalCard is not null) approvalCard.ApprovalState = 2; });
-                    break; // 取消 → 终止本轮
+                    // 模式自动批（Auto/AutoEdit-非Dangerous）：无对话框、无审批卡，直接走与用户批准相同的再调用路径恢复执行。
+                    decision = autoDecision;
+                }
+                else
+                {
+                    // 审批等用户决定：统一走模态对话框（文件编辑工具已改 Safe 自动跑，不再走审批）。
+                    var userDecision = _approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false);
+                    if (userDecision is null)
+                    {
+                        _dispatcher.Post(() => { if (approvalCard is not null) approvalCard.ApprovalState = 2; });
+                        break; // 取消 → 终止本轮
+                    }
+                    decision = userDecision;
+                    var approved = decision.Approved;
+                    var cardRef = approvalCard;
+                    _dispatcher.Post(() =>
+                    {
+                        if (cardRef is not null) cardRef.ApprovalState = approved ? 1 : 2;
+                        turn.Status = TurnStatus.Working;
+                        // 开新答案段承接恢复流
+                        var seg = NewTextSegment(senderName, isReasoningContent: false);
+                        var idx = items.IndexOf(cursor.Current);
+                        if (idx < 0) idx = items.Count - 1;
+                        items.Insert(idx + 1, seg);
+                        cursor.Current = seg;
+                    });
                 }
                 approvalResponse = decision;
-                var approved = decision.Approved;
-                var cardRef = approvalCard;
-                _dispatcher.Post(() =>
-                {
-                    if (cardRef is not null) cardRef.ApprovalState = approved ? 1 : 2;
-                    turn.Status = TurnStatus.Working;
-                    // 开新答案段承接恢复流
-                    var seg = NewTextSegment(senderName, isReasoningContent: false);
-                    var idx = items.IndexOf(cursor.Current);
-                    if (idx < 0) idx = items.Count - 1;
-                    items.Insert(idx + 1, seg);
-                    cursor.Current = seg;
-                });
             }
         }
         catch (Exception ex)
@@ -656,7 +673,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 _ => (Guid.Empty, "目标"),
             };
             var fullText = new System.Text.StringBuilder();
-            var desiredMode = HasModeSupport ? SelectedMode : null;
+            var desiredMode = HasModeSupport ? SelectedChatMode.ToDesiredMode() : null;
             await RunSegmentedStreamAsync(remoteTurn, targetName,
                 (handlers, approvalResponse, ct) => remoteKind == ChatTargetKind.Workflow
                     ? _workflowRunner.RunStreamingAsync(msg.ConversationId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
@@ -706,7 +723,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [ObservableProperty] private bool _hasActivePlan;
     [ObservableProperty] private bool _isPlanExpanded = true;
     /// <summary>plan 模式轮、且本轮产出计划后置 true（待用户接受）；execute 轮/接受后即 false。
-    /// 脱钩于 SelectedMode——避免 RefreshModeAsync 把模式回翻成 plan 时接受条误弹。</summary>
+    /// 脱钩于 SelectedChatMode——避免 RefreshModeAsync 把模式回翻成 plan 时接受条误弹。</summary>
     [ObservableProperty] private bool _planAwaitingAccept;
     /// <summary>本轮是否调过 todos_*（区分「本轮新计划」vs「上轮残留计划」）。每轮开始重置。</summary>
     private bool _todosTouchedThisTurn;
@@ -735,9 +752,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [ObservableProperty]
     private bool _hasModeSupport;
 
-    /// <summary>当前会话 AgentMode（plan/execute…）；null=未知/未启用。输入框选择器 + plan-accept 条绑定。</summary>
+    /// <summary>当前会话运行模式（4 档：Plan/Manual/AutoEdit/Auto）。MAF 只存 plan/execute；
+    /// execute 子档（Manual/AutoEdit/Auto）是纯 VM 状态，经审批拦截逐工具决定自动批/弹框。默认 AutoEdit。</summary>
     [ObservableProperty]
-    private string? _selectedMode = "plan";
+    private ChatMode _selectedChatMode = ChatMode.AutoEdit;
 
     /// <summary>agent 是否正在流式运行（驱动 plan-accept 条显隐）。</summary>
     [ObservableProperty]
@@ -749,9 +767,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     /// <summary>有计划、非运行中、且不在待接受态 → execute 已跑完，可点「确认执行完毕」收起面板。</summary>
     public bool ShowPlanDismiss => HasActivePlan && !IsAgentRunning && !PlanAwaitingAccept;
-
-    /// <summary>输入框模式选择器选项（默认 plan/execute）。</summary>
-    public ObservableCollection<string> ModeOptions { get; } = new() { "plan", "execute" };
 
     // —— 最近会话列表（侧边栏）——
     public ObservableCollection<ConversationItem> Conversations { get; } = new();
@@ -1167,7 +1182,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         HasModeSupport = kind == ChatTargetKind.Workflow
                       || (kind == ChatTargetKind.Agent && value is ExpertItem e && e.EnableAgentModeProvider);
         _syncingMode = true;
-        SelectedMode = HasModeSupport ? "plan" : null;
+        SelectedChatMode = ChatMode.AutoEdit; // 默认自动编辑档（无选择器时值无意义——TryAutoApprove 不激活）
         _syncingMode = false;
 
         var newKey = TargetKey(value, kind);
@@ -1189,27 +1204,16 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         RefreshModeAsync().SafeFireAndForget();
     }
 
-    partial void OnSelectedModeChanged(string? value)
+    partial void OnSelectedChatModeChanged(ChatMode value)
     {
         OnPropertyChanged(nameof(ShowPlanAccept));
-        OnPropertyChanged(nameof(IsPlanMode));
-        if (_syncingMode || _isInitializing || value is null || !HasModeSupport) return;
-        // 已存在会话：立即 SetMode；新会话：不改，由 run delegate 的 desiredMode 在首轮应用。
+        if (_syncingMode || _isInitializing || !HasModeSupport) return;
+        // 已存在会话：立即 SetMode（plan/execute）；新会话：不改，由 run delegate 的 desiredMode 在首轮应用。
+        // 审批子档（Manual/AutoEdit/Auto）不经 SetMode——它们是 VM 状态，在 OnApprovalRequest 逐工具读取。
         if (_currentConversationId != Guid.Empty)
-            SetModeOnSessionAsync(value).SafeFireAndForget();
-
+            SetModeOnSessionAsync(value.ToDesiredMode()).SafeFireAndForget();
     }
 
-    /// <summary>是否在规划模式（ToggleButton 绑定用）。设值切换 plan/execute。</summary>
-    public bool IsPlanMode
-    {
-        get => SelectedMode == "plan";
-        set
-        {
-            var target = value ? "plan" : "execute";
-            if (SelectedMode != target) SelectedMode = target;
-        }
-    }
     partial void OnIsAgentRunningChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowPlanAccept));
@@ -1265,7 +1269,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _runCts?.Cancel();
     }
 
-    /// <summary>用户在输入框切换 plan/execute 模式：新会话只记 SelectedMode（首轮 desiredMode 应用），已存在会话立即 SetMode。</summary>
+    /// <summary>用户在输入框切模式：新会话只记 SelectedChatMode（首轮 desiredMode 应用），已存在会话立即 SetMode（plan/execute）。</summary>
     private async Task SetModeOnSessionAsync(string mode)
     {
         if (_currentConversationId == Guid.Empty) return;
@@ -1277,7 +1281,35 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             await _agentRunner.SetModeAsync(_currentConversationId, mode);
     }
 
-    /// <summary>轮后从会话读实际模式（捕获 agent 自行 set_mode 的切换），带 guard 不回触 SetMode。</summary>
+    /// <summary>按当前 <see cref="SelectedChatMode"/> 算工具审批的自动决定。
+    /// 返回非 null = 自动批准（跳过对话框+审批卡，走与用户批准相同的再调用路径恢复执行）；返回 null = 需弹框。
+    /// - Auto：全部自动批（含 Dangerous）。
+    /// - AutoEdit：自动批非 Dangerous（Safe/Confirm）；Dangerous 弹框。lookup 为 null（未注册）退化为全弹（安全降级）。
+    /// - Manual/Plan：始终弹框（Plan 轮一般不调写工具，防御性弹框）。
+    /// AlwaysApprove=false：一次性批，不设 session 级 standing rule（模式可变，不能永久放行）。</summary>
+    private ToolApprovalDecision? TryAutoApprove(ToolApprovalRequest req)
+    {
+        // 无模式选择器（RequireToolApproval-only agent 或规则）→ 不自动批，走对话框（保留旧行为）。
+        // 4 档自动批策略仅对有选择器（EnableAgentModeProvider/工作流）的会话生效。
+        if (!HasModeSupport) return null;
+        switch (SelectedChatMode)
+        {
+            case ChatMode.Auto:
+                return new ToolApprovalDecision(req.RequestId, Approved: true, "自动批准（自动模式）", AlwaysApprove: false);
+            case ChatMode.AutoEdit:
+                // lookup 缺失 → 视为 Dangerous（弹框，安全降级）。
+                var level = _levelLookup?.LevelOf(req.ToolName) ?? ToolApprovalLevel.Dangerous;
+                return level != ToolApprovalLevel.Dangerous
+                    ? new ToolApprovalDecision(req.RequestId, Approved: true, "自动批准（自动编辑模式）", AlwaysApprove: false)
+                    : null;
+            default: // Manual / Plan
+                return null;
+        }
+    }
+
+    /// <summary>轮后从会话读实际模式（捕获 agent 自行 set_mode 的切换），带 guard 不回触 SetMode。
+    /// 只同步 plan/execute（MAF 唯一存的两态）；execute 子档（Manual/AutoEdit/Auto）保留 VM 当前值——
+    /// set_mode 经 ToolFilteringChatClient 过滤，agent 不能自切，子档只由用户改。</summary>
     private async Task RefreshModeAsync(Guid? conversationId = null)
     {
         var convId = conversationId ?? _currentConversationId;
@@ -1288,19 +1320,22 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         if (m is not null)
         {
             _syncingMode = true;
-            SelectedMode = m;
+            // MAF=plan → Plan；MAF=execute → 若当前是 Plan 则置默认 AutoEdit，否则保留 execute 子档。
+            SelectedChatMode = ChatModeExtensions.IsPlanMode(m)
+                ? ChatMode.Plan
+                : (SelectedChatMode == ChatMode.Plan ? ChatMode.AutoEdit : SelectedChatMode);
             _syncingMode = false;
         }
     }
 
-    /// <summary>接受计划：切 execute 模式 + 续跑一轮"已接受计划，进入执行"。</summary>
+    /// <summary>接受计划：切 AutoEdit（execute 子档）+ 续跑一轮"已接受计划，进入执行"。</summary>
     [RelayCommand]
     private async Task AcceptPlanAsync()
     {
         if (!HasModeSupport || IsAgentRunning || _currentConversationId == Guid.Empty) return;
         PlanAwaitingAccept = false; // 已接受→不再显示接受条（execute 轮后也不会误弹）
+        _syncingMode = true; SelectedChatMode = ChatMode.AutoEdit; _syncingMode = false;
         await SetModeOnSessionAsync("execute");
-        _syncingMode = true; SelectedMode = "execute"; _syncingMode = false;
         InputText = "（已接受计划，进入执行模式）";
         await SendInputAsync();
     }
@@ -1369,8 +1404,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             }
 
             var fullText = new System.Text.StringBuilder();
-            // 规则无 mode（desiredMode 传 null）；agent/工作流传 HasModeSupport?SelectedMode:null。
-            var desiredMode = kind == ChatTargetKind.Rule ? null : (HasModeSupport ? SelectedMode : null);
+            // 规则无 mode（desiredMode 传 null）；agent/工作流传 HasModeSupport?SelectedChatMode.ToDesiredMode():null。
+            var desiredMode = kind == ChatTargetKind.Rule ? null : (HasModeSupport ? SelectedChatMode.ToDesiredMode() : null);
             _todosTouchedThisTurn = false; // 本轮 todos 信号重置（HandleTodoList 里置 true）
             var runItems = await RunSegmentedStreamAsync(turn, targetName,
                 (handlers, approvalResponse, ct) => kind == ChatTargetKind.Workflow
@@ -1382,7 +1417,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             // 放在 RefreshModeAsync 之前：避免模式回翻干扰（门控已脱钩 SelectedMode，但语义上先定信号再读模式）。
             // 已开始执行则不再弹接受条：若本轮已有任意 todo 完成，说明 agent 在 plan 轮里已自行执行，
             // 此时再提示「计划已就绪，接受开始执行」与事实相悖（用户已看到执行结果）。
-            PlanAwaitingAccept = desiredMode == "plan" && _todosTouchedThisTurn && HasActivePlan
+            PlanAwaitingAccept = desiredMode == "plan" && SelectedChatMode == ChatMode.Plan
+                && _todosTouchedThisTurn && HasActivePlan
                 && !ActiveTodos.Any(t => t.IsComplete);
 
             // 持久化本轮为 run+events（typed 事件流，CallId 写入时即配对）并乐观 bump 侧栏项。

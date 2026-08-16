@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Aether.AI.Core.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,19 +18,8 @@ public sealed class DelegateToolRegistryContributor : IToolRegistryContributor
     public void Contribute(ToolRegistry registry) => _configure(registry);
 }
 
-/// <summary>工具审批等级：Safe 自动放行；Confirm 需审批；Dangerous 需审批且 UI 强调（红）。
-/// 由工具适配器在注册时显式声明；AgentFactory 在 RequireToolApproval 时按级包装非 Safe 工具。</summary>
-public enum ToolApprovalLevel
-{
-    /// <summary>只读/无副作用：自动放行，不弹审批。</summary>
-    Safe = 0,
-    /// <summary>有副作用/可逆：RequireToolApproval 时弹审批。</summary>
-    Confirm = 1,
-    /// <summary>不可逆/高风险（下单/删除/执行命令）：RequireToolApproval 时弹审批并红色强调。</summary>
-    Dangerous = 2,
-}
-
-/// <summary>工具元数据（名称 + 描述 + 分类 + 审批等级），供 UI 选择展示。</summary>
+/// <summary>工具元数据（名称 + 描述 + 分类 + 审批等级），供 UI 选择展示。
+/// 审批等级 <see cref="ToolApprovalLevel"/> 已上移到 Aether.AI.Core.Agents。</summary>
 public sealed class ToolMeta
 {
     public string Name { get; }

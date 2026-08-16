@@ -96,7 +96,9 @@ public sealed class AgentFactory
         // ToolApprovalRequestContent，由 UI 弹审批框（协作式审批）。等级优先取专家的 ToolApprovals 覆盖，
         // 否则取 ToolRegistry 声明等级——Safe 自动放行，Confirm/Dangerous 才包装。
         // MCP 工具注册时默认标 Dangerous（来源未知），故 RequireToolApproval 时也会被包装。
-        if (definition.RequireToolApproval)
+        // EnableAgentModeProvider 也触发包装：4 档模式选择器（Manual/AutoEdit/Auto）靠审批请求逐工具拦截，
+        // 不包装则非 Safe 工具直接自动跑、档位失效。Safe 工具（文件编辑/读/ask_user）不包装，始终内联自动跑。
+        if (definition.RequireToolApproval || definition.EnableAgentModeProvider)
         {
             tools = tools
                 .Select(t => t is AIFunction fn && ResolveApprovalLevel(fn.Name, definition) != ToolApprovalLevel.Safe

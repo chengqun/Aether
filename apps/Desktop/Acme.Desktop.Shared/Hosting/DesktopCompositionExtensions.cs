@@ -4,7 +4,7 @@ using Acme.Agents.AI;
 using Acme.Desktop.Mvvm;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Scripting;
-using Aether.AI.Harness.Tools;
+using Aether.AI.Core.Agents;
 using Aether.AI.Hosting;
 using Aether.AI.Hosting.Agents;
 using Aether.AI.Mcp;
