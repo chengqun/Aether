@@ -61,12 +61,15 @@ public sealed class RunInTerminalTool
 
         var timeout = timeoutMs ?? 180000;
         var result = await _terminal.RunAsync(sessionId, fullCmd, timeout, cancellationToken).ConfigureAwait(false);
+        var success = result.Completed && result.ExitCode == 0;
         return new Output
         {
-            Success = result.Completed && result.ExitCode == 0,
+            Success = success,
             ExitCode = result.ExitCode,
             Completed = result.Completed,
-            OutputText = result.Output,
+            // 头尾截断省 token（对齐 Claude Code/Codex 主流做法）：终端原始输出可能数千行，全量返回浪费上下文。
+            // 失败时 tail 优先（错误/堆栈在末尾，主流都重视尾部）；成功时均衡头尾。完整输出在终端面板可见。
+            OutputText = TruncateForAgent(result.Output, success),
             Error = result.Error,
             SessionId = sessionId.ToString(),
         };
@@ -78,6 +81,26 @@ public sealed class RunInTerminalTool
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return "\"" + path.Replace("\"", "\"\"") + "\"";
         return "'" + path.Replace("'", @"'\''") + "'";
+    }
+
+    /// <summary>返回给 agent 的输出上限（字符）。终端原始输出（含 VT 噪音剥离后的文本）可能数千行，
+    /// 全量返回浪费上下文。阈值比 Claude Code 的 ~30k 小——run_in_terminal 输出不如管道干净、且本地 agent 上下文有限。</summary>
+    private const int MaxOutputChars = 6000;
+
+    /// <summary>
+    /// 头尾截断省 token（对齐 Claude Code/Codex 主流：长输出截断 + 通知，不搞人话摘要）。
+    /// 失败时 tail 优先（错误/堆栈在末尾）：头 10% + 尾 90%；成功时均衡：头 20% + 尾 80%。
+    /// 截断后附通知，告知 agent 完整输出在终端面板可见（命令本就在可见终端跑）。
+    /// </summary>
+    private static string TruncateForAgent(string text, bool success)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= MaxOutputChars)
+            return text;
+        int headPct = success ? 20 : 10;
+        int head = Math.Max(0, MaxOutputChars * headPct / 100);
+        int tail = Math.Max(0, MaxOutputChars - head - 80);
+        var note = $"\n... (已截断，省略 {text.Length - head - tail} 字符，完整输出在终端面板可见) ...\n";
+        return text[..head] + note + (tail > 0 ? text[^(tail)..] : string.Empty);
     }
 
     public class Output
