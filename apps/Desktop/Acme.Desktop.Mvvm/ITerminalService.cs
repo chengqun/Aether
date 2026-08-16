@@ -62,6 +62,13 @@ public interface ITerminalService
     event Action<Guid>? ActiveSessionChanged;
     /// <summary>会话 shell 退出——视图层触发，VM 标记标签为已停止。</summary>
     event Action<Guid>? SessionExited;
+
+    /// <summary>底部终端面板是否可见（VSCode 式底部面板方案 B：可折叠）。折叠时仅隐藏 region 空间，PTY 不中断。</summary>
+    bool IsPanelVisible { get; }
+    /// <summary>底部终端面板显隐变更。WorkspaceView 订阅以折叠/展开 region 的 Grid 行高；shell VM 订阅以同步 toggle 按钮态。</summary>
+    event Action<bool>? PanelVisibilityChanged;
+    /// <summary>设置底部终端面板可见性并持久化到 preferences（ui.terminalVisible）。终端折叠按钮 / 侧边栏 toggle 调此。</summary>
+    void SetPanelVisible(bool visible);
 }
 
 /// <summary>终端标签元数据（VM 绑定用；由 <see cref="ITerminalService.GetSessions"/> 投影）。</summary>

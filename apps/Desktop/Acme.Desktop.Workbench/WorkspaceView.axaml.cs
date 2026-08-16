@@ -39,6 +39,14 @@ public partial class WorkspaceView : UserControl
     private readonly Dictionary<LayoutNode, (Grid Grid, List<Control> Children)> _splitState
         = new(ReferenceEqualityComparer.Instance);
 
+    // ── 底部终端面板折叠（方案 B toggle）：记 terminal region 的宿主 + 父 split Grid + 行位置，折叠时改行高 ──
+    private ContentControl? _terminalHost;           // terminal region 的 ContentControl（BuildRegion 时记）
+    private Grid? _terminalSplitGrid;                // 含 terminal 的 split Grid
+    private int _terminalRow = -1;                   // terminal 在 grid 的 child row（= i*2）
+    private int _terminalSplitterRow = -1;           // terminal 前的 GridSplitter row（= i*2-1）
+    private GridLength _terminalExpandedHeight = new(220, GridUnitType.Pixel); // 展开行高（折叠前记实际值，含拖动后）
+    private ITerminalService? _terminalService;
+
     private bool _persistWired;
 
     public WorkspaceView()
@@ -52,6 +60,10 @@ public partial class WorkspaceView : UserControl
     {
         _workspace = DataContext as IWorkspace;
         _splitState.Clear();
+        _terminalHost = null;
+        _terminalSplitGrid = null;
+        _terminalRow = -1;
+        _terminalSplitterRow = -1;
         if (_workspace is null)
         {
             _rootLayout = null;
@@ -62,6 +74,15 @@ public partial class WorkspaceView : UserControl
         EnsureServices();
         _rootLayout = _workspace.Layout;
         Content = _rootLayout is not null ? BuildLayout(_rootLayout, _workspace) : null;
+
+        // 订阅底部终端面板显隐（方案 B toggle）：折叠/展开 terminal region 的 Grid 行高（PTY 不中断，仅隐藏空间）。
+        _terminalService ??= DesktopApp.Services?.GetService<ITerminalService>();
+        if (_terminalService is not null)
+        {
+            _terminalService.PanelVisibilityChanged -= OnTerminalPanelVisibilityChanged; // 防重复订阅
+            _terminalService.PanelVisibilityChanged += OnTerminalPanelVisibilityChanged;
+            ApplyTerminalVisibility(_terminalService.IsPanelVisible);
+        }
     }
 
     private void EnsureServices()
@@ -92,6 +113,7 @@ public partial class WorkspaceView : UserControl
         var panel = ws.Panels.FirstOrDefault(p => p.RegionId == r.RegionId);
         if (panel is not null)
             _regionManager?.AddToRegion(r.RegionId, panel); // 初始内容走与插件注入相同的路径
+        if (r.RegionId == PanelKeys.Terminal) _terminalHost = cc; // 记终端宿主，折叠时改其父 Grid 行高
         return cc;
     }
 
@@ -126,6 +148,14 @@ public partial class WorkspaceView : UserControl
         {
             var child = BuildLayout(s.Children[i], ws);
             children.Add(child);
+            // 含 terminal region 的 split：记 Grid + terminal 的行位置，用于折叠/展开底部面板（方案 B toggle）。
+            if (ReferenceEquals(child, _terminalHost) && _terminalSplitGrid is null)
+            {
+                _terminalSplitGrid = grid;
+                _terminalRow = i * 2;
+                _terminalSplitterRow = i * 2 - 1; // terminal 前的 splitter（terminal 非首 child 时存在）
+                _terminalExpandedHeight = grid.RowDefinitions[i * 2].Height;
+            }
             int idx = i * 2;
             if (horiz) Grid.SetColumn(child, idx); else Grid.SetRow(child, idx);
             grid.Children.Add(child);
@@ -263,5 +293,43 @@ public partial class WorkspaceView : UserControl
         var json = JsonSerializer.Serialize(layout, typeof(LayoutNode));
         try { Task.Run(async () => await store.SetAsync(LayoutPrefKey, json)).Wait(); }
         catch { /* 持久化失败不阻断关闭 */ }
+    }
+
+    // ── 底部终端面板折叠/展开（方案 B toggle：terminal region 改 Grid 行高，PTY 不中断） ──
+
+    /// <summary>终端面板显隐变更（TerminalService 触发，可能非 UI 线程）→ marshal 到 UI 线程改 region 行高。</summary>
+    private void OnTerminalPanelVisibilityChanged(bool visible)
+        => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyTerminalVisibility(visible));
+
+    /// <summary>折叠/展开底部终端 region：改其父 Grid 行高（0 ↔ 展开高度）+ splitter 显隐 + content 显隐。
+    /// 折叠时 PTY 不中断（仅隐藏 region 空间，会话继续在后台跑）。</summary>
+    private void ApplyTerminalVisibility(bool visible)
+    {
+        if (_terminalSplitGrid is null || _terminalRow < 0) return;
+        var row = _terminalSplitGrid.RowDefinitions[_terminalRow];
+        if (!visible)
+        {
+            if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后的实际值）
+            row.Height = new GridLength(0);
+            SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, false);
+            if (_terminalHost is not null) _terminalHost.IsVisible = false;
+        }
+        else
+        {
+            row.Height = _terminalExpandedHeight.Value > 0
+                ? _terminalExpandedHeight
+                : new GridLength(220, GridUnitType.Pixel);
+            SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, true);
+            if (_terminalHost is not null) _terminalHost.IsVisible = true;
+        }
+    }
+
+    /// <summary>按 row 索引设 split Grid 中对应 GridSplitter 的可见性（折叠终端时隐藏其前的分隔条）。</summary>
+    private static void SetSplitterVisible(Grid grid, int splitterRow, bool visible)
+    {
+        if (splitterRow < 0) return;
+        foreach (var c in grid.Children)
+            if (c is GridSplitter && Grid.GetRow(c) == splitterRow)
+                c.IsVisible = visible;
     }
 }

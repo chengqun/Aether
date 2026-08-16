@@ -28,8 +28,41 @@ public sealed class TerminalService : ITerminalService
     private readonly object _lock = new();
     private TerminalView? _view;
     private Guid? _activeId;
+    private readonly IPreferencesStore? _prefs;
+    private bool _isPanelVisible = true;
+
+    /// <summary>底部终端面板显隐持久化键（preferences.json）。</summary>
+    private const string TerminalVisiblePrefKey = "ui.terminalVisible";
+
+    public TerminalService(IPreferencesStore? prefs = null)
+    {
+        _prefs = prefs;
+        // JsonPreferencesStore.GetAsync 同步完成（Task.FromResult），构造期 .GetAwaiter().GetResult() 安全不死锁。
+        try
+        {
+            var v = prefs?.GetAsync(TerminalVisiblePrefKey).GetAwaiter().GetResult();
+            _isPanelVisible = !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase); // 默认可见，仅 "false" 折叠
+        }
+        catch { _isPanelVisible = true; }
+    }
 
     public Guid? ActiveSessionId { get { lock (_lock) return _activeId; } }
+
+    /// <inheritdoc/>
+    public bool IsPanelVisible { get { lock (_lock) return _isPanelVisible; } }
+
+    /// <inheritdoc/>
+    public event Action<bool>? PanelVisibilityChanged;
+
+    /// <inheritdoc/>
+    public void SetPanelVisible(bool visible)
+    {
+        lock (_lock) _isPanelVisible = visible;
+        PanelVisibilityChanged?.Invoke(visible);
+        // SetAsync 真异步，fire-and-forget 持久化（SafeFireAndForget 记 Trace 不静默吞异常）。
+        if (_prefs is not null)
+            Task.Run(async () => await _prefs.SetAsync(TerminalVisiblePrefKey, visible ? "true" : "false")).SafeFireAndForget();
+    }
 
     public event Action? SessionsChanged;
     public event Action<Guid>? ActiveSessionChanged;

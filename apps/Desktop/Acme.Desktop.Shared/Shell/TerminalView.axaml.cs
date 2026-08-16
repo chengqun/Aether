@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using RoyalTerminal.Avalonia.Controls;
@@ -49,6 +50,10 @@ public partial class TerminalView : UserControl
         base.OnDetachedFromVisualTree(e);
         _service?.DetachView(this);
     }
+
+    /// <summary>折叠按钮：通知 service 隐藏底部终端面板（PTY 不中断，仅折叠 region 空间；侧边栏 toggle 可再展开）。</summary>
+    private void OnCollapseClick(object? sender, RoutedEventArgs e)
+        => _service?.SetPanelVisible(false);
 
     // —— TerminalService 调用的视图面 API ——
 
@@ -119,6 +124,7 @@ public partial class TerminalView : UserControl
 
     // —— 主题 ——
     private void ApplyThemeToAll()
+
     {
         foreach (var ctrl in _controls.Values)
             ApplyTheme(ctrl);

@@ -38,6 +38,7 @@ public static class Codicons
     public static readonly string Dot = R(PackIconCodiconsKind.CircleSmallFilled);       // ● 小实心点
     public static readonly string Loading = R(PackIconCodiconsKind.Loading);             // ⏳ pending/等待
     public static readonly string CircleOutline = R(PackIconCodiconsKind.CircleLarge);   // ○ 空心 pending
+    public static readonly string Terminal = R(PackIconCodiconsKind.Terminal);           // 终端面板 toggle
     public static readonly string Check = R(PackIconCodiconsKind.Check);                 // ✓
     public static readonly string Close = R(PackIconCodiconsKind.Close);                 // ✕
     public static readonly string Add = R(PackIconCodiconsKind.Add);                     // ✚

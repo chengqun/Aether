@@ -4,8 +4,9 @@ using Acme.Desktop.Workbench.Abstractions;
 namespace Acme.Stockapp.Desktop;
 
 /// <summary>
-/// Stockapp 租户工作台定义：左 = 6 panel tabbed（笔记/专家/自动化/期货/回测/股票），右 = chat region。
-/// nav 6 项数据驱动自 LayoutTabbed——比 Qifu 多 CTP 期货 + 回测 + 股票（外部版股票期货场景）。
+/// Stockapp 租户工作台定义：左 = 上下分割（上 8-panel tabbed 主区 + 下 终端底部常驻 region），右 = chat region。
+/// nav 8 项数据驱动自 LayoutTabbed——终端移到底部 region 不进 nav（VSCode 式底部面板：agent run_in_terminal 时
+/// 终端与上方主面板同时可见，不用切 tab）。比 Qifu 多 CTP 期货 + 回测 + 股票（外部版股票期货场景）。
 /// icon 用 icons.json manifest key（notes/experts/automation/futures/backtest/activity/chat）。
 /// </summary>
 public static class StockappWorkspace
@@ -30,9 +31,18 @@ public static class StockappWorkspace
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Terminal, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                // 左：上下分割——上 = 主面板 tabbed（终端移出 nav），下 = 终端底部常驻 region（VSCode 式底部面板方案 A）。
+                new LayoutSplit(
+                    Orientation: SplitOrientation.Vertical,
+                    Children: new LayoutNode[]
+                    {
+                        new LayoutTabbed(RegionIds: new[] { PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                        new LayoutRegion(RegionId: PanelKeys.Terminal),
+                    },
+                    // Pixels: [0, 220] → 主面板区 Star（弹性）+ 终端区 220px 固定（可拖高度，拖动后持久化）。
+                    Pixels: new double[] { 0, 220 }),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
-            // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 固定。
+            // Pixels: [0, 420] → 左区 Star（弹性）+ chat 区 420px 固定。
             Pixels: new double[] { 0, 420 }));
 }

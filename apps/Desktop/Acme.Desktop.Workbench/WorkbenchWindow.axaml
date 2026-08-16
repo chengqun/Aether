@@ -24,7 +24,7 @@
     <Border DockPanel.Dock="Left" Width="48"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*,Auto">
+      <Grid RowDefinitions="Auto,*,Auto,Auto">
         <StackPanel Grid.Row="0" Margin="0,10,0,0">
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}">
             <ItemsControl.ItemTemplate>
@@ -39,7 +39,17 @@
           </ItemsControl>
         </StackPanel>
 
-        <Button Grid.Row="2" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
+        <!-- 终端面板 toggle（VSCode 式底部面板开关）：可见时图标 accent 高亮，隐藏时灰色。PTY 不中断仅折叠 region。 -->
+        <Button Grid.Row="2" Classes="nav-rail" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端">
+          <Grid>
+            <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
+            <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{DynamicResource SecondaryFgBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
+          </Grid>
+        </Button>
+
+        <Button Grid.Row="3" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">

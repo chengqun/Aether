@@ -33,6 +33,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private readonly WorkspaceDefinition _defaultWorkspace;
     private readonly IPreferencesStore _preferences;
     private readonly IServiceProvider _serviceProvider;
+    private ITerminalService? _terminalService;
     private INotifyPropertyChanged? _navWorkspace;
 
     /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
@@ -54,6 +55,13 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _serviceProvider = serviceProvider;
         _workspaceManager.WorkspaceActivated += OnWorkspaceActivated;
+        // 终端面板显隐（方案 B toggle）：初始态从 service 读 + 订阅变更同步 IsTerminalVisible（侧边栏 toggle 按钮绑此）。
+        _terminalService = serviceProvider.GetService<ITerminalService>();
+        if (_terminalService is not null)
+        {
+            _isTerminalVisible = _terminalService.IsPanelVisible;
+            _terminalService.PanelVisibilityChanged += OnTerminalPanelVisibilityChanged;
+        }
     }
 
     /// <summary>工作台导航 rail 项（数据驱动：从活动工作台的首个 LayoutTabbed 派生，覆盖租户 panel 差异）。
@@ -82,6 +90,11 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// JSON overlay 只覆盖自定义 token 画刷；原生控件（TextBox/ComboBox/滚动条…）须经 ThemeVariant 翻转。</summary>
     [ObservableProperty]
     private bool _isDarkVariant;
+
+    /// <summary>底部终端面板是否可见（侧边栏终端 toggle 按钮绑此 + 驱动高亮态）。
+    /// 状态由 <see cref="ITerminalService.PanelVisibilityChanged"/> 事件同步——TerminalView 折叠按钮 / 本 VM 的 ToggleTerminalCommand 都经 service 改态，事件回写此属性。</summary>
+    [ObservableProperty]
+    private bool _isTerminalVisible = true;
 
     /// <summary>主题变化（overlay JSON 或明暗倾向改变）时触发。子窗口（设置/Trace）订阅以即时重染——
     /// 它们不在 Workbench 层、拿不到 ThemeLoader，经 <see cref="IThemeApplier"/> 桥接。</summary>
@@ -309,4 +322,12 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         await _preferences.SetAsync(LayoutPrefKey, null);
         await _workspaceManager.ActivateAsync(_defaultWorkspace);
     }
+
+    /// <summary>侧边栏终端 toggle：切换底部终端面板显隐（PTY 不中断，仅折叠/展开 region 空间）。
+    /// 经 service 改态 → service 触发 PanelVisibilityChanged → WorkspaceView 折叠/展开 region + 回写 IsTerminalVisible。</summary>
+    [RelayCommand]
+    private void ToggleTerminal()
+        => _terminalService?.SetPanelVisible(!IsTerminalVisible);
+
+    private void OnTerminalPanelVisibilityChanged(bool visible) => IsTerminalVisible = visible;
 }

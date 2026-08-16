@@ -47,7 +47,8 @@
   <Grid RowDefinitions="Auto,*">
     <!-- 标签条 -->
     <Border Grid.Row="0" Background="{DynamicResource SidebarBgBrush}" Padding="4,2">
-      <StackPanel Orientation="Horizontal" Spacing="2">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
         <ItemsControl ItemsSource="{Binding Sessions}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -80,6 +81,9 @@
         <Button Content="＋" Classes="term-new" Command="{Binding NewSessionCommand}"
                 ToolTip.Tip="新建终端会话"/>
       </StackPanel>
+      <Button Grid.Column="1" Classes="term-new" Content="▼" Click="OnCollapseClick"
+              ToolTip.Tip="折叠终端面板"/>
+      </Grid>
     </Border>
     <!-- 终端控件宿主：每会话一个 RoyalTerminal TerminalControl，靠 IsVisible 切换 -->
     <Grid Grid.Row="1" x:Name="ContentHost" Background="#1E1E1E"/>
