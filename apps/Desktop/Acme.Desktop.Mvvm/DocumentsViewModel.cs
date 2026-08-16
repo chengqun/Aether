@@ -361,8 +361,8 @@ public partial class DocumentsViewModel : ObservableObject
     partial void OnActiveTabChanged(DocumentTab? value)
     {
         SaveActiveCommand.NotifyCanExecuteChanged();
-        // 切换标签时重置为双栏（新 md 文件默认上预览/下源码；非 md 则 IsPreviewOnly 无意义）。
-        IsPreviewOnly = false;
+        // IsPreviewOnly 不随 tab 切换重置——「仅预览 / 双栏」是浏览模式（阅读 vs 编辑），
+        // 切到别的 md tab 保持上次的模式，浏览多个文档不用反复点眼睛。非 md 文件 IsPreviewOnly 无意义（按钮隐）。
         RaiseLayout();
     }
 

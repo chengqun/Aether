@@ -231,6 +231,14 @@ public partial class NotesEditorView : UserControl
     private void OnCodeEditorPreviewKeyDown(object? sender, KeyEventArgs e)
     {
         if (_vm?.IsMarkdownNode != true || _pasting) return;
+        // Ctrl+Shift+P 切仅显示上栏 / 上下双栏（眼睛按钮快捷键）
+        if (e.Key == Key.P && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0)
+        {
+            e.Handled = true;
+            _vm.TogglePreviewOnlyCommand.Execute(null);
+            return;
+        }
         if (e.Key != Key.V || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
         e.Handled = true; // 阻断 AvaloniaEdit 默认粘贴，由我们 async 处理
         HandlePasteAsync().SafeFireAndForget();

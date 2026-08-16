@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
+using Microsoft.Extensions.DependencyInjection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -20,6 +22,7 @@ public partial class DocumentsEditorView : UserControl
 {
     private DocumentsViewModel? _vm;
     private bool _syncing;
+    private bool _layoutPersistWired;
     private FoldingManager? _foldingManager;
 
     public DocumentsEditorView()
@@ -42,8 +45,63 @@ public partial class DocumentsEditorView : UserControl
             if (_vm?.ActiveTab is { } tab)
                 CodeEditorSetup.ApplyHighlighting(CodeEditor, tab.SyntaxKey);
         };
-        this.Loaded += (_, _) => SyncEditor();
+        this.Loaded += (_, _) =>
+        {
+            SyncEditor();
+            RestoreLayout();
+            WireHostWindowClosing();
+        };
     }
+
+    /// <summary>订阅宿主窗口 Closing，关闭时自持久化上下分栏比例。双订阅守卫防 Loaded 多次触发重复挂事件。</summary>
+    private void WireHostWindowClosing()
+    {
+        if (_layoutPersistWired) return;
+        if (TopLevel.GetTopLevel(this) is Window host)
+        {
+            host.Closing += (_, _) => PersistLayout();
+            _layoutPersistWired = true;
+        }
+    }
+
+    /// <summary>持久化上下预览/编辑比例（docs.previewStar/editorStar）。后台线程写文件，Wait 确保关闭前落盘。</summary>
+    private void PersistLayout()
+    {
+        var store = DesktopApp.Services.GetService<IPreferencesStore>();
+        if (store is null) return;
+        var (previewStar, editorStar) = CollectLayout();
+        try
+        {
+            Task.Run(async () =>
+            {
+                await store.SetAsync("docs.previewStar", previewStar.ToString("0.###"));
+                await store.SetAsync("docs.editorStar", editorStar.ToString("0.###"));
+            }).Wait();
+        }
+        catch { /* 关闭期写入失败忽略 */ }
+    }
+
+    /// <summary>恢复上下分栏比例。JsonPreferencesStore.GetAsync 同步完成，Loaded 期直接读。</summary>
+    private void RestoreLayout()
+    {
+        var store = DesktopApp.Services.GetService<IPreferencesStore>();
+        if (store is null) return;
+        try
+        {
+            var ps = double.TryParse(store.GetAsync("docs.previewStar").GetAwaiter().GetResult(), out var p) ? p : 1d;
+            var es = double.TryParse(store.GetAsync("docs.editorStar").GetAwaiter().GetResult(), out var e) ? e : 1d;
+            if (ps <= 0) ps = 1d;
+            if (es <= 0) es = 1d;
+            EditorGrid.RowDefinitions[0].Height = new GridLength(ps, GridUnitType.Star);
+            EditorGrid.RowDefinitions[2].Height = new GridLength(es, GridUnitType.Star);
+        }
+        catch { /* 读取失败用默认分隔 */ }
+    }
+
+    /// <summary>采集当前上下分栏比例（供关闭时持久化，隐藏页也不丢）。</summary>
+    public (double PreviewStar, double EditorStar) CollectLayout()
+        => (EditorGrid.RowDefinitions[0].Height.Value,
+            EditorGrid.RowDefinitions[2].Height.Value);
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -126,6 +184,13 @@ public partial class DocumentsEditorView : UserControl
             e.Handled = true;
             if (_vm.SaveActiveCommand.CanExecute(null))
                 _vm.SaveActiveCommand.Execute(null);
+        }
+        // Ctrl+Shift+P 切 markdown 仅预览 / 上下双栏（眼睛按钮的快捷键；非 md 文件无副作用——按钮本就隐）
+        if (e.Key == Key.P && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0
+            && (e.KeyModifiers & KeyModifiers.Shift) != 0 && _vm is not null)
+        {
+            e.Handled = true;
+            _vm.IsPreviewOnly = !_vm.IsPreviewOnly;
         }
     }
 
