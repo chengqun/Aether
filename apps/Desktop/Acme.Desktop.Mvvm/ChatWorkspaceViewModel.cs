@@ -424,6 +424,26 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     _dispatcher.Post(() => cardRef.FileEdit = new FileEditSnapshot(fp, old, existed));
                 });
             }
+            // 多文件批量编辑工具：call 阶段对每个 patch path 读盘快照 old。撤销逆序写回全部。
+            else if (AgentEditPreview.IsApplyPatchTool(ev.Name))
+            {
+                var input = ev.Input;
+                var cardRef = tool;
+                cardRef.UndoCommand = new RelayCommand(() => UndoFileEdit(cardRef));
+                _ = Task.Run(() =>
+                {
+                    var paths = AgentEditPreview.TryGetFilePaths(input);
+                    if (paths.Count == 0) return;
+                    var snaps = new List<FileEditSnapshot>(paths.Count);
+                    foreach (var fp in paths)
+                    {
+                        bool existed = File.Exists(fp);
+                        string? old = existed ? TryReadAllText(fp) : null;
+                        snaps.Add(new FileEditSnapshot(fp, old, existed));
+                    }
+                    _dispatcher.Post(() => cardRef.FileEdits = snaps);
+                });
+            }
         }
         else // Result：回填到对应工具步（合并为一条），再开新答案段
         {
@@ -460,6 +480,27 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     _dispatcher.Post(() => cardRef.DiffPreview = diff);
                 });
             }
+            // 多文件批量编辑：result 阶段对每个 path 读盘 new + 快照 old 算 diff，列表挂卡。
+            else if (tool.FileEdits is { Count: > 0 } snaps)
+            {
+                var cardRef = tool;
+                _ = Task.Run(() =>
+                {
+                    var diffs = new List<DiffModel>(snaps.Count);
+                    foreach (var s in snaps)
+                    {
+                        bool newExists = File.Exists(s.FilePath);
+                        string? newText = newExists ? TryReadAllText(s.FilePath) : null;
+                        // old 或 new 任一存在即算 diff（新建→全增；删除→全删）。
+                        if (s.OldExisted || newExists)
+                        {
+                            var syntax = GitService.SyntaxForExtension(Path.GetExtension(s.FilePath));
+                            diffs.Add(LineDiffBuilder.Build(s.OldContent ?? "", newText ?? "", s.FilePath, syntax));
+                        }
+                    }
+                    _dispatcher.Post(() => cardRef.DiffPreviews = diffs);
+                });
+            }
 
             var idx = items.IndexOf(tool);
             if (idx < 0) idx = items.Count - 1;
@@ -471,17 +512,43 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     /// <summary>撤销一步文件编辑：写回 call 阶段快照的 old 内容（工具新建的文件 → 撤销 = 删除）。
     /// 写盘后 <c>DocumentsViewModel</c> 的 FileSystemWatcher 自动重载编辑器。朴素单步语义——写回该步 old；
-    /// 多步同文件撤销中间步会破坏后续步基准（边缘情况，用户多半撤销最后一步或整体重来）。</summary>
+    /// 多步同文件撤销中间步会破坏后续步基准（边缘情况，用户多半撤销最后一步或整体重来）。
+    /// 多文件批量编辑（ApplyPatch）：逆序写回所有快照（后改的先恢复，尽量还原中间状态）。</summary>
     private void UndoFileEdit(ChatMessageItem card)
     {
-        var snap = card.FileEdit;
-        if (snap is null || card.IsUndone) return;
+        if (card.IsUndone) return;
+
+        // 多文件批量编辑：逆序写回全部快照
+        if (card.FileEdits is { Count: > 0 } snaps)
+        {
+            for (int i = snaps.Count - 1; i >= 0; i--)
+            {
+                var snap = snaps[i];
+                try
+                {
+                    if (snap.OldExisted)
+                        File.WriteAllText(snap.FilePath, snap.OldContent ?? "");
+                    else if (File.Exists(snap.FilePath))
+                        File.Delete(snap.FilePath);
+                }
+                catch
+                {
+                    // 单文件撤销失败不中断后续（用户可去 SCM 页手动恢复）。
+                }
+            }
+            card.IsUndone = true;
+            return;
+        }
+
+        // 单文件编辑
+        var single = card.FileEdit;
+        if (single is null) return;
         try
         {
-            if (snap.OldExisted)
-                File.WriteAllText(snap.FilePath, snap.OldContent ?? "");
-            else if (File.Exists(snap.FilePath))
-                File.Delete(snap.FilePath); // 工具新建的文件 → 撤销 = 删除
+            if (single.OldExisted)
+                File.WriteAllText(single.FilePath, single.OldContent ?? "");
+            else if (File.Exists(single.FilePath))
+                File.Delete(single.FilePath); // 工具新建的文件 → 撤销 = 删除
             card.IsUndone = true;
         }
         catch

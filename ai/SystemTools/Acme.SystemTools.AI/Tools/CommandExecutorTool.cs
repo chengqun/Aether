@@ -130,15 +130,11 @@ public class CommandExecutorTool
         }
         finally
         {
-            // 任何退出路径都杀进程树，避免孤儿进程堆积。
+            // 任何退出路径都杀进程树（ProcessKiller 先 Kill(true) 再 pgrep 递归兜底——
+            // macOS 上 Kill(true) 偶尔漏杀重型子树，导致取消/超时后 CPU 仍占满）。
             if (process is not null)
             {
-                try
-                {
-                    if (!process.HasExited)
-                        process.Kill(entireProcessTree: true);
-                }
-                catch { /* 进程可能已退出 */ }
+                ProcessKiller.KillTree(process);
                 process.Dispose();
             }
         }

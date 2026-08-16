@@ -65,40 +65,43 @@ public class ShellCommandTool
             // 立即关闭 stdin：任何读 stdin 的子命令拿到 EOF 而非永久阻塞。
             try { process.StandardInput.Close(); } catch { }
 
-            // 异步读取 stdout 和 stderr 避免死锁
-            stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            // 并发读取 stdout/stderr（不带取消令牌——取消/超时时应返回残留输出，而非抛出丢数据）。
+            // 必须在 WaitForExit 之前并发读：命令输出超 ~64KB 管道缓冲会写阻塞、永不退出 → 死锁。
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
 
-            // 等待进程退出或超时
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(actualTimeout);
 
             bool cancelledByUser = false;
+            bool timedOut = false;
             try
             {
                 await process.WaitForExitAsync(cts.Token);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                // 超时（非外部取消）：进程已在下方 finally 被 kill。
-                var partialStdout = await stdoutTask;
-                var partialStderr = await stderrTask;
+                // 超时或用户取消：必须先杀进程（让 stdout/stderr 关闭 EOF）再读残留输出——
+                // 否则 ReadToEndAsync 等一个永不关闭的管道（进程还活着）→ 死锁卡死。
+                ProcessKiller.KillTree(process);
+                cancelledByUser = cancellationToken.IsCancellationRequested;
+                timedOut = !cancelledByUser;
+            }
+
+            // 进程已退出或已被杀 → 管道已关闭，读取不会阻塞。
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            if (timedOut)
+            {
                 return new Output
                 {
                     ExitCode = -1,
-                    StandardOutput = Truncate(partialStdout, 50000),
-                    StandardError = $"命令执行超时（{actualTimeout}ms），已终止进程。\n{Truncate(partialStderr, 10000)}",
+                    StandardOutput = Truncate(stdout, 50000),
+                    StandardError = $"命令执行超时（{actualTimeout}ms），已终止进程。\n{Truncate(stderr, 10000)}",
                     Success = false,
                 };
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // 用户主动停止：进程已在下方 finally 被 kill。
-                cancelledByUser = true;
-            }
-
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
 
             if (cancelledByUser)
             {
@@ -131,15 +134,11 @@ public class ShellCommandTool
         }
         finally
         {
-            // 任何退出路径（正常/超时/取消/异常）都确保杀掉进程树，避免孤儿进程堆积吃 CPU/内存。
+            // 任何退出路径都确保杀掉进程树（ProcessKiller 先 Kill(true) 再 pgrep 递归兜底——
+            // Kill(true) 在 macOS 偶尔漏杀 dotnet publish 等重型子树，会导致取消/超时后 CPU 仍占满）。
             if (process is not null)
             {
-                try
-                {
-                    if (!process.HasExited)
-                        process.Kill(entireProcessTree: true);
-                }
-                catch { /* 进程可能已退出 */ }
+                ProcessKiller.KillTree(process);
                 process.Dispose();
             }
         }

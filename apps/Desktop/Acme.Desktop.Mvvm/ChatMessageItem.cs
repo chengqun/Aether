@@ -150,13 +150,28 @@ public partial class ChatMessageItem : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasUndo))]
     private FileEditSnapshot? _fileEdit;
 
+    /// <summary>多文件批量编辑快照（ApplyPatch/ApplyPatchWithDelete）——每个 patch 的 path 一份。
+    /// 非空时优先于单文件 <see cref="FileEdit"/>；撤销逆序写回全部。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMultiFileDiff))]
+    [NotifyPropertyChangedFor(nameof(HasUndo))]
+    private List<FileEditSnapshot>? _fileEdits;
+
+    /// <summary>多文件 diff 列表（与 <see cref="FileEdits"/> 顺序对齐）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMultiFileDiff))]
+    private List<DiffModel>? _diffPreviews;
+
+    /// <summary>多文件批量编辑有 diff 可展示。</summary>
+    public bool HasMultiFileDiff => IsToolStep && DiffPreviews is { Count: > 0 };
+
     /// <summary>该步已撤销（撤销按钮点击后置 true，按钮隐藏）。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUndo))]
     private bool _isUndone;
 
-    /// <summary>工具卡可撤销（文件编辑工具 + 有快照 + 未撤销）。</summary>
-    public bool HasUndo => IsToolStep && FileEdit is not null && !IsUndone;
+    /// <summary>工具卡可撤销（单文件或多文件编辑工具 + 有快照 + 未撤销）。</summary>
+    public bool HasUndo => IsToolStep && (FileEdit is not null || (FileEdits is { Count: > 0 })) && !IsUndone;
 
     /// <summary>撤销命令——由 ChatWorkspaceViewModel 注入（写回 old 内容），镜像 ConversationItem.ResumeCommand 外部注入模式。</summary>
     public ICommand? UndoCommand { get; set; }

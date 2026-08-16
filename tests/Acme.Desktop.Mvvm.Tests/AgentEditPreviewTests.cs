@@ -53,4 +53,51 @@ public class AgentEditPreviewTests
         Assert.Null(AgentEditPreview.TryGetFilePath(null));
         Assert.Null(AgentEditPreview.TryGetFilePath(Input(("filePath", "   "))));
     }
+
+    [Fact]
+    public void IsApplyPatchTool_RecognizesBatchEditors()
+    {
+        Assert.True(AgentEditPreview.IsApplyPatchTool("ApplyPatch"));
+        Assert.True(AgentEditPreview.IsApplyPatchTool("ApplyPatchWithDelete"));
+        Assert.False(AgentEditPreview.IsApplyPatchTool("EditFile"));
+        Assert.False(AgentEditPreview.IsApplyPatchTool(null));
+    }
+
+    [Fact]
+    public void IsFileEditTool_DoesNotIncludeApplyPatch()
+    {
+        // ApplyPatch 走多文件路径（FileEdits），不走单文件 FileEdit
+        Assert.False(AgentEditPreview.IsFileEditTool("ApplyPatch"));
+        Assert.False(AgentEditPreview.IsFileEditTool("ApplyPatchWithDelete"));
+    }
+
+    [Fact]
+    public void TryGetFilePaths_ParsesPatchesArrayFromJsonElement()
+    {
+        // 模拟 MEAI 反序列化路径：patches 是 JsonElement 数组
+        var json = """
+{"patches": [
+  {"filePath": "/tmp/a.cs", "operation": "edit"},
+  {"filePath": "/tmp/b.cs", "operation": "create"},
+  {"filePath": "/tmp/a.cs", "operation": "edit"}
+]}
+""";
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        // 取 patches 属性的值（数组），模拟 MEAI 把参数反序列化成 JsonElement
+        var input = new Dict { ["patches"] = doc.RootElement.GetProperty("patches").Clone() };
+
+        var paths = AgentEditPreview.TryGetFilePaths(input);
+
+        Assert.Equal(2, paths.Count); // 去重后 a.cs 只一份
+        Assert.Contains(Path.GetFullPath("/tmp/a.cs"), paths);
+        Assert.Contains(Path.GetFullPath("/tmp/b.cs"), paths);
+    }
+
+    [Fact]
+    public void TryGetFilePaths_ReturnsEmptyWhenNoPatches()
+    {
+        Assert.Empty(AgentEditPreview.TryGetFilePaths(null));
+        Assert.Empty(AgentEditPreview.TryGetFilePaths(new Dict()));
+        Assert.Empty(AgentEditPreview.TryGetFilePaths(Input(("filePath", "/tmp/x"))));
+    }
 }

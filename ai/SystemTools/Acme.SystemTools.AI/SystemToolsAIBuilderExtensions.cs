@@ -17,7 +17,8 @@ public static class SystemToolsAIBuilderExtensions
     public static readonly string[] ToolNames = {
         "ReadFile", "WriteFile", "EditFile", "LineEditFile", "DeleteFile", "MoveFile",
         "Grep", "Glob", "ExecuteCommand", "ExploreDirectory",
-        "ExecuteShellCommand", "FetchUrl", "DiffFile"
+        "ExecuteShellCommand", "FetchUrl", "DiffFile",
+        "ApplyPatch", "ApplyPatchWithDelete"
     };
 
     public static AetherAIBuilder AddSystemTools(this AetherAIBuilder builder)
@@ -41,6 +42,7 @@ public static class SystemToolsAIBuilderExtensions
         s.AddTransient<DirectoryExplorerTool>();
         s.AddTransient<ShellCommandTool>();
         s.AddTransient<FileDiffTool>();
+        s.AddTransient<ApplyPatchTool>();
 
         const string cat = "系统工具";
         builder.ConfigureToolRegistry(reg =>
@@ -71,6 +73,12 @@ public static class SystemToolsAIBuilderExtensions
                 sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
             reg.Register("DiffFile", "比较文件差异", cat,
                 sp => CreateTool<FileDiffTool>(sp, "DiffFile"));
+            // 多文件批量编辑：纯 create/edit/lineEdit → Safe（自动跑 + 事后 diff + 一键撤销，同单文件工具）。
+            // 含 delete 的批次走 ApplyPatchWithDelete（Dangerous，审批兜底）——delete 不可逆、无内容 diff。
+            reg.Register("ApplyPatch", "批量编辑多个文件（create/edit/lineEdit，不含删除）", cat,
+                sp => CreateTool<ApplyPatchTool>(sp, "ApplyPatch")); // Safe：自动跑 + 多文件事后 diff + 独立撤销
+            reg.Register("ApplyPatchWithDelete", "批量编辑多个文件（含删除，危险）", cat,
+                sp => CreateTool<ApplyPatchTool>(sp, "ApplyPatchWithDelete"), ToolApprovalLevel.Dangerous);
         });
         return builder;
     }

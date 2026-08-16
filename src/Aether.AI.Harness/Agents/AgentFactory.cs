@@ -473,23 +473,78 @@ public sealed class AgentFactory
             }
         }
 
+        Process? process = null;
         try
         {
-            using var process = new Process { StartInfo = psi };
+            process = new Process { StartInfo = psi };
+            // 重定向并立即关闭 stdin：脚本若读 stdin 拿到 EOF 而非永久阻塞（.app 下 stdin 可能不可读）。
+            process.StartInfo.RedirectStandardInput = true;
             if (!process.Start()) return $"无法启动脚本进程：{interpreter}";
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            try { process.StandardInput.Close(); } catch { }
+
+            // 必须在 WaitForExit 之前并发读 stdout/stderr：脚本输出超 ~64KB 管道缓冲会写阻塞、
+            // 永不退出 → WaitForExit 死锁卡死。不带取消令牌——取消时应返回残留输出而非抛出。
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            // 超时兜底（脚本可能死循环 / 起服务不退）。用户取消经 cancellationToken 即时取消。
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // 超时：先杀进程树（关管道 EOF）再读残留 stderr，避免 ReadToEndAsync 死锁。
+                KillProcessTree(process);
+                var partialErr = await stderrTask.ConfigureAwait(false);
+                return $"脚本执行超时（120s），已终止进程。\n{TruncateScript(partialErr)}";
+            }
+
+            var stdout = await stdoutTask.ConfigureAwait(false);
             if (process.ExitCode != 0)
             {
-                var stderr = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-                return $"脚本退出码 {process.ExitCode}：{stderr}";
+                var stderr = await stderrTask.ConfigureAwait(false);
+                return $"脚本退出码 {process.ExitCode}：{TruncateScript(stderr)}";
             }
             return stdout;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 用户取消：finally 已杀进程。返回取消说明（保持工具返回字符串契约；ct 已取消，本轮随即结束）。
+            return "脚本执行已被取消（用户停止）。";
         }
         catch (Exception ex)
         {
             return $"脚本执行失败：{ex.Message}";
         }
+        finally
+        {
+            // 任何路径（取消/超时/异常/正常）都杀进程树，避免孤儿脚本进程继续吃 CPU。
+            if (process is not null)
+            {
+                KillProcessTree(process);
+                process.Dispose();
+            }
+        }
+    }
+
+    /// <summary>尽力杀掉脚本进程树：先 Kill(true)（含子进程），再 Kill() 单进程兜底。</summary>
+    private static void KillProcessTree(Process process)
+    {
+        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        catch { /* 落到下面兜底 */ }
+        try { if (!process.HasExited) process.Kill(); }
+        catch { /* 进程可能已退出 */ }
+    }
+
+    /// <summary>截断脚本输出到 10000 字符，避免超长 stderr 撑爆工具结果。</summary>
+    private static string TruncateScript(string text, int max = 10000)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= max) return text;
+        return text[..max] + $"\n... (已截断，总长度 {text.Length} 字符)";
     }
 
     private static List<string> ParseCliArgs(JsonElement? raw)

@@ -4,6 +4,7 @@
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              xmlns:conv="using:Acme.Desktop.Shared.Shell.Converters"
              xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+             xmlns:git="using:Acme.Desktop.Mvvm.Git"
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -163,6 +164,22 @@
                   <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" MaxHeight="300" ClipToBounds="True">
                     <shell:DiffView DataContext="{Binding DiffPreview}" />
                   </Border>
+                </StackPanel>
+                <!-- 多文件批量编辑：每个文件一个 diff（ApplyPatch/ApplyPatchWithDelete） -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasMultiFileDiff}" Margin="0,2,0,0">
+                  <ItemsControl ItemsSource="{Binding DiffPreviews}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="git:DiffModel">
+                        <StackPanel Spacing="2" Margin="0,0,0,4">
+                          <TextBlock Text="{Binding FilePath, StringFormat='改动 · {0}'}" FontSize="10"
+                                     Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" MaxHeight="260" ClipToBounds="True">
+                            <shell:DiffView DataContext="{Binding}" />
+                          </Border>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </StackPanel>
                 <!-- 一键撤销：写回改前内容（新建文件撤销=删除） -->
                 <Button Command="{Binding UndoCommand}" Padding="10,3" FontSize="11"

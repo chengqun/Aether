@@ -17,6 +17,9 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Markdown.Avalonia.Tight" Version="12.0.0-a3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+    <!-- Roslyn 语义分析（EditSymbolTool：符号级 C# 编辑）。宿主层独有——不复用 ai/SystemTools 的轻量工具集。 -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.13.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.13.0" />
   </ItemGroup>
 
   <ItemGroup>

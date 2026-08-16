@@ -135,10 +135,48 @@ public sealed class BuildTool
 
         var config = string.IsNullOrWhiteSpace(configuration) ? "Debug" : configuration;
         var filterArg = string.IsNullOrWhiteSpace(filter) ? string.Empty : $" --filter \"{filter.Trim()}\"";
-        var command = $"dotnet test \"{project}\" -c {config} --nologo{filterArg} 2>&1";
+
+        // --logger trx：生成结构化 TRX XML，比默认 console logger 更准（不受格式/本地化/截断影响）。
+        // --results-directory 控制 TRX 落点（比 LogFileName 绝对路径更可靠——后者在某些 dotnet 版本会被
+        // 当作相对 TestResults 目录的路径）。跑完在结果目录里找 .trx 读回解析；读不到/解析失败回退 console parser。
+        var trxDir = Path.Combine(Path.GetTempPath(), "aether-trx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(trxDir);
+        const string trxName = "testresults.trx";
+        var loggerArg = $" --logger \"trx;LogFileName={trxName}\" --results-directory \"{trxDir}\"";
+
+        var command = $"dotnet test \"{project}\" -c {config} --nologo{filterArg}{loggerArg} 2>&1";
         var r = await _shell.ExecuteShellCommand(command, dir, 300000, cancellationToken).ConfigureAwait(false);
 
-        var summary = TestOutputParser.Parse(r.StandardOutput);
+        // 优先用 TRX（结构化、精确）；拿不到或解析失败回退 console parser。
+        TestSummary? summary = null;
+        string? trxParseNote = null;
+        try
+        {
+            // 优先预期文件名；找不到则扫结果目录下任意 .trx（dotnet 可能带时间戳子目录）。
+            var trxFile = Path.Combine(trxDir, trxName);
+            if (!File.Exists(trxFile))
+                trxFile = Directory.GetFiles(trxDir, "*.trx", SearchOption.AllDirectories).FirstOrDefault() ?? trxFile;
+            if (File.Exists(trxFile))
+            {
+                var trxXml = await File.ReadAllTextAsync(trxFile, cancellationToken).ConfigureAwait(false);
+                summary = TrxParser.Parse(trxXml);
+            }
+        }
+        catch
+        {
+            // TRX 读/解析异常——回退 console parser，不阻断返回。
+        }
+        finally
+        {
+            try { if (Directory.Exists(trxDir)) Directory.Delete(trxDir, recursive: true); } catch { }
+        }
+
+        if (summary is null)
+        {
+            summary = TestOutputParser.Parse(r.StandardOutput);
+            trxParseNote = r.Success ? null : "（未拿到 TRX，已回退 console logger 解析；结果可能不完整）";
+        }
+
         return new TestOutput
         {
             Success = summary.Success,
@@ -152,7 +190,7 @@ public sealed class BuildTool
                 Name = f.Name, ErrorMessage = f.ErrorMessage, StackTrace = f.StackTrace,
             }).ToList(),
             ProjectPath = project,
-            Error = r.Success ? null : (summary.Failed > 0 ? null : "测试运行失败但未解析到摘要行，请看 dotnet 原始输出诊断。"),
+            Error = r.Success ? null : (summary.Failed > 0 ? trxParseNote : "测试运行失败但未解析到摘要行，请看 dotnet 原始输出诊断。"),
         };
     }
 

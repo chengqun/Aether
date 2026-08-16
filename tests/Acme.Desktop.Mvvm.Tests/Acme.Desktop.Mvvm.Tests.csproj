@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\Desktop\Acme.Desktop.Mvvm\Acme.Desktop.Mvvm.csproj" />
+    <!-- ApplyPatchTool 回滚逻辑单测（ai/SystemTools 纯逻辑，无 Avalonia 依赖） -->
+    <ProjectReference Include="..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
   </ItemGroup>
 
 </Project>

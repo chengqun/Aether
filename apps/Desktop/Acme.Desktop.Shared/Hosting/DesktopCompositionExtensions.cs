@@ -203,6 +203,19 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Safe);
         });
 
+        // 语义感知符号编辑工具：基于 Roslyn 定位 C# 符号（类型/方法/属性/字段）并替换其源码文本，
+        // 不受注释/字符串/同名局部变量干扰。宿主层注册（需项目目录 + Roslyn Compilation）。仅 C#。标 Safe。
+        // diff/撤销：路径由 Roslyn 在执行时定位（call 阶段未知）→ 不走单文件事后 diff 闭环，用户可去 SCM 页看 diff + git 撤销。
+        services.AddTransient<EditSymbolTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("edit_symbol", "基于 Roslyn 语义分析定位并替换当前项目中的一个 C# 符号（类型/方法/属性/字段）的源码文本。比 EditFile 字符串匹配更精确。仅支持 C#。", "编程",
+                sp => AIFunctionFactory.Create(
+                    typeof(EditSymbolTool).GetMethod(nameof(EditSymbolTool.EditSymbol))!, sp.GetRequiredService<EditSymbolTool>(),
+                    "edit_symbol"),
+                ToolApprovalLevel.Safe);
+        });
+
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();
