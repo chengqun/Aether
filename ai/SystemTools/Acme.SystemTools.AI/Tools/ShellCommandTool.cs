@@ -18,13 +18,15 @@ public class ShellCommandTool
     public async Task<Output> ExecuteShellCommand(
         [System.ComponentModel.Description("Shell 命令字符串，如 'dotnet build 2>&1 | head -20'")] string command,
         [System.ComponentModel.Description("工作目录（可选）")] string? workingDirectory = null,
-        [System.ComponentModel.Description("超时时间（毫秒），默认60000")] int? timeoutMs = null,
+        [System.ComponentModel.Description("超时时间（毫秒），默认180000（3 分钟）。长构建如 dotnet publish 全量发布可能需 5-10 分钟，此时应显式传更大值")] int? timeoutMs = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(command))
             return new Output { ExitCode = -1, StandardOutput = string.Empty, StandardError = "命令不能为空", Success = false };
 
-        var actualTimeout = timeoutMs ?? 60000;
+        // 默认 180s：覆盖绝大多数 dotnet build/test，超时已是干净退出（杀进程树+返回残留输出），不再有死锁风险。
+        // 全量 publish/Lean 首编仍可能不够，由 agent 显式传更大 timeoutMs。
+        var actualTimeout = timeoutMs ?? 180000;
 
         Process? process = null;
         Task<string>? stdoutTask = null;
@@ -57,7 +59,7 @@ public class ShellCommandTool
                 psi.FileName = ResolveLoginShell();
                 psi.ArgumentList.Add("-l");
                 psi.ArgumentList.Add("-c");
-                psi.ArgumentList.Add(command);
+                psi.ArgumentList.Add(MaybeSourceRc(command));
             }
 
             process = new Process { StartInfo = psi };
@@ -153,11 +155,31 @@ public class ShellCommandTool
         return "/bin/bash";
     }
 
+    /// <summary>
+    /// 可选 source ~/.zshrc。登录 shell <c>-l</c> 只加载 .zprofile/.zshenv，**不加载 .zshrc**（非交互），
+    /// 而用户常把 PATH 修正/工具链 token 放在 .zshrc 里 → agent 跑命令的 env 与真实终端不一致。
+    /// 设环境变量 <c>AETHER_SOURCE_ZSHRC=1</c> 开启（默认关——.zshrc 可能有交互式副作用，不为所有命令冒回归风险）。
+    /// <c>&gt;/dev/null 2&gt;&amp;1</c> 吞掉 .zshrc 的输出（提示符插件/compinit 噪音），<c>|| true</c> 保证加载失败不中断。
+    /// </summary>
+    private static string MaybeSourceRc(string command)
+    {
+        if (Environment.GetEnvironmentVariable("AETHER_SOURCE_ZSHRC") == "1")
+            return "source ~/.zshrc >/dev/null 2>&1 || true; " + command;
+        return command;
+    }
+
+    /// <summary>
+    /// 保留头 + 尾地截断。构建/命令的**错误信息与摘要在末尾**，纯截头部（旧实现）会把 agent 最需要的错误丢掉。
+    /// 头部 20% 给上下文（哪个项目/阶段开始），尾部 80% 给错误/摘要。
+    /// </summary>
     private static string Truncate(string text, int maxLength)
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
             return text;
-        return text[..maxLength] + $"\n... (已截断，总长度 {text.Length} 字符)";
+        int head = Math.Max(0, maxLength / 5);
+        int tail = Math.Max(0, maxLength - head - 80);
+        var note = $"\n... (已截断，省略 {text.Length - head - tail} 字符，保留头/尾) ...\n";
+        return text[..head] + note + (tail > 0 ? text[^(tail)..] : string.Empty);
     }
 
     public class Output
