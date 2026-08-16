@@ -251,6 +251,76 @@ public class NoteTool
         }
     }
 
+    [Description("把一条笔记移动到指定父节点下（改变 parentId，重组笔记树）。parentTitle 留空=移到根节点。" +
+                "不能把节点移入自身或其子节点（会形成环）。子节点会随被移动的节点一起搬走。")]
+    public async Task<ActionOutput> MoveNote(
+        [Description("要移动的笔记标题")] string title,
+        [Description("目标父笔记标题（留空=移到根节点）")] string? parentTitle = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return new ActionOutput { Error = "标题不能为空" };
+
+            var all = await _service.GetAllAsync(cancellationToken);
+            var note = all.FirstOrDefault(n => n.Title == title);
+            if (note == null)
+                return new ActionOutput { Error = $"找不到笔记: {title}" };
+
+            // 解析目标父节点：留空 → 根节点（newParentId=null）
+            string? newParentId = null;
+            if (!string.IsNullOrWhiteSpace(parentTitle))
+            {
+                var parent = all.FirstOrDefault(n => n.Title == parentTitle);
+                if (parent == null)
+                    return new ActionOutput { Error = $"找不到父笔记: {parentTitle}" };
+                if (parent.Id == note.Id)
+                    return new ActionOutput { Error = "不能把笔记移入自身" };
+                // 环检测：目标父若是被移动节点的后代（含自身），移入会成环——从 parent 向上遍历祖先链，途遇 note.Id 即拒绝
+                if (IsDescendantOrSelf(parent, note.Id, all))
+                    return new ActionOutput { Error = "不能把笔记移入它自己的子节点（会形成环）" };
+                newParentId = parent.Id;
+            }
+
+            // 已在目标位置则无操作
+            if ((note.ParentId ?? "") == (newParentId ?? ""))
+                return new ActionOutput { Success = true, Id = note.Id, Title = note.Title };
+
+            // UpdateAsync 会无条件覆盖 Title/Content，故须保留原值（与 AppendNote/UpdateNote 同法）
+            var request = new UpdateNoteRequest
+            {
+                Id = note.Id,
+                Title = note.Title,
+                Content = note.Content,
+                Syntax = note.Syntax,
+                Tags = note.Tags,
+                // 空串：UpdateAsync 解析失败 → ParentId=null → 根节点；非空=目标父 id
+                ParentId = newParentId ?? "",
+            };
+            await _service.UpdateAsync(request, cancellationToken);
+            return new ActionOutput { Success = true, Id = note.Id, Title = note.Title };
+        }
+        catch (Exception ex)
+        {
+            return new ActionOutput { Error = $"移动笔记失败: {ex.Message}" };
+        }
+    }
+
+    /// <summary>判断 <paramref name="candidate"/> 是否是 <paramref name="ancestorId"/> 的后代或自身：
+    /// 从 candidate 向上遍历父链，途遇 ancestorId 即为真。用于移动前的环检测。</summary>
+    private static bool IsDescendantOrSelf(NoteDto candidate, string ancestorId, IReadOnlyList<NoteDto> all)
+    {
+        var cur = candidate;
+        while (cur is not null)
+        {
+            if (cur.Id == ancestorId) return true;
+            if (string.IsNullOrEmpty(cur.ParentId)) return false;
+            cur = all.FirstOrDefault(n => n.Id == cur.ParentId);
+        }
+        return false;
+    }
+
     private static NoteSummary ToSummary(NoteDto n) => new()
     {
         Id = n.Id,

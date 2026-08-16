@@ -11,7 +11,7 @@ public static class NotesAIBuilderExtensions
 {
     public static readonly string[] ToolNames = {
         "CreateNote", "ReadNote", "AppendNote", "UpdateNote",
-        "SearchNotes", "ListNotes", "DeleteNote",
+        "SearchNotes", "ListNotes", "DeleteNote", "MoveNote",
         "ListKnowledgeObjects", "ReadKnowledgeObject"
     };
 
@@ -41,6 +41,8 @@ public static class NotesAIBuilderExtensions
                 sp => CreateTool<NoteTool>(sp, "ListNotes"));
             reg.Register("DeleteNote", "删除笔记", cat,
                 sp => CreateTool<NoteTool>(sp, "DeleteNote"), ToolApprovalLevel.Dangerous);
+            reg.Register("MoveNote", "移动笔记到指定父节点", cat,
+                sp => CreateTool<NoteTool>(sp, "MoveNote"), ToolApprovalLevel.Confirm);
             reg.Register("ListKnowledgeObjects", "列出知识对象", kCat,
                 sp => CreateTool<KnowledgeTool>(sp, "ListKnowledgeObjects"));
             reg.Register("ReadKnowledgeObject", "读取知识对象定义", kCat,
