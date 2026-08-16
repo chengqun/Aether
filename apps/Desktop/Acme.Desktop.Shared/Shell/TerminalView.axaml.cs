@@ -1,0 +1,144 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+using Acme.Desktop.Mvvm;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Microsoft.Extensions.DependencyInjection;
+using RoyalTerminal.Avalonia.Controls;
+
+namespace Acme.Desktop.Shared.Shell;
+
+/// <summary>
+/// 集成终端视图：标签条（绑 TerminalViewModel.Sessions）+ 控件宿主（每会话一个 RoyalTerminal <see cref="TerminalControl"/>）。
+/// 控件/PTY 生命周期由本视图拥有；<see cref="TerminalService"/> 经 AttachView 拿本视图引用并转发 Create/Close/SendInput/RunAsync。
+/// 工作台加载即建本视图（IsVisible 切换不销毁）→ 跨 nav 切换常驻，PTY 不断。主题随 ActualThemeVariant。
+/// </summary>
+public partial class TerminalView : UserControl
+{
+    private readonly Dictionary<Guid, TerminalControl> _controls = new();
+    private TerminalService? _service;
+    private bool _initialized;
+
+    public TerminalView()
+    {
+        InitializeComponent();
+        this.Loaded += OnLoaded;
+        this.ActualThemeVariantChanged += (_, _) => ApplyThemeToAll();
+    }
+
+    private void OnLoaded(object? sender, EventArgs e)
+    {
+        if (_initialized) return;
+        _initialized = true;
+        _service = DesktopApp.Services?.GetService<ITerminalService>() as TerminalService;
+        if (_service is null) return;
+        _service.AttachView(this);
+        // 首次打开若无会话，自动建一个（cwd 跟随文档页项目目录）。
+        if (_service.GetSessions().Count == 0)
+        {
+            var projectDir = DesktopApp.Services?.GetService<ICurrentProjectDirectoryProvider>()?.CurrentDirectory;
+            _service.CreateSession(string.IsNullOrWhiteSpace(projectDir) ? null : projectDir, null);
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _service?.DetachView(this);
+    }
+
+    // —— TerminalService 调用的视图面 API ——
+
+    /// <summary>为会话创建终端控件 + 起真实登录 shell。已存在则 no-op。</summary>
+    public void CreateSessionControl(ITerminalSession session)
+    {
+        if (_controls.ContainsKey(session.Id)) return;
+        var ctrl = new TerminalControl
+        {
+            IsVisible = false,
+            TerminalFontSize = 13,
+        };
+        ApplyTheme(ctrl);
+        ctrl.TitleChanged += (_, title) => _service?.NotifyTitleChanged(session.Id, title ?? session.Title);
+        ctrl.ProcessExited += (_, code) => _service?.NotifyExited(session.Id);
+        ContentHost.Children.Add(ctrl);
+        _controls[session.Id] = ctrl;
+
+        var (shell, args) = ResolveShell();
+        var cwd = string.IsNullOrWhiteSpace(session.Cwd)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : session.Cwd;
+        try
+        {
+            ctrl.StartPty(shell, cwd, args);
+        }
+        catch (Exception ex)
+        {
+            // 起壳失败不崩——向控件写一条错误（可见）+ 标记退出。
+            ctrl.WriteOutput(System.Text.Encoding.UTF8.GetBytes($"终端启动失败: {ex.Message}\r\n"));
+            _service?.NotifyExited(session.Id);
+        }
+    }
+
+    public void RemoveControl(Guid id)
+    {
+        if (!_controls.Remove(id, out var ctrl)) return;
+        try { ctrl.StopPty(); } catch { }
+        try { ctrl.RequestClose(); } catch { }
+        ContentHost.Children.Remove(ctrl);
+    }
+
+    public void Activate(Guid id)
+    {
+        foreach (var (cid, ctrl) in _controls)
+            ctrl.IsVisible = cid == id;
+    }
+
+    public void SendInput(Guid id, string text)
+    {
+        if (_controls.TryGetValue(id, out var ctrl))
+            ctrl.SendInput(text);
+    }
+
+    public TerminalControl? GetControl(Guid id) => _controls.TryGetValue(id, out var c) ? c : null;
+
+    /// <summary>视图从树分离（窗口关闭/工作台重置）：杀所有 PTY + 清控件。会话元数据保留在 service（可重建）。</summary>
+    public void DisposeAllControls()
+    {
+        foreach (var ctrl in _controls.Values)
+        {
+            try { ctrl.StopPty(); } catch { }
+            try { ctrl.RequestClose(); } catch { }
+            ContentHost.Children.Remove(ctrl);
+        }
+        _controls.Clear();
+    }
+
+    // —— 主题 ——
+    private void ApplyThemeToAll()
+    {
+        foreach (var ctrl in _controls.Values)
+            ApplyTheme(ctrl);
+    }
+
+    private void ApplyTheme(TerminalControl ctrl)
+    {
+        var dark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
+        ctrl.DefaultBackground = dark ? Color.Parse("#1E1E1E") : Color.Parse("#FFFFFF");
+        ctrl.DefaultForeground = dark ? Color.Parse("#D4D4D4") : Color.Parse("#1E1E1E");
+    }
+
+    // —— shell 解析（交互式登录 shell：Unix zsh/bash -l；Windows powershell）——
+    private static (string shell, IReadOnlyList<string> args) ResolveShell()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return ("powershell.exe", new[] { "-NoLogo" });
+        var shell = Environment.GetEnvironmentVariable("SHELL");
+        if (string.IsNullOrEmpty(shell) || !File.Exists(shell))
+            shell = File.Exists("/bin/zsh") ? "/bin/zsh" : "/bin/bash";
+        return (shell, new[] { "-l" });
+    }
+}

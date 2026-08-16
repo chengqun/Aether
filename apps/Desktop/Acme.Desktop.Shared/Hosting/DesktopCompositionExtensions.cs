@@ -131,6 +131,8 @@ public static class DesktopCompositionExtensions
 
         // ask_user 交互对话框工具：agent 需用户拍板/澄清时调用（替代纯文本提问）。AgentFactory 自动纳入各 agent。
         services.AddSingleton<IAskUserDialogService, AskUserDialogService>();
+        // 集成终端服务（单例）：TerminalView 经 AttachView 持控件；run_in_terminal 工具 + TerminalViewModel 共用。
+        services.AddSingleton<ITerminalService, TerminalService>();
         services.AddTransient<AskUserTool>();
         aether.ConfigureToolRegistry(reg => reg.Register(
             "ask_user", "向用户提问/确认并阻塞等待回答（返回用户选择或自由文本）。需要用户拍板/澄清时用此工具而非纯文本提问。", "交互",
@@ -214,6 +216,21 @@ public static class DesktopCompositionExtensions
                     typeof(EditSymbolTool).GetMethod(nameof(EditSymbolTool.EditSymbol))!, sp.GetRequiredService<EditSymbolTool>(),
                     "edit_symbol"),
                 ToolApprovalLevel.Safe);
+        });
+
+        // 集成终端工具：在可见终端面板执行命令（真实 PTY / 完整 env 含 .zshrc / 可观察可中断）。
+        // 与 ExecuteShellCommand 分工：后者静默管道拿干净输出做判断；本工具走可见终端，适合需 TTY/长任务观察/介入。
+        // 标 Dangerous（执行任意命令），对齐 ExecuteShellCommand。宿主层注册（需 ITerminalService + 项目目录）。
+        services.AddTransient<RunInTerminalTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("run_in_terminal", "在集成终端（可见面板）执行命令——真实 PTY / 完整登录 env（含 .zshrc）/ 可观察可中断。" +
+                "需要 TTY、长任务想观察/介入、或需完整环境时用此工具；拿干净输出做判断仍用 ExecuteShellCommand。" +
+                "命令在终端可见，超时/取消后进程继续在终端跑（可手动停止）。", "编程",
+                sp => AIFunctionFactory.Create(
+                    typeof(RunInTerminalTool).GetMethod(nameof(RunInTerminalTool.RunInTerminal))!, sp.GetRequiredService<RunInTerminalTool>(),
+                    "run_in_terminal"),
+                ToolApprovalLevel.Dangerous);
         });
 
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent

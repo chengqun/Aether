@@ -37,6 +37,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new SourceControlView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().SourceControl);
 
+        // 集成终端：共享 TerminalView（多标签真实 PTY；agent run_in_terminal 工具经 ITerminalService）。
+        Register(PanelKeys.Terminal,
+            () => new TerminalView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Terminal);
+
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,
             () => new ExpertsView(),

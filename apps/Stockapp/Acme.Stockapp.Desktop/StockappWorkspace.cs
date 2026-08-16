@@ -17,6 +17,7 @@ public static class StockappWorkspace
         {
             new(PanelKeys.Documents, PanelKeys.Documents, "文档", "documents"),
             new(PanelKeys.SourceControl, PanelKeys.SourceControl, "源代码管理", "sourcecontrol"),
+            new(PanelKeys.Terminal, PanelKeys.Terminal, "终端", "terminal"),
             new(PanelKeys.Notes, PanelKeys.Notes, "笔记", "notes"),
             new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation"),
@@ -29,7 +30,7 @@ public static class StockappWorkspace
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Terminal, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 固定。

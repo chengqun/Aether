@@ -53,6 +53,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         SourceControl = new SourceControlViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
+        Terminal = new TerminalViewModel(serviceProvider,
+            serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         Automation = new AutomationViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             serviceProvider.GetRequiredService<IAutomationService>(),
@@ -124,6 +126,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>源代码管理页 ViewModel（git status/diff/stage/commit/discard，读文档页打开的项目目录）</summary>
     public SourceControlViewModel SourceControl { get; }
+
+    /// <summary>集成终端页 ViewModel（多标签真实 PTY；agent run_in_terminal 工具亦经其 ITerminalService）</summary>
+    public TerminalViewModel Terminal { get; }
 
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }

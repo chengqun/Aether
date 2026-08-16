@@ -25,6 +25,7 @@ public static class IconLoader
         ["notes"] = PackIconCodiconsKind.Book,
         ["documents"] = PackIconCodiconsKind.Files,
         ["sourcecontrol"] = PackIconCodiconsKind.SourceControl,
+        ["terminal"] = PackIconCodiconsKind.Terminal,
         ["automation"] = PackIconCodiconsKind.Calendar,
         ["futures"] = PackIconCodiconsKind.GraphLine,
         ["backtest"] = PackIconCodiconsKind.Beaker,

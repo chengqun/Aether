@@ -23,6 +23,9 @@ public static class PanelKeys
     /// <summary>源代码管理面板（SourceControlView，git status/diff/stage/commit/discard）。</summary>
     public const string SourceControl = "sourcecontrol";
 
+    /// <summary>集成终端面板（TerminalView，多标签真实 PTY；agent run_in_terminal 工具的目标）。</summary>
+    public const string Terminal = "terminal";
+
     /// <summary>专家面板（ExpertsView，6 tab）。</summary>
     public const string Experts = "experts";
 

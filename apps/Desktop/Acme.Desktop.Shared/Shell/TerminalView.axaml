@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Acme.Desktop.Shared.Shell.TerminalView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <!-- 终端标签按钮：活跃态加粗 + 亮底 -->
+    <Style Selector="Button.term-tab">
+      <Setter Property="Padding" Value="10,3"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+    </Style>
+    <Style Selector="Button.term-tab:active /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.term-tab:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SidebarBgBrush}"/>
+    </Style>
+    <Style Selector="Button.term-close">
+      <Setter Property="Padding" Value="6,2"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+    </Style>
+    <Style Selector="Button.term-close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Button.term-new">
+      <Setter Property="Padding" Value="8,2"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+    </Style>
+    <Style Selector="Button.term-new:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SidebarBgBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+    <!-- 标签条 -->
+    <Border Grid.Row="0" Background="{DynamicResource SidebarBgBrush}" Padding="4,2">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <ItemsControl ItemsSource="{Binding Sessions}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="2"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="*,Auto">
+                <Button Grid.Column="0" Classes="term-tab"
+                        Command="{Binding $parent[UserControl].DataContext.SwitchSessionCommand}"
+                        CommandParameter="{Binding}">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{Binding Title}"/>
+                    <!-- shell 已退出标记 -->
+                    <TextBlock Text="●" FontSize="8" Foreground="OrangeRed"
+                               IsVisible="{Binding !IsRunning}" VerticalAlignment="Center"/>
+                    <!-- 活跃会话下划线 -->
+                    <Border Height="2" Background="{DynamicResource AccentBrush}"
+                            IsVisible="{Binding IsActive}" VerticalAlignment="Bottom"/>
+                  </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Classes="term-close" Content="✕"
+                        Command="{Binding $parent[UserControl].DataContext.CloseSessionCommand}"
+                        CommandParameter="{Binding}"/>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Content="＋" Classes="term-new" Command="{Binding NewSessionCommand}"
+                ToolTip.Tip="新建终端会话"/>
+      </StackPanel>
+    </Border>
+    <!-- 终端控件宿主：每会话一个 RoyalTerminal TerminalControl，靠 IsVisible 切换 -->
+    <Grid Grid.Row="1" x:Name="ContentHost" Background="#1E1E1E"/>
+  </Grid>
+</UserControl>
