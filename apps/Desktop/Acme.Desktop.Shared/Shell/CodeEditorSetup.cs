@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using Acme.Desktop.Mvvm.Syntax;
 using Avalonia.Media;
 using Avalonia.Styling;
 using AvaloniaEdit.Folding;
@@ -54,30 +55,8 @@ internal static class CodeEditorSetup
         catch { /* 控件未就绪则跳过 */ }
     }
 
-    /// <summary>文件扩展名（含点，大小写不敏感）→ 语法 key。未知扩展名返回 null（纯文本，不高亮）。</summary>
-    public static string? SyntaxForExtension(string? extension)
-    {
-        if (string.IsNullOrWhiteSpace(extension)) return null;
-        var ext = extension.ToLowerInvariant();
-        return ext switch
-        {
-            ".cs" => "csharp",
-            ".py" or ".pyw" => "python",
-            ".md" or ".markdown" => "markdown",
-            ".json" => "json",
-            ".sql" => "sql",
-            ".yaml" or ".yml" => "yaml",
-            ".js" or ".mjs" or ".cjs" or ".ts" => "javascript",
-            ".html" or ".htm" => "html",
-            ".css" => "css",
-            ".xml" or ".axaml" or ".xaml" or ".csproj" or ".props" or ".targets" => "xml",
-            ".java" => "java",
-            ".cpp" or ".cc" or ".cxx" or ".hpp" or ".hh" or ".h" => "cpp",
-            ".vb" => "vb",
-            ".ps1" => "powershell",
-            _ => null,
-        };
-    }
+    /// <summary>文件扩展名（含点，大小写不敏感）→ 语法 key。转发 <see cref="SyntaxMap.SyntaxForExtension"/>（单一来源）。</summary>
+    public static string? SyntaxForExtension(string? extension) => SyntaxMap.SyntaxForExtension(extension);
 
     /// <summary>把语法 key 映射到 AvaloniaEdit 内置定义名（<see cref="HighlightingManager.GetDefinition"/> 接受的名字）。
     /// yaml 走自定义内联 .xshd（AvaloniaEdit 无内置 YAML）。</summary>

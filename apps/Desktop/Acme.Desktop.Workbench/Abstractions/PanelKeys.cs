@@ -17,8 +17,13 @@ public static class PanelKeys
     /// <summary>笔记面板（NotesView + AvaloniaEdit + form 节点两栏）。</summary>
     public const string Notes = "notes";
 
-    /// <summary>打开文档面板（DocumentsView，多标签 AvaloniaEdit 编辑器，打开磁盘文件）。</summary>
+    /// <summary>打开文档面板（DocumentsEditorView，多标签 AvaloniaEdit 编辑器，打开磁盘文件）。</summary>
     public const string Documents = "documents";
+
+    /// <summary>文档页文件树面板（FileTreeView，shell 级独立左栏——VSCode 式目录栏占满高度，终端只压编辑器区不压树）。
+    /// 是 LayoutRegion 不进 LayoutTabbed → 不进 nav rail；仅 documents tab 选中时可见（WorkspaceView 按 SelectedTabIndex 切列宽）。
+    /// 与 documents 共享同一 DocumentsViewModel 单例（树点文件→VM.Open→编辑器响应）。</summary>
+    public const string FileTree = "filetree";
 
     /// <summary>源代码管理面板（SourceControlView，git status/diff/stage/commit/discard）。</summary>
     public const string SourceControl = "sourcecontrol";

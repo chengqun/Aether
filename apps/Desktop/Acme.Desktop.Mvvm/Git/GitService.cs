@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Acme.Desktop.Mvvm.Syntax;
 using LibGit2Sharp;
 
 namespace Acme.Desktop.Mvvm.Git;
@@ -539,25 +540,7 @@ public sealed class GitService : IGitService
 
     private static bool IsBinary(string text) => text.Contains('\0');
 
-    /// <summary>扩展名 → 语法 key（镜像 CodeEditorSetup.SyntaxForExtension，但 Mvvm 不能引 Shared）。
+    /// <summary>扩展名 → 语法 key。转发 <see cref="SyntaxMap.SyntaxForExtension"/>（单一来源；旧版本地镜像已删）。
     /// internal 供 <see cref="AgentEditPreview"/> 复用（agent 编辑审批 diff 也需按扩展名上色）。</summary>
-    internal static string? SyntaxForExtension(string ext)
-    {
-        return ext.ToLowerInvariant() switch
-        {
-            ".cs" => "csharp",
-            ".py" => "python",
-            ".js" => "javascript",
-            ".ts" => "javascript",
-            ".json" => "json",
-            ".md" => "markdown",
-            ".yaml" or ".yml" => "yaml",
-            ".xml" or ".axaml" or ".xaml" => "xml",
-            ".sql" => "sql",
-            ".html" or ".htm" => "html",
-            ".css" => "css",
-            ".sh" => "shell",
-            _ => null,
-        };
-    }
+    internal static string? SyntaxForExtension(string? ext) => SyntaxMap.SyntaxForExtension(ext);
 }

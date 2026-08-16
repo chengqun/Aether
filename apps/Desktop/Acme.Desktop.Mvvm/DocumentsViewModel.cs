@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Acme.Desktop.Mvvm.Syntax;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -191,6 +193,43 @@ public partial class DocumentsViewModel : ObservableObject
             return true;
         }
         return false;
+    }
+
+    /// <summary>5MB 上限，防超大文件卡编辑器（原在 View code-behind，迁入 VM 供拆分后的独立树控件复用）。</summary>
+    private const long MaxFileBytes = 5 * 1024 * 1024;
+
+    /// <summary>读取磁盘文件（5MB/二进制检测）→ 按扩展名算语法 key（<see cref="SyntaxMap"/>）→ 打开标签。
+    /// 原 View code-behind 的 ReadAndOpenAsync 迁入 VM：拆分后文件树是独立 view，文件读 IO 必须在 VM 才能跨 view 复用。
+    /// VM 本就持 <see cref="FileSystemWatcher"/> 重载（读盘能力已在），IO 移入无架构越界。</summary>
+    public async Task OpenFromDiskAsync(string filePath, CancellationToken ct = default)
+    {
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(filePath, ct);
+            if (bytes.Length > MaxFileBytes)
+            {
+                StatusMessage = $"跳过 {Path.GetFileName(filePath)}：超过 5MB 上限";
+                return;
+            }
+            // 二进制检测：前 8KB 出现 NUL 字节视为二进制（字节版，比解码后查 '\0' 更早拦截）。
+            var checkLen = Math.Min(bytes.Length, 8192);
+            for (var i = 0; i < checkLen; i++)
+            {
+                if (bytes[i] == 0)
+                {
+                    StatusMessage = $"跳过 {Path.GetFileName(filePath)}：二进制文件";
+                    return;
+                }
+            }
+            var content = System.Text.Encoding.UTF8.GetString(bytes);
+            var syntax = SyntaxMap.SyntaxForExtension(Path.GetExtension(filePath));
+            Open(filePath, content, syntax);
+        }
+        catch (OperationCanceledException) { /* 取消不报 */ }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打开失败：{ex.Message}";
+        }
     }
 
     /// <summary>打开项目目录：清旧树+旧标签，后台递归扫描构建文件树，回 UI 线程挂根节点并展开。

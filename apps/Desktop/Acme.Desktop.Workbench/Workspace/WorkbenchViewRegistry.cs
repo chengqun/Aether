@@ -27,9 +27,15 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new NotesView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Notes);
 
-        // 打开文档：共享 DocumentsView（多标签 AvaloniaEdit 编辑器，打开磁盘文件）。
+        // 打开文档编辑器：共享 DocumentsEditorView（多标签 AvaloniaEdit 编辑器，从原 DocumentsView col2 拆出）。
         Register(PanelKeys.Documents,
-            () => new DocumentsView(),
+            () => new DocumentsEditorView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
+
+        // 文档页文件树：shell 级独立左栏（FileTreeView，从原 DocumentsView col0 拆出），占满高度。
+        // 与 documents 共享同一 DocumentsViewModel 单例（vmFactory 同上）——树点文件→VM.Open→编辑器响应。
+        Register(PanelKeys.FileTree,
+            () => new FileTreeView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
 
         // 源代码管理：共享 SourceControlView（git 变更列表 + 左右并排 diff）。
