@@ -90,9 +90,19 @@ public class ShellCommandTool
                 timedOut = !cancelledByUser;
             }
 
-            // 进程已退出或已被杀 → 管道已关闭，读取不会阻塞。
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
+            // 进程已退出或已被杀 → 管道应已关闭，读取不会阻塞。但 KillTree 后仍可能因 reparent 到
+            // launchd(PID 1) 的孙进程（dotnet publish 的 MSBuild/csc）仍持有管道写端而拿不到 EOF →
+            // ReadToEndAsync 永久阻塞 → 工具永不返回（UI 一直"运行中"）。给读取加超时兜底：最多等 5s，
+            // 超时则放弃残留输出（进程已杀，输出无意义）。正常退出路径 stdoutTask 已完成，WhenAny 立即返回无延迟。
+            string stdout, stderr;
+            if (await Task.WhenAny(stdoutTask, Task.Delay(5000)) == stdoutTask)
+                stdout = await stdoutTask;
+            else
+                stdout = string.Empty;
+            if (await Task.WhenAny(stderrTask, Task.Delay(5000)) == stderrTask)
+                stderr = await stderrTask;
+            else
+                stderr = string.Empty;
 
             if (timedOut)
             {
