@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Threading;
+using System.Windows.Input;
 using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -44,6 +45,9 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     private readonly Func<Guid, string?> _resolveTitleById;
     private readonly Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> _resolveTargetDef;
 
+    /// <summary>导航到笔记节点（转发 NotesViewModel.NavigateToNoteCommand，供 body markdown 链接 + link 行跳转）。</summary>
+    private readonly Action<string>? _navigateToNote;
+
     private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
     private Timer? _saveTimer;
     private bool _loading = true;
@@ -57,12 +61,16 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     /// <summary>可 link 的目标节点树（按层级展开，供树形选择窗口）。</summary>
     public IReadOnlyList<TargetTreeNode> AvailableTargetTree { get; }
 
+    /// <summary>body markdown 内部链接（<c>note:</c>/<c>note-id:</c>）点击导航命令，转发 NotesViewModel。</summary>
+    public ICommand NoteNavigateCommand { get; }
+
     public KnowledgeEditViewModel(Guid id, string name, KnowledgeObjectDefinition def,
         IReadOnlyList<TargetOption> availableTargets,
         IReadOnlyList<TargetTreeNode> availableTargetTree,
         Func<string?, (Guid Id, string Title)?> resolveTarget,
         Func<Guid, string?> resolveTitleById,
-        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef)
+        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef,
+        Action<string>? navigateToNote)
     {
         Id = id;
         _saveTimer = new Timer(_ => FlushSave(), null, Timeout.Infinite, Timeout.Infinite);
@@ -74,6 +82,9 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
         _resolveTarget = resolveTarget;
         _resolveTitleById = resolveTitleById;
         _resolveTargetDef = resolveTargetDef;
+        _navigateToNote = navigateToNote;
+        // body markdown 内部链接点击转发到 NotesViewModel 导航（参数=原始 url，含 note:/note-id: 前缀）
+        NoteNavigateCommand = new RelayCommand<string>(raw => _navigateToNote?.Invoke(raw ?? string.Empty));
         foreach (var l in def.Links)
         {
             // 有 TargetId 时按 id 反查当前标题（目标被改名也能显示最新标题）；查不到回退存储标题
@@ -149,6 +160,16 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     [RelayCommand] private void AddLink() => Links.Add(new KnowledgeLinkRow());
     [RelayCommand] private void RemoveLink(KnowledgeLinkRow row) => Links.Remove(row);
+
+    /// <summary>跳转到 link 行的目标笔记节点（优先 SelectedTarget.Id，回退 TargetId；走 note-id 权威，改名不断链）。</summary>
+    [RelayCommand]
+    private void JumpToTarget(KnowledgeLinkRow? row)
+    {
+        if (row is null) return;
+        var id = row.SelectedTarget?.Id ?? row.TargetId;
+        if (id is null) return;
+        _navigateToNote?.Invoke($"note-id:{id.Value:N}");
+    }
 
     /// <summary>字段/links 变更后延迟自动保存（1500ms debounce，与普通笔记一致）。</summary>
     private void ScheduleSave()

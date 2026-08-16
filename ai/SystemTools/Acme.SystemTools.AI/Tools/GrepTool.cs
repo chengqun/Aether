@@ -159,7 +159,7 @@ public class GrepTool
                     return;
 
                 var dirName = Path.GetFileName(subdir);
-                if (dirName.StartsWith("."))
+                if (FileSearchHelpers.IsIgnoredDirectory(dirName))
                     continue;
 
                 await SearchDirectory(subdir, regex, results, fileFilter, cancellationToken);
@@ -174,24 +174,27 @@ public class GrepTool
     {
         try
         {
-            var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-            var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            // 跳二进制文件（DLL/图片/压缩包等），避免当文本逐行匹配的噪音与开销（对标 grep -I / ripgrep）
+            if (FileSearchHelpers.IsBinary(filePath)) return;
 
             var result = new SearchResult { FilePath = filePath };
             var matchCount = 0;
+            int lineNo = 0;
 
-            for (int i = 0; i < lines.Length; i++)
+            // 流式逐行读，不整文件入内存（大文件不爆内存；原 ReadAllTextAsync 会把整文件读进来）
+            using var sr = new StreamReader(filePath);
+            string? line;
+            while ((line = await sr.ReadLineAsync(cancellationToken)) is not null)
             {
+                lineNo++;
                 if (cancellationToken.IsCancellationRequested)
                     return;
 
-                var line = lines[i];
                 var matches = regex.Matches(line);
-
                 if (matches.Count > 0)
                 {
                     matchCount += matches.Count;
-                    result.LineMatches.Add(new LineMatch { LineNumber = i + 1, Line = line });
+                    result.LineMatches.Add(new LineMatch { LineNumber = lineNo, Line = line });
                 }
             }
 

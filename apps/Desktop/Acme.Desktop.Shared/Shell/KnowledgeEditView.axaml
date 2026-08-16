@@ -40,14 +40,19 @@
             <ItemsControl ItemsSource="{Binding Links}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Grid ColumnDefinitions="*,2*,Auto" Margin="0,0,0,4">
+                  <Grid ColumnDefinitions="*,2*,Auto,Auto" Margin="0,0,0,4">
                     <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（uses/then/applies-to/produces…）" Margin="0,0,4,0"/>
                     <Button Grid.Column="1" Margin="0,0,4,0" Click="OnPickTarget"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                       <TextBlock Text="{Binding SelectedTarget.Title, FallbackValue=选择目标…}"
                                  Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
                     </Button>
-                    <Button Grid.Column="2" Command="{Binding $parent[ItemsControl].DataContext.RemoveLinkCommand}"
+                    <Button Grid.Column="2" Classes="tool" Padding="8,4" Margin="0,0,4,0"
+                            Command="{Binding $parent[ItemsControl].DataContext.JumpToTargetCommand}"
+                            CommandParameter="{Binding}" ToolTip.Tip="跳转到目标笔记">
+                      <Path Data="{x:Static shell:Codicons.ArrowRight}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button Grid.Column="3" Command="{Binding $parent[ItemsControl].DataContext.RemoveLinkCommand}"
                             CommandParameter="{Binding}" Padding="8,4"><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/></Button>
                   </Grid>
                 </DataTemplate>
@@ -57,6 +62,7 @@
         </Expander>
 
         <ctl:SelectableMarkdownViewer Markdown="{Binding Body}"
+                                      NoteNavigateCommand="{Binding NoteNavigateCommand}"
                                       MinHeight="200" Margin="0,2"/>
 
       </StackPanel>

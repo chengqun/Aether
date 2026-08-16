@@ -312,6 +312,7 @@ A rule agent is a normal agent whose **brain is swapped from an LLM to determini
   - `NoteTool.CreateNote` 没有 nodeType 参数（只能建 `Note`），但 `KnowledgeTool.CreateKnowledgeObject` 专门建 Knowledge 节点（设 tags/syntax/content）。Knowledge 节点也可经 UI 新建或 `NoteService.CreateAsync(NodeType=...)` 直调。
   - link 靠标题解析时**标题必须唯一**；在 UI 里打开流程节点并保存一次，`KnowledgeEditViewModel.Build()` 会把标题解析成 `TargetId` 落库，之后改名/同名也按 id 精确命中。
   - `FormatAsync` 内联子笔记的 front-matter（含其 links），有轻微噪音但无害；清反向边后已最小化。
+- **笔记间内部链接导航**：任意 markdown 笔记正文（含 Knowledge body）可写 `[显示文字](note:目标标题)`（按标题，可读但改名可能断链）或 `[显示文字](note-id:<guid>)`（按 id 权威，改名不断链），点击后 `SelectableMarkdownViewer` 经 `IMarkdownEngine.HyperlinkCommand` 拦截（`NoteLinkHyperlinkCommand`，`SelectableMarkdownViewer.cs`）转发给 `NoteNavigateCommand` → `NotesViewModel.NavigateToNote` 解析前缀 + `FindNoteById`/`FindNoteByTitle` → `SelectAndRevealNode`（展开祖先链 + 设 `SelectedNode`）；非 note: 链接回退系统浏览器。NotesEditorView 标题栏「🔗 插入笔记链接」按钮弹 `TreePickerWindow` 选目标 → 插 `[标题](note-id:<id:N>)`（实现"标题为主显示、存时转 id"）。Knowledge link 行有「→ 跳转」按钮（`JumpToTargetCommand`，用 `SelectedTarget.Id ?? TargetId` 走 note-id）；KnowledgeEditViewModel 经工厂注入 `navigateToNote` 闭包转发 `notes.NavigateToNoteCommand`。
 
 ### Chat streaming surface (reasoning / approval / plan / mode / ask_user)
 

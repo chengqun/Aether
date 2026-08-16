@@ -210,7 +210,8 @@ public sealed class KnowledgeEditVmFactory : INoteNodeEditVmFactory
             id => notes.FindNoteById(id)?.Title,
             title => notes.FindNoteByTitle(title) is { } tn2
                 ? (tn2.Title, notes.TryParseKnowledge(tn2.Content ?? "").Def)
-                : ((string Title, KnowledgeObjectDefinition? Def)?)null);
+                : ((string Title, KnowledgeObjectDefinition? Def)?)null,
+            raw => notes.NavigateToNoteCommand.Execute(raw));
         editVm.SaveRequested += async saved =>
         {
             // debounce 自动保存可能跨越节点切换：仅当当前选中节点仍是本对象时才写库

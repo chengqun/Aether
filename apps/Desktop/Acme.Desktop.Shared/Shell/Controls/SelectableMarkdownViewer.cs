@@ -1,10 +1,13 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Windows.Input;
 using Acme.Desktop.Mvvm;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.LogicalTree;
 using Markdown.Avalonia;
 
 namespace Acme.Desktop.Shared.Shell.Controls;
@@ -35,6 +38,70 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
         // 此处 MarkdownStyleName="Empty" 触发 setter 移除默认 + Insert(0, 空 Styles)。
         MarkdownStyleName = "Empty";
         Styles.Add(new MarkdownThemeStyles());
+        // 拦截 markdown 链接点击：note:/note-id: 内部链接转发给 NoteNavigateCommand（由 VM 解析+导航到目标笔记节点）；
+        // 其余（http/https/mailto…）回退系统浏览器（复刻库默认 DefaultHyperlinkCommand 行为）。
+        // MarkdownScrollViewer 不直接暴露 HyperlinkCommand，但其 Engine（IMarkdownEngine）有公开 HyperlinkCommand——链接点击的总出口。
+        SetupHyperlinkCommand();
+    }
+
+    protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToLogicalTree(e);
+        // Engine 可能在控件附加到逻辑树时才完成初始化（构造期可能为 null），此处兜底再设一次。
+        SetupHyperlinkCommand();
+    }
+
+    private void SetupHyperlinkCommand()
+    {
+        // Engine 声明为 IMarkdownEngineBase，但默认引擎实现 IMarkdownEngine（带 HyperlinkCommand 链接出口）。
+        if (Engine is IMarkdownEngine md)
+            md.HyperlinkCommand = new NoteLinkHyperlinkCommand(this);
+    }
+
+    /// <summary>
+    /// 内部笔记链接导航命令。markdown 里的 <c>[文字](note:标题)</c> / <c>[文字](note-id:&lt;guid&gt;)</c>
+    /// 链接点击时，本控件把原始 url（含 scheme 前缀）作为参数传给此命令，由绑定方（NotesViewModel）解析并跳转。
+    /// 不绑定则内部链接点击无反应。控件本身不依赖任何 VM 类型——只做 scheme 分流 + 转发 + 浏览器回退。
+    /// </summary>
+    public static readonly StyledProperty<ICommand?> NoteNavigateCommandProperty =
+        AvaloniaProperty.Register<SelectableMarkdownViewer, ICommand?>(nameof(NoteNavigateCommand));
+
+    public ICommand? NoteNavigateCommand
+    {
+        get => GetValue(NoteNavigateCommandProperty);
+        set => SetValue(NoteNavigateCommandProperty, value);
+    }
+
+    /// <summary>
+    /// markdown 链接点击分流命令：内部链接（note:/note-id:）转发给 <see cref="NoteNavigateCommand"/>，
+    /// 外部链接回退系统浏览器。挂在 <see cref="MarkdownScrollViewer.HyperlinkCommand"/> 上。
+    /// </summary>
+    private sealed class NoteLinkHyperlinkCommand : ICommand
+    {
+        private readonly SelectableMarkdownViewer _owner;
+        public NoteLinkHyperlinkCommand(SelectableMarkdownViewer owner) => _owner = owner;
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter)
+        {
+            if (parameter is not string url || string.IsNullOrWhiteSpace(url)) return;
+            var trimmed = url.Trim();
+            if (trimmed.StartsWith("note-id:", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("note:", StringComparison.OrdinalIgnoreCase))
+            {
+                // 内部链接：交给绑定的导航命令（参数=原始 url，含前缀，由 VM 解析）
+                _owner.NoteNavigateCommand?.Execute(trimmed);
+                return;
+            }
+            // 外部链接：回退系统浏览器（复刻库默认 DefaultHyperlinkCommand）
+            try
+            {
+                if (System.Uri.TryCreate(trimmed, System.UriKind.Absolute, out _))
+                    Process.Start(new ProcessStartInfo(trimmed) { UseShellExecute = true });
+            }
+            catch { /* 无效 url / 无默认浏览器：忽略 */ }
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)

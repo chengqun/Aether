@@ -325,4 +325,16 @@ public partial class NotesEditorView : UserControl
         _vm.EditorFontSize = size; // 绑定更新 CodeEditor.FontSize，并持久化
         e.Handled = true;
     }
+
+    /// <summary>插入笔记内部链接：弹树选择目标节点，在光标处插入 <c>[标题](note-id:&lt;id&gt;)</c>。
+    /// 显示文字=可读标题，链接=权威 id（目标改名不断链）；手写 <c>note:标题</c> 也支持导航。</summary>
+    private async void OnInsertNoteLink(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        var tree = _vm.GetLinkTargetTree(node.Id);
+        var picked = await TreePickerWindow.PickAsync(owner, tree, "选择要链接的笔记");
+        if (picked is null) return;
+        InsertText($"[{picked.Title}](note-id:{picked.Id:N})");
+    }
 }

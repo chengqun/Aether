@@ -85,7 +85,7 @@ public class GlobTool
                     return;
 
                 var dirName = Path.GetFileName(subdir);
-                if (dirName.StartsWith("."))
+                if (FileSearchHelpers.IsIgnoredDirectory(dirName))
                     continue;
 
                 SearchFiles(subdir, pattern, results, maxResults, cancellationToken);

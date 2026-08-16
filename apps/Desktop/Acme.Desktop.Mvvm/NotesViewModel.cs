@@ -784,6 +784,41 @@ public partial class NotesViewModel : ObservableObject
     /// <summary>按 Id 查找笔记节点（用于知识对象 link 加载时按 TargetId 反查当前标题）。</summary>
     public NoteNodeVM? FindNoteById(Guid id) => FindNode(Roots, id);
 
+    /// <summary>导航到指定笔记节点（markdown 内部链接 / KnowledgeLink 跳转调用）。
+    /// <paramref name="raw"/> 支持 <c>note-id:&lt;guid&gt;</c>（按 id 权威，目标改名不断链）和 <c>note:标题</c>（按标题，可读但改名可能断链）。</summary>
+    [RelayCommand]
+    private void NavigateToNote(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return;
+        var s = raw.Trim();
+        NoteNodeVM? target = null;
+        if (s.StartsWith("note-id:", StringComparison.OrdinalIgnoreCase))
+        {
+            var idStr = s["note-id:".Length..].Trim();
+            if (Guid.TryParse(idStr, out var id)) target = FindNoteById(id);
+        }
+        else if (s.StartsWith("note:", StringComparison.OrdinalIgnoreCase))
+        {
+            var title = s["note:".Length..].Trim();
+            target = FindNoteByTitle(title);
+        }
+        if (target is null)
+        {
+            StatusMessage = $"找不到笔记：{s}";
+            return;
+        }
+        SelectAndRevealNode(target);
+        StatusMessage = $"已跳转：{target.Title}";
+    }
+
+    /// <summary>展开目标节点的所有祖先并选中它（Avalonia TreeView 程序化选中折叠父下的节点不会自动展开/滚动到视野）。</summary>
+    private void SelectAndRevealNode(NoteNodeVM node)
+    {
+        for (var p = node.Parent; p is not null; p = p.Parent)
+            p.IsExpanded = true;
+        SelectedNode = node;
+    }
+
     /// <summary>收集所有可 link 的目标笔记节点（排除 <paramref name="excludeId"/> 自身），
     /// 供知识对象编辑器 target 下拉选择。不限 Knowledge——link 可指向任意笔记（普通 Note/Agent/Workflow/Knowledge），
     /// read 时原样内联目标 content，非 KO 目标在图上画成叶子节点。</summary>

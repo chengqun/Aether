@@ -53,13 +53,21 @@
             <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11"
                        Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"
                        IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
-            <Button Grid.Column="2" Classes="notes-tool" IsVisible="{Binding HasRightPane}"
-                    Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示上栏 / 上下双栏">
-              <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
-                    Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
-                    StrokeLineCap="Round" StrokeJoin="Round"
-                    Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-            </Button>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+              <Button Classes="notes-tool" IsVisible="{Binding IsMarkdownNode}"
+                      ToolTip.Tip="插入笔记链接（选目标节点，插 note-id 链接）" Click="OnInsertNoteLink">
+                <Path Data="{x:Static shell:Codicons.Link}" Stretch="Uniform" Width="15" Height="15"
+                      Fill="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      VerticalAlignment="Center"/>
+              </Button>
+              <Button Classes="notes-tool" IsVisible="{Binding HasRightPane}"
+                      Command="{Binding TogglePreviewOnlyCommand}" ToolTip.Tip="切换仅显示上栏 / 上下双栏">
+                <Path Data="{Binding IsPreviewOnly, Converter={x:Static shell:PreviewIconConverter.Instance}}"
+                      Stretch="Uniform" Width="15" Height="15" StrokeThickness="1.6"
+                      StrokeLineCap="Round" StrokeJoin="Round"
+                      Stroke="{Binding $parent.Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+              </Button>
+            </StackPanel>
           </Grid>
         </Border>
 
@@ -85,7 +93,8 @@
             <!-- markdown 渲染 -->
             <ctl:SelectableMarkdownViewer IsVisible="{Binding IsMarkdownNode}"
                    Markdown="{Binding SelectedNode.Content}"
-                   AssetPathRoot="{Binding ImageRoot}"/>
+                   AssetPathRoot="{Binding ImageRoot}"
+                   NoteNavigateCommand="{Binding NavigateToNoteCommand}"/>
             <!-- Agent 表单 -->
             <Border IsVisible="{Binding IsAgentNode}">
               <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>
