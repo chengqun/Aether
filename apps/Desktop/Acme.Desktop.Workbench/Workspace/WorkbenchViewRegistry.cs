@@ -49,6 +49,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new TerminalView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Terminal);
 
+        // 活动热力图：共享 ActivityView（GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。
+        Register(PanelKeys.Activity,
+            () => new ActivityView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Activity);
+
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,
             () => new ExpertsView(),

@@ -32,6 +32,9 @@ public static class PanelKeys
     /// <summary>集成终端面板（TerminalView，多标签真实 PTY；agent run_in_terminal 工具的目标）。</summary>
     public const string Terminal = "terminal";
 
+    /// <summary>活动热力图面板（ActivityView，GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。</summary>
+    public const string Activity = "activity";
+
     /// <summary>专家面板（ExpertsView，6 tab）。</summary>
     public const string Experts = "experts";
 

@@ -94,6 +94,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<McpViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
 
+        Activity = new ActivityViewModel(serviceProvider,
+            serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
+
         // 聊天引擎组合：须在 Experts/Workflows/Rules 建好后构造——它订阅三者的 SummonChanged 事件
         //（召唤入池/出池 → 刷新统一下拉池 + 持久化），并在 InitializeAsync 里读这三类列表恢复召唤/选中态。
         Chat = new ChatWorkspaceViewModel(serviceProvider, deviceChatClient, llmService, settingsDialog, Experts, Workflows, Rules);
@@ -141,6 +144,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>专家页 ViewModel</summary>
     public ExpertsViewModel Experts { get; }
+
+    /// <summary>活动热力图页 ViewModel（GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，读文档页项目目录的 git 历史）。</summary>
+    public ActivityViewModel Activity { get; }
 
     // —— 账户 / 登录态 ——
     [ObservableProperty]

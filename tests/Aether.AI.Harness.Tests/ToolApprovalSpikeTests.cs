@@ -183,7 +183,7 @@ public class ToolApprovalSpikeTests
 
         var registry = new ToolRegistry();
         registry.Register("PlaceOrder", "Place a trading order.", "test",
-            _ => AIFunctionFactory.Create((Func<string, string>)PlaceOrder), Aether.AI.Harness.Tools.ToolApprovalLevel.Dangerous);
+            _ => AIFunctionFactory.Create((Func<string, string>)PlaceOrder), Aether.AI.Core.Agents.ToolApprovalLevel.Dangerous);
         var factory = new AgentFactory(new ConstChatClientFactory(client), registry, new SkillRegistry());
         var runtime = new HarnessRuntime(factory, new SessionManager());
         runtime.RegisterAgent(new AgentDefinition

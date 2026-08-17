@@ -100,6 +100,27 @@ public sealed class InMemoryConversationStore : IConversationStore
         return Task.FromResult(result);
     }
 
+    public Task<IReadOnlyList<RunSummary>> GetRunsInRangeAsync(string userId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        var uid = userId ?? string.Empty;
+        var list = new List<RunSummary>();
+        foreach (var (convId, runs) in _runsByConversation)
+        {
+            // join conversation 取 user_id 过滤 + title（与 Sqlite 实现对齐）。
+            if (!_conversations.TryGetValue(convId, out var conv) || conv.UserId != uid) continue;
+            foreach (var run in runs)
+            {
+                if (run.StartedAt < from || run.StartedAt >= to) continue;
+                list.Add(new RunSummary(
+                    run.Id, run.ConversationId, conv.Title,
+                    run.AgentId, run.AgentName, run.Status,
+                    run.StartedAt, run.FinishedAt, run.UserMessage));
+            }
+        }
+        list.Sort((a, b) => a.StartedAt.CompareTo(b.StartedAt));
+        return Task.FromResult<IReadOnlyList<RunSummary>>(list);
+    }
+
     private static string ComputePreview(AgentRun run, IReadOnlyList<AgentEvent> events)
     {
         // Prefer the last answer text; fall back to the user message.

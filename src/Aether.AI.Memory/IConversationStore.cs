@@ -43,4 +43,10 @@ public interface IConversationStore
 
     /// <summary>All events of a run, ordered by <see cref="AgentEvent.Seq"/> (oldest first).</summary>
     Task<IReadOnlyList<AgentEvent>> GetEventsAsync(Guid runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 该用户在 [<paramref name="from"/>, <paramref name="to"/>) 内所有 run（跨会话），按 <see cref="AgentRun.StartedAt"/> 升序。
+    /// 一次查询同时供热力图按日聚合 + 当天 run 详情两用（避免逐会话枚举）。空范围/无 run 返回空表。
+    /// </summary>
+    Task<IReadOnlyList<RunSummary>> GetRunsInRangeAsync(string userId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
 }

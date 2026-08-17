@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Desktop.Mvvm"
+             xmlns:git="using:Acme.Desktop.Mvvm.Git"
+             xmlns:runs="using:Aether.AI.Core.Conversations.Runs"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.ActivityView"
+             Background="{DynamicResource ContentBgBrush}">
+    <UserControl.Styles>
+        <Style Selector="Button.range">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Button.range:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Border.cell">
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Margin" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Border.cell.today">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="Border.cell.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+            <!-- 标题 + 范围切换 -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,4">
+                <TextBlock Text="活动" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                <TextBlock Text="（GitHub 式贡献图）" Classes="muted" VerticalAlignment="Center" Margin="8,2,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="24,0,0,0">
+                    <Button Classes="range" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ActivityRange.Month}" Content="近 30 天"/>
+                    <Button Classes="range" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ActivityRange.Quarter}" Content="近 3 月"/>
+                    <Button Classes="range" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ActivityRange.Year}" Content="近 1 年"/>
+                </StackPanel>
+                <TextBlock Classes="muted" Text="每天一格，颜色深浅 = 当天活动量（Agent 执行 + Git 提交）" VerticalAlignment="Center" Margin="24,0,0,0"/>
+            </StackPanel>
+
+            <!-- 加载态 -->
+            <TextBlock Grid.Row="1" Text="加载中…" Classes="muted" Margin="16,4,0,0" IsVisible="{Binding IsLoading}"/>
+
+            <!-- 热力图网格（UniformGrid Rows=7 按行填；VM 已按 GitHub 行优先序重排：第一行=所有周日横向排开） -->
+            <Border Grid.Row="2" Margin="16,8" Padding="10" Background="{DynamicResource CardBgBrush}" CornerRadius="6"
+                    HorizontalAlignment="Left">
+                <ItemsControl ItemsSource="{Binding Days}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="7"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:DayCell">
+                            <Border Classes="cell"
+                                    Background="{Binding Intensity, Converter={x:Static shell:IntensityToBrushConverter.Instance}}"
+                                    ToolTip.Tip="{Binding Tooltip}"
+                                    Classes.today="{Binding IsToday}"
+                                    Classes.selected="{Binding IsSelected}"
+                                    PointerPressed="OnCellPointerPressed"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <!-- 当天明细 -->
+            <Border Grid.Row="3" Margin="16,8,16,16" Padding="12" Background="{DynamicResource CardBgBrush}" CornerRadius="6">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock FontSize="14" FontWeight="Bold" Text="{Binding SelectedDay.Date, StringFormat=yyyy-MM-dd}"/>
+                        <TextBlock FontSize="14" FontWeight="Bold" Text="当天明细"/>
+                    </StackPanel>
+                    <TextBlock Classes="muted" Text="点上方某格切换日期" IsVisible="{Binding !SelectedDay}"/>
+
+                    <!-- Agent 执行 -->
+                    <TextBlock Text="Agent 执行" FontWeight="SemiBold" Margin="0,8,0,2"
+                               IsVisible="{Binding DayDetail}"/>
+                    <ItemsControl ItemsSource="{Binding DayDetail.Runs}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="runs:RunSummary">
+                                <Button Background="Transparent" BorderThickness="0" Padding="4,2" HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Command="{Binding $parent[UserControl].DataContext.OpenRunCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Grid ColumnDefinitions="52,120,90,*" Margin="0,0,0,4">
+                                        <TextBlock Grid.Column="0" Text="{Binding StartedAt, StringFormat=HH:mm}" Classes="muted"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding AgentName}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="muted"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding UserMessage}" TextTrimming="CharacterEllipsis" Opacity="0.8"/>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="muted" Text="当天无 Agent 执行" Margin="0,0,0,4"
+                               IsVisible="{Binding !DayDetail}"/>
+
+                    <!-- Git 提交 -->
+                    <TextBlock Text="Git 提交" FontWeight="SemiBold" Margin="0,8,0,2"
+                               IsVisible="{Binding DayDetail}"/>
+                    <ItemsControl ItemsSource="{Binding DayDetail.Commits}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="git:CommitInfo">
+                                <Grid ColumnDefinitions="64,*,60" Margin="0,0,0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding ShaShort}" Classes="muted" FontFamily="Cascadia Code,Menlo,monospace"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding When, StringFormat=HH:mm}" Classes="muted" HorizontalAlignment="Right"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

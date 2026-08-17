@@ -274,6 +274,39 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
         return list;
     }
 
+    public async Task<IReadOnlyList<RunSummary>> GetRunsInRangeAsync(string userId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(CreateSchemaSql, cancellationToken);
+        await using var c = await OpenAsync(cancellationToken);
+        await using var cmd = c.CreateCommand();
+        // join conversation 取 user_id 过滤 + title；started_at 是 ISO 文本串，字符串比较对 ISO 排序正确。
+        cmd.CommandText =
+            "SELECT r.id, r.conversation_id, c.title, r.agent_id, r.agent_name, r.status, r.started_at, r.finished_at, r.user_message " +
+            "FROM " + RunTable + " r JOIN " + ConvTable + " c ON r.conversation_id = c.id " +
+            "WHERE c.user_id = @uid AND r.started_at >= @from AND r.started_at < @to " +
+            "ORDER BY r.started_at";
+        cmd.Parameters.AddWithValue("@uid", userId ?? string.Empty);
+        cmd.Parameters.AddWithValue("@from", Format(from));
+        cmd.Parameters.AddWithValue("@to", Format(to));
+
+        var list = new List<RunSummary>();
+        await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await r.ReadAsync(cancellationToken))
+        {
+            list.Add(new RunSummary(
+                Guid.Parse(r.GetString(0)),
+                Guid.Parse(r.GetString(1)),
+                r.IsDBNull(2) ? string.Empty : r.GetString(2),
+                r.IsDBNull(3) ? string.Empty : r.GetString(3),
+                r.IsDBNull(4) ? string.Empty : r.GetString(4),
+                (RunStatus)r.GetInt32(5),
+                Parse(r.GetString(6)),
+                r.IsDBNull(7) ? null : Parse(r.GetString(7)),
+                r.IsDBNull(8) ? string.Empty : r.GetString(8)));
+        }
+        return list;
+    }
+
     private static async Task<Conversation?> ReadConversationAsync(SqliteConnection c, Guid id, CancellationToken ct)
     {
         await using var cmd = c.CreateCommand();
