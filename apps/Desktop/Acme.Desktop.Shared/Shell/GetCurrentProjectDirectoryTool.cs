@@ -45,50 +45,55 @@ public sealed class GetCurrentProjectDirectoryTool
     [Description("获取文档页当前打开的项目目录路径与顶层文件/目录结构。" +
                  "用户在「文档」页打开项目目录后，此工具返回其绝对路径与顶层条目（目录优先，排除 bin/obj/.git/node_modules 等）。" +
                  "未打开目录时返回 IsOpen=false。拿到路径后可用 ReadFile/Grep/Glob/ExploreDirectory 等工具读写该项目。")]
-    public Task<Output> GetCurrentProjectDirectory(CancellationToken cancellationToken = default)
+    public async Task<Output> GetCurrentProjectDirectory(CancellationToken cancellationToken = default)
     {
         var path = _provider.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
         {
-            return Task.FromResult(new Output
+            return new Output
             {
                 IsOpen = false,
                 Error = "当前未打开项目目录。请先在「文档」页用「文件 ▾ 打开项目目录」打开一个目录。",
-            });
+            };
         }
 
-        try
+        // 目录枚举（虽限 50 项）移入 Task.Run：同步 Directory.EnumerateFileSystemEntries + 每项 Directory.Exists
+        // 在调用线程跑；MAF 工具分派线程通常在 ThreadPool，但仍移出以彻底消除 UI 线程同步 IO 风险。
+        return await Task.Run(() =>
         {
-            var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (string.IsNullOrEmpty(name)) name = path;
-
-            var entries = new List<Entry>();
-            foreach (var full in Directory.EnumerateFileSystemEntries(path))
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var entryName = Path.GetFileName(full);
-                if (ExcludedNames.Contains(entryName)) continue;
-                var isDir = Directory.Exists(full);
-                entries.Add(new Entry { Name = entryName, IsDirectory = isDir });
-                if (entries.Count >= 50) break;
+                var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(name)) name = path;
+
+                var entries = new List<Entry>();
+                foreach (var full in Directory.EnumerateFileSystemEntries(path))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var entryName = Path.GetFileName(full);
+                    if (ExcludedNames.Contains(entryName)) continue;
+                    var isDir = Directory.Exists(full);
+                    entries.Add(new Entry { Name = entryName, IsDirectory = isDir });
+                    if (entries.Count >= 50) break;
+                }
+                // 目录优先，各自按名排序。
+                entries = entries
+                    .OrderByDescending(e => e.IsDirectory)
+                    .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return new Output
+                {
+                    ProjectPath = path,
+                    ProjectName = name,
+                    IsOpen = true,
+                    Entries = entries,
+                };
             }
-            // 目录优先，各自按名排序。
-            entries = entries
-                .OrderByDescending(e => e.IsDirectory)
-                .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return Task.FromResult(new Output
+            catch (Exception ex)
             {
-                ProjectPath = path,
-                ProjectName = name,
-                IsOpen = true,
-                Entries = entries,
-            });
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new Output { ProjectPath = path, IsOpen = true, Error = $"读取目录结构失败：{ex.Message}" });
-        }
+                return new Output { ProjectPath = path, IsOpen = true, Error = $"读取目录结构失败：{ex.Message}" };
+            }
+        }, cancellationToken);
     }
 }

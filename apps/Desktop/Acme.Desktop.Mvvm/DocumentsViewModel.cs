@@ -436,39 +436,60 @@ public partial class DocumentsViewModel : ObservableObject
     }
 
     /// <summary>遍历打开的标签，按磁盘 mtime 判定是否需重载。
-    /// 非 dirty → SetContentSilently + 发事件（View 重载编辑器）；dirty → IsStale 提示不覆盖；文件已删 → IsStale。</summary>
+    /// 非 dirty → SetContentSilently + 发事件（View 重载编辑器）；dirty → IsStale 提示不覆盖；文件已删 → IsStale。
+    /// 所有文件 IO（GetLastWriteTime/Exists/ReadAllText）移到后台线程——agent 批量写文件时 watcher 触发频繁，
+    /// 旧版在 UI 线程同步读盘会与 token flush 争 UI 线程导致卡顿。</summary>
     private void ReloadChangedTabs()
     {
-        foreach (var tab in Tabs)
+        // 先在 UI 线程快照标签状态（IsDirty/LastDiskWrite 是 UI 绑定属性，避免后台跨线程读）。
+        var snapshot = Tabs.Select(t => (Tab: t, t.FilePath, t.IsDirty, t.LastDiskWrite)).ToList();
+        _ = Task.Run(() =>
         {
-            DateTime diskWrite;
-            try { diskWrite = File.GetLastWriteTime(tab.FilePath); }
-            catch { diskWrite = DateTime.MinValue; }
-
-            var exists = File.Exists(tab.FilePath);
-            if (!exists)
+            // 后台线程做所有文件 IO，收集需在 UI 线程应用的数据绑定变更。
+            var actions = new List<Action>();
+            foreach (var (tab, filePath, isDirty, lastDiskWrite) in snapshot)
             {
-                if (!tab.IsStale) tab.IsStale = true; // 文件被删 → 提示（不关标签，用户可放弃改动）
-                continue;
+                DateTime diskWrite;
+                try { diskWrite = File.GetLastWriteTime(filePath); }
+                catch { diskWrite = DateTime.MinValue; }
+
+                var exists = File.Exists(filePath);
+                if (!exists)
+                {
+                    var tRef = tab;
+                    actions.Add(() => { if (!tRef.IsStale) tRef.IsStale = true; }); // 文件被删 → 提示
+                    continue;
+                }
+
+                if (diskWrite <= lastDiskWrite) continue; // mtime 未变 → 跳过
+
+                if (isDirty)
+                {
+                    var tRef = tab;
+                    actions.Add(() => { tRef.LastDiskWrite = diskWrite; tRef.IsStale = true; }); // 用户有未存改动 → 不覆盖
+                    continue;
+                }
+
+                try
+                {
+                    var newContent = File.ReadAllText(filePath);
+                    var tRef = tab;
+                    actions.Add(() =>
+                    {
+                        tRef.LastDiskWrite = diskWrite;
+                        tRef.SetContentSilently(newContent); // 不置 dirty
+                        TabExternallyReloaded?.Invoke(tRef); // View 据此对 ActiveTab 重载编辑器
+                    });
+                }
+                catch { /* 读失败忽略，下次再试 */ }
             }
 
-            if (diskWrite <= tab.LastDiskWrite) continue; // mtime 未变 → 跳过
-
-            tab.LastDiskWrite = diskWrite;
-            if (tab.IsDirty)
-            {
-                tab.IsStale = true; // 用户有未存改动 → 不覆盖，提示磁盘已变
-                continue;
-            }
-
-            try
-            {
-                var newContent = File.ReadAllText(tab.FilePath);
-                tab.SetContentSilently(newContent); // 不置 dirty
-                TabExternallyReloaded?.Invoke(tab); // View 据此对 ActiveTab 重载编辑器
-            }
-            catch { /* 读失败忽略，下次再试 */ }
-        }
+            // 回 UI 线程应用数据绑定变更 + 触发事件。
+            if (actions.Count == 0) return;
+            var ui = _serviceProvider.GetService<IUiDispatcher>();
+            if (ui is not null) ui.Post(() => { foreach (var a in actions) a(); });
+            else { foreach (var a in actions) a(); }
+        });
     }
 
     /// <summary>用户主动重载 stale 标签：丢弃本地改动，用盘内容覆盖。</summary>

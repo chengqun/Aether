@@ -14,6 +14,7 @@ public class DirectoryExplorerTool
     {
         public List<DirectoryItem> Items { get; set; } = new();
         public string? Error { get; set; }
+        public bool? Truncated { get; set; }
     }
 
     public class DirectoryItem
@@ -27,8 +28,18 @@ public class DirectoryExplorerTool
         public List<DirectoryItem>? Children { get; set; }
     }
 
+    // 递归深度硬上限（防 agent 传巨大 recursionDepth 扫爆）+ 总条目硬上限（防大目录返回数万项）。
+    private const int MaxRecursionDepth = 5;
+    private const int MaxItems = 1000;
+
+    /// <summary>跨递归层共享的条目计数器，保证整棵树不超过 <see cref="MaxItems"/>。</summary>
+    private class Counter
+    {
+        public int Value;
+    }
+
     [Description("浏览目录结构")]
-    public async Task<Output> ExploreDirectory([Description("要浏览的目录路径")] string path, [Description("递归深度（0 = 当前目录）")] int recursionDepth = 0, [Description("是否包含隐藏文件")] bool includeHidden = false, [Description("是否仅显示目录")] bool directoriesOnly = false, CancellationToken cancellationToken = default)
+    public async Task<Output> ExploreDirectory([Description("要浏览的目录路径（项目目录绝对路径）")] string path, [Description("递归深度（0 = 当前目录，上限 5）")] int recursionDepth = 0, [Description("是否包含隐藏文件")] bool includeHidden = false, [Description("是否仅显示目录")] bool directoriesOnly = false, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -39,19 +50,27 @@ public class DirectoryExplorerTool
 
             var fullPath = Path.GetFullPath(path);
 
+            if (FileSearchHelpers.IsProtectedRoot(fullPath))
+            {
+                return new Output { Error = $"拒绝扫描系统根目录: {fullPath}。请指定项目子目录。" };
+            }
+
             if (!Directory.Exists(fullPath))
             {
                 return new Output { Error = $"目录不存在: {path}" };
             }
 
+            var depth = Math.Min(Math.Max(recursionDepth, 0), MaxRecursionDepth);
+            var counter = new Counter();
             var items = await Task.Run(() =>
             {
-                return GetDirectoryItems(fullPath, recursionDepth, includeHidden, directoriesOnly, cancellationToken);
+                return GetDirectoryItems(fullPath, depth, includeHidden, directoriesOnly, counter, cancellationToken);
             }, cancellationToken);
 
             return new Output
             {
-                Items = items
+                Items = items,
+                Truncated = counter.Value >= MaxItems
             };
         }
         catch (Exception ex)
@@ -60,7 +79,7 @@ public class DirectoryExplorerTool
         }
     }
 
-    private List<DirectoryItem> GetDirectoryItems(string directoryPath, int remainingDepth, bool includeHidden, bool directoriesOnly, CancellationToken cancellationToken)
+    private List<DirectoryItem> GetDirectoryItems(string directoryPath, int remainingDepth, bool includeHidden, bool directoriesOnly, Counter counter, CancellationToken cancellationToken)
     {
         var result = new List<DirectoryItem>();
 
@@ -77,8 +96,18 @@ public class DirectoryExplorerTool
             {
                 if (cancellationToken.IsCancellationRequested)
                     break;
+                if (counter.Value >= MaxItems)
+                    break;
 
                 if (!includeHidden && (dir.Attributes & FileAttributes.Hidden) != 0)
+                    continue;
+
+                // 跳构建产物/VCS/依赖缓存（bin/obj/node_modules/.git 等），对标 Glob/Grep。
+                if (FileSearchHelpers.IsIgnoredDirectory(dir.Name))
+                    continue;
+
+                // 跳符号链接目录，防环/防重复扫描同一物理子树。
+                if (FileSearchHelpers.IsSymlinkDirectory(dir.FullName))
                     continue;
 
                 var item = new DirectoryItem
@@ -89,10 +118,11 @@ public class DirectoryExplorerTool
                     IsHidden = (dir.Attributes & FileAttributes.Hidden) != 0,
                     LastModified = dir.LastWriteTime
                 };
+                counter.Value++;
 
                 if (remainingDepth > 0)
                 {
-                    item.Children = GetDirectoryItems(dir.FullName, remainingDepth - 1, includeHidden, directoriesOnly, cancellationToken);
+                    item.Children = GetDirectoryItems(dir.FullName, remainingDepth - 1, includeHidden, directoriesOnly, counter, cancellationToken);
                 }
 
                 result.Add(item);
@@ -106,9 +136,13 @@ public class DirectoryExplorerTool
                 {
                     if (cancellationToken.IsCancellationRequested)
                         break;
+                    if (counter.Value >= MaxItems)
+                        break;
 
                     if (!includeHidden && (file.Attributes & FileAttributes.Hidden) != 0)
                         continue;
+
+                    counter.Value++;
 
                     result.Add(new DirectoryItem
                     {

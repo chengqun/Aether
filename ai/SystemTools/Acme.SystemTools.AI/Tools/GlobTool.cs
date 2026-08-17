@@ -26,7 +26,20 @@ public class GlobTool
                 return new Output { Error = "匹配模式不能为空" };
             }
 
-            var searchPath = string.IsNullOrEmpty(path) ? Directory.GetCurrentDirectory() : Path.GetFullPath(path);
+            // path 为空不再回退到 Directory.GetCurrentDirectory()——桌面 app 从 .app 启动时 CWD=/，
+            // 回退会递归扫整个 macOS 根（百万级文件 + 符号链接环 → 整机 IO 饥饿、CPU 爆炸、只能强制重启）。
+            // 引导 agent 先调 GetCurrentProjectDirectory 取项目目录再传入。
+            if (string.IsNullOrEmpty(path))
+            {
+                return new Output { Error = "搜索路径不能为空。请先调用 GetCurrentProjectDirectory 获取项目目录路径，再作为 path 传入。" };
+            }
+
+            var searchPath = Path.GetFullPath(path);
+
+            if (FileSearchHelpers.IsProtectedRoot(searchPath))
+            {
+                return new Output { Error = $"拒绝扫描系统根目录: {searchPath}。请指定项目子目录。" };
+            }
 
             if (!Directory.Exists(searchPath))
             {
@@ -86,6 +99,10 @@ public class GlobTool
 
                 var dirName = Path.GetFileName(subdir);
                 if (FileSearchHelpers.IsIgnoredDirectory(dirName))
+                    continue;
+
+                // 跳符号链接目录，防 macOS 环（/etc→/private/etc 等）导致递归不终止或重复放大。
+                if (FileSearchHelpers.IsSymlinkDirectory(subdir))
                     continue;
 
                 SearchFiles(subdir, pattern, results, maxResults, cancellationToken);
