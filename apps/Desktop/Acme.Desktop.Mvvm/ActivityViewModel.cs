@@ -34,6 +34,9 @@ public partial class ActivityViewModel : ObservableObject
     [ObservableProperty] private DayCell? _selectedDay;
     [ObservableProperty] private ActivityDayDetail? _dayDetail;
     [ObservableProperty] private bool _isLoading;
+
+    /// <summary>报告生成中（驱动「正在生成…」提示；AsyncRelayCommand 已禁并发，此属性仅作视觉反馈）。</summary>
+    [ObservableProperty] private bool _isGeneratingReport;
     [ObservableProperty] private ActivityRange _range = ActivityRange.Year;
 
     public ActivityViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider)
@@ -171,11 +174,16 @@ public partial class ActivityViewModel : ObservableObject
         var svc = _serviceProvider.GetService<IActivityReportService>();
         var dlg = _serviceProvider.GetService<IReportDialogService>();
         if (svc is null || dlg is null) return;
-        var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
-        var report = await svc.GenerateReportAsync(ActivityReportKind.Day, date);
-        if (string.IsNullOrEmpty(report))
-            report = $"（{date:yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
-        await dlg.ShowAsync($"日报 {date:yyyy-MM-dd}", report);
+        IsGeneratingReport = true;
+        try
+        {
+            var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
+            var report = await svc.GenerateReportAsync(ActivityReportKind.Day, date);
+            if (string.IsNullOrEmpty(report))
+                report = $"（{date:yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
+            await dlg.ShowAsync($"日报 {date:yyyy-MM-dd}", report);
+        }
+        finally { IsGeneratingReport = false; }
     }
 
     /// <summary>生成周报（基于 SelectedDay 所在 ISO 周，无则今天所在周）→ LLM 汇总 → markdown 弹窗展示。</summary>
@@ -185,12 +193,17 @@ public partial class ActivityViewModel : ObservableObject
         var svc = _serviceProvider.GetService<IActivityReportService>();
         var dlg = _serviceProvider.GetService<IReportDialogService>();
         if (svc is null || dlg is null) return;
-        var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
-        var monday = date.AddDays((int)date.DayOfWeek == 0 ? -6 : 1 - (int)date.DayOfWeek);
-        var report = await svc.GenerateReportAsync(ActivityReportKind.Week, date);
-        if (string.IsNullOrEmpty(report))
-            report = $"（{monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
-        await dlg.ShowAsync($"周报 {monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd}", report);
+        IsGeneratingReport = true;
+        try
+        {
+            var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
+            var monday = date.AddDays((int)date.DayOfWeek == 0 ? -6 : 1 - (int)date.DayOfWeek);
+            var report = await svc.GenerateReportAsync(ActivityReportKind.Week, date);
+            if (string.IsNullOrEmpty(report))
+                report = $"（{monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
+            await dlg.ShowAsync($"周报 {monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd}", report);
+        }
+        finally { IsGeneratingReport = false; }
     }
 
     private sealed class DayBucket

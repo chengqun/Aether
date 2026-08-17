@@ -42,20 +42,23 @@ public sealed class ActivityReportService : IActivityReportService
         var git = _services.GetService<IGitService>();
         var projectDir = _services.GetService<ICurrentProjectDirectoryProvider>()?.CurrentDirectory;
 
-        // 3. 拉 runs + commits。
+        // 3. 拉 runs（async I/O，不阻塞 UI 线程）。
         var runs = store is null
             ? new List<RunSummary>()
-            : (await store.GetRunsInRangeAsync(string.Empty, fromDto, toDto, cancellationToken)).ToList();
-        var commits = new List<CommitInfo>();
-        if (git is not null && !string.IsNullOrEmpty(projectDir) && git.IsRepository(projectDir))
-        {
-            var history = git.GetHistory(projectDir, 5000);
-            commits = history.Select(n => n.Info).Where(c => c.When >= fromDto && c.When < toDto).ToList();
-        }
-        if (runs.Count == 0 && commits.Count == 0) return null;
+            : (await store.GetRunsInRangeAsync(string.Empty, fromDto, toDto, cancellationToken).ConfigureAwait(false)).ToList();
 
-        // 4. 聚合成 markdown 素材（机器汇总的活动数据，喂给 LLM 重组）。
-        var material = BuildMaterial(kind, from, to, runs, commits);
+        // 4. 拉 commits + 聚合素材（同步 LibGit2Sharp 遍历 + CPU → 后台线程，避免大仓库 5000 commits 卡 UI）。
+        var material = await Task.Run(() =>
+        {
+            var commits = new List<CommitInfo>();
+            if (git is not null && !string.IsNullOrEmpty(projectDir) && git.IsRepository(projectDir))
+            {
+                var history = git.GetHistory(projectDir, 5000);
+                commits = history.Select(n => n.Info).Where(c => c.When >= fromDto && c.When < toDto).ToList();
+            }
+            return runs.Count == 0 && commits.Count == 0 ? null : BuildMaterial(kind, from, to, runs, commits);
+        }, cancellationToken).ConfigureAwait(false);
+        if (material is null) return null; // 无活动数据
 
         // 5. 懒解析 LLM 客户端（照 ConversationSummaryService：factory 优先，fallback 容器 IChatClient，全 catch silent）。
         IChatClient? chatClient = null;
@@ -78,7 +81,7 @@ public sealed class ActivityReportService : IActivityReportService
         };
         try
         {
-            var response = await chatClient.GetResponseAsync(messages, cancellationToken: cancellationToken);
+            var response = await chatClient.GetResponseAsync(messages, cancellationToken: cancellationToken).ConfigureAwait(false);
             var report = response.Text?.Trim();
             return string.IsNullOrWhiteSpace(report) ? null : report;
         }

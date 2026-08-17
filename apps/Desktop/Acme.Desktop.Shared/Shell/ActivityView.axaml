@@ -56,6 +56,8 @@
                 <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
                     <Button Classes="range" Command="{Binding GenerateDayReportCommand}" Content="📄 日报"/>
                     <Button Classes="range" Command="{Binding GenerateWeekReportCommand}" Content="📅 周报"/>
+                    <TextBlock Classes="muted" Text="正在生成报告…" IsVisible="{Binding IsGeneratingReport}"
+                               VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
                 <TextBlock Classes="muted" Text="每天一格，颜色深浅 = 当天活动量（Agent 执行 + Git 提交）" VerticalAlignment="Center" Margin="24,0,0,0"/>
             </StackPanel>
