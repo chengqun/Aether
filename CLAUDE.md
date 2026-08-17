@@ -341,6 +341,19 @@ The input-area mode selector is a 4-option ComboBox (mirrors Claude Code's Plan/
 - **Tool result rendering by type**: `ChatMessageItem.NormalizeToolResult` normalizes `Output` → `ResultKind` (text/code/table/error/json) + `ResultText` + `IsResultLong`; the tool card expanded section picks a template (text one-line, code monospace+scroll, error red, table/json fallback). Collapsed one-liner = `VerbIcon` (by tool-name keyword) + `ToolName(MainArg)`.
 - Core DTOs (`ToolApprovalRequest`/`ToolApprovalDecision`/`TodoItemInfo`/`StreamHandlers`/`ToolApprovalLevel`) live in `Aether.AI.Core.Agents` — MEAI types (`ToolApprovalRequestContent` etc.) stay confined to Harness. `TodoItem.Id` is `int` (not string).
 
+### 手机远程控制 agent 回复（进度心跳 + 概览摘要）
+
+手机经 SignalR 远程控制桌面 agent 时**不回传流式过程 token**（老板视角：只要"过程中看进度、跑完收概览"）。桌面 `ChatWorkspaceViewModel.HandleMessageReceived` 跑完 `RunSegmentedStreamAsync` 后不再原样发回 fullText，改为两段：①过程中发**进度心跳**、②跑完发 **LLM 概览摘要**。服务端**零改**——`ChatHub.SendMessage(Guid, string content, string messageType="Text")` 的 `messageType` 是自由 string 透传+持久化，发 `"Progress"` 服务端无需懂语义。
+
+- **进度心跳**：复用 MAF `TodoProvider` 的 `OnTodoList` 回调（桌面计划卡同源）。`RunSegmentedStreamAsync` 加可选尾参 `onRemoteProgress`（本地路径不传=null 行为不变；远程路径传闭包）。回调把 todos 格式化成短文本（`FormatTodosForRemote`：`📋 进度\n✅/⏳ <title>`），经 `IDeviceChatClient.SendMessageAsync(convId, text, "Progress")` 发回手机，fire-and-forget（`.SafeFireAndForget()`——心跳丢失不影响主流程，不 await 避免阻塞流式）。仅对开了 `EnableTodoProvider` 的 agent 有；Rule agent 关所有 provider→无心跳。
+- **概览摘要**：新增 `IConversationSummaryService`（`src/Aether.AI.Hosting/ConversationSummaryService.cs`，镜像 `ConversationTitleService`——注入 `IServiceProvider` 懒解析、失败-silent 返回 null、fire-and-forget）。**唯一关键差异**：`factory.Create(modelId)` **传真实 `ExpertItem.ModelId`**（用 agent 同款 LLM，不新增配置），非 title 服务的 null。system prompt 压成 ≤300 字中文概览（要点+结论+关键代码/命令引用不省略、不寒暄）；user 传 fullText 截断 ~8000 字。失败/空→返回 null，调用方退化为截断 fullText（`full[..2000] + …（完整回复见桌面端）`）。
+- **退化护栏**：`remoteKind == Rule` → 跳过摘要直发 fullText（`RuleChatClient` 无 LLM）；`WorkflowItem` 无 ModelId → 摘要传 null（宿主默认 LLM）；未开 plan 的普通 agent → 无心跳，只最终摘要（老板至少收结果概览）。
+- **手机端 Progress 处理**（`ChatMessage.MessageType` 字段已存在于 `Acme.ChatSocial.Domain`，默认 `"Text"`，服务端 DTO 同名透传，契约层零改）：
+  - `GlobalMessageHandler`：Progress 不进未读缓存。
+  - `ChatViewModel.OnNewMessage`：Progress 早返回（不动会话列表预览/未读数）。
+  - `ChatDetailViewModel.HandleMessageForCurrentConversation`：Progress **覆盖更新**——找同 sender 的进度槽位 `Messages[idx]=fixedMsg`（Replace；ChatMessage 是 POCO 非 ObservableObject，原地改 Content 不刷新 UI 故须 Replace），无槽位则 Add；不进 `_displayedMessageIds`（同 Id 心跳不被拒）、不缓存、不 MarkAsRead。Text（含摘要）到达时先移除同 sender 进度槽位再 Add（收束）。历史加载 3 处过滤 Progress（不残留历史心跳）。
+  - `HumanChatMessageTemplateSelector` + `ChatDetailPage.xaml`：Progress 独立模板（muted `Opacity=0.7` 浅气泡 + `ActivityIndicator` + `MarkdownView`），SenderId 判断之前分流。
+
 ### Conversation persistence (event-stream model)
 
 Agent 对话持久化是 **typed append-only 事件流**，不是 flat transcript。核心收益：执行轨迹变成 first-class 的 typed 事件，CallId 在 ToolCall/ToolResult 写入时即配对——跨重启重建 LLM 历史与 UI transcript 时，结构不变量（call↔result 配对、role 交替、无孤儿）**由构造保证**，不再需要 restore 净化 saga（旧的 resume-400 `Convert`/`Sanitize` 整段已删）。
