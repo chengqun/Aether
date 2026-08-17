@@ -275,11 +275,19 @@
               <TextBlock Text="在「文档」页打开一个 git 项目" FontSize="11" HorizontalAlignment="Center"
                          Foreground="{DynamicResource TextSecondaryBrush}"/>
             </StackPanel>
-            <!-- 非 git 仓库 -->
+            <!-- 非 git 仓库 → 初始化仓库（VSCode/Cursor 标准：非仓库目录给一键 init） -->
             <StackPanel IsVisible="{Binding IsNotRepository}"
-                        VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Opacity="0.6">
+                        VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
               <TextBlock Text="当前项目不是 git 仓库" FontSize="13" HorizontalAlignment="Center"
                          Foreground="{DynamicResource TextSecondaryBrush}"/>
+              <Button Command="{Binding InitRepositoryCommand}" IsEnabled="{Binding !IsBusy}"
+                      HorizontalAlignment="Center" Padding="16,8">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Data="{x:Static shell:Codicons.GitCommit}" Stretch="Uniform" Width="14" Height="14"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <TextBlock Text="初始化 Git 仓库"/>
+                </StackPanel>
+              </Button>
             </StackPanel>
 
             <!-- 变更 + 历史 -->

@@ -83,17 +83,21 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>是否打开了项目目录。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotRepository))]
+    [NotifyCanExecuteChangedFor(nameof(InitRepositoryCommand))]
     private bool _hasProject;
 
     /// <summary>打开的项目是否是 git 仓库。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotRepository))]
+    [NotifyCanExecuteChangedFor(nameof(InitRepositoryCommand))]
     private bool _isRepository;
 
     /// <summary>项目名（目录尾名）。</summary>
     [ObservableProperty] private string? _projectName;
 
-    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InitRepositoryCommand))]
+    private bool _isBusy;
 
     [ObservableProperty] private string? _statusMessage;
 
@@ -186,6 +190,27 @@ public partial class SourceControlViewModel : ObservableObject
         if (value && IsRepository && HistoryGraph is null)
             LoadHistoryAsync().SafeFireAndForget();
     }
+
+    /// <summary>初始化 git 仓库（仅「非仓库」空态可用）——把当前项目目录变成仓库并重新加载，
+    /// 变更列表随即显示全部未跟踪文件（VSCode/Cursor 标准 <c>git init</c>）。默认分支 main。</summary>
+    [RelayCommand(CanExecute = nameof(CanInitRepository))]
+    private async Task InitRepositoryAsync()
+    {
+        var git = _serviceProvider.GetService<IGitService>();
+        if (git is null || string.IsNullOrEmpty(_projectDir)) return;
+        IsBusy = true;
+        try
+        {
+            var ok = await Task.Run(() => git.Init(_projectDir));
+            if (ok)
+                await SetProjectAsync(_projectDir); // 重载——IsRepository 变 true，变更列表显示未跟踪文件。
+            else
+                StatusMessage = "初始化失败：无法在该目录创建 git 仓库";
+        }
+        finally { IsBusy = false; }
+    }
+
+    private bool CanInitRepository() => HasProject && !IsRepository && !IsBusy;
 
     /// <summary>加载提交历史拓扑图（≤200 条）。</summary>
     [RelayCommand]

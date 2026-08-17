@@ -21,6 +21,40 @@ public sealed class GitService : IGitService
         catch { return null; }
     }
 
+    public bool Init(string repoPath)
+    {
+        if (string.IsNullOrWhiteSpace(repoPath)) return false;
+        try
+        {
+            // 已是仓库 → 幂等返回 true（不重复 init，避免覆盖已有 .git）。
+            if (Repository.Discover(repoPath) is not null) return true;
+            // Repository.Init 建 .git；返回 git 目录路径（标准仓库 = <repoPath>/.git）。
+            var gitDir = Repository.Init(repoPath, isBare: false);
+            if (string.IsNullOrEmpty(gitDir)) return false;
+            TrySetDefaultBranchMain(gitDir);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>把新建仓库的默认分支从 master 改写为 main（对齐现代 Git/GitHub 默认）。
+    /// LibGit2Sharp 的 <c>Repository.Init</c> 不支持设默认分支，故直接改 <c>.git/HEAD</c> 的 symbolic ref。
+    /// 失败（权限/HEAD 非 symbolic）静默——保留 master，不影响仓库可用性。</summary>
+    private static void TrySetDefaultBranchMain(string gitDir)
+    {
+        try
+        {
+            var headPath = Path.Combine(gitDir, "HEAD");
+            if (File.Exists(headPath))
+            {
+                var content = File.ReadAllText(headPath);
+                if (content.Contains("refs/heads/master", StringComparison.Ordinal))
+                    File.WriteAllText(headPath, "ref: refs/heads/main\n");
+            }
+        }
+        catch { /* 保留默认 master，不影响初始化结果 */ }
+    }
+
     public IReadOnlyList<GitChange> GetStatus(string repoPath)
     {
         var list = new List<GitChange>();

@@ -12,6 +12,10 @@ public interface IGitService
     /// <summary>Discover .git 根（<see cref="LibGit2Sharp.Repository.Discover"/>）；非仓库返回 null。</summary>
     string? Discover(string path);
 
+    /// <summary>初始化新 git 仓库（<c>git init</c>）。默认分支 <c>main</c>（对齐现代 Git/GitHub）。
+    /// 路径无效/已存在仓库时返回 false 不抛。成功后上层据 <see cref="IsRepository"/> 重新加载。</summary>
+    bool Init(string repoPath);
+
     /// <summary>取仓库所有文件变更（staged + unstaged 合并，<see cref="GitChange.IsStaged"/> 区分）。</summary>
     IReadOnlyList<GitChange> GetStatus(string repoPath);
 
