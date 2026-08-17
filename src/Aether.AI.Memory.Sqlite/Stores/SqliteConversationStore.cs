@@ -283,7 +283,7 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
         cmd.CommandText =
             "SELECT r.id, r.conversation_id, c.title, r.agent_id, r.agent_name, r.status, r.started_at, r.finished_at, r.user_message " +
             "FROM " + RunTable + " r JOIN " + ConvTable + " c ON r.conversation_id = c.id " +
-            "WHERE c.user_id = @uid AND r.started_at >= @from AND r.started_at < @to " +
+            "WHERE (@uid IS NULL OR c.user_id IS NULL OR c.user_id = @uid) AND r.started_at >= @from AND r.started_at < @to " +
             "ORDER BY r.started_at";
         cmd.Parameters.AddWithValue("@uid", userId ?? string.Empty);
         cmd.Parameters.AddWithValue("@from", Format(from));

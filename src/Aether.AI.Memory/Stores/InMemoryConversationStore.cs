@@ -107,7 +107,7 @@ public sealed class InMemoryConversationStore : IConversationStore
         foreach (var (convId, runs) in _runsByConversation)
         {
             // join conversation 取 user_id 过滤 + title（与 Sqlite 实现对齐）。
-            if (!_conversations.TryGetValue(convId, out var conv) || conv.UserId != uid) continue;
+            if (!_conversations.TryGetValue(convId, out var conv) || (conv.UserId ?? string.Empty) != uid) continue;
             foreach (var run in runs)
             {
                 if (run.StartedAt < from || run.StartedAt >= to) continue;

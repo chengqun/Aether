@@ -70,8 +70,10 @@ public partial class ActivityViewModel : ObservableObject
                 ActivityRange.Quarter => today.AddDays(-89),
                 _ => today.AddDays(-364),
             };
-            var fromDto = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-            var toDto = DateTimeOffset.Now;
+            // started_at 存 UTC ISO（AgentRun.StartedAt = DateTimeOffset.UtcNow）；查询边界统一转 UTC offset 0，
+            // 字符串比较才严格等价时刻比较——to 用本地 +8 而 stored UTC，跨日边界 run 会错位（本地凌晨 run 被漏/误纳入）。
+            var fromDto = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset).ToUniversalTime();
+            var toDto = DateTimeOffset.UtcNow;
 
             var store = _serviceProvider.GetService<IConversationStore>();
             var git = _serviceProvider.GetService<IGitService>();
