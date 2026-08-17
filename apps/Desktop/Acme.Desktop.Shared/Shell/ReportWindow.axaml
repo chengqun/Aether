@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+        x:Class="Acme.Desktop.Shared.Shell.ReportWindow"
+        Title="报告"
+        Width="640" Height="560"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="*,Auto" Margin="16,12,16,12">
+    <!-- SelectableMarkdownViewer 自带滚动 + Ctrl/Cmd+C 复制选中文本；绑 Markdown 属性。 -->
+    <ctl:SelectableMarkdownViewer Grid.Row="0" Markdown="{Binding Markdown}"
+                                   SelectionEnabled="True" SelectionBrush="#3300A2ED"/>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button Content="复制" Click="OnCopyReport" Padding="20,8"/>
+      <Button Content="关闭" Classes="primary" Command="{Binding CloseCommand}" Padding="20,8"/>
+    </StackPanel>
+  </Grid>
+</Window>

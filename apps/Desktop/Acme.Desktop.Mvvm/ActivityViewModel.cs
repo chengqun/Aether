@@ -163,22 +163,34 @@ public partial class ActivityViewModel : ObservableObject
             : new ActivityDayDetail(cell.Date, new(), new());
     }
 
+    /// <summary>生成当天日报（基于 SelectedDay，无则今天）→ LLM 汇总 runs+commits → markdown 弹窗展示。
+    /// 报告生成在后台跑（按钮异步），失败/无数据降级提示（不崩）。服务/弹窗经 _serviceProvider 懒解析。</summary>
     [RelayCommand]
-    private void OpenRun(RunSummary? run)
+    private async Task GenerateDayReport()
     {
-        if (run is null) return;
-        // 运行时懒解析 shell VM（构造期 MainViewModelBase 尚未建完，避免循环依赖）。
-        var chat = _serviceProvider.GetService<MainViewModelBase>()?.Chat;
-        if (chat is null) return;
-        var item = new ConversationItem
-        {
-            Id = run.ConversationId,
-            Title = run.ConversationTitle,
-            AgentId = run.AgentId,
-            AgentName = run.AgentName,
-            ResumeCommand = chat.ResumeConversationCommand,
-        };
-        chat.ResumeConversationCommand.Execute(item);
+        var svc = _serviceProvider.GetService<IActivityReportService>();
+        var dlg = _serviceProvider.GetService<IReportDialogService>();
+        if (svc is null || dlg is null) return;
+        var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
+        var report = await svc.GenerateReportAsync(ActivityReportKind.Day, date);
+        if (string.IsNullOrEmpty(report))
+            report = $"（{date:yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
+        await dlg.ShowAsync($"日报 {date:yyyy-MM-dd}", report);
+    }
+
+    /// <summary>生成周报（基于 SelectedDay 所在 ISO 周，无则今天所在周）→ LLM 汇总 → markdown 弹窗展示。</summary>
+    [RelayCommand]
+    private async Task GenerateWeekReport()
+    {
+        var svc = _serviceProvider.GetService<IActivityReportService>();
+        var dlg = _serviceProvider.GetService<IReportDialogService>();
+        if (svc is null || dlg is null) return;
+        var date = SelectedDay?.Date ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
+        var monday = date.AddDays((int)date.DayOfWeek == 0 ? -6 : 1 - (int)date.DayOfWeek);
+        var report = await svc.GenerateReportAsync(ActivityReportKind.Week, date);
+        if (string.IsNullOrEmpty(report))
+            report = $"（{monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd} 无活动数据，或 LLM 生成失败）";
+        await dlg.ShowAsync($"周报 {monday:yyyy-MM-dd}~{monday.AddDays(6):yyyy-MM-dd}", report);
     }
 
     private sealed class DayBucket

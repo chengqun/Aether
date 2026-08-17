@@ -279,6 +279,10 @@ public static class DesktopCompositionExtensions
         // 工具审批对话框服务（HarnessAgent 协作式审批，按专家 RequireToolApproval 开启）
         services.AddSingleton<IApprovalDialogService, ApprovalDialogService>();
 
+        // 活动报告生成 + 报告展示弹窗（活动页「生成日报/周报」按钮 → LLM 汇总当天/当周 runs+commits → markdown 弹窗）
+        services.AddSingleton<IActivityReportService, ActivityReportService>();
+        services.AddSingleton<IReportDialogService, ReportDialogService>();
+
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
     }
