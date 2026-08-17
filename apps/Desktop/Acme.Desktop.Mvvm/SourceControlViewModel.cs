@@ -23,6 +23,9 @@ public partial class SourceControlViewModel : ObservableObject
     // 工作区文件监听：用户改文件（Aether 编辑器或外部工具）后自动刷新变更列表。
     // 去抖 + 噪音过滤（.git/bin/obj/node_modules 等）避免频繁刷新。
     private FileSystemWatcher? _watcher;
+    /// <summary>专监 <c>.git/refs/</c>（分支/tag 引用文件）——外部 app 提交/切分支改的是 <c>refs/heads/&lt;branch&gt;</c>，
+    /// 工作区文件不一定变 + 主 watcher 过滤 .git → 外部提交检测不到。此处监引用文件变即触发刷新。</summary>
+    private FileSystemWatcher? _refsWatcher;
     private CancellationTokenSource? _debounceCts;
 
     public SourceControlViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider)
@@ -303,6 +306,26 @@ public partial class SourceControlViewModel : ObservableObject
             _watcher.Renamed += (_, e) => OnFileChangedCore(e.FullPath);
             _watcher.Error += (_, _) => ScheduleRefresh(); // 缓冲溢出等 → 尽力刷一次。
             _watcher.EnableRaisingEvents = true;
+
+            // 单独监 .git/refs/（分支/tag 引用文件）——外部 IDE/终端提交改的是 refs/heads/<branch>，
+            // 工作区文件不一定变 + 主 watcher 过滤 .git → 外部提交检测不到。复用 OnGitChangedExternally
+            // （RefreshAsync + 历史重载 + UI marshal），让 SCM 页在别的 app 提交后自动刷新。
+            var refsDir = Path.Combine(repoRoot, ".git", "refs");
+            if (Directory.Exists(refsDir))
+            {
+                _refsWatcher = new FileSystemWatcher(refsDir)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime,
+                    InternalBufferSize = 8 * 1024,
+                };
+                _refsWatcher.Changed += (_, _) => OnGitChangedExternally();
+                _refsWatcher.Created += (_, _) => OnGitChangedExternally();
+                _refsWatcher.Deleted += (_, _) => OnGitChangedExternally();
+                _refsWatcher.Renamed += (_, _) => OnGitChangedExternally();
+                _refsWatcher.Error += (_, _) => OnGitChangedExternally();
+                _refsWatcher.EnableRaisingEvents = true;
+            }
         }
         catch { /* 无权限/路径无效 → 静默，手动刷新兜底 */ }
     }
@@ -314,6 +337,12 @@ public partial class SourceControlViewModel : ObservableObject
             try { _watcher.EnableRaisingEvents = false; _watcher.Dispose(); }
             catch { /* 忽略 */ }
             _watcher = null;
+        }
+        if (_refsWatcher is not null)
+        {
+            try { _refsWatcher.EnableRaisingEvents = false; _refsWatcher.Dispose(); }
+            catch { /* 忽略 */ }
+            _refsWatcher = null;
         }
         _debounceCts?.Cancel();
         _debounceCts = null;
