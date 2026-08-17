@@ -35,10 +35,25 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 人类聊天选择器：按 SenderId == 当前用户 区分我的/对方（ChatMessage 域类型无 Role） -->
+        <!-- 进度心跳：远程 agent 控制时的 todos 快照，覆盖更新不堆积。muted 浅气泡 + 活动指示器 + Markdown。 -->
+        <DataTemplate x:Key="ProgressTemplate" x:DataType="domain:ChatMessage">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0" Opacity="0.7"
+                        Padding="12,8" MaximumWidthRequest="300">
+                    <HorizontalStackLayout Spacing="8">
+                        <ActivityIndicator IsRunning="True" WidthRequest="16" HeightRequest="16" VerticalOptions="Center" />
+                        <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                    </HorizontalStackLayout>
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 人类聊天选择器：按 SenderId == 当前用户 区分我的/对方（ChatMessage 域类型无 Role）；Progress 走独立模板 -->
         <views:HumanChatMessageTemplateSelector x:Key="ChatMessageSelector"
             MineTemplate="{StaticResource MineTemplate}"
-            OtherTemplate="{StaticResource OtherTemplate}" />
+            OtherTemplate="{StaticResource OtherTemplate}"
+            ProgressTemplate="{StaticResource ProgressTemplate}" />
     </ContentPage.Resources>
 
     <Grid RowDefinitions="*,Auto">

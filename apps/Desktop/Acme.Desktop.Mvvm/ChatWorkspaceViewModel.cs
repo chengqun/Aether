@@ -32,6 +32,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly IConversationStore _conversationStore;
     private readonly IPreferencesStore _preferences;
     private readonly IConversationTitleService _titleService;
+    private readonly IConversationSummaryService _summaryService; // 手机远程回复摘要（agent 跑完把 fullText 压成概览）
     private readonly IDeviceAutoConnectService _autoConnect;
     private readonly IApprovalDialogService? _approvalDialog;
     private readonly IToolApprovalLevelLookup? _levelLookup; // AutoEdit 模式按工具等级区分自动批/弹框；null 退化为全弹（Manual 语义）
@@ -77,6 +78,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
         _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
+        _summaryService = serviceProvider.GetRequiredService<IConversationSummaryService>();
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
         _levelLookup = serviceProvider.GetService<IToolApprovalLevelLookup>();
@@ -165,7 +167,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(ChatTurnItem turn,
         string senderName,
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
-        System.Text.StringBuilder fullText, CancellationToken cancellationToken = default)
+        System.Text.StringBuilder fullText, CancellationToken cancellationToken = default,
+        // 远程路径传：todos 变化时格式化成短文本经 SignalR 以 "Progress" type 发回手机（进度心跳）。
+        // 本地路径不传（默认 null）→ 不发 Progress，行为不变。
+        Action<IReadOnlyList<TodoItemInfo>>? onRemoteProgress = null)
     {
         var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
         var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
@@ -265,6 +270,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     OnTodoList: (list, _) =>
                     {
                         _dispatcher.Post(() => HandleTodoList(items, list, senderName));
+                        // 远程路径：todos 快照格式化成短文本发回手机（Progress 心跳）；本地路径 null 不调。
+                        onRemoteProgress?.Invoke(list);
                         return Task.CompletedTask;
                     },
                     OnError: (text, _) =>
@@ -581,6 +588,18 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         catch { return null; }
     }
 
+    /// <summary>把 todos 快照格式化成手机端可读的短文本（Progress 心跳内容）。
+    /// 与 <see cref="HandleTodoList"/> 同源数据（TodoItemInfo），但输出纯文本供手机 MarkdownView 渲染：
+    /// 完成项打 ✅、待办项打 ⏳。空列表返回"进行中…"占位（agent 已起跑但还没建计划）。</summary>
+    private static string FormatTodosForRemote(IReadOnlyList<TodoItemInfo> todos)
+    {
+        if (todos is null || todos.Count == 0) return "📋 进行中…";
+        var sb = new System.Text.StringBuilder("📋 进度\n");
+        foreach (var t in todos)
+            sb.Append(t.IsComplete ? "✅ " : "⏳ ").AppendLine(t.Title);
+        return sb.ToString();
+    }
+
     /// <summary>todos_* 调用后更新浮动计划面板（ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。
     /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
     private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
@@ -672,18 +691,49 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 WorkflowItem wi => (wi.Id, wi.Name),
                 _ => (Guid.Empty, "目标"),
             };
+            // 摘要用与 agent 同款 LLM：取当前专家 ModelId（WorkflowItem 无 ModelId → null 退宿主默认/聊天页选中 LLM）。
+            var agentModelId = (SelectedChatTarget as ExpertItem)?.ModelId;
+            var convId = msg.ConversationId;
             var fullText = new System.Text.StringBuilder();
             var desiredMode = HasModeSupport ? SelectedChatMode.ToDesiredMode() : null;
             await RunSegmentedStreamAsync(remoteTurn, targetName,
                 (handlers, approvalResponse, ct) => remoteKind == ChatTargetKind.Workflow
-                    ? _workflowRunner.RunStreamingAsync(msg.ConversationId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
-                    : _agentRunner.RunStreamingAsync(msg.ConversationId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
-                fullText);
+                    ? _workflowRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
+                    : _agentRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
+                fullText,
+                // 进度心跳：todos 快照格式化成短文本经 SignalR 以 "Progress" type 发回手机（老板视角：过程中看进度）。
+                // 心跳丢失不影响主流程；不 await（避免阻塞流式）。Rule/未开 plan 的 agent 无 OnTodoList → 自然不发。
+                onRemoteProgress: list =>
+                {
+                    var progressText = FormatTodosForRemote(list);
+                    if (_deviceChatClient.IsConnected)
+                        _deviceChatClient.SendMessageAsync(convId, progressText, "Progress").SafeFireAndForget();
+                });
             if (remoteKind != ChatTargetKind.Rule) await RefreshModeAsync(msg.ConversationId);
 
             // 远程消息触发运行：把回复通过 SignalR 发回远程发送方（否则对方收不到结果）。
             // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
-            var replyText = fullText.ToString();
+            // 老板视角：不回传全量过程，只发一段 LLM 概览摘要（用与 agent 同款模型）。失败/Rule 退化为截断全量。
+            var full = fullText.ToString();
+            string replyText;
+            if (remoteKind == ChatTargetKind.Rule || string.IsNullOrWhiteSpace(full))
+            {
+                replyText = full; // Rule 无 LLM，直发全量
+            }
+            else
+            {
+                try
+                {
+                    var summary = await _summaryService.GenerateSummaryAsync(full, agentModelId);
+                    replyText = !string.IsNullOrWhiteSpace(summary)
+                        ? summary
+                        : (full.Length > 2000 ? full[..2000] + "\n…（完整回复见桌面端）" : full);
+                }
+                catch
+                {
+                    replyText = full.Length > 2000 ? full[..2000] + "\n…（完整回复见桌面端）" : full;
+                }
+            }
             if (!string.IsNullOrWhiteSpace(replyText) && _deviceChatClient.IsConnected)
             {
                 try

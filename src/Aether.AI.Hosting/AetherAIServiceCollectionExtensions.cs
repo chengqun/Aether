@@ -162,6 +162,9 @@ public static class AetherAIServiceCollectionExtensions
         // 会话标题自动生成（LLM，首轮后异步补；无 key 时退化为 no-op）
         services.AddSingleton<IConversationTitleService, ConversationTitleService>();
 
+        // 手机远程控制回复摘要（LLM，agent 跑完把 fullText 压成概览发回手机；失败退化为截断全量）
+        services.AddSingleton<IConversationSummaryService, ConversationSummaryService>();
+
         // 应用内 trace 收集器（ActivityListener 收集最近 50 条 agent.run，供 trace 查看页展示）。
         services.AddSingleton<Aether.AI.Harness.Telemetry.TraceCollector>();
 

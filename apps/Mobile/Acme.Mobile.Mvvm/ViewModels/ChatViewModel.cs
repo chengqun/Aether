@@ -442,6 +442,10 @@ public partial class ChatViewModel : NavigableViewModelBase
 
     private async void OnNewMessage(NewMessageEvent @event)
     {
+        // Progress 心跳不动会话列表预览/未读（不当 LastMessage、不 UnreadCount++）。
+        if (string.Equals(@event.Message.MessageType, "Progress", StringComparison.OrdinalIgnoreCase))
+            return;
+
         // 自己发送的消息不增加未读数
         var currentUserId = await GetCurrentUserIdAsync();
         var isFromSelf = @event.Message.SenderId == currentUserId;

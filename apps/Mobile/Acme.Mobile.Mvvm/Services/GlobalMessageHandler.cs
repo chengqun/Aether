@@ -69,7 +69,9 @@ public class GlobalMessageHandler : IGlobalMessageHandler
         System.Diagnostics.Debug.WriteLine($"[GlobalMessageHandler] 收到消息: ConversationId={message.ConversationId}, SenderId={message.SenderId}, Content={message.Content?.Substring(0, Math.Min(message.Content?.Length ?? 0, 30))}...");
 
         _eventBusService?.Publish(new NewMessageEvent(message));
-        _unreadMessageCacheService?.CacheMessage(message);
+        // Progress 心跳不进未读缓存（不当未读社交消息计数；ChatDetailViewModel 仅覆盖更新进度气泡）。
+        if (!string.Equals(message.MessageType, "Progress", StringComparison.OrdinalIgnoreCase))
+            _unreadMessageCacheService?.CacheMessage(message);
     }
 
     private async Task OnSignalRUnreadCountUpdated(Guid conversationId, Guid userId, int unreadCount)

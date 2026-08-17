@@ -414,6 +414,7 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
         }
 
         var newMessages = response
+            .Where(m => !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase)) // 历史不残留进度心跳
             .Where(m => _displayedMessageIds.Add(m.Id))
             .Select(FixMessage)
             .OrderBy(m => m.CreationTime)
@@ -517,13 +518,43 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
 
         System.Diagnostics.Debug.WriteLine($"[ChatDetail] HandleMessage: 显示消息 Id={message.Id}, SenderId={message.SenderId}, Content={message.Content?.Substring(0, Math.Min(message.Content?.Length ?? 0, 30))}");
 
+        // Progress 心跳：覆盖更新同 sender 的进度槽位（不堆积、不缓存、不标已读）。
+        // ChatMessage 是 POCO（非 ObservableObject），原地改 Content 不刷新 UI → 必须 Messages[idx]=updated（Replace）触发刷新。
+        var isProgress = string.Equals(message.MessageType, "Progress", StringComparison.OrdinalIgnoreCase);
+        if (isProgress)
+        {
+            _uiThreadDispatcher?.Post(() =>
+            {
+                if (version != _loadVersion)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ChatDetail] HandleMessage: 版本过期，跳过进度更新 (version={version}, current={_loadVersion})");
+                    return;
+                }
+                var fixedMsg = FixMessage(message);
+                var idx = -1;
+                for (int i = Messages.Count - 1; i >= 0; i--)
+                    if (string.Equals(Messages[i].MessageType, "Progress", StringComparison.OrdinalIgnoreCase)
+                        && Messages[i].SenderId == message.SenderId) { idx = i; break; }
+                if (idx >= 0) Messages[idx] = fixedMsg;
+                else Messages.Add(fixedMsg);
+            });
+            // Progress 不进 _displayedMessageIds（避免同 Id 心跳被拒）、不缓存、不 MarkAsRead。
+            return;
+        }
+
+        // Text（含摘要）：收束——先移除同 sender 的进度槽位，再走原 Add 路径（结果替换进度心跳）。
         if (_displayedMessageIds.Add(message.Id))
         {
             _lastMessageTime = message.CreationTime;
             _uiThreadDispatcher?.Post(() =>
             {
                 if (version == _loadVersion)
+                {
+                    for (int i = Messages.Count - 1; i >= 0; i--)
+                        if (string.Equals(Messages[i].MessageType, "Progress", StringComparison.OrdinalIgnoreCase)
+                            && Messages[i].SenderId == message.SenderId) { Messages.RemoveAt(i); break; }
                     Messages.Add(FixMessage(message));
+                }
                 else
                     System.Diagnostics.Debug.WriteLine($"[ChatDetail] HandleMessage: 版本过期，跳过 UI 更新 (version={version}, current={_loadVersion})");
             });
@@ -563,6 +594,9 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             {
                 foreach (var msg in response)
                 {
+                    // 历史不残留进度心跳（Progress 是实时过程态，回看无意义）。
+                    if (string.Equals(msg.MessageType, "Progress", StringComparison.OrdinalIgnoreCase))
+                        continue;
                     if (_displayedMessageIds.Add(msg.Id))
                         Messages.Add(FixMessage(msg));
                 }
@@ -784,7 +818,8 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             if (version != _loadVersion) return;
             if (response == null) return;
 
-            var missed = response.Where(m => m.CreationTime > _lastMessageTime).ToList();
+            var missed = response.Where(m => m.CreationTime > _lastMessageTime
+                && !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase)).ToList();
             if (!missed.Any()) return;
 
             foreach (var msg in missed)
