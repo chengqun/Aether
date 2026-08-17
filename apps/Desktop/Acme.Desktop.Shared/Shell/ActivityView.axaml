@@ -100,7 +100,7 @@
                                         Command="{Binding $parent[UserControl].DataContext.OpenRunCommand}"
                                         CommandParameter="{Binding}">
                                     <Grid ColumnDefinitions="52,120,90,*" Margin="0,0,0,4">
-                                        <TextBlock Grid.Column="0" Text="{Binding StartedAt, StringFormat=HH:mm}" Classes="muted"/>
+                                        <TextBlock Grid.Column="0" Text="{Binding StartedAt, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="muted"/>
                                         <TextBlock Grid.Column="1" Text="{Binding AgentName}" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="muted"/>
                                         <TextBlock Grid.Column="3" Text="{Binding UserMessage}" TextTrimming="CharacterEllipsis" Opacity="0.8"/>
@@ -121,7 +121,7 @@
                                 <Grid ColumnDefinitions="64,*,60" Margin="0,0,0,4">
                                     <TextBlock Grid.Column="0" Text="{Binding ShaShort}" Classes="muted" FontFamily="Cascadia Code,Menlo,monospace"/>
                                     <TextBlock Grid.Column="1" Text="{Binding Message}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding When, StringFormat=HH:mm}" Classes="muted" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding When, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="muted" HorizontalAlignment="Right"/>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

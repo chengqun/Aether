@@ -23,6 +23,9 @@ public partial class ActivityViewModel : ObservableObject
     private readonly IUiDispatcher _dispatcher;
     private string? _projectDir;
 
+    /// <summary>中国标准时区（UTC+8）——分桶日期 + UI 显示均硬编码 +8，不依赖系统时区（出差/海外开发机也准）。</summary>
+    private static readonly TimeSpan ChinaOffset = TimeSpan.FromHours(8);
+
     // 已加载的按日分桶（一次加载同时供热力图计数 + 当天详情 filter，不重查）。
     private Dictionary<DateOnly, DayBucket> _buckets = new();
 
@@ -63,7 +66,7 @@ public partial class ActivityViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            var today = DateOnly.FromDateTime(DateTime.Now);
+            var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(ChinaOffset).DateTime);
             var from = Range switch
             {
                 ActivityRange.Month => today.AddDays(-29),
@@ -71,8 +74,8 @@ public partial class ActivityViewModel : ObservableObject
                 _ => today.AddDays(-364),
             };
             // started_at 存 UTC ISO（AgentRun.StartedAt = DateTimeOffset.UtcNow）；查询边界统一转 UTC offset 0，
-            // 字符串比较才严格等价时刻比较——to 用本地 +8 而 stored UTC，跨日边界 run 会错位（本地凌晨 run 被漏/误纳入）。
-            var fromDto = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset).ToUniversalTime();
+            // 字符串比较才严格等价时刻比较。from 用中国时区零点（硬编码 +8）转 UTC——不依赖系统时区。
+            var fromDto = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), ChinaOffset).ToUniversalTime();
             var toDto = DateTimeOffset.UtcNow;
 
             var store = _serviceProvider.GetService<IConversationStore>();
@@ -95,13 +98,13 @@ public partial class ActivityViewModel : ObservableObject
             var buckets = new Dictionary<DateOnly, DayBucket>();
             foreach (var r in runs)
             {
-                var d = DateOnly.FromDateTime(r.StartedAt.ToLocalTime().DateTime);
+                var d = DateOnly.FromDateTime(r.StartedAt.ToOffset(ChinaOffset).DateTime);
                 if (!buckets.TryGetValue(d, out var b)) buckets[d] = b = new DayBucket();
                 b.Runs.Add(r);
             }
             foreach (var c in commits)
             {
-                var d = DateOnly.FromDateTime(c.When.ToLocalTime().DateTime);
+                var d = DateOnly.FromDateTime(c.When.ToOffset(ChinaOffset).DateTime);
                 if (!buckets.TryGetValue(d, out var b)) buckets[d] = b = new DayBucket();
                 b.Commits.Add(c);
             }
