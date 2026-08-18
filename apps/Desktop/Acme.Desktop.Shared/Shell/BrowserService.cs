@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
+using Aether.AI.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.Playwright;
 
 namespace Acme.Desktop.Shared.Shell;
@@ -22,7 +24,11 @@ public sealed class BrowserService : IBrowserService
 {
     private readonly Dictionary<Guid, BrowserSession> _sessions = new();
     private readonly object _lock = new();
+    private readonly string? _profileDir;
     private Guid? _activeId;
+
+    /// <param name="options">读 <see cref="AetherAIOptions.BrowserProfileDir"/>——非空则持久 profile（登录一次后续复用），null 退回临时 profile（兼容旧行为）。</param>
+    public BrowserService(IOptions<AetherAIOptions> options) => _profileDir = options.Value.BrowserProfileDir;
 
     public event Action? SessionsChanged;
     public event Action<Guid>? ActiveSessionChanged;
@@ -37,7 +43,7 @@ public sealed class BrowserService : IBrowserService
     public IBrowserSession OpenSession(string url, string? channel = null)
     {
         var id = Guid.NewGuid();
-        var session = new BrowserSession(id, this);
+        var session = new BrowserSession(id, this, _profileDir);
         lock (_lock) _sessions[id] = session;
         _activeId = id;
         // Playwright 启动在后台跑（不阻塞 UI 线程 / agent 工具返回）；建好/失败都经事件通知 VM。
@@ -108,7 +114,7 @@ public sealed class BrowserService : IBrowserService
     public async Task<IBrowserSession> OpenSessionAsync(string url, string? channel, CancellationToken ct)
     {
         var id = Guid.NewGuid();
-        var session = new BrowserSession(id, this);
+        var session = new BrowserSession(id, this, _profileDir);
         lock (_lock) { _sessions[id] = session; _activeId = id; }
         SessionsChanged?.Invoke();
         ActiveSessionChanged?.Invoke(id);
@@ -174,9 +180,10 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
     private readonly Timer _requestsDebounce;
 
     private IPlaywright? _playwright;
-    private IBrowser? _browser;
+    private IBrowser? _browser;          // 临时模式用；持久模式（LaunchPersistentContextAsync）无独立 IBrowser 句柄
     private IBrowserContext? _context;
     private IPage? _page;
+    private readonly string? _userDataDir;  // 持久 profile 目录；非空则 LaunchPersistentContextAsync（登录一次复用），null 退回临时
 
     private volatile string _url;
     private volatile string _title;
@@ -187,10 +194,11 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
     public string Title => _title;
     public bool IsAlive => _isAlive;
 
-    public BrowserSession(Guid id, BrowserService owner)
+    public BrowserSession(Guid id, BrowserService owner, string? userDataDir)
     {
         Id = id;
         _owner = owner;
+        _userDataDir = userDataDir;
         _url = "about:blank";
         _title = "新建会话";
         _requestsDebounce = new Timer(_ => _owner.RaiseRequestsChanged(Id), null, Timeout.Infinite, Timeout.Infinite);
@@ -203,12 +211,25 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
         try
         {
             _playwright = await Playwright.CreateAsync();
-            var opts = new BrowserTypeLaunchOptions { Headless = false };
-            if (!string.IsNullOrWhiteSpace(channel)) opts.Channel = channel;
-            _browser = await _playwright.Chromium.LaunchAsync(opts);
-            _browser.Disconnected += OnBrowserDisconnected;
-            _context = await _browser.NewContextAsync();
-            _page = await _context.NewPageAsync();
+            if (!string.IsNullOrWhiteSpace(_userDataDir))
+            {
+                // 持久 profile：cookie/会话存盘，登录一次后续复用（不碰日常浏览器）。LaunchPersistentContextAsync 返回 context（无独立 IBrowser 句柄）。
+                var popts = new BrowserTypeLaunchPersistentContextOptions { Headless = false };
+                if (!string.IsNullOrWhiteSpace(channel)) popts.Channel = channel;
+                _context = await _playwright.Chromium.LaunchPersistentContextAsync(_userDataDir, popts);
+                _context.Close += OnContextClosed;
+                _page = _context.Pages.Count > 0 ? _context.Pages[0] : await _context.NewPageAsync();
+            }
+            else
+            {
+                // 临时 profile（兼容旧行为）：每次新开、不持久。
+                var opts = new BrowserTypeLaunchOptions { Headless = false };
+                if (!string.IsNullOrWhiteSpace(channel)) opts.Channel = channel;
+                _browser = await _playwright.Chromium.LaunchAsync(opts);
+                _browser.Disconnected += OnBrowserDisconnected;
+                _context = await _browser.NewContextAsync();
+                _page = await _context.NewPageAsync();
+            }
             _page.Request += OnRequest;
             _page.Response += OnResponse;
             _page.RequestFinished += OnRequestFinished;
@@ -309,6 +330,7 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
             _page.FrameNavigated -= OnFrameNavigated;
         }
         if (_browser is not null) _browser.Disconnected -= OnBrowserDisconnected;
+        if (_context is not null) _context.Close -= OnContextClosed;
         await _opLock.WaitAsync();
         try
         {
@@ -387,6 +409,15 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
         MarkDead();
         _owner.RaiseSessionClosed(Id);
         // 后台清理 Playwright 资源（不阻塞事件线程；已断开，主要释放驱动进程）。
+        DisposeAsync().AsTask().SafeFireAndForget();
+    }
+
+    private void OnContextClosed(object? sender, IBrowserContext context)
+    {
+        // 持久模式：context 关闭（用户关浏览器窗口 / 崩溃）→ 标记会话已死。同 OnBrowserDisconnected 语义。
+        if (!_isAlive) return;
+        MarkDead();
+        _owner.RaiseSessionClosed(Id);
         DisposeAsync().AsTask().SafeFireAndForget();
     }
 

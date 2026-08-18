@@ -64,6 +64,8 @@ public static class DesktopCompositionExtensions
             o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
             // skills 目录：MAF AgentFileSkillsSource 从此加载 SKILL.md（+ 脚本/资源）。
             o.SkillsDirectory = Path.Combine(tenantDir, "skills");
+            // Playwright 浏览器持久 profile：browser_open 工具 + 网络面板共用，登录一次后续复用（不碰日常浏览器）。
+            o.BrowserProfileDir = Path.Combine(tenantDir, "browser-profile");
         });
 
         // OTel：控制台导出（dev 调试；专家需开 EnableOpenTelemetry 才发 Activity）。OTLP 端点按需配。

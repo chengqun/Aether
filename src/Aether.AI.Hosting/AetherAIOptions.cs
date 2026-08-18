@@ -34,6 +34,14 @@ public sealed class AetherAIOptions
     /// </summary>
     public string? PythonExecutable { get; set; }
 
+    /// <summary>
+    /// Playwright 浏览器持久 profile 目录（browser_open 工具 + 网络面板共用同一 IBrowserService）。
+    /// cookie/会话存盘于此——用户每个网站首次手动登录一次，后续 browser_open 自动带登录态（不用每次重登）。
+    /// 为 null 时退回临时 profile（每次新开、不持久，兼容旧行为）。桌面端应设为租户数据目录下的子目录
+    /// （如 &lt;tenantDir&gt;/browser-profile），不碰用户日常浏览器（独立 profile，无污染、无 profile 锁冲突）。
+    /// </summary>
+    public string? BrowserProfileDir { get; set; }
+
     /// <summary>OpenTelemetry 导出配置。配了任一项才启用 OTel SDK（接 Aether.AI.Harness + MAF 的 Activity 源）。</summary>
     public OpenTelemetryOptions OpenTelemetry { get; set; } = new();
 }
