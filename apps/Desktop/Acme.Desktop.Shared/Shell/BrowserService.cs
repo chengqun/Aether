@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -350,6 +351,7 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
         var item = new NetworkRequestItem(Guid.NewGuid(), Id, DateTimeOffset.UtcNow, request.Method, request.Url);
         try { item.RequestHeaders = JsonSerializer.Serialize(request.Headers); } catch { }
         try { item.ResourceType = request.ResourceType.ToString(); } catch { }
+        try { item.RequestBody = TryGetRequestBody(request); } catch { }
         lock (_stateLock)
         {
             if (!_byRequest.TryAdd(request, item)) return;   // 同请求重复事件去重
@@ -369,9 +371,64 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
             item.StatusText = response.StatusText;
             try { item.ResponseHeaders = JsonSerializer.Serialize(response.Headers); } catch { }
             item.IsError = !response.Ok;
+            // 异步捕获 response body（不阻塞事件线程；redirect/已导航拿 body 会抛异常，catch 留空）。fire-and-forget 同 DisposeAsync 范式。
+            CaptureResponseBodyAsync(response, item).SafeFireAndForget();
         }
         catch { }
         ScheduleDebounce();
+    }
+
+    /// <summary>异步抓 response body（BurpSuite 式——看 API/页面实际返回内容）。等 FinishedAsync 再 BodyAsync 防不完整；
+    /// 二进制判别（content-type + 前 1024 字节含 null）不存文本；文本截断 200000 防 UI 渲染卡顿，超长提示用 curl 重发取全。</summary>
+    private async Task CaptureResponseBodyAsync(IResponse response, NetworkRequestItem item)
+    {
+        try
+        {
+            await response.FinishedAsync();
+            var bytes = await response.BodyAsync();
+            if (bytes is null || bytes.Length == 0) return;
+            item.Size = bytes.Length;
+            var ct = TryGetContentType(response);
+            item.MimeType = ct;
+            var isBinary = IsBinaryContentType(ct) || HasBinaryBytes(bytes);
+            item.IsBinary = isBinary;
+            if (isBinary) return;   // 二进制不存文本（详情显示「[二进制 {size} 字节]」占位）
+            var text = Encoding.UTF8.GetString(bytes);
+            item.ResponseBody = text.Length > 200000
+                ? text[..200000] + "\n…(已截断，完整内容请用 browser_get_cookies + curl 重发获取)"
+                : text;
+            ScheduleDebounce();   // body 回填后刷列表 Size 列 + 触发详情重读
+        }
+        catch { /* redirect/已导航/服务工人：BodyAsync 抛异常，留空（同 CloudDocsAuthService 轮询容错范式） */ }
+    }
+
+    private static string? TryGetRequestBody(IRequest request)
+    {
+        // Playwright 1.61: PostDataBuffer(byte[]?)/PostData(string?) 同步属性，无 PostDataAsync。截断 4000（同 cookie Truncate 范式防灌爆）。
+        if (request.PostDataBuffer is { Length: > 0 } buf)
+            return buf.Length > 4000 ? Encoding.UTF8.GetString(buf, 0, 4000) + "…(已截断)" : Encoding.UTF8.GetString(buf);
+        return request.PostData is { Length: > 0 } ps ? (ps.Length > 4000 ? ps[..4000] + "…(已截断)" : ps) : null;
+    }
+
+    private static string? TryGetContentType(IResponse response)
+    {
+        try { return response.Headers.TryGetValue("content-type", out var v) && !string.IsNullOrWhiteSpace(v) ? v.ToLowerInvariant() : null; }
+        catch { return null; }
+    }
+
+    private static bool IsBinaryContentType(string? ct) =>
+        !string.IsNullOrEmpty(ct) && (
+            ct.Contains("image/") || ct.Contains("video/") || ct.Contains("audio/") ||
+            ct.Contains("font") || ct.Contains("octet-stream") || ct.Contains("protobuf") ||
+            ct.Contains("application/zip") || ct.Contains("application/gzip") || ct.Contains("application/pdf") ||
+            ct.Contains("application/x-"));
+
+    private static bool HasBinaryBytes(byte[] bytes)
+    {
+        // 前 1024 字节含 null 字节 → 二进制（同 file 命令思路；text/utf8 早期不含 null）。
+        var n = Math.Min(bytes.Length, 1024);
+        for (int i = 0; i < n; i++) if (bytes[i] == 0) return true;
+        return false;
     }
 
     private void OnRequestFinished(object? sender, IRequest request)

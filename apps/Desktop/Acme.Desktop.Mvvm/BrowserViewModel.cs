@@ -27,6 +27,17 @@ public partial class BrowserViewModel : ObservableObject
     /// <summary>地址栏输入（回车 Navigate；空时禁用）。</summary>
     [ObservableProperty] private string? _addressBar;
 
+    /// <summary>过滤后的请求列表（列表控件绑此；全量 <see cref="Requests"/> 供过滤计算）。照 TraceWindow.VisibleTraces 范式。</summary>
+    public ObservableCollection<NetworkRequestItem> FilteredRequests { get; } = new();
+    /// <summary>URL 关键词搜索（忽略大小写，匹配 Url）。空=不过滤。</summary>
+    [ObservableProperty] private string? _filterText;
+    /// <summary>状态码段过滤：null/""=全部、"2xx"/"3xx"/"4xx"/"5xx"/"err"（err=失败或≥400）。</summary>
+    [ObservableProperty] private string? _statusFilter;
+    /// <summary>过滤后条数（过滤栏显示 {FilteredCount}/{TotalCount} 条）。</summary>
+    [ObservableProperty] private int _filteredCount;
+    /// <summary>当前会话请求总数。</summary>
+    [ObservableProperty] private int _totalCount;
+
     public BrowserViewModel(IServiceProvider serviceProvider)
     {
         _service = serviceProvider.GetRequiredService<IBrowserService>();
@@ -97,8 +108,47 @@ public partial class BrowserViewModel : ObservableObject
         var snapshotIds = snapshot.Select(r => r.Id).ToHashSet();
         for (int i = Requests.Count - 1; i >= 0; i--)
             if (!snapshotIds.Contains(Requests[i].Id)) Requests.RemoveAt(i);
+        TotalCount = Requests.Count;
+        ApplyFilter();
         ClearRequestsCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>按当前过滤条件重算 <see cref="FilteredRequests"/>（叠加在 RebuildRequests 后；过滤条件变更也调）。</summary>
+    private void ApplyFilter()
+    {
+        FilteredRequests.Clear();
+        foreach (var r in Requests)
+            if (PassesFilter(r)) FilteredRequests.Add(r);
+        FilteredCount = FilteredRequests.Count;
+    }
+
+    private bool PassesFilter(NetworkRequestItem r)
+    {
+        if (!string.IsNullOrEmpty(FilterText) && !r.Url.Contains(FilterText, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!string.IsNullOrEmpty(StatusFilter))
+        {
+            var s = r.Status ?? 0;
+            var pass = StatusFilter switch
+            {
+                "2xx" => s >= 200 && s < 300,
+                "3xx" => s >= 300 && s < 400,
+                "4xx" => s >= 400 && s < 500,
+                "5xx" => s >= 500 && s < 600,
+                "err" => r.IsError || s >= 400,
+                _ => true,
+            };
+            if (!pass) return false;
+        }
+        return true;
+    }
+
+    partial void OnFilterTextChanged(string? value) => ApplyFilter();
+    partial void OnStatusFilterChanged(string? value) => ApplyFilter();
+
+    /// <summary>状态段 Button 组点击（CommandParameter=段名；空=全部）。照 ActivityView.SetRangeCommand 范式。</summary>
+    [RelayCommand]
+    private void SetStatusFilter(string? s) => StatusFilter = string.IsNullOrEmpty(s) ? null : s;
 
     // —— 命令（纯转发 service，不持控件）——
 

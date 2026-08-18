@@ -40,6 +40,17 @@ public partial class NetworkRequestItem : ObservableObject
     public string? RequestHeaders { get; set; }
     /// <summary>响应头 JSON（含 Set-Cookie——看登录后服务端 set 了哪些 cookie）。</summary>
     public string? ResponseHeaders { get; set; }
+    /// <summary>请求体文本（POST 表单/JSON body；二进制留空）。点开详情看，普通属性（同 RequestHeaders 范式——详情按需读，非列表列）。</summary>
+    public string? RequestBody { get; set; }
+    /// <summary>响应体文本（非二进制 body 的文本渲染；二进制留空，详情显示占位）。点开详情看。</summary>
+    public string? ResponseBody { get; set; }
+
+    /// <summary>响应 Content-Type（判 JSON/HTML/文本渲染分流）。列表 Size 列实时刷新故 Observable。</summary>
+    [ObservableProperty] private string? _mimeType;
+    /// <summary>响应体大小（字节；截断体标提示）。列表实时刷新故 Observable。</summary>
+    [ObservableProperty] private int? _size;
+    /// <summary>响应体是否二进制（二进制不存文本，详情显示「[二进制 {size} 字节]」）。列表实时刷新。</summary>
+    [ObservableProperty] private bool _isBinary;
 
     public NetworkRequestItem(Guid id, Guid sessionId, DateTimeOffset time, string method, string url)
     {
