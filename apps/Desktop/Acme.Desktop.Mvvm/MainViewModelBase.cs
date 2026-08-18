@@ -55,6 +55,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         Terminal = new TerminalViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
+        Browser = new BrowserViewModel(serviceProvider);
         Automation = new AutomationViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             serviceProvider.GetRequiredService<IAutomationService>(),
@@ -132,6 +133,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>集成终端页 ViewModel（多标签真实 PTY；agent run_in_terminal 工具亦经其 ITerminalService）</summary>
     public TerminalViewModel Terminal { get; }
+
+    /// <summary>浏览器网络页 ViewModel（Playwright 持久会话 + 实时记录 HTTP 请求；agent browser_open/get_cookies 工具亦经其 IBrowserService）</summary>
+    public BrowserViewModel Browser { get; }
 
     /// <summary>自动化页 ViewModel</summary>
     public AutomationViewModel Automation { get; }

@@ -44,15 +44,23 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new SourceControlView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().SourceControl);
 
-        // 集成终端：共享 TerminalView（多标签真实 PTY；agent run_in_terminal 工具经 ITerminalService）。
+        // 集成终端 + 浏览器网络：底部 BottomPanelView 复合视图（终端/网络 tab 内部切换，各自常驻不销毁；折叠复用终端 region toggle）。
+        // agent run_in_terminal 工具经 ITerminalService（TerminalView 内）；browser_open/get_cookies 经 IBrowserService（BrowserView 内）。
+        // DataContext = TerminalViewModel（vmFactory 注入）；BrowserView 的 BrowserViewModel 经 DesktopApp.Services 定位器解析（同 NotesEditorView 范式）。
         Register(PanelKeys.Terminal,
-            () => new TerminalView(),
+            () => new BottomPanelView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Terminal);
 
         // 活动热力图：共享 ActivityView（GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。
         Register(PanelKeys.Activity,
             () => new ActivityView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Activity);
+
+        // 浏览器网络（侧边栏 nav 全屏入口）：与底部 BottomPanelView 的「网络」tab 同源 BrowserViewModel 单例——两个 BrowserView 实例绑同一 VM，
+        // 请求流双视图同步。底部 tab 适合边干别的边瞄一眼，侧边栏全屏适合细看请求流（agent browser_open/get_cookies 经同一 IBrowserService）。
+        Register(PanelKeys.Browser,
+            () => new BrowserView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Browser);
 
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,

@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.BottomPanelView"
+             Background="{DynamicResource ContentBgBrush}">
+    <UserControl.Styles>
+        <Style Selector="Button.btab">
+            <Setter Property="Padding" Value="14,4"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Button.btab:pointerover">
+            <Setter Property="Background" Value="{DynamicResource HoverBgBrush}"/>
+        </Style>
+        <Style Selector="Button.btab.active">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*">
+        <!-- tab 切换条（内部状态，独立于 workspace SelectedTabIndex——主 tabbed 不受影响） -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="6,3">
+            <Button Classes="btab active" x:Name="TabTerminalBtn" Click="OnTerminalTab" Content="终端"/>
+            <Button Classes="btab" x:Name="TabBrowserBtn" Click="OnBrowserTab" Content="🌐 网络"/>
+        </StackPanel>
+        <!-- 两个子视图常驻叠放（切 IsVisible，不销毁——PTY 不中断 / 浏览器会话不断） -->
+        <Grid Grid.Row="1">
+            <shell:TerminalView x:Name="TerminalPane"/>
+            <shell:BrowserView x:Name="BrowserPane" IsVisible="False"/>
+        </Grid>
+    </Grid>
+</UserControl>

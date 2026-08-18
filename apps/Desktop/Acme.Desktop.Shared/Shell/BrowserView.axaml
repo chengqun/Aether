@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Desktop.Mvvm"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             x:Class="Acme.Desktop.Shared.Shell.BrowserView"
+             Background="{DynamicResource ContentBgBrush}">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Code,Menlo,monospace"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Border.tabrow">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+        </Style>
+        <Style Selector="Border.tabrow.active">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <!-- 工具栏：新建 + 地址栏 + 打开 + 清空 -->
+        <WrapPanel Grid.Row="0" Margin="6,3">
+            <Button Content="＋ 新建" Command="{Binding NewSessionCommand}" Padding="8,4" Margin="0,0,4,0"/>
+            <TextBox Text="{Binding AddressBar}" Watermark="输入 URL 回车打开（如 example.com/login）" Width="300"
+                     KeyDown="OnAddressKeyDown" Margin="0,0,4,0"/>
+            <Button Content="打开" Command="{Binding NavigateCommand}" Padding="10,4" Margin="0,0,4,0"/>
+            <Button Content="清空" Command="{Binding ClearRequestsCommand}" Padding="8,4"/>
+        </WrapPanel>
+
+        <!-- 会话标签条 -->
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Sessions}" Margin="6,0,6,4">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="2"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:BrowserSessionItem">
+                    <Border Classes="tabrow" Classes.active="{Binding IsActive}" PointerPressed="OnTabPointerPressed">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding RequestCount, StringFormat='{}({0})'}" Classes="muted" VerticalAlignment="Center"/>
+                            <Button Content="✕" Padding="4,1" Background="Transparent" BorderThickness="0"
+                                    FontSize="11" VerticalAlignment="Center"
+                                    Click="OnCloseTab"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- 请求列表（DevTools Network 风格） -->
+        <ListBox Grid.Row="2" ItemsSource="{Binding Requests}" SelectedItem="{Binding SelectedRequest}"
+                 Background="Transparent" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="vm:NetworkRequestItem">
+                    <Grid ColumnDefinitions="54,48,42,52,72,*">
+                        <TextBlock Grid.Column="0" Text="{Binding Time, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="mono"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Method}" Classes="mono"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="mono" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        <TextBlock Grid.Column="3" Text="{Binding DurationMs, StringFormat='{}{0}ms'}" Classes="muted"/>
+                        <TextBlock Grid.Column="4" Text="{Binding ResourceType}" Classes="muted"/>
+                        <TextBlock Grid.Column="5" Text="{Binding Url}" TextTrimming="CharacterEllipsis" Classes="mono"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- 请求详情（选中后显示 headers） -->
+        <Border Grid.Row="3" Padding="8" Background="{DynamicResource CardBgBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                MaxHeight="160" IsVisible="{Binding SelectedRequest}">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="mono" Text="{Binding SelectedRequest.Url}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    <Grid ColumnDefinitions="*,*">
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0" Spacing="2">
+                            <TextBlock Text="请求头（含 Cookie）" FontWeight="SemiBold" FontSize="11"/>
+                            <TextBlock Classes="mono" Text="{Binding SelectedRequest.RequestHeaders}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="响应头（含 Set-Cookie）" FontWeight="SemiBold" FontSize="11"/>
+                            <TextBlock Classes="mono" Text="{Binding SelectedRequest.ResponseHeaders}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

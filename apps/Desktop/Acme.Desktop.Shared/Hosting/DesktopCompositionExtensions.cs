@@ -233,6 +233,40 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Dangerous);
         });
 
+        // 浏览器网络面板服务（单例）：BrowserView 经事件投影会话+请求列表；browser_open/get_cookies 工具共用。
+        // Playwright headed 独立窗口——用户手动登录，面板记录 HTTP 请求流；agent 拿 cookie 后 curl 带访问需登录接口。
+        services.AddSingleton<IBrowserService, BrowserService>();
+        services.AddTransient<BrowserTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("browser_open", "打开浏览器到指定 URL（headed 独立 OS 窗口，用户手动登录）。有活跃会话则导航它，否则建新。" +
+                "channel=chrome/msedge 复用本机已装浏览器（免 playwright install chromium）。返回会话 id 与当前 URL。" +
+                "用法：browser_open(url='https://xxx/login') → 让用户登录 → browser_get_cookies() 拿 CookieHeader → " +
+                "ExecuteShellCommand/run_in_terminal 跑 curl -s -H \"Cookie: <CookieHeader>\" https://同域/任意路径。", "浏览器",
+                sp => AIFunctionFactory.Create(
+                    typeof(BrowserTool).GetMethod(nameof(BrowserTool.BrowserOpenAsync))!, sp.GetRequiredService<BrowserTool>(),
+                    "browser_open"),
+                ToolApprovalLevel.Safe);
+            reg.Register("browser_get_cookies", "提取当前活跃浏览器会话的 cookie（Playwright 按 host 过滤，含父子域 + HttpOnly）。" +
+                "返回 curl 直接用的 CookieHeader 串（name=value; name=value; ...）+ 明细。⚠ cookie 是登录凭证，会进 agent 上下文供后续 curl 用。" +
+                "cookieNames 非空时只取指定 cookie。建议先用 browser_open + 让用户登录，再调此工具。", "浏览器",
+                sp => AIFunctionFactory.Create(
+                    typeof(BrowserTool).GetMethod(nameof(BrowserTool.GetCookiesAsync))!, sp.GetRequiredService<BrowserTool>(),
+                    "browser_get_cookies"),
+                ToolApprovalLevel.Confirm);
+            reg.Register("browser_get_requests", "取当前活跃浏览器会话已记录的 HTTP 请求列表（DevTools Network 风格）。" +
+                "urlContains 过滤 URL；errorsOnly 只看失败/4xx/5xx；limit 限制条数（默认 50）。用于发现登录后调用的 API 端点与请求状态。", "浏览器",
+                sp => AIFunctionFactory.Create(
+                    typeof(BrowserTool).GetMethod(nameof(BrowserTool.GetRequestsAsync))!, sp.GetRequiredService<BrowserTool>(),
+                    "browser_get_requests"),
+                ToolApprovalLevel.Safe);
+            reg.Register("browser_close", "关闭当前活跃浏览器会话（关浏览器 + 释放 Playwright 资源）。", "浏览器",
+                sp => AIFunctionFactory.Create(
+                    typeof(BrowserTool).GetMethod(nameof(BrowserTool.CloseAsync))!, sp.GetRequiredService<BrowserTool>(),
+                    "browser_close"),
+                ToolApprovalLevel.Safe);
+        });
+
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();

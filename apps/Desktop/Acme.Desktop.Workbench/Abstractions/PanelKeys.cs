@@ -32,6 +32,10 @@ public static class PanelKeys
     /// <summary>集成终端面板（TerminalView，多标签真实 PTY；agent run_in_terminal 工具的目标）。</summary>
     public const string Terminal = "terminal";
 
+    /// <summary>浏览器网络面板（BrowserView，Playwright 持久会话 + 实时记录 HTTP 请求；agent browser_open/get_cookies 工具的目标）。
+    /// 与终端共用底部 tabbed region（LayoutTabbed([Terminal, Browser]) 切换），不进 nav rail。</summary>
+    public const string Browser = "browser";
+
     /// <summary>活动热力图面板（ActivityView，GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。</summary>
     public const string Activity = "activity";
 
