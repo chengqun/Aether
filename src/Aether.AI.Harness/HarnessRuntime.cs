@@ -347,6 +347,44 @@ public sealed class HarnessRuntime
                         break;
                     }
 
+                    // 内置 web search（EnableWebSearch 开启时，hosted 服务发起的搜索）。与普通工具同走
+                    // ToolStreamEvent 路径——两者皆继承自 ToolCallContent/ToolResultContent 故带 CallId，
+                    // 可按 CallId 配对（桌面合并成一卡、手机两卡），复用既有工具卡渲染/持久化/重启重建管线，
+                    // 不静默丢。OpenAI 内置 web search 实际多走 TextContent（已由 OnToken 处理），此分支兜底
+                    // provider 直接发结构化 WebSearch 内容的少见情形。
+                    case WebSearchToolCallContent wsCall:
+                    {
+                        var query = wsCall.Queries is null ? string.Empty : string.Join(" | ", wsCall.Queries);
+                        if (!string.IsNullOrEmpty(wsCall.CallId))
+                            toolNamesByCallId[wsCall.CallId] = WebSearchToolName;
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventToolCall,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("name", WebSearchToolName), new KeyValuePair<string, object?>("callId", wsCall.CallId) })));
+                        if (handlers?.OnToolEvent is not null)
+                        {
+                            await handlers.OnToolEvent(
+                                new ToolStreamEvent(ToolStreamEventKind.Call, WebSearchToolName, wsCall.CallId ?? string.Empty,
+                                    string.IsNullOrEmpty(query) ? null : new Dictionary<string, object> { ["query"] = query }, null),
+                                cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
+                    case WebSearchToolResultContent wsResult:
+                    {
+                        var name = (wsResult.CallId is not null && toolNamesByCallId.TryGetValue(wsResult.CallId, out var n))
+                            ? n : WebSearchToolName;
+                        activity?.AddEvent(new ActivityEvent(Aether.AI.Harness.Telemetry.AetherActivitySource.EventToolResult,
+                            tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("name", name), new KeyValuePair<string, object?>("callId", wsResult.CallId) })));
+                        if (handlers?.OnToolEvent is not null)
+                        {
+                            await handlers.OnToolEvent(
+                                new ToolStreamEvent(ToolStreamEventKind.Result, name, wsResult.CallId ?? string.Empty,
+                                    null, ToWebSearchOutputDict(wsResult.Outputs)),
+                                cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
                     case TextReasoningContent tr when !string.IsNullOrEmpty(tr.Text):
                         if (handlers?.OnReasoning is not null)
                             await handlers.OnReasoning(tr.Text!, cancellationToken).ConfigureAwait(false);
@@ -488,6 +526,29 @@ public sealed class HarnessRuntime
         }
 
         return new Dictionary<string, object> { ["result"] = result.ToString() ?? string.Empty };
+    }
+
+    /// <summary>内置 web search 工具的展示名（toolNamesByCallId 登记名 + 卡片名）。</summary>
+    private const string WebSearchToolName = "web_search";
+
+    /// <summary>把 <see cref="WebSearchToolResultContent.Outputs"/>（<c>IList&lt;AIContent&gt;</c>）归一为可展示字典。
+    /// 镜像 <see cref="ToOutputDict"/>：<see cref="ChatMessageItem"/> 的 NormalizeToolResult 读 "result" 键 →
+    /// 多行渲染为 code 块。每条输出取 <c>TextContent.Text</c>，回退 <c>ToString()</c>；空集返 null。</summary>
+    private static Dictionary<string, object>? ToWebSearchOutputDict(System.Collections.Generic.IList<AIContent>? outputs)
+    {
+        if (outputs is null || outputs.Count == 0) return null;
+        var sb = new System.Text.StringBuilder();
+        foreach (var o in outputs)
+        {
+            var t = o is TextContent tc ? tc.Text : o.ToString();
+            if (!string.IsNullOrEmpty(t))
+            {
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(t);
+            }
+        }
+        var text = sb.ToString();
+        return string.IsNullOrEmpty(text) ? null : new Dictionary<string, object> { ["result"] = text };
     }
 
     private AgentDefinition ResolveDefinition(string agentId)

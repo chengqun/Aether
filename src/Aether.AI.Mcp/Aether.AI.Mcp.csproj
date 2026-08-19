@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <!-- MCP 集成仍是 alpha 预发布（隔离在本项目，宿主按需 opt-in，不影响其它项目）。 -->
-    <PackageReference Include="Microsoft.Agents.AI.Mcp" Version="1.17.0-alpha.260804.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Mcp" Version="1.18.0-alpha.260818.1" />
   </ItemGroup>
 
 </Project>
