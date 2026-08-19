@@ -186,15 +186,25 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         });
 
         // —— Token 批量更新：不逐 token Post 到 UI 线程（会假死），攒 50ms 批量刷新一次 ——
+        // Content（纯字符串拼接，便宜）每 flush 更新；MarkdownContent 触发 Markdown.Avalonia 全量重解析+重建可视树，
+        // 长 answer 是 O(n²)（尾段几十 KB × 20 次/秒），故节流到 ≥250ms 一次（流式期最多 ~4 次/秒）。
+        // 末帧由 FinalizeSegment(line 657) force MarkdownContent=Content 兜底，定稿显示完整不滞后。
         var pendingTokens = new System.Text.StringBuilder();
         var pendingReasoning = new System.Text.StringBuilder();
+        var lastMarkdownRenderTicks = 0L;
+        const long MarkdownRenderIntervalTicks = 250 * TimeSpan.TicksPerMillisecond;
         var flushTimer = new System.Threading.Timer(_ => _dispatcher.Post(() =>
         {
             if (pendingTokens.Length > 0)
             {
                 EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                 cursor.Current.Content += pendingTokens.ToString();
-                cursor.Current.MarkdownContent = cursor.Current.Content;
+                var now = System.DateTime.UtcNow.Ticks;
+                if (now - lastMarkdownRenderTicks >= MarkdownRenderIntervalTicks)
+                {
+                    cursor.Current.MarkdownContent = cursor.Current.Content;
+                    lastMarkdownRenderTicks = now;
+                }
                 pendingTokens.Clear();
             }
             if (pendingReasoning.Length > 0)

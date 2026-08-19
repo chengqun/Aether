@@ -35,6 +35,9 @@ public sealed class SettingsDialogService : ISettingsDialogService
         var window = new SettingsWindow { DataContext = vm };
         await window.ShowDialog(desktop.MainWindow);
 
+        // 窗口关闭后取消订阅单例 DeviceChatClient.ConnectionStateChanged，释放本次 transient VM（防越用越卡泄漏）。
+        vm.Cleanup();
+
         RefreshMainViewModelConnectionState();
     }
 

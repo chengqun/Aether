@@ -6,6 +6,7 @@ using Acme.DeviceConnect.Infrastructure;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Avalonia.Media;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -203,7 +204,23 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private void SubscribeToConnectionStateChanges()
     {
-        DeviceChatClient.ConnectionStateChanged += status =>
+        // 命名方法（非 lambda）以便关窗时 -= 取消订阅：SettingsViewModel 是 transient（每次开设置窗新建），
+        // 若用 lambda 挂单例 DeviceChatClient.ConnectionStateChanged，旧 VM 永久被单例持有不释放 → 越用越卡
+        // （事件触发随开关次数线性增长）。Cleanup() 在 SettingsDialogService 关窗后调用取消订阅。
+        DeviceChatClient.ConnectionStateChanged += OnConnectionStateChanged;
+    }
+
+    /// <summary>取消订阅单例 DeviceChatClient.ConnectionStateChanged，使本次设置窗的 transient VM 可被 GC。
+    /// 由 SettingsDialogService 在窗口关闭后调用。</summary>
+    public void Cleanup()
+    {
+        DeviceChatClient.ConnectionStateChanged -= OnConnectionStateChanged;
+    }
+
+    private void OnConnectionStateChanged(string status)
+    {
+        // ConnectionStateChanged 由 SignalR 后台线程触发；INPC/绑定更新须在 UI 线程，否则跨线程未定义。
+        Dispatcher.UIThread.Post(() =>
         {
             ConnectionStatusText = status;
             if (status.Contains("成功") || status.Contains("已连接"))
@@ -220,7 +237,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             }
             OnPropertyChanged(nameof(IsDeviceConnected));
             OnPropertyChanged(nameof(CanConnect));
-        };
+        });
     }
 
     private void UpdateConnectionStatus()

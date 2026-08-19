@@ -21,7 +21,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// 但同一 page/context 的并发操作会竞争——故 per-session <see cref="BrowserSession.OpLock"/> 串行化所有主动操作（Navigate/GetCookies/Close）。
 /// Playwright 的 Request/Response 事件在驱动回调线程触发，经 <see cref="BrowserSession._stateLock"/> 保护请求字典/列表的增改；
 /// <see cref="NetworkRequestItem"/> 的字段更新经 Avalonia 绑定引擎自动 marshal 到 UI 线程。请求通知经 per-session Timer 去抖（150ms）合批，避免页面加载几十个请求刷爆 UI。</summary>
-public sealed class BrowserService : IBrowserService
+public sealed class BrowserService : IBrowserService, IAsyncDisposable
 {
     private readonly Dictionary<Guid, BrowserSession> _sessions = new();
     private readonly object _lock = new();
@@ -94,6 +94,25 @@ public sealed class BrowserService : IBrowserService
     public IReadOnlyList<IBrowserSession> GetSessions()
     {
         lock (_lock) return _sessions.Values.Select(s => (IBrowserSession)s).ToList();
+    }
+
+    /// <summary>app 退出时容器 DisposeAsync 调此：释放所有仍在 _sessions 的 Playwright 会话，
+    /// 关闭 headed Chromium 子进程 + 释放持久 profile 句柄。否则退出后 Chromium 进程残留 + 句柄泄漏
+    /// （CloseSession 只释放单个会话；app 关闭走容器批量释放）。关窗事件不触发（app 正在退出，UI 已拆）。</summary>
+    public async ValueTask DisposeAsync()
+    {
+        BrowserSession[] sessions;
+        lock (_lock) sessions = _sessions.Values.ToArray();
+        foreach (var s in sessions)
+        {
+            try { await s.DisposeAsync(); }
+            catch (Exception ex) { Trace.WriteLine($"browser session {s.Id} shutdown dispose failed: {ex}"); }
+        }
+        lock (_lock)
+        {
+            _sessions.Clear();
+            _activeId = null;
+        }
     }
 
     public Task NavigateAsync(Guid sessionId, string url)
@@ -178,6 +197,11 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
     private readonly object _stateLock = new();           // 保护请求字典/列表的增改（事件来自 Playwright 线程）
     private readonly Dictionary<IRequest, NetworkRequestItem> _byRequest = new();
     private readonly List<NetworkRequestItem> _requests = new();
+    /// <summary>_requests 上限（丢最旧）。防长浏览会话请求只增不减 → 万级 × body 常驻 = 数百 MB。
+    /// 1000 覆盖一次浏览的最近请求；超限丢最旧并反向清理 _byRequest（否则被丢 item 的 body 经字典常驻，cap 失效）。</summary>
+    private const int MaxRequests = 1000;
+    /// <summary>response body 文本截断字符数（.NET UTF-16 串 ≈2 字节/字符 → ~64KB/条）。配合 MaxRequests 上限总内存 ~64MB 封顶。</summary>
+    private const int MaxBodyChars = 32_000;
     private readonly Timer _requestsDebounce;
 
     private IPlaywright? _playwright;
@@ -356,6 +380,16 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
         {
             if (!_byRequest.TryAdd(request, item)) return;   // 同请求重复事件去重
             _requests.Add(item);
+            // 上限丢最旧：超 MaxRequests 移除头部溢出；并反向清理 _byRequest 中对应条目
+            // （_byRequest 只增不减，不随 _requests 封顶则被丢 item 的 body 经字典常驻 → cap 形同虚设）。
+            if (_requests.Count > MaxRequests)
+            {
+                var overflow = _requests.Count - MaxRequests;
+                var dropped = new HashSet<NetworkRequestItem>(_requests.Take(overflow));
+                _requests.RemoveRange(0, overflow);
+                foreach (var k in _byRequest.Where(kvp => dropped.Contains(kvp.Value)).Select(kvp => kvp.Key).ToArray())
+                    _byRequest.Remove(k);
+            }
         }
         ScheduleDebounce();
     }
@@ -379,7 +413,7 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
     }
 
     /// <summary>异步抓 response body（BurpSuite 式——看 API/页面实际返回内容）。等 FinishedAsync 再 BodyAsync 防不完整；
-    /// 二进制判别（content-type + 前 1024 字节含 null）不存文本；文本截断 200000 防 UI 渲染卡顿，超长提示用 curl 重发取全。</summary>
+    /// 二进制判别（content-type + 前 1024 字节含 null）不存文本；文本截断 MaxBodyChars（32000）防内存无界，超长提示用 curl 重发取全。</summary>
     private async Task CaptureResponseBodyAsync(IResponse response, NetworkRequestItem item)
     {
         try
@@ -394,8 +428,8 @@ internal sealed class BrowserSession : IBrowserSession, IAsyncDisposable
             item.IsBinary = isBinary;
             if (isBinary) return;   // 二进制不存文本（详情显示「[二进制 {size} 字节]」占位）
             var text = Encoding.UTF8.GetString(bytes);
-            item.ResponseBody = text.Length > 200000
-                ? text[..200000] + "\n…(已截断，完整内容请用 browser_get_cookies + curl 重发获取)"
+            item.ResponseBody = text.Length > MaxBodyChars
+                ? text[..MaxBodyChars] + "\n…(已截断，完整内容请用 browser_get_cookies + curl 重发获取)"
                 : text;
             ScheduleDebounce();   // body 回填后刷列表 Size 列 + 触发详情重读
         }
