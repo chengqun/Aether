@@ -757,18 +757,11 @@ public partial class NotesViewModel : ObservableObject
 
             await _dispatcher.InvokeAsync(() =>
             {
-                // 子节点提升为根（DB 已置 parent_id=NULL），保持其展开状态
-                foreach (var child in node.Children.ToList())
-                {
-                    child.Parent = null;
-                    child.ParentId = null;
-                    Roots.Add(child);
-                }
-                node.Children.Clear();
-                // 从父级或 Roots 移除被删节点
-                if (node.Parent != null) node.Parent.Children.Remove(node);
+                // DB 已级联删除整棵子树（含所有后代）；本地树直接移除被删节点——其子树随节点一起从树消失，不再提升为根。
+                var parent = node.Parent;
+                if (parent != null) parent.Children.Remove(node);
                 else Roots.Remove(node);
-                SelectedNode = Roots.FirstOrDefault();
+                SelectedNode = parent ?? Roots.FirstOrDefault();
             });
             StatusMessage = $"已删除：{title}";
             NotesChanged?.Invoke();

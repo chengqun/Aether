@@ -86,11 +86,18 @@ public sealed class SqliteNoteRepository : SqliteStoreBase, INoteRepository
     {
         await EnsureSchemaAsync(CreateSql, ct);
         await using var c = await OpenAsync(ct);
-        await using var tx = (SqliteTransaction)await c.BeginTransactionAsync(ct);
-        // Children promoted to root (parent_id = NULL)
-        await using (var p = c.CreateCommand()) { p.Transaction = tx; p.CommandText = $"UPDATE {TableName} SET parent_id=NULL WHERE parent_id=@id"; p.Parameters.AddWithValue("@id", id.ToString()); await p.ExecuteNonQueryAsync(ct); }
-        await using (var d = c.CreateCommand()) { d.Transaction = tx; d.CommandText = $"DELETE FROM {TableName} WHERE id=@id"; d.Parameters.AddWithValue("@id", id.ToString()); await d.ExecuteNonQueryAsync(ct); }
-        await tx.CommitAsync(ct);
+        await using var cmd = c.CreateCommand();
+        // 级联删除整棵子树（含任意深度后代），而非把直接子节点提升为根节点。
+        // 递归 CTE 枚举后代 id，单条 DELETE 原子清除子树 + 节点本身（表无 FK cascade 故用 CTE）。
+        cmd.CommandText = $@"
+WITH RECURSIVE descendants(id) AS (
+    SELECT id FROM {TableName} WHERE parent_id=@id
+    UNION ALL
+    SELECT n.id FROM {TableName} n JOIN descendants d ON n.parent_id=d.id
+)
+DELETE FROM {TableName} WHERE id=@id OR id IN (SELECT id FROM descendants)";
+        cmd.Parameters.AddWithValue("@id", id.ToString());
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<List<NoteNode>> SearchAsync(string query, CancellationToken ct = default)
