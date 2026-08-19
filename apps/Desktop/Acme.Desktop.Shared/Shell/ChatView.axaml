@@ -23,11 +23,12 @@
           </StackPanel>
         </Border>
 
-        <!-- 流式答案（TextContent）：全宽 markdown，无气泡 -->
+        <!-- 流式答案（TextContent）：流式期纯文本 TextBlock——避免 Markdown.Avalonia 每次 Markdown 属性变都
+             全量 engine.Transform + 重建可视树（无增量渲染）致 UI 假死。完成时 FinalizeSegment 置 IsStreaming=false
+             → 切到下方完成态 markdown viewer 一次性渲染格式。Claude Code/Cursor 同款做法：流式纯文本、完成后才格式化。 -->
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentStreamingAnswer}" Spacing="4">
           <TextBlock Text="回答中…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <ctl:SelectableMarkdownViewer Markdown="{Binding MarkdownContent}"
-                                        SelectionEnabled="True" SelectionBrush="#3300A2ED" />
+          <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
         </StackPanel>
 
         <!-- agent markdown 回答（完成）：全宽无框 + 元信息/复制 -->

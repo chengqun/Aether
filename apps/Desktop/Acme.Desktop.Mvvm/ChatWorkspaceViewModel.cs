@@ -186,25 +186,19 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         });
 
         // —— Token 批量更新：不逐 token Post 到 UI 线程（会假死），攒 50ms 批量刷新一次 ——
-        // Content（纯字符串拼接，便宜）每 flush 更新；MarkdownContent 触发 Markdown.Avalonia 全量重解析+重建可视树，
-        // 长 answer 是 O(n²)（尾段几十 KB × 20 次/秒），故节流到 ≥250ms 一次（流式期最多 ~4 次/秒）。
-        // 末帧由 FinalizeSegment(line 657) force MarkdownContent=Content 兜底，定稿显示完整不滞后。
+        // 流式期只更新 Content（纯字符串拼接，TextBlock 增量重布局廉价）。绝不碰 MarkdownContent：
+        // Markdown.Avalonia 无增量渲染，每次 Markdown 属性变都全量 engine.Transform + 重建可视树，
+        // 长 answer 单次重解析即可 >250ms，50ms 或 250ms 频率都让 _dispatcher.Post 队列堆积 → UI 线程饱和假死
+        // （流式气泡还在更新，但整窗卡死）。流式态由 ChatView 用 TextBlock 显 Content；
+        // 完成时 FinalizeSegment 置 IsStreaming=false 切到 markdown viewer 一次性渲染格式。
         var pendingTokens = new System.Text.StringBuilder();
         var pendingReasoning = new System.Text.StringBuilder();
-        var lastMarkdownRenderTicks = 0L;
-        const long MarkdownRenderIntervalTicks = 250 * TimeSpan.TicksPerMillisecond;
         var flushTimer = new System.Threading.Timer(_ => _dispatcher.Post(() =>
         {
             if (pendingTokens.Length > 0)
             {
                 EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                 cursor.Current.Content += pendingTokens.ToString();
-                var now = System.DateTime.UtcNow.Ticks;
-                if (now - lastMarkdownRenderTicks >= MarkdownRenderIntervalTicks)
-                {
-                    cursor.Current.MarkdownContent = cursor.Current.Content;
-                    lastMarkdownRenderTicks = now;
-                }
                 pendingTokens.Clear();
             }
             if (pendingReasoning.Length > 0)
@@ -664,7 +658,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             if (!last.IsReasoningContent)
             {
                 last.IsReasoning = false; // 末段 TextContent = 最终回答
-                last.MarkdownContent = last.Content; // 终态 markdown 对齐，避免流式末帧与最终气泡不一致
+                // IsStreaming=false 切到完成态：ChatView 完成态 viewer 绑 Content 一次性渲染 markdown 格式。
+                // MarkdownContent 同步赋值仅作安全网（保持属性一致，供未来/非展示消费者），不驱动桌面展示。
+                last.MarkdownContent = last.Content;
             }
         }
     }
