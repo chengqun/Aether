@@ -186,26 +186,44 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         });
 
         // —— Token 批量更新：不逐 token Post 到 UI 线程（会假死），攒 50ms 批量刷新一次 ——
-        // 流式期只更新 Content（纯字符串拼接，TextBlock 增量重布局廉价）。绝不碰 MarkdownContent：
-        // Markdown.Avalonia 无增量渲染，每次 Markdown 属性变都全量 engine.Transform + 重建可视树，
-        // 长 answer 单次重解析即可 >250ms，50ms 或 250ms 频率都让 _dispatcher.Post 队列堆积 → UI 线程饱和假死
-        // （流式气泡还在更新，但整窗卡死）。流式态由 ChatView 用 TextBlock 显 Content；
-        // 完成时 FinalizeSegment 置 IsStreaming=false 切到 markdown viewer 一次性渲染格式。
-        var pendingTokens = new System.Text.StringBuilder();
-        var pendingReasoning = new System.Text.StringBuilder();
+        // 用「有序 chunk 队列」而非两个独立 StringBuilder。原因：MAF 一个 update 可含混合 TextContent +
+        // TextReasoningContent，且 reasoning→answer 边界常落在同一 50ms flush 窗口。若分两个 StringBuilder 且
+        // flush 先处理 answer 再处理 reasoning，会把边界倒置——answer 先 EnsureTextSegment(false) 冻结当前
+        // reasoning 卡、新建 answer 卡，随后 reasoning 又 EnsureTextSegment(true) 冻结 answer、新建第二张
+        // reasoning 卡 → 一段连续 reasoning 被劈成两卡（上方「思考了」+ 下方「思考中」）、answer 夹中间，
+        // 用户看到「多个思考中、乱了、流式跑上面的思考中去了」。有序队列保留 token 真实时序，连续同类型
+        // chunk 合并进同一卡，仅在类型真切换时换段——消除劈裂。
+        // 流式期只更 Content（TextBlock 廉价、无 markdown 重解析，避免假死）；完成时 FinalizeSegment 切
+        // markdown viewer 一次性渲染格式。
+        var pendingChunks = new List<(string Text, bool IsReasoning)>();
+        var pendingLock = new object();
         var flushTimer = new System.Threading.Timer(_ => _dispatcher.Post(() =>
         {
-            if (pendingTokens.Length > 0)
+            List<(string Text, bool IsReasoning)> snapshot;
+            lock (pendingLock)
             {
-                EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
-                cursor.Current.Content += pendingTokens.ToString();
-                pendingTokens.Clear();
+                if (pendingChunks.Count == 0) return;
+                snapshot = pendingChunks;          // 整表换出：drain 原子，流式线程继续往新表 append 不互斥
+                pendingChunks = new List<(string, bool)>();
             }
-            if (pendingReasoning.Length > 0)
+            // 按真实时序处理；连续同类型 chunk 合并成一个字符串再追加（O(段数) 次拼接，非 O(chunk 数) 次）。
+            var buf = new System.Text.StringBuilder();
+            bool? segType = null;
+            foreach (var (text, isReasoning) in snapshot)
             {
-                EnsureTextSegment(cursor, items, senderName, isReasoningContent: true);
-                cursor.Current.Content += pendingReasoning.ToString();
-                pendingReasoning.Clear();
+                if (segType is { } prev && prev != isReasoning)
+                {
+                    EnsureTextSegment(cursor, items, senderName, isReasoningContent: prev);
+                    cursor.Current.Content += buf.ToString();
+                    buf.Clear();
+                }
+                segType = isReasoning;
+                buf.Append(text);
+            }
+            if (buf.Length > 0 && segType is { } last)
+            {
+                EnsureTextSegment(cursor, items, senderName, isReasoningContent: last);
+                cursor.Current.Content += buf.ToString();
             }
         }), null, Timeout.Infinite, Timeout.Infinite);
 
@@ -224,13 +242,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     OnToken: (token, _) =>
                     {
                         fullText.Append(token);
-                        pendingTokens.Append(token);
+                        lock (pendingLock) pendingChunks.Add((token, false));
                         flushTimer.Change(50, Timeout.Infinite); // 50ms 后批量刷新
                         return Task.CompletedTask;
                     },
                     OnReasoning: (text, _) =>
                     {
-                        pendingReasoning.Append(text);
+                        lock (pendingLock) pendingChunks.Add((text, true));
                         flushTimer.Change(50, Timeout.Infinite);
                         return Task.CompletedTask;
                     },
