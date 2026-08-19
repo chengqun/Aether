@@ -226,6 +226,49 @@ public class RuleAgentTests
     }
 
     [Fact]
+    public async Task RuleChatClient_keeps_genuine_user_msg_across_tool_result_in_chain()
+    {
+        // 回归守卫：工具结果也是 ChatRole.User（装 FunctionResultContent，无 TextContent）。
+        // BuildContext 扫「最后一条 user」必须跳过工具结果消息取到真正用户输入——否则 userText=""
+        // → 程序级 Capture 失配、toolCallsThisTurn 归零、OnUserRegex 失配（工具链中段断链）。
+        // 镜像 SlidingWindowChatReducer「安全 user 起点 = user 角色 + 不含 FunctionResultContent」。
+        var program = new RuleProgram
+        {
+            Capture = "查(?<sym>\\d+)",
+            Steps = new()
+            {
+                // 步骤 0：首轮命中 → 调 Echo 传 {user.1}（首轮 toolCallsThisTurn=0≤MaxToolCalls=0）。
+                new RuleStep { Match = new() { OnUserRegex = "查(?<sym>\\d+)", MaxToolCalls = 0 },
+                               Action = new() { Tool = "Echo", Args = new() { ["text"] = "{user.1}" } } },
+                // 步骤 1：工具已调一次后 → 终答引用 {user.1}（证明 LatestUser 仍指向真正 user，Capture 未丢）。
+                new RuleStep { Match = new() { MinToolCalls = 1 },
+                               Action = new() { ReplyText = "结果：{user.1}" } },
+            },
+        };
+        var client = new RuleChatClient(new RuleProgramBrain(program));
+
+        // 工具链中段历史：真正 user 输入 → assistant 工具调用 → user 工具结果（FunctionResultContent）。
+        var call = new FunctionCallContent("c1", "Echo", new Dictionary<string, object?> { ["text"] = "600000" });
+        var callMsg = new ChatMessage { Role = ChatRole.Assistant };
+        callMsg.Contents.Add(call);
+        var resultMsg = new ChatMessage { Role = ChatRole.User };
+        resultMsg.Contents.Add(new FunctionResultContent("c1", "echo:600000"));
+        var history = new List<ChatMessage>
+        {
+            new(ChatRole.User, "查600000"),
+            callMsg,
+            resultMsg,
+        };
+
+        var text = "";
+        await foreach (var u in client.GetStreamingResponseAsync(history)) text += u.Text;
+
+        // {user.1}="600000" 来自真正 user 消息的 Capture——证明 LatestUser 指向真正 user 而非工具结果。
+        // 修复前会输出「无匹配规则」（userText 空 → Capture 失配 + toolCallsThisTurn=0 → 两条步骤都不命中）。
+        Assert.Equal("结果：600000", text);
+    }
+
+    [Fact]
     public async Task RuleChatClient_drives_agent_loop_tool_then_reply()
     {
         // 规则：查(\d+) → 调 Echo 传 {user.1}；调过一次后 → 终答「结果：{result}」。

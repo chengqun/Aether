@@ -197,7 +197,9 @@ public partial class TradingViewModel : ObservableObject
     /// <summary>当前策略描述（策略 tab 显示）。</summary>
     [ObservableProperty] private string _currentStrategyDescription = "";
 
-    [ObservableProperty] private bool _isRunning;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StartLiveCommand))]
+    private bool _isRunning;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private string _error = string.Empty;
     [ObservableProperty] private BacktestStatistics? _statistics;
@@ -219,7 +221,8 @@ public partial class TradingViewModel : ObservableObject
         OnPropertyChanged(nameof(HasError));
     }
 
-    private bool CanRun => !IsRunning;
+    // 回测/实盘共享 Lean 全局静态，绝不可并发——互查对方运行态（LeanGlobalLock 是硬兜底）。
+    private bool CanRun => !IsRunning && !IsLiveRunning;
 
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
@@ -321,7 +324,9 @@ public partial class TradingViewModel : ObservableObject
     [ObservableProperty] private bool _isLiveMode;   // false=回测模式, true=实盘模式
     [ObservableProperty] private string _liveStrategy = "";
     [ObservableProperty] private string _liveStatusText = "未启动";
-    [ObservableProperty] private bool _isLiveRunning;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StartLiveCommand), nameof(StopLiveCommand))]
+    private bool _isLiveRunning;
     [ObservableProperty] private string _liveLog = "";
 
     private readonly StringBuilder _liveLogBuf = new();
@@ -355,7 +360,7 @@ public partial class TradingViewModel : ObservableObject
         LiveLog = _liveLogBuf.ToString();
     }
 
-    private bool CanStartLive => !IsLiveRunning;
+    private bool CanStartLive => !IsLiveRunning && !IsRunning;
     private bool CanStopLive => IsLiveRunning;
 
     [RelayCommand(CanExecute = nameof(CanStartLive))]

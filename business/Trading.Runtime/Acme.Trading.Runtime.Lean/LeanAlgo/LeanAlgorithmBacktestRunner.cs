@@ -51,6 +51,22 @@ public sealed class LeanAlgorithmBacktestRunner : ILeanAlgorithmRuntime
     {
         ct.ThrowIfCancellationRequested();
 
+        // P0 守卫：与 LeanBacktestRunner/LeanLiveRunner 共用 LeanGlobalLock，三入口互斥（Lean 全局静态进程级）。
+        await LeanGlobalLock.WaitAsync(ct);
+        try
+        {
+            return await RunCoreAsync(request, ct);
+        }
+        finally
+        {
+            LeanGlobalLock.Release();
+        }
+    }
+
+    private async Task<BacktestResult> RunCoreAsync(LeanAlgorithmBacktestRequest request, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
         var algoType = LeanAlgorithmRegistry.GetType(request.StrategyName);
         var algoPath = LeanAlgorithmRegistry.GetAssemblyPath(request.StrategyName);
         if (algoType is null || algoPath is null)

@@ -75,6 +75,15 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         _runtime.Invalidate(agentId.ToString());
     }
 
+    public void EvictConversation(Guid conversationId)
+    {
+        // 会话删除：丢弃 conversationId→sessionId 映射并清平台运行时会话。
+        // agent 路径的 FrameworkAgentSession 存于 HarnessRuntime._frameworkSessions + SessionManager，
+        // EvictSession 切断这两个强引用 → RestoringChatHistoryProvider 的弱键缓存随 GC 自动回收。
+        if (_sessionsByConversation.TryRemove(conversationId, out var entry))
+            _runtime.EvictSession(entry.sessionId);
+    }
+
     internal static AgentDefinition ToAgentDefinition(string id, CustomAgentDefinition def)
     {
         // 规则 agent：body(SystemPrompt) 是 YAML 规则程序，由适配器解析成 RuleProgram 对象直接喂平台 Rules seam；

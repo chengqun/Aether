@@ -51,6 +51,25 @@ public sealed class LeanBacktestRunner : IBacktestRuntime
     {
         ct.ThrowIfCancellationRequested();
 
+        // P0 守卫：Lean 全局静态（Config/Globals/Composer/WorkerThread/Log.LogHandler/Console）进程级，
+        // 回测/实盘/LeanAlgo 三入口互斥（见 LeanGlobalLock）。锁覆盖整个 Lean 会话（setup→run→handler 释放）；
+        // 结果映射读本地对象，在 RunCoreAsync 内完成。UI CanRun/CanStartLive 互查是早拒绝，本锁硬兜底
+        // （AI BacktestTool 等绕过 UI 的调用者也受保护）。
+        await LeanGlobalLock.WaitAsync(ct);
+        try
+        {
+            return await RunCoreAsync(request, ct);
+        }
+        finally
+        {
+            LeanGlobalLock.Release();
+        }
+    }
+
+    private async Task<BacktestResult> RunCoreAsync(BacktestRuntimeRequest request, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
         // Lean 的算法/结果处理器在 setup 阶段可能 Console.SetOut 把算法的 Console 输出收进日志存储，
         // 导致回测后宿主进程的 Console 输出写到 Lean 的 TextWriter（而非原 stdout），输出"丢失"。
         // 保存原 stdout/stderr，在 finally 里恢复，保证回测后 Console 仍指向真实终端/重定向目标。

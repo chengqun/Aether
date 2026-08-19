@@ -33,6 +33,21 @@ internal sealed class LeanLiveRunner
     /// <returns>(算法结束状态, 错误信息)</returns>
     public (AlgorithmStatus Status, string? Error) Run(LiveTradingRuntimeRequest request)
     {
+        // P0 守卫：与 LeanBacktestRunner/LeanAlgorithmBacktestRunner 共用 LeanGlobalLock，三入口互斥。
+        // 本方法同步阻塞（调用方 LeanLiveTradingService 已 Task.Run 卸载到后台线程），故用阻塞 Wait()。
+        LeanGlobalLock.Wait();
+        try
+        {
+            return RunCore(request);
+        }
+        finally
+        {
+            LeanGlobalLock.Release();
+        }
+    }
+
+    private (AlgorithmStatus Status, string? Error) RunCore(LiveTradingRuntimeRequest request)
+    {
         var resultsDir = Path.Combine(Path.GetTempPath(), "AetherCtpLean", Guid.NewGuid().ToString("N"));
 
         WorkerThread.Instance = new FreshWorkerThread();

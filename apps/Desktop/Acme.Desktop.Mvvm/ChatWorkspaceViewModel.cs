@@ -940,6 +940,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         try
         {
             await _conversationStore.DeleteAsync(item.Id);
+            // 清出运行时会话状态：丢弃 agent/workflow 路径缓存的 FrameworkAgentSession + 平台 session 字典，
+            // 使 RestoringChatHistoryProvider 的 per-session 历史缓存随 GC 自动回收（防长会话累积内存泄漏）。
+            _agentRunner.EvictConversation(item.Id);
+            _workflowRunner.EvictConversation(item.Id);
             Conversations.Remove(item);
             if (_currentConversationId == item.Id)
             {

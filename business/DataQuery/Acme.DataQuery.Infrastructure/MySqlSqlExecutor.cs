@@ -48,8 +48,8 @@ public sealed class MySqlSqlExecutor : ISqlExecutor
             else
             {
                 // 必须先关闭 reader 才能稳定拿到 RecordsAffected（MySqlConnector 在 reader 活跃时可能未填充）。
-                var affected = reader.RecordsAffected;
                 await reader.CloseAsync();
+                var affected = reader.RecordsAffected;
                 return new SqlRawResult { IsResultSet = false, AffectedRows = affected };
             }
         }

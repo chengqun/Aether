@@ -57,6 +57,8 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
             _registeredNames.Clear();
             lock (_lock) _loadErrors.Clear();
 
+            // 本轮编译的 Code 策略源码 hash 集合——扫完后调 UnloadStale 回收已删除/改名/改坏的旧版本 ALC。
+            var currentHashes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var note in strategyNotes)
             {
                 if (string.IsNullOrWhiteSpace(note.Content))
@@ -91,7 +93,8 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                 }
                 else
                 {
-                    // Code 策略：Roslyn 编译 IStrategy 源码（既有路径，原样）。
+                    // Code 策略：Roslyn 编译 IStrategy 源码。命中缓存复用既有程序集，免每次 NotesChanged 全量重编译。
+                    currentHashes.Add(StrategyScriptCompiler.HashOf(note.Content!));
                     if (StrategyScriptCompiler.TryCompile(note.Content!, out var instance, out var err) && instance is not null)
                     {
                         var type = instance.GetType();
@@ -107,6 +110,8 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                     }
                 }
             }
+            // 回收本轮源码集合之外的旧编译产物（可卸载 ALC）——防长会话反复改策略致默认 ALC 无界堆积。
+            StrategyScriptCompiler.UnloadStale(currentHashes);
             StrategiesLoaded?.Invoke();
         }
         finally

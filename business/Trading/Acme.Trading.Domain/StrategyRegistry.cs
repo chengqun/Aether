@@ -1,20 +1,25 @@
+using System.Collections.Concurrent;
+
 namespace Acme.Trading.Domain;
 
 /// <summary>
 /// 策略注册表（静态，纯领域无 Lean 依赖）。Lean 用反射无参 ctor 创建 algorithm，host 拿不到 DI，故用静态注册表。
 /// AddTradingRuntimeLean 启动时 Register 内置策略，TradingHostAlgorithm 按 strategy-name 解析。
 /// 回测与实盘共用同一注册表 → 同一策略逻辑。未来动态/AI 策略可同样 Register。
+/// <see cref="ConcurrentDictionary{TKey,TValue}"/>：脚本服务后台线程 LoadAsync 写（Register/Unregister）
+/// 同时 UI 选择器 + Lean runner 读（Create/GetRegisteredNames/GetParameterDefinitions）——Dictionary 非线程安全
+/// 会抛或损坏；ConcurrentDictionary 快照枚举 + 原子读写并发安全。
 /// </summary>
 public static class StrategyRegistry
 {
-    private static readonly Dictionary<string, Func<IStrategy>> _factories = new();
+    private static readonly ConcurrentDictionary<string, Func<IStrategy>> _factories = new();
 
     public static void Register(string name, Func<IStrategy> factory)
         => _factories[name] = factory;
 
     /// <summary>注销一个已注册策略（动态脚本策略重加载前清理旧的，避免选择器残留失效策略）。</summary>
     public static bool Unregister(string name)
-        => _factories.Remove(name);
+        => _factories.TryRemove(name, out _);
 
     public static IStrategy? Create(string name, StrategyParameters parameters)
     {

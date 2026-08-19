@@ -580,6 +580,20 @@ public sealed class HarnessRuntime
     public void RegisterWorkflowSession(FrameworkAgentSession session, Guid conversationId)
         => _sessionConversationMap.Register(session, conversationId);
 
+    /// <summary>
+    /// 会话删除时清出运行时会话状态：丢弃 <see cref="_frameworkSessions"/> 里的 FrameworkAgentSession
+    /// （agent 路径）+ <see cref="SessionManager"/> 里的 AgentSession。一旦这两个强引用切断，session 对象即
+    /// 可回收——RestoringChatHistoryProvider 的 per-session 缓存（ConditionalWeakTable 弱键）随之随 GC 自动清，
+    /// 无需 provider↔runtime 清理布线。工作流路径的 session 不在此处（自管于 CustomWorkflowRunner._sessions），
+    /// 由 <c>ICustomWorkflowRunner.EvictConversation</c> 直接清。会话删除前 UI 已 <c>CancelRunningRun</c>，故无在飞 run 持有该 session。
+    /// </summary>
+    public void EvictSession(Guid sessionId)
+    {
+        _frameworkSessions.TryRemove(sessionId, out _);
+        _sessions.Remove(sessionId);
+        // SessionConversationMap 是 ConditionalWeakTable 弱键，session 回收后自动清，无需显式删。
+    }
+
     private static IEnumerable<string> ExtractToolCalls(AgentResponse response)
     {
         var names = new List<string>();

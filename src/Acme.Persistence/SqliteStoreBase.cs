@@ -20,6 +20,10 @@ public abstract class SqliteStoreBase
 {
     protected readonly string ConnectionString;
     private int _initialized;
+    /// <summary>串行化 schema 初始化：首个调用者做建表+迁移，并发调用者在此阻塞等其完成后再放行
+    /// （而非早返回 → 撞上「表还没建好」的查询失败）。async/sync 两路共用一把锁——async 全程
+    /// ConfigureAwait(false) 无 UI 线程亲和，sync 路阻塞量等同原实现（建表本就同步），不死锁。</summary>
+    private readonly SemaphoreSlim _schemaLock = new(1, 1);
 
     protected SqliteStoreBase(string connectionString)
         => ConnectionString = !string.IsNullOrWhiteSpace(connectionString)
@@ -62,12 +66,15 @@ public abstract class SqliteStoreBase
     }
 
     /// <summary>Idempotent lazy schema init: creates the parent directory, enables WAL, runs
-    /// <paramref name="createSql"/>, then <see cref="MigrateAsync"/>. Runs once; resets on failure so the next call retries.</summary>
+    /// <paramref name="createSql"/>, then <see cref="MigrateAsync"/>. Runs once. 并发调用者在
+    /// <see cref="_schemaLock"/> 上等首个调用者完成后放行（双检：拿到锁后若已初始化则直接返回）。
+    /// 失败时 <see cref="_initialized"/> 仍为 0（仅在成功后置位），锁在 finally 释放 → 下次调用重试。</summary>
     protected async Task EnsureSchemaAsync(string createSql, CancellationToken ct = default)
     {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
+        await _schemaLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            if (_initialized != 0) return;   // 双检：并发调用者拿到锁时首个已完成
             EnsureDirectory();
             await using var c = await OpenAsync(ct).ConfigureAwait(false);
             await using (var wal = c.CreateCommand())
@@ -79,21 +86,23 @@ public abstract class SqliteStoreBase
             cmd.CommandText = createSql;
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             await MigrateAsync(c, ct).ConfigureAwait(false);
+            _initialized = 1;   // 仅建表+迁移全成功后标记完成
         }
-        catch
+        finally
         {
-            Interlocked.Exchange(ref _initialized, 0);
-            throw;
+            _schemaLock.Release();
         }
     }
 
     /// <summary>Synchronous idempotent schema init for stores that must init in their ctor
-    /// (e.g. Automation — avoids async-over-sync deadlock on the UI thread; see #3a).</summary>
+    /// (e.g. Automation — avoids async-over-sync deadlock on the UI thread; see #3a)。与 async 路共用
+    /// <see cref="_schemaLock"/>：若后台正跑 async 初始化，ctor 线程在此短暂阻塞等其完成（建表本就同步阻塞，无新增阻塞量）。</summary>
     protected void EnsureSchema(string createSql)
     {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0) return;
+        _schemaLock.Wait();
         try
         {
+            if (_initialized != 0) return;
             EnsureDirectory();
             using var c = Open();
             using (var wal = c.CreateCommand())
@@ -105,11 +114,11 @@ public abstract class SqliteStoreBase
             cmd.CommandText = createSql;
             cmd.ExecuteNonQuery();
             Migrate(c);
+            _initialized = 1;
         }
-        catch
+        finally
         {
-            Interlocked.Exchange(ref _initialized, 0);
-            throw;
+            _schemaLock.Release();
         }
     }
 

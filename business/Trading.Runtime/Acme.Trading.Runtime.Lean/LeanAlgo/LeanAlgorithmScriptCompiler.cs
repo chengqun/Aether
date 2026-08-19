@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
+using System.Text;
 using Acme.Trading.Domain;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -42,21 +43,64 @@ public static class LeanAlgorithmScriptCompiler
 
         // 落盘 dll：按源码 hash 命名，重编译内容变 → 新文件名 → 新程序集（绕过 LoadFrom 路径缓存）。
         Directory.CreateDirectory(cacheDir);
-        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source));
-        var hashSuffix = Convert.ToHexString(hash)[..12];
+        var hashSuffix = HashSuffix(source);
         dllPath = Path.Combine(cacheDir, $"LeanAlgo_{name}_{hashSuffix}.dll");
 
-        var result = compilation.Emit(dllPath);
-        if (!result.Success)
+        // 同 hash 同内容 → 复用已编译 dll，免每次 NotesChanged 全量重 emit（Roslyn 编译开销）。
+        var preExisting = File.Exists(dllPath);
+        if (!preExisting)
         {
-            error = string.Join("\n", result.Diagnostics
-                .Where(d => d.Severity == DiagnosticSeverity.Error)
-                .Select(d => d.ToString()));
-            return false;
+            var result = compilation.Emit(dllPath);
+            if (!result.Success)
+            {
+                error = EmitError(result.Diagnostics);
+                return false;
+            }
         }
 
-        // 从落盘 dll 加载（与 Lean BacktestingSetupHandler 同路径加载方式一致），找 QCAlgorithm 派生类。
-        // GetTypes() 可能因依赖解析失败抛 ReflectionTypeLoadException——捕获并以可读错误返回，免致整批加载静默失败。
+        if (LoadAlgorithmType(dllPath, out type, out error)) return true;
+
+        // 复用的旧 dll 加载失败（损坏/被截断）——删后重 emit 再加载一次。
+        // 首次 emit 即失败的不再重试（同源码同样字节，重 emit 不会变好）。
+        if (!preExisting) return false;
+        try { File.Delete(dllPath); } catch { /* 占用中忽略，下面重 emit 覆盖 */ }
+        var retry = compilation.Emit(dllPath);
+        if (!retry.Success)
+        {
+            error = EmitError(retry.Diagnostics);
+            return false;
+        }
+        return LoadAlgorithmType(dllPath, out type, out error);
+    }
+
+    /// <summary>删除 cacheDir 中本轮源码集合之外的旧 dll（重加载后清已删除/改名/改坏的旧版本落盘文件）。</summary>
+    public static void CleanupStaleDlls(string cacheDir, IEnumerable<(string Name, string Source)> current)
+    {
+        if (!Directory.Exists(cacheDir)) return;
+        var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, source) in current)
+            expected.Add($"LeanAlgo_{name}_{HashSuffix(source)}.dll");
+        foreach (var f in Directory.EnumerateFiles(cacheDir, "LeanAlgo_*.dll"))
+        {
+            if (expected.Contains(Path.GetFileName(f))) continue;
+            try { File.Delete(f); } catch { /* 被 Lean 加载占用/竞态忽略——best-effort 清理 */ }
+        }
+    }
+
+    private static string HashSuffix(string source)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))[..12];
+
+    private static string EmitError(System.Collections.Generic.IEnumerable<Diagnostic> diagnostics)
+        => string.Join("\n", diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Select(d => d.ToString()));
+
+    // 从落盘 dll 加载（与 Lean BacktestingSetupHandler 同路径加载方式一致），找 QCAlgorithm 派生类。
+    // GetTypes() 可能因依赖解析失败抛 ReflectionTypeLoadException——捕获并以可读错误返回，免致整批加载静默失败。
+    private static bool LoadAlgorithmType(string dllPath, out Type? type, out string? error)
+    {
+        type = null;
+        error = null;
         try
         {
             var asm = Assembly.LoadFrom(dllPath);

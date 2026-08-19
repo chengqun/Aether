@@ -60,6 +60,8 @@ public sealed class LeanAlgorithmScriptingService : ILeanAlgorithmScriptingServi
             _registeredNames.Clear();
             lock (_lock) _loadErrors.Clear();
 
+            // 本轮 Lean 算法（名+源码）——扫完后调 CleanupStaleDlls 清已删除/改名/改坏的旧 dll。
+            var currentAlgos = new List<(string Name, string Source)>();
             foreach (var note in all)
             {
                 try
@@ -70,6 +72,7 @@ public sealed class LeanAlgorithmScriptingService : ILeanAlgorithmScriptingServi
                         continue;
                     }
 
+                    currentAlgos.Add((note.Title, note.Content!));
                     if (LeanAlgorithmScriptCompiler.TryCompile(note.Content!, note.Title, _cacheDir, out var type, out _, out var err) && type is not null)
                     {
                         var paramDefs = LeanAlgorithmScriptCompiler.ReadParameterDefinitions(type);
@@ -91,6 +94,8 @@ public sealed class LeanAlgorithmScriptingService : ILeanAlgorithmScriptingServi
                     _logger.LogError(ex, "Lean 算法加载异常 {Name}", note.Title);
                 }
             }
+            // 清理本轮源码集合之外的旧落盘 dll——防反复改算法致 cacheDir 无界堆积（dll 只增不删）。
+            LeanAlgorithmScriptCompiler.CleanupStaleDlls(_cacheDir, currentAlgos);
             Loaded?.Invoke();
         }
         finally

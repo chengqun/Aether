@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Memory;
@@ -20,9 +21,12 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
     private readonly SessionConversationMap _sessionMap;
     private readonly IChatReducer? _reducer;
     private readonly ILoggerFactory? _loggerFactory;
-    // per-session 内存缓存（和 InMemoryChatHistoryProvider 一样）
-    private readonly ConcurrentDictionary<AgentSession, List<ChatMessage>> _sessionMessages = new();
-    private readonly HashSet<AgentSession> _restoredSessions = new();
+    // per-session 内存缓存（和 InMemoryChatHistoryProvider 一样）。用 ConditionalWeakTable 弱键持有——
+    // session 一旦被运行时清出（EvictSession/EvictConversation）即失去强引用 → 本表条目 + 历史列表随 GC
+    // 自动回收，无需 provider↔runtime 的清理布线（镜像 SessionConversationMap 的弱键模式）。
+    private readonly ConditionalWeakTable<AgentSession, List<ChatMessage>> _sessionMessages = new();
+    // 标记「已尝试从 DB 恢复」，避免每次 Provide 都查库。弱键：随 session 回收自动清。
+    private readonly ConditionalWeakTable<AgentSession, object> _restoredSessions = new();
 
     public RestoringChatHistoryProvider(IConversationStore? store, SessionConversationMap sessionMap,
         IChatReducer? reducer = null, ILoggerFactory? loggerFactory = null)
@@ -36,7 +40,7 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(InvokingContext context, CancellationToken cancellationToken)
     {
         // 首次：从 DB 恢复历史，存入内存缓存
-        if (_store is not null && _sessionMap.TryGet(context.Session, out var conversationId) && !_restoredSessions.Contains(context.Session))
+        if (_store is not null && _sessionMap.TryGet(context.Session, out var conversationId) && !_restoredSessions.TryGetValue(context.Session, out _))
         {
             try
             {
@@ -52,19 +56,19 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
                         eventsByRun[run.Id] = await _store.GetEventsAsync(run.Id, cancellationToken).ConfigureAwait(false);
                     }
                     var messages = EventHistoryRebuilder.RebuildLlmHistory(runs, eventsByRun);
-                    _sessionMessages[context.Session] = messages.ToList();
+                    _sessionMessages.AddOrUpdate(context.Session, messages.ToList());
                 }
-                _restoredSessions.Add(context.Session);
+                _restoredSessions.AddOrUpdate(context.Session, new object());
             }
             catch (Exception ex)
             {
                 _loggerFactory?.CreateLogger<RestoringChatHistoryProvider>()?.LogWarning(ex, "恢复会话历史失败，使用空历史。");
-                _restoredSessions.Add(context.Session);
+                _restoredSessions.AddOrUpdate(context.Session, new object());
             }
         }
 
         // 从内存返回历史
-        var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
+        var list = _sessionMessages.GetValue(context.Session, _ => new List<ChatMessage>());
 
         // 应用 reducer（SlidingWindow 截断），再净化。用 SanitizeProviderHistory（非 Sanitize）——
         // 活路径 FICC 循环里最近一轮的 tool_call 在 Provide 时尚无 result（下一轮 Store 才落地），
@@ -85,7 +89,7 @@ public sealed class RestoringChatHistoryProvider : ChatHistoryProvider
     {
         if (context.Session is null) return default;
 
-        var list = _sessionMessages.GetOrAdd(context.Session, _ => new List<ChatMessage>());
+        var list = _sessionMessages.GetValue(context.Session, _ => new List<ChatMessage>());
         foreach (var msg in context.RequestMessages ?? Enumerable.Empty<ChatMessage>())
         {
             var filtered = FilterMessage(msg);

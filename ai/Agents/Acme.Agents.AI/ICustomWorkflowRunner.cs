@@ -28,4 +28,11 @@ public interface ICustomWorkflowRunner
 
     /// <summary>使该 workflow 的缓存会话失效（编辑/删除后调用）。</summary>
     void Invalidate(Guid workflowId);
+
+    /// <summary>
+    /// 会话删除时清出该 conversationId 的运行时会话：丢弃 (workflowAIAgent, FrameworkAgentSession) 缓存。
+    /// 工作流 session 自管于本 runner（不经 HarnessRuntime._frameworkSessions），TryRemove 即切断其唯一强引用
+    /// → RestoringChatHistoryProvider 弱键缓存随 GC 自动回收（防长会话累积内存泄漏）。
+    /// </summary>
+    void EvictConversation(Guid conversationId);
 }

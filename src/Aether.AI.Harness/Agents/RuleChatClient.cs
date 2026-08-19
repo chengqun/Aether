@@ -57,11 +57,16 @@ public sealed class RuleChatClient : IChatClient
     /// <summary>从对话历史 + ChatOptions 推导求值上下文（无状态）。</summary>
     private static RuleContext BuildContext(IList<ChatMessage> history, ChatOptions? options)
     {
+        // 找最后一条「真正的用户输入」：User 角色 + 不含 FunctionResultContent。
+        // 工具结果也是 ChatRole.User（装 FunctionResultContent，无 TextContent）——若取到它，
+        // LatestUser.Text 会是空 → 程序级 Capture/{user.N} 替换、toolCallsThisTurn、OnUserRegex 全错。
+        // 镜像 SlidingWindowChatReducer「安全 user 起点 = user 角色 + 不含 FunctionResultContent」。
         ChatMessage? latestUser = null;
         var lastUserIndex = -1;
         for (var i = history.Count - 1; i >= 0; i--)
         {
-            if (history[i].Role == ChatRole.User)
+            if (history[i].Role == ChatRole.User
+                && !history[i].Contents.Any(c => c is FunctionResultContent))
             {
                 latestUser = history[i];
                 lastUserIndex = i;
@@ -69,7 +74,7 @@ public sealed class RuleChatClient : IChatClient
             }
         }
 
-        // 本轮已调工具次数 = 最后一条 user 消息之后的 FunctionCallContent 计数。
+        // 本轮已调工具次数 = 最后一条真正用户输入之后的 FunctionCallContent 计数。
         var toolCallsThisTurn = 0;
         if (lastUserIndex >= 0)
         {

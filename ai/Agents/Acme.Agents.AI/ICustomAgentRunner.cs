@@ -34,4 +34,11 @@ public interface ICustomAgentRunner
     /// 使该 agent 的缓存失效（编辑/删除后调用，清掉该 agent 所有会话，下次运行重建 agent 与会话）。
     /// </summary>
     void Invalidate(Guid agentId);
+
+    /// <summary>
+    /// 会话删除时清出该 conversationId 的运行时会话：丢弃 conversationId→sessionId 映射并调
+    /// <see cref="HarnessRuntime.EvictSession"/> 清掉平台持有的 FrameworkAgentSession/AgentSession，
+    /// 使 RestoringChatHistoryProvider 的 per-session 历史缓存随 GC 自动回收（防长会话累积内存泄漏）。
+    /// </summary>
+    void EvictConversation(Guid conversationId);
 }

@@ -56,6 +56,8 @@ public sealed class RuleScriptingService : IRuleScriptingService
             _registeredIds.Clear();
             lock (_lock) _loadErrors.Clear();
 
+            // 本轮编译的代码规则源码 hash 集合——扫完后调 UnloadStale 回收已删除/改名/改坏的旧版本 ALC。
+            var currentHashes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var note in notes)
             {
                 if (string.IsNullOrWhiteSpace(note.Content))
@@ -64,6 +66,7 @@ public sealed class RuleScriptingService : IRuleScriptingService
                     _registry.RecordError(note.Id, "代码源码为空");
                     continue;
                 }
+                currentHashes.Add(RuleScriptCompiler.HashOf(note.Content!));
                 if (RuleScriptCompiler.TryCompile(note.Content!, out var instance, out var err) && instance is not null)
                 {
                     var type = instance.GetType();
@@ -80,6 +83,8 @@ public sealed class RuleScriptingService : IRuleScriptingService
                     _logger.LogWarning("代码规则脚本编译失败 {Title}：{Err}", note.Title, err);
                 }
             }
+            // 回收本轮源码集合之外的旧编译产物（可卸载 ALC）——防长会话反复改代码规则致默认 ALC 无界堆积。
+            RuleScriptCompiler.UnloadStale(currentHashes);
             RulesLoaded?.Invoke();
         }
         finally

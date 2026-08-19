@@ -65,6 +65,13 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
             _sessions.TryRemove(kv.Key, out _);
     }
 
+    public void EvictConversation(Guid conversationId)
+    {
+        // 会话删除：工作流 session 自管于 _sessions（不经 HarnessRuntime._frameworkSessions），
+        // TryRemove 即切断其唯一强引用 → RestoringChatHistoryProvider 弱键缓存随 GC 自动回收。
+        _sessions.TryRemove(conversationId, out _);
+    }
+
     private async Task<(AIAgent agent, FrameworkAgentSession session)> GetOrCreateAsync(Guid conversationId, Guid workflowId, CancellationToken ct)
     {
         if (_sessions.TryGetValue(conversationId, out var existing) && existing.workflowId == workflowId)
