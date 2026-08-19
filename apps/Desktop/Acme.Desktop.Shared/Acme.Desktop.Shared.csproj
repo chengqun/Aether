@@ -11,6 +11,8 @@
     <PackageReference Include="Avalonia" Version="12.1.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <!-- 调色板选色控件（ColorPicker：弹出色板/光谱/HSV/RGB/hex）。调 PaletteWindow 经 HexToColorConverter 绑 PaletteColorRow.Hex。版本与 Avalonia 对齐。 -->
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.1" />
     <!-- 集成终端控件（SkiaSharp/HarfBuzz 渲染；own-transport + SendInput/WriteOutput + shell integration，供 B2 run_in_terminal 捕获）。要求 Avalonia >=12.1.1，故全 app 升 12.0.4→12.1.1。 -->
     <PackageReference Include="RoyalApps.RoyalTerminal.Avalonia" Version="0.5.1" />
     <!-- Playwright（浏览器网络面板 + browser_open/get_cookies 工具：headed Chromium 独立窗口，用户手动登录后取 cookie 给 agent curl）。与 Qifu.Infrastructure 同版本；浏览器二进制靠 playwright install 单独装。 -->

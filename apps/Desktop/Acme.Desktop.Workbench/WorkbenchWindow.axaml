@@ -74,6 +74,9 @@
                   </DataTemplate>
                 </MenuItem.ItemTemplate>
               </MenuItem>
+              <MenuItem Header="调色板…" Command="{Binding OpenPaletteCommand}">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.ColorMode}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
               <MenuItem Header="━" IsEnabled="False"/>
               <MenuItem Header="登录…" Command="{Binding LoginCommand}" IsVisible="{Binding !IsLoggedIn}">
                 <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Key}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>

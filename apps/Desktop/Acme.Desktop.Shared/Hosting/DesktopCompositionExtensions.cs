@@ -2,6 +2,7 @@ using System.IO;
 using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Desktop.Mvvm;
+using Acme.Desktop.Mvvm.Palette;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Scripting;
 using Aether.AI.Core.Agents;
@@ -318,6 +319,9 @@ public static class DesktopCompositionExtensions
         // 活动报告生成 + 报告展示弹窗（活动页「生成日报/周报」按钮 → LLM 汇总当天/当周 runs+commits → markdown 弹窗）
         services.AddSingleton<IActivityReportService, ActivityReportService>();
         services.AddSingleton<IReportDialogService, ReportDialogService>();
+
+        // 主题调色板弹窗（账号菜单「调色板」→ ColorView 改色实时预览 → 保存成命名主题）
+        services.AddSingleton<IPaletteDialogService, PaletteDialogService>();
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;

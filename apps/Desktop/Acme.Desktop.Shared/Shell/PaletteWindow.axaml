@@ -1,0 +1,164 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        xmlns:cp="using:Avalonia.Controls"
+        x:Class="Acme.Desktop.Shared.Shell.PaletteWindow"
+        Title="主题编辑器"
+        Width="760" Height="680"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+  <Grid RowDefinitions="*,Auto" Margin="16,12,16,12">
+    <TabControl Grid.Row="0">
+
+      <!-- ══ 颜色 tab：主从式（左 35 色项带色块 + 右常驻 ColorView 改选中色）══ -->
+      <TabItem Header="🎨 颜色">
+        <Grid ColumnDefinitions="300,*" Margin="0,8,0,0">
+          <!-- 左：色项列表。每行 色块 + 标签 + 分类 + 派生锁。选中→右色板。 -->
+          <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+            <ListBox ItemsSource="{Binding ColorRows}" SelectedItem="{Binding SelectedColorRow}"
+                     Padding="2" Background="Transparent" BorderThickness="0">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="22,*,Auto,Auto" Margin="2,3" Height="26">
+                    <!-- 色块预览 -->
+                    <Border Grid.Column="0" Background="{Binding Hex, Converter={x:Static shell:HexToBrushConverter.Instance}}"
+                            CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Label}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Category}" VerticalAlignment="Center" Margin="6,0,0,0"
+                               FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <!-- 派生项锁标（主色联动重算，不可独立改） -->
+                    <TextBlock Grid.Column="3" Text="🔒" VerticalAlignment="Center" Margin="6,0,0,0"
+                               IsVisible="{Binding IsDerived}"/>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+
+          <!-- 右：常驻色板改选中色。派生项禁用 + 提示改主色。 -->
+          <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Border Width="22" Height="22" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                      Background="{Binding SelectedColorRow.Hex, Converter={x:Static shell:HexToBrushConverter.Instance}}"/>
+              <TextBlock Text="{Binding SelectedColorRow.Label}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding SelectedColorRow.Key}" VerticalAlignment="Center" Margin="6,0,0,0"
+                         FontFamily="Cascadia Code, Consolas, monospace" FontSize="11"
+                         Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <cp:ColorView x:Name="MasterColorView" Width="300" Height="360"
+                          Color="{Binding SelectedColorRow.Hex, Mode=TwoWay, Converter={x:Static shell:HexToColorConverter.Instance}}"
+                          IsEnabled="{Binding SelectedColorRow.IsEditable}" HorizontalAlignment="Left"/>
+            <TextBlock Text="此项随主色派生（hover/浅色/淡底/侧栏选中/用户气泡），改「主色」即可联动重算。"
+                       IsVisible="{Binding SelectedColorRow.IsDerived}"
+                       TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" MaxWidth="320"/>
+          </StackPanel>
+        </Grid>
+      </TabItem>
+
+      <!-- ══ 字体 tab：TextBox 手输字体族串 + 预览 TextBlock（FontFamily 绑此值）══ -->
+      <TabItem Header="🔤 字体">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" Padding="0,8,0,0">
+          <ItemsControl ItemsSource="{Binding FontRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,6" Spacing="4">
+                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold"/>
+                  <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Watermark="字体族，如：Segoe UI, PingFang SC, sans-serif"
+                           MinWidth="440" HorizontalAlignment="Left"/>
+                  <!-- 预览：直接用输入的字体渲染样例 -->
+                  <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+                    <TextBlock Text="预览 AaBb 123 中文" FontFamily="{Binding Value}" FontSize="15"/>
+                    <TextBlock Text="0O1lI ABC abc" FontFamily="{Binding Value}" FontSize="13"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ══ 圆角与间距 tab：NumericUpDown（圆角 3 + 间距 5）══ -->
+      <TabItem Header="📐 圆角与间距">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" Padding="0,8,0,0">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+              <TextBlock Text="圆角" FontWeight="SemiBold"/>
+              <ItemsControl ItemsSource="{Binding RadiusRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="160,*" Margin="0,4">
+                      <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
+                      <cp:NumericUpDown Grid.Column="1" Value="{Binding Value}" Minimum="{Binding Min}" Maximum="{Binding Max}"
+                                        Increment="{Binding Step}" FormatString="0" HorizontalAlignment="Left" Width="120"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <TextBlock Text="间距" FontWeight="SemiBold"/>
+              <ItemsControl ItemsSource="{Binding SpacingRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="160,*" Margin="0,4">
+                      <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
+                      <cp:NumericUpDown Grid.Column="1" Value="{Binding Value}" Minimum="{Binding Min}" Maximum="{Binding Max}"
+                                        Increment="{Binding Step}" FormatString="0" HorizontalAlignment="Left" Width="120"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ══ 明暗基底 tab：RadioButton light/dark + 窗口背景色 ══ -->
+      <TabItem Header="🌓 明暗基底">
+        <StackPanel Margin="0,12,0,0" Spacing="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="基底明暗" FontWeight="SemiBold"/>
+            <TextBlock Text="决定 native 控件（输入框/滚动条/下拉）ThemeVariant：light=浅色，dark=深色。" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxWidth="500"/>
+            <StackPanel Orientation="Horizontal" Spacing="20" Margin="0,6,0,0">
+              <RadioButton Content="☀ 浅色 (light)" GroupName="variant"
+                          IsChecked="{Binding Variant, Mode=TwoWay, Converter={x:Static shell:VariantToBoolConverter.Instance}, ConverterParameter=light}"/>
+              <RadioButton Content="🌙 深色 (dark)" GroupName="variant"
+                          IsChecked="{Binding Variant, Mode=TwoWay, Converter={x:Static shell:VariantToBoolConverter.Instance}, ConverterParameter=dark}"/>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="窗口背景色" FontWeight="SemiBold"/>
+            <TextBlock Text="覆盖工作区背景（WorkspaceBackground）。" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Border Width="22" Height="22" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                      Background="{Binding BackgroundColor.Hex, Converter={x:Static shell:HexToBrushConverter.Instance}}"/>
+              <TextBlock Text="{Binding BackgroundColor.Hex}" FontFamily="Cascadia Code, Consolas, monospace" VerticalAlignment="Center"/>
+            </StackPanel>
+            <cp:ColorView x:Name="BgColorView" Width="300" Height="360"
+                          Color="{Binding BackgroundColor.Hex, Mode=TwoWay, Converter={x:Static shell:HexToColorConverter.Instance}}"
+                          HorizontalAlignment="Left"/>
+          </StackPanel>
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+
+    <!-- 底部：主题名 + 保存/取消 -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,14,0,0">
+      <TextBlock Text="主题名:" VerticalAlignment="Center"/>
+      <TextBox Text="{Binding ThemeName, UpdateSourceTrigger=PropertyChanged}" MinWidth="220"/>
+      <TextBlock Text="（同名覆盖；light/dark 为保留名）" VerticalAlignment="Center"
+                 Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button Content="取消" Command="{Binding CancelCommand}" Padding="20,8" MinWidth="80"/>
+      <Button Content="保存" Classes="primary" Command="{Binding SaveCommand}" Padding="20,8" MinWidth="80"/>
+    </StackPanel>
+  </Grid>
+</Window>

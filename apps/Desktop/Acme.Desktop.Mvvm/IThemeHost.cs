@@ -25,4 +25,13 @@ public interface IThemeHost
 
     /// <summary>选中主题并持久化。name 命中内置/用户文件；用户文件缺失则回退 light。</summary>
     Task SelectThemeAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>临时覆盖 overlay JSON（调色板实时预览用，不持久化主题名）。
+    /// 设值触发窗口订阅 <c>ThemeLoader.Apply</c> 即时重染；传 null 恢复无 overlay 基线。
+    /// 与 <see cref="SelectThemeAsync"/> 区别：后者读文件 + 持久化名，本方法仅设 overlay 不改名不落盘。</summary>
+    void SetCustomThemeJson(string? json);
+
+    /// <summary>保存自定义主题：写 &lt;tenantDir&gt;/themes/&lt;name&gt;.json + 重扫主题列表 + 选中并持久化。
+    /// 调色板「保存」调用：用户调色后生成的 overlay JSON 经此落盘成命名主题，菜单立即可选、跨重启持久。</summary>
+    Task SaveCustomThemeAsync(string name, string json, CancellationToken cancellationToken = default);
 }

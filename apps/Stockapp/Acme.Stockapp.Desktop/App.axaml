@@ -8,6 +8,8 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"/>
+        <!-- ColorPicker 控件主题（ColorView 光谱/HSV/RGB/hex 模板）。不引则 ColorView 无 ControlTheme → 不渲染光谱。同 AvaloniaEdit 模式。 -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
         <StyleInclude Source="avares://Acme.Desktop.Shared/Themes/SharedTheme.axaml"/>
     </Application.Styles>
 
