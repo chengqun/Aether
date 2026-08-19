@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -22,7 +23,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// 在本服务内（统一一处）：向控件 SendInput 命令 + OSC 8331 退出码哨兵，订阅 <see cref="TerminalControl.DataReceived"/>
 /// 扫原始字节命中哨兵拿退出码。Workbench 加载即建全部 panel 视图（IsVisible 切换不销毁）→ 视图常驻，PTY 跨 nav 不断。
 /// </remarks>
-public sealed class TerminalService : ITerminalService
+public sealed class TerminalService : ITerminalService, IAsyncDisposable
 {
     private readonly Dictionary<Guid, SessionInfo> _sessions = new();
     private readonly object _lock = new();
@@ -89,6 +90,21 @@ public sealed class TerminalService : ITerminalService
             view.DisposeAllControls();
             _view = null;
         }
+    }
+
+    /// <summary>app 退出时容器 DisposeAsync 调此：杀所有仍在跑的 PTY 子进程，防退出后 shell 孤儿。
+    /// 镜像 BrowserService.DisposeAsync（③）。PTY 控件归视图所有，正常退出经视觉树分离（DetachView→
+    /// DisposeAllControls）已清；此处兜底 dispose 先于树分离或视图仍附着的情形——经视图 StopAllPtys()
+    /// 只动进程句柄（线程无关），不触视觉树 Remove（须 UI 线程），故 dispose 跑非 UI 线程也安全。</summary>
+    public ValueTask DisposeAsync()
+    {
+        TerminalView? view;
+        lock (_lock) { view = _view; }
+        try { view?.StopAllPtys(); }
+        catch (Exception ex) { Trace.WriteLine($"terminal dispose stop-pty failed: {ex}"); }
+        lock (_lock) { _sessions.Clear(); _activeId = null; }
+        _view = null;
+        return ValueTask.CompletedTask;
     }
 
     public ITerminalSession CreateSession(string? cwd, string? title)

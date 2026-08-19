@@ -122,6 +122,20 @@ public partial class TerminalView : UserControl
         _controls.Clear();
     }
 
+    /// <summary>仅杀所有 PTY 子进程 + 关 PTY 句柄，**不动视觉树**（不 Remove 子控件）。
+    /// 供 TerminalService.DisposeAsync 在 app 退出时调：容器 dispose 可能跑在非 UI 线程，
+    /// <c>ContentHost.Children.Remove</c> 是 Avalonia 视觉树操作须在 UI 线程，故此法只动进程句柄（线程无关）。
+    /// 正常退出时视觉树分离（OnDetachedFromVisualTree→DetachView→DisposeAllControls）已先清 PTY，
+    /// 此处是兜底：若 dispose 先于树分离发生（视图仍附着），补杀残留 PTY 子进程防退出后 shell 孤儿。</summary>
+    public void StopAllPtys()
+    {
+        foreach (var ctrl in _controls.Values)
+        {
+            try { ctrl.StopPty(); } catch { }
+            try { ctrl.RequestClose(); } catch { }
+        }
+    }
+
     // —— 主题 ——
     private void ApplyThemeToAll()
 
