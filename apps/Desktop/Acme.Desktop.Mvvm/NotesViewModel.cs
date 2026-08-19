@@ -417,6 +417,10 @@ public partial class NotesViewModel : ObservableObject
 
             await _dispatcher.InvokeAsync(() =>
             {
+                // 重建前记下当前选中节点 id：reload（尤其 AI 批量编辑触发的）排队期间用户可能已切到
+                // 别的节点；重建后若旧选中仍在则继续选它，避免把用户刚切到的节点抢回首项（"切不动"）。
+                // 首次加载 SelectedNode 为 null → 回退首项（同原行为）。
+                var prevSelectedId = SelectedNode?.Id;
                 var lookup = vms.ToDictionary(n => n.Id);
 
                 foreach (var node in vms)
@@ -442,7 +446,9 @@ public partial class NotesViewModel : ObservableObject
                     _loadingExp = false;
                 }
 
-                SelectedNode = Roots.FirstOrDefault();
+                // 保持用户当前选中（而非无脑跳回首项）：AI 编辑触发 reload 时旧选中仍在则续选它。
+                NoteNodeVM? kept = prevSelectedId.HasValue ? FindNode(Roots, prevSelectedId.Value) : null;
+                SelectedNode = kept ?? Roots.FirstOrDefault();
             });
         }
         catch (Exception ex)
@@ -462,11 +468,31 @@ public partial class NotesViewModel : ObservableObject
         return row;
     }
 
-    /// <summary>外部（如 AI 工具）修改笔记后触发：刷新树，保持展开/选中状态。</summary>
+    private CancellationTokenSource? _externalRefreshCts;
+
+    /// <summary>外部改动刷新去抖窗口：AI 一连串 note 操作（同 turn 内多次 Create/Update/Delete）停顿后触发 1 次 reload。</summary>
+    private const int ExternalRefreshDebounceMs = 250;
+
+    /// <summary>外部（如 AI 工具）修改笔记后触发：**去抖**后刷新树，保持展开/选中状态。
+    /// 一个 AI turn 常连发多次 Create/Update/Delete（各自 NotifyChanged）；若每次都立即
+    /// <c>_dispatcher.Post(RefreshAsync)</c>，N 次 reload 排队、每次在 UI 线程 Clear+Add 重建整树
+    /// （大树每次数百节点、数百 ms）→ UI 线程被占满 → 用户切节点点击排队 → "卡住"。去抖把一连串
+    /// 改动合并成 1 次 reload（停顿 ExternalRefreshDebounceMs 后触发）；期间 UI 线程空闲、切换不受阻
+    /// （树短暂 stale 远胜冻结）。LoadAsync/RefreshAsync 内仍有 _suppressExternalRefresh 执行期守卫，
+    /// 故延迟期跨越本地保存时也会被守卫跳过。</summary>
     private void OnNotesChangedExternal()
     {
         if (_suppressExternalRefresh) return;
-        _dispatcher.Post(async () => await RefreshAsync());
+        _externalRefreshCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _externalRefreshCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(ExternalRefreshDebounceMs, cts.Token); }
+            catch (TaskCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            _dispatcher.Post(async () => await RefreshAsync());
+        });
     }
 
     /// <summary>重新加载树，保持展开状态和选中节点。</summary>
