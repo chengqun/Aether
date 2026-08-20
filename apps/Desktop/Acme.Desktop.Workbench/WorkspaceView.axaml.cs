@@ -66,7 +66,6 @@ public partial class WorkspaceView : UserControl
     private int _chatSplitterCol = -1;                // chat 前的 GridSplitter col（= i*2-1）
     private GridLength _chatExpandedWidth = new(420, GridUnitType.Pixel); // 展开列宽（折叠前记实际值，含拖动后）
     private IChatPanelService? _chatService;
-    private int _chatTabIndex = -1;                   // ChatPage（全屏 AI 聊天页）在 LayoutTabbed.RegionIds 中的索引（-1 = 无 nav 入口 → 仅作可折叠右栏；切到 ChatPage nav 时右栏自动收起，单可见无双输入框）
 
     /// <summary>隐藏宿主尺寸记忆表：折叠/切 tab 隐藏后子控件 Bounds=0，ReadPixels 用此记忆的展开尺寸替换，防持久化 0。
     /// key=隐藏的 ContentControl（terminal/lefttree host），value=隐藏前的展开尺寸（像素值）。显隐时增删。</summary>
@@ -97,7 +96,6 @@ public partial class WorkspaceView : UserControl
         _chatSplitGrid = null;
         _chatCol = -1;
         _chatSplitterCol = -1;
-        _chatTabIndex = -1;
         _hiddenSizes.Clear();
         // 解订阅旧 workspace 的 SelectedTabIndex 通知（重建/切换工作台时）。
         if (_workspaceNpc is not null)
@@ -127,7 +125,7 @@ public partial class WorkspaceView : UserControl
 
         // 订阅右侧 AI 聊天面板显隐（VSCode 式可折叠侧栏）：折叠/展开 chat region 的 Grid 列宽（聊天视图不销毁，流式不中断）。
         // BuildLayout 已跑（上方 Content = BuildLayout），故 _chatSplitGrid/_chatCol 已填充。初次显隐在下方 tab 索引解析后调用
-        //（需 _chatTabIndex——tab-coupled：切到 chat nav 全屏入口时右栏自动收起，须先知 chat tab 索引才能判定）。
+        //（tab-coupled：切到关闭类 nav 时右栏自动收起，须先解析 tab 索引才能判定当前 tab）。
         _chatService ??= DesktopApp.Services?.GetService<IChatPanelService>();
         if (_chatService is not null)
         {
@@ -139,14 +137,12 @@ public partial class WorkspaceView : UserControl
         var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
         _documentsTabIndex = -1;
         _notesTabIndex = -1;
-        _chatTabIndex = -1;
         if (tabbed is not null)
         {
             for (int i = 0; i < tabbed.RegionIds.Count; i++)
             {
                 if (tabbed.RegionIds[i] == PanelKeys.Documents) _documentsTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.Notes) _notesTabIndex = i;
-                else if (tabbed.RegionIds[i] == PanelKeys.ChatPage) _chatTabIndex = i;
             }
         }
         if (_workspace is INotifyPropertyChanged pc)
@@ -155,7 +151,7 @@ public partial class WorkspaceView : UserControl
             pc.PropertyChanged += OnWorkspaceSelectedTabChanged;
         }
         ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
-        // 须在 _chatTabIndex 解析后调（tab-coupled：切到 chat nav 全屏入口时右栏自动收起——单可见，无双输入框）。
+        // 须在 BuildLayout 后调（tab-coupled：切到关闭类 nav 时右栏自动收起——单可见，无双输入框）。
         ApplyChatVisibility();
     }
 
@@ -406,8 +402,10 @@ public partial class WorkspaceView : UserControl
     private void ApplyTerminalVisibility(bool visible)
     {
         if (_terminalSplitGrid is null || _terminalRow < 0) return;
+        // tab-coupled：关闭类 tab（AI 聊天/专家/自动化/活动/网络）下终端视觉收起，切回编辑/数据页恢复（toggle 全局态不变，PTY 不中断）。
+        bool effective = visible && !IsPanelHidingTab(CurrentTabRegionId());
         var row = _terminalSplitGrid.RowDefinitions[_terminalRow];
-        if (!visible)
+        if (!effective)
         {
             if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后的实际值）
             row.Height = new GridLength(0);
@@ -443,12 +441,30 @@ public partial class WorkspaceView : UserControl
 
     // ── 侧栏 shell 级左栏条件可见（VSCode 式：documents/notes tab 显示对应树，切其它 tab 隐藏列宽 0） ──
 
-    /// <summary>workspace SelectedTabIndex 变化 → 侧栏显隐 + 切对应树（documents→文件树 / notes→笔记树 / 其它→隐藏）。</summary>
+    /// <summary>当前选中 tab 的 region id（LayoutTabbed.RegionIds[SelectedTabIndex]），null = 无 tabbed/越界。</summary>
+    private string? CurrentTabRegionId()
+    {
+        if (_workspace is null) return null;
+        var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
+        if (tabbed is null) return null;
+        var idx = _workspace.SelectedTabIndex;
+        if (idx < 0 || idx >= tabbed.RegionIds.Count) return null;
+        return tabbed.RegionIds[idx];
+    }
+
+    /// <summary>关闭类 tab：AI 聊天/专家/自动化/活动/网络——这些页默认不显示底部终端和右侧 AI 对话（VSCode 式：
+    /// 编辑/数据页才需终端+右栏辅助，非编辑页收起让出空间）。tab-coupled：切到这些 tab → 终端/右栏视觉收起
+    /// （toggle 全局态不变，PTY/流式不中断），切回编辑/数据页恢复；toggle 按钮仍反映全局 toggle 态（同 chat tab-coupled 范式）。</summary>
+    private static bool IsPanelHidingTab(string? regionId)
+        => regionId is PanelKeys.ChatPage or PanelKeys.Experts or PanelKeys.Automation or PanelKeys.Activity or PanelKeys.Browser;
+
+    /// <summary>workspace SelectedTabIndex 变化 → 侧栏显隐 + 切对应树 + 终端/右栏 tab-coupled（关闭类 tab 收起）。</summary>
     private void OnWorkspaceSelectedTabChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IWorkspace.SelectedTabIndex) || _workspace is null) return;
         ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
-        ApplyChatVisibility(); // tab-coupled：切到/切出 chat nav 时右栏自动收起/展开（单可见，无双输入框）
+        ApplyChatVisibility(); // tab-coupled 右栏：关闭类 tab（AI 聊天/专家/自动化/活动/网络）收起
+        ApplyTerminalVisibility(_terminalService?.IsPanelVisible ?? true); // tab-coupled 终端：同上
     }
 
     /// <summary>当前 tab → 侧栏活动树：documents→"documents" / notes→"notes" / 其它→null（隐藏左栏）。</summary>
@@ -511,17 +527,13 @@ public partial class WorkspaceView : UserControl
     /// <summary>折叠/展开右侧聊天 region：改其父 Grid 列宽（0 ↔ 展开宽度）+ splitter 显隐 + content 显隐。
     /// 折叠时聊天视图不销毁（仅隐藏 region 空间，流式回复继续在后台）。镜像 <see cref="ApplyLeftTreeVisibility"/>，
     /// 但不切子树（聊天只有单一视图，无 documents/notes 那种树切换）。复用 <see cref="SetSplitterVisibleCol"/>，不新增方法。
-    /// tab-coupled（Option A）：有效可见 = toggle 开 && 当前非 chat nav 全屏入口——切到「AI 聊天」nav 时右栏自动收起
-    /// （聊天全幅在主面板单可见，避免双输入框）；切回其它 nav 时若 toggle 开则右栏「漏出来」边聊边看期货/文档。
-    /// _chatTabIndex &lt; 0 = 该 workspace 无 chat nav 入口 → 退化为纯 toggle（恒不因 tab 收起）。</summary>
+    /// tab-coupled（Option A）：有效可见 = toggle 开 && 当前非关闭类 tab——切到「AI 聊天/专家/自动化/活动/网络」nav 时
+    /// 右栏自动收起（这些页不需边聊边看，让出空间）；切回编辑/数据页时若 toggle 开则右栏「漏出来」边聊边看期货/文档。</summary>
     private void ApplyChatVisibility()
     {
         if (_chatSplitGrid is null || _chatCol < 0) return;
         bool toggleOn = _chatService?.IsChatVisible ?? true; // 默认开（不回归）
-        bool chatTabActive = _chatTabIndex >= 0
-            && _workspace is not null
-            && _workspace.SelectedTabIndex == _chatTabIndex;
-        bool visible = toggleOn && !chatTabActive;
+        bool visible = toggleOn && !IsPanelHidingTab(CurrentTabRegionId());
         var col = _chatSplitGrid.ColumnDefinitions[_chatCol];
         if (!visible)
         {
