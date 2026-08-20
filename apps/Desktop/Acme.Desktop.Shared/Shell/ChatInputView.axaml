@@ -3,11 +3,10 @@
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.ChatInputView">
 
-  <!-- 输入列（plan-accept / 活动计划 / 输入卡 / 免责）。居中 + MaxWidth 768（软上限，非硬 Width）：
-       窗口窄时跟着缩（不溢出）、宽时停 768 居中——对齐 ChatGPT 桌面端响应式居中列。
-       容器只管垂直位置（非空态：底部 dock 全宽条；空态：居中 hero）。被 ChatPageView 两态共用。
+  <!-- 输入列（plan-accept / 活动计划 / 输入卡 / 免责）。自居中 MaxWidth 768——容器只管位置
+       （非空态：底部 dock 全宽条；空态：居中 hero）。被 ChatPageView 两态共用此单一输入定义。
        pill 圆角 16 是全屏页专属（紧凑右栏 ChatView 自持其输入，不经此控件）。 -->
-  <StackPanel Spacing="6" HorizontalAlignment="Center" MaxWidth="768">
+  <StackPanel Spacing="6" HorizontalAlignment="Center" MaxWidth="768" Width="768">
     <!-- plan-accept 条：plan 模式下计划就绪后提示接受→执行 -->
     <Border Classes="chat-input-card" Padding="12,8" IsVisible="{Binding ShowPlanAccept}" CornerRadius="12">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">

@@ -103,11 +103,10 @@
         </Panel>
       </DockPanel>
 
-      <!-- 空态：当前会话无消息 → 居中 hero（问候 + 输入），ChatGPT/WorkBuddy 式。首次发送后 HasMessages 翻 true，自动落回非空态。
-           MaxWidth 768 软上限（非硬 Width）：窄窗跟着缩、宽窗停 768 居中——与下方输入框/消息列同行为。 -->
+      <!-- 空态：当前会话无消息 → 居中 hero（问候 + 输入），ChatGPT/WorkBuddy 式。首次发送后 HasMessages 翻 true，自动落回非空态。 -->
       <StackPanel IsVisible="{Binding !HasMessages}"
                   VerticalAlignment="Center" HorizontalAlignment="Center"
-                  MaxWidth="768" Spacing="24">
+                  MaxWidth="768" Width="768" Spacing="24">
         <StackPanel Spacing="10" HorizontalAlignment="Center">
           <TextBlock Text="👋" FontSize="40" HorizontalAlignment="Center"/>
           <TextBlock Text="开始对话" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"
