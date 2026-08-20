@@ -179,7 +179,7 @@ public partial class DocumentsViewModel : ObservableObject
         var tab = new DocumentTab(filePath, content, syntaxKey);
         Tabs.Add(tab);
         ActiveTab = tab;
-        StatusMessage = $"已打开 {tab.FileName}";
+        StatusMessage = string.Empty; // 成功操作不在标题栏显示确认日志（仅错误/失败时显示）
     }
 
     /// <summary>树节点选中文件时：若该文件已是打开标签则激活并返回 true；未开返回 false（由 View 读取后 <see cref="Open"/>）。</summary>
@@ -254,7 +254,7 @@ public partial class DocumentsViewModel : ObservableObject
             var root = await Task.Run(() => BuildNode(path, isRoot: true));
             Roots.Add(root);
             root.IsExpanded = true;
-            StatusMessage = $"已打开 {ProjectName}";
+            StatusMessage = string.Empty;
             await PersistProjectPathAsync(path);
         }
         catch (Exception ex)
@@ -350,7 +350,7 @@ public partial class DocumentsViewModel : ObservableObject
             tab.IsStale = false;
             try { tab.LastDiskWrite = File.GetLastWriteTime(tab.FilePath); }
             catch { /* 忽略 */ }
-            StatusMessage = $"已保存 {tab.FileName}";
+            StatusMessage = string.Empty;
         }
         catch (Exception ex)
         {
@@ -505,7 +505,7 @@ public partial class DocumentsViewModel : ObservableObject
             try { tab.LastDiskWrite = File.GetLastWriteTime(tab.FilePath); }
             catch { /* 忽略 */ }
             TabExternallyReloaded?.Invoke(tab);
-            if (ReferenceEquals(ActiveTab, tab)) StatusMessage = $"已重载 {tab.FileName}";
+            if (ReferenceEquals(ActiveTab, tab)) StatusMessage = string.Empty;
         }
         catch (Exception ex)
         {

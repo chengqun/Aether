@@ -596,7 +596,7 @@ public partial class NotesViewModel : ObservableObject
             }
             SelectedNode = created;
 
-            StatusMessage = $"已创建「{title}」";
+            StatusMessage = string.Empty; // 成功操作不在标题栏显示确认日志（仅错误/失败时显示）
             NotesChanged?.Invoke();
         }
         catch (Exception ex)
@@ -627,7 +627,7 @@ public partial class NotesViewModel : ObservableObject
                 Icon = row.IconKey ?? "",
             });
 
-            StatusMessage = $"已保存「{name}」";
+            StatusMessage = string.Empty;
             NotesChanged?.Invoke();
         }
         catch (Exception ex)
@@ -670,7 +670,7 @@ public partial class NotesViewModel : ObservableObject
                 }
                 SelectedNode = source;
             });
-            StatusMessage = $"已移动「{source.Title}」";
+            StatusMessage = string.Empty;
         }
         catch (Exception ex)
         {
@@ -729,7 +729,7 @@ public partial class NotesViewModel : ObservableObject
             }
             catch { /* 单条失败不阻断其余 */ }
         }
-        StatusMessage = "顺序已保存";
+        StatusMessage = string.Empty;
     }
 
     [RelayCommand]
@@ -739,7 +739,7 @@ public partial class NotesViewModel : ObservableObject
         _saveCts?.Cancel();
         await SaveNodeInternalAsync(SelectedNode);
         _dirty = false;
-        StatusMessage = "已保存";
+        StatusMessage = string.Empty;
         NotesChanged?.Invoke();
     }
 
@@ -763,7 +763,7 @@ public partial class NotesViewModel : ObservableObject
                 else Roots.Remove(node);
                 SelectedNode = parent ?? Roots.FirstOrDefault();
             });
-            StatusMessage = $"已删除：{title}";
+            StatusMessage = string.Empty;
             NotesChanged?.Invoke();
         }
         catch (Exception ex)
@@ -827,7 +827,7 @@ public partial class NotesViewModel : ObservableObject
             return;
         }
         SelectAndRevealNode(target);
-        StatusMessage = $"已跳转：{target.Title}";
+        StatusMessage = string.Empty;
     }
 
     /// <summary>展开目标节点的所有祖先并选中它（Avalonia TreeView 程序化选中折叠父下的节点不会自动展开/滚动到视野）。</summary>
