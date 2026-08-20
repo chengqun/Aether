@@ -19,7 +19,51 @@
     </ResourceDictionary>
   </Window.Resources>
 
-  <DockPanel>
+  <Grid>
+    <!-- Layer 0: 动画梦幻背景层（皮肤 animated=true 时显，aurora 漂移光斑；半透明面板让 aurora 透出） -->
+    <Grid x:Name="DreamLayer" IsHitTestVisible="False" IsVisible="{Binding IsDreamLayerVisible}" ClipToBounds="True"/>
+
+    <!-- Layer 1: shell（nav rail + 工作台）—— DreamLayer 在其下层 -->
+    <DockPanel>
+
+    <!-- ═══ 自绘标题栏（仅 borderless 皮肤显：dream 类。透明底让 aurora/渐变透出 → 沉浸无边框） ═══ -->
+    <Border x:Name="CustomTitleBar" DockPanel.Dock="Top"
+            Height="{Binding TitleBarHeight}" IsVisible="{Binding IsBorderless}"
+            Background="Transparent"
+            PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
+      <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Stretch">
+        <!-- 标题（轻量、不抢戏；IsHitTestVisible=False 让拖拽穿透到 Border） -->
+        <TextBlock Grid.Column="0" Text="Aether" Margin="14,0,0,0"
+                   VerticalAlignment="Center" IsHitTestVisible="False"
+                   FontFamily="{DynamicResource UiFont}" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+        <!-- 窗口控制按钮（右对齐，Windows 式三键；dream.styles 给 win-btn 皮肤） -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Classes="win-btn" Click="OnMinimize" ToolTip.Tip="最小化">
+            <Path Data="{x:Static shell:Codicons.ChromeMinimize}" Stretch="Uniform" Width="12" Height="12"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Button>
+          <Button x:Name="MaxBtn" Classes="win-btn" Click="OnMaximizeRestore" ToolTip.Tip="最大化/还原">
+            <!-- 最大化/还原图标按 WindowState 切（ChromeMaximize / ChromeRestore）；两者叠放、IsVisible 互斥 -->
+            <Panel>
+              <Path x:Name="MaxIcon" Data="{x:Static shell:Codicons.ChromeMaximize}" Stretch="Uniform" Width="12" Height="12"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              <Path x:Name="RestoreIcon" Data="{x:Static shell:Codicons.ChromeRestore}" Stretch="Uniform" Width="12" Height="12"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False"/>
+            </Panel>
+          </Button>
+          <Button Classes="win-btn win-close" Click="OnClose" ToolTip.Tip="关闭">
+            <Path Data="{x:Static shell:Codicons.ChromeClose}" Stretch="Uniform" Width="12" Height="12"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
     <!-- ═══ 侧边栏（48px 图标导航栏，常驻不展开） ═══ -->
     <Border DockPanel.Dock="Left" Width="48"
             Background="{DynamicResource SidebarBgBrush}"
@@ -45,7 +89,7 @@
             <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="16" Height="16"
                   Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
             <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="16" Height="16"
-                  Fill="{DynamicResource SecondaryFgBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
+                  Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
           </Grid>
         </Button>
 
@@ -98,5 +142,6 @@
     <ContentControl Content="{Binding ActiveWorkspace}"
                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                     Background="{DynamicResource ContentBgBrush}"/>
-  </DockPanel>
+    </DockPanel>
+  </Grid>
 </Window>

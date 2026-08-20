@@ -93,6 +93,20 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     [ObservableProperty]
     private bool _isDarkVariant;
 
+    /// <summary>是否显示动画梦幻背景层（aurora 漂移光斑）。由主题 JSON 的 animated 字段驱动（dream 类皮肤 true）。
+    /// WorkbenchWindow 订阅此属性变化启停 aurora；普通主题 false = 静态背景，aurora 停跑省 CPU。</summary>
+    [ObservableProperty]
+    private bool _isDreamLayerVisible;
+
+    /// <summary>是否无边框自绘标题栏（dream 类炫皮肤 borderless=true）。由主题 JSON 的 chrome.borderless 字段驱动。
+    /// WorkbenchWindow 订阅此属性变化切 ExtendClientAreaToDecorationsHint + 显隐自绘标题栏；普通主题 false = 系统原生 chrome。</summary>
+    [ObservableProperty]
+    private bool _isBorderless;
+
+    /// <summary>自绘标题栏高度（px）。borderless=true 时生效，默认 36。由主题 JSON 的 chrome.titleBarHeight 字段驱动。</summary>
+    [ObservableProperty]
+    private double _titleBarHeight = 36;
+
     /// <summary>底部终端面板是否可见（侧边栏终端 toggle 按钮绑此 + 驱动高亮态）。
     /// 状态由 <see cref="ITerminalService.PanelVisibilityChanged"/> 事件同步——TerminalView 折叠按钮 / 本 VM 的 ToggleTerminalCommand 都经 service 改态，事件回写此属性。</summary>
     [ObservableProperty]
@@ -108,6 +122,8 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     // overlay JSON 或明暗倾向一变即通知子窗口重染（CustomThemeJson 由 [ObservableProperty] 生成 public 属性，已满足接口）。
     partial void OnCustomThemeJsonChanged(string? value) => ThemeChanged?.Invoke(this, EventArgs.Empty);
     partial void OnIsDarkVariantChanged(bool value) => ThemeChanged?.Invoke(this, EventArgs.Empty);
+    partial void OnIsBorderlessChanged(bool value) => ThemeChanged?.Invoke(this, EventArgs.Empty);
+    partial void OnTitleBarHeightChanged(double value) => ThemeChanged?.Invoke(this, EventArgs.Empty);
 
     private DesktopOptions? _desktopOptions;
     /// <summary>桌面路径选项（惰性从 DI 取，同 NotesViewModel 的 NotesEditorOptions 模式）。</summary>
@@ -245,7 +261,10 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         }
         // 深色倾向：读 JSON variant 字段（"light"→false，缺省/其它→true）。
         // 所有内置主题 JSON 均带 variant 字段；驱动 Avalonia 原生控件 ThemeVariant——overlay 不覆盖原生控件，须靠 variant 翻转。
-        IsDarkVariant = !string.Equals(ThemeLoader.Deserialize(json ?? "")?.Variant, "light", StringComparison.OrdinalIgnoreCase);
+        var def = ThemeLoader.Deserialize(json ?? "");
+        IsDarkVariant = !string.Equals(def?.Variant, "light", StringComparison.OrdinalIgnoreCase);
+        IsDreamLayerVisible = def?.Animated == true;   // dream 类皮肤开 aurora 动画背景层
+        ApplyChrome(def);   // dream 类皮肤 borderless=true → 无边框自绘标题栏
         CustomThemeJson = json;   // 触发 ThemeLoader.Apply（窗口订阅 CustomThemeJson 变化）
         Theme = name;             // 当前名（高亮）
         foreach (var t in Themes)
@@ -279,7 +298,21 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     {
         CustomThemeJson = json;
         if (json is not null)
-            IsDarkVariant = !string.Equals(ThemeLoader.Deserialize(json)?.Variant, "light", StringComparison.OrdinalIgnoreCase);
+        {
+            var def = ThemeLoader.Deserialize(json);
+            IsDarkVariant = !string.Equals(def?.Variant, "light", StringComparison.OrdinalIgnoreCase);
+            IsDreamLayerVisible = def?.Animated == true;   // 实时预览也同步 aurora 层（调色板切 animated 皮肤）
+            ApplyChrome(def);   // 实时预览也同步 chrome（调色板切 borderless 皮肤）
+        }
+    }
+
+    /// <summary>从主题定义读 chrome 字段设 <see cref="IsBorderless"/>/<see cref="TitleBarHeight"/>。
+    /// null def / 无 chrome = 系统原生 chrome（borderless=false, 高度保持默认）。两处主题设置路径共用。</summary>
+    private void ApplyChrome(ThemeDefinition? def)
+    {
+        IsBorderless = def?.Chrome?.Borderless == true;
+        if (def?.Chrome?.TitleBarHeight is { } h and > 0)
+            TitleBarHeight = h;
     }
 
     /// <inheritdoc/>

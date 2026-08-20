@@ -32,10 +32,10 @@
       <Setter Property="MinHeight" Value="0"/>
     </Style>
     <Style Selector="ListBox.docs-tabs > ListBoxItem:selected">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
     <Style Selector="ListBox.docs-tabs > ListBoxItem:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
     <!-- 关闭小按钮 -->
     <Style Selector="Button.tab-close">
@@ -45,11 +45,11 @@
       <Setter Property="Width" Value="18"/>
       <Setter Property="Height" Value="18"/>
       <Setter Property="FontSize" Value="14"/>
-      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.tab-close:pointerover">
       <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
-      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Foreground" Value="{DynamicResource OnDangerBrush}"/>
     </Style>
 
     <!-- 预览切换按钮 -->
@@ -57,15 +57,15 @@
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="ToggleButton.preview-toggle:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
     <Style Selector="ToggleButton.preview-toggle:checked">
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
   </UserControl.Styles>
 
@@ -98,7 +98,7 @@
           </ToggleButton>
           <TextBlock DockPanel.Dock="Right" Text="{Binding StatusMessage}"
                      VerticalAlignment="Center" Margin="8,0,6,0"
-                     Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"
+                     Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                      IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
           <ListBox Name="TabsList" Classes="docs-tabs"
                    ItemsSource="{Binding Tabs}" SelectedItem="{Binding ActiveTab}"
@@ -172,11 +172,11 @@
                   IsVisible="True">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                         Spacing="10" Opacity="0.6">
-              <Path Data="{x:Static shell:Codicons.File}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource SecondaryTextBrush}"/>
+              <Path Data="{x:Static shell:Codicons.File}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
               <TextBlock Text="在左侧文件树点击文件打开" FontSize="14"
-                         Foreground="{DynamicResource SecondaryTextBrush}"/>
+                         Foreground="{DynamicResource TextSecondaryBrush}"/>
               <TextBlock Text="支持 .cs .py .json .md .yaml .sql .js .xml 等语法高亮" FontSize="12"
-                         Foreground="{DynamicResource SecondaryTextBrush}"/>
+                         Foreground="{DynamicResource TextSecondaryBrush}"/>
             </StackPanel>
           </Border>
         </Grid>

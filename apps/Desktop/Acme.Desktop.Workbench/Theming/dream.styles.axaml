@@ -1,0 +1,134 @@
+<!-- dream 皮肤样式包（Codex-CSS 式特效层）—— 与 dream.json 配对：
+     JSON overlay 负责颜色/渐变 token；本 .axaml 负责非 token 化的"炫"特效（发光/深度阴影/悬停加亮）。
+     经 ThemeLoader.Apply 用 StyleInclude 载入并 merge 进窗口 Styles。换肤移除。
+     紫色发光是 dream 皮肤签名色（#a78bfa violet）；别的皮肤另起 .axaml 用各自色。
+     ── 静态发光（base） + 悬停加亮（:pointerover）两段。悬停时发光增强 → "活/炫"的微交互。
+     ── 不用 <Style.Animations> 脉冲：dotted/子属性动画路径 API 不稳（本仓无先例可镜），
+        错路径能编过但运行时静默 no-op（headless 抓不到）；动画优先级已由 aurora 漂移层承担。 -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ═══ 静态发光（base）：常驻辉光 ──── -->
+
+  <!-- 用户气泡：紫色外发光（Neon Dream 标志） -->
+  <Style Selector="Border.bubble-user">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="20" Opacity="0.55" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+
+  <!-- 主按钮（accent）：柔和紫光 + 微下沉 -->
+  <Style Selector="Button.primary">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="16" Opacity="0.45" OffsetX="0" OffsetY="2"/>
+    </Setter>
+  </Style>
+
+  <!-- 账号按钮·收起态 rail（侧栏底部头像，Workbench shell 实显）：圆形紫光环 -->
+  <Style Selector="Button.account-rail">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#8b5cf6" BlurRadius="18" Opacity="0.5" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+  <!-- 账号按钮·展开态 chip（设置/对话框内展开侧栏用）：同款紫光环 -->
+  <Style Selector="Button.account-chip">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#8b5cf6" BlurRadius="18" Opacity="0.5" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+
+  <!-- 卡片：深度阴影（非发光——给玻璃面板加悬浮感，免平面化） -->
+  <Style Selector="Border.card">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#000000" BlurRadius="28" Opacity="0.30" OffsetX="0" OffsetY="6"/>
+    </Setter>
+  </Style>
+
+  <!-- 消息卡（工具调用/结果卡）：轻发光描边感 -->
+  <Style Selector="Border.msg-card">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#302b63" BlurRadius="16" Opacity="0.4" OffsetX="0" OffsetY="2"/>
+    </Setter>
+  </Style>
+
+  <!-- 发送按钮：紫光（与主按钮呼应，强调动作） -->
+  <Style Selector="Button.send-btn">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="14" Opacity="0.4" OffsetX="0" OffsetY="1"/>
+    </Setter>
+  </Style>
+
+  <!-- ═══ 悬停加亮（:pointerover）：发光增强 → 鼠标移近"亮起来"的活感 ──── -->
+
+  <!-- 主按钮悬停：紫光放大 + 提亮 -->
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="24" Opacity="0.7" OffsetX="0" OffsetY="2"/>
+    </Setter>
+  </Style>
+
+  <!-- 发送按钮悬停：紫光放大 + 提亮（发送动作的"就绪"高亮） -->
+  <Style Selector="Button.send-btn:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="22" Opacity="0.75" OffsetX="0" OffsetY="1"/>
+    </Setter>
+  </Style>
+
+  <!-- 导航项悬停：accent 微光（小图标按钮，光弱避免喧宾夺主） -->
+  <Style Selector="Button.nav-rail:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="14" Opacity="0.5" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+
+  <!-- 账号按钮悬停（收起/展开两态）：紫光环放大 -->
+  <Style Selector="Button.account-rail:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#8b5cf6" BlurRadius="26" Opacity="0.7" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+  <Style Selector="Button.account-chip:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#8b5cf6" BlurRadius="26" Opacity="0.7" OffsetX="0" OffsetY="0"/>
+    </Setter>
+  </Style>
+
+  <!-- 卡片悬停：描边转 accent 色 + 紫光（玻璃面板"被点亮"） -->
+  <Style Selector="Border.card:pointerover">
+    <Setter Property="BorderBrush" Value="#33a78bfa"/>
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="20" Opacity="0.35" OffsetX="0" OffsetY="4"/>
+    </Setter>
+  </Style>
+
+  <!-- 消息卡悬停：轻紫光提亮 -->
+  <Style Selector="Border.msg-card:pointerover">
+    <Setter Property="Effect">
+      <DropShadowEffect Color="#a78bfa" BlurRadius="18" Opacity="0.45" OffsetX="0" OffsetY="2"/>
+    </Setter>
+  </Style>
+
+  <!-- ═══ 自绘标题栏窗口按钮（borderless 皮肤；三键右对齐）──── -->
+  <Style Selector="Button.win-btn">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Width" Value="42"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.win-btn:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+  </Style>
+  <Style Selector="Button.win-btn:pressed">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+  <!-- 关闭键悬停转红（macOS 式红键，余两键灰）——须在 win-btn:pointerover 之后，特异性同则后写者胜 -->
+  <Style Selector="Button.win-close:pointerover">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnDangerColor}"/>
+  </Style>
+
+</Styles>

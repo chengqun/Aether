@@ -11,11 +11,11 @@
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.term-tab:active /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="TextElement.Foreground" Value="White"/>
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}"/>
     </Style>
     <Style Selector="Button.term-tab:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource SidebarBgBrush}"/>
@@ -26,18 +26,18 @@
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.term-close:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="TextElement.Foreground" Value="White"/>
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}"/>
     </Style>
     <Style Selector="Button.term-new">
       <Setter Property="Padding" Value="8,2"/>
       <Setter Property="FontSize" Value="14"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Foreground" Value="{DynamicResource SecondaryFgBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.term-new:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource SidebarBgBrush}"/>

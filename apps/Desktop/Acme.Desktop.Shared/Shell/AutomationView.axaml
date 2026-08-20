@@ -50,7 +50,7 @@
                 Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 HorizontalAlignment="Center" Margin="0,40">
           <StackPanel Spacing="8" HorizontalAlignment="Center">
-            <Path Data="{x:Static shell:Codicons.Calendar}" Stretch="Uniform" Width="40" Height="40" HorizontalAlignment="Center" Fill="{DynamicResource SecondaryTextBrush}"/>
+            <Path Data="{x:Static shell:Codicons.Calendar}" Stretch="Uniform" Width="40" Height="40" HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
             <TextBlock Text="还没有定时任务" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
             <TextBlock Text="点击右上角「+ 创建任务」，让专家按计划自动运行" FontSize="12"

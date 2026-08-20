@@ -43,6 +43,12 @@ public static class Codicons
     public static readonly string Close = R(PackIconCodiconsKind.Close);                 // ✕
     public static readonly string Add = R(PackIconCodiconsKind.Add);                     // ✚
 
+    // —— 窗口控制（自绘标题栏 borderless 皮肤用）——
+    public static readonly string ChromeClose = R(PackIconCodiconsKind.ChromeClose);
+    public static readonly string ChromeMinimize = R(PackIconCodiconsKind.ChromeMinimize);
+    public static readonly string ChromeMaximize = R(PackIconCodiconsKind.ChromeMaximize);
+    public static readonly string ChromeRestore = R(PackIconCodiconsKind.ChromeRestore);
+
     // —— 功能 / 卡片图标 ——
     public static readonly string Sparkle = R(PackIconCodiconsKind.Sparkle);             // 💭 思考 / ⚡
     public static readonly string Tools = R(PackIconCodiconsKind.Tools);                 // 🔧

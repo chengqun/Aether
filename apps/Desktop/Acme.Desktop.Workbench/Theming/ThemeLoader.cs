@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -13,7 +14,7 @@ using Avalonia.Styling;
 namespace Acme.Desktop.Workbench.Theming;
 
 /// <summary>
-/// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
+/// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/LinearGradientBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
 /// 叠加在 WorkbenchTheme.axaml（编译期 token 基线）之上。内置主题（light/dark）
 /// 同为 JSON overlay——换 JSON 即换肤，无需重编；用户可在 &lt;tenantDir&gt;/themes/*.json 放自定义主题，或同名 JSON 覆盖内置。
 /// 全部经 {DynamicResource} 消费 → overlay merge 后全量重染（颜色/字体/圆角/间距/背景）。
@@ -24,12 +25,17 @@ public static class ThemeLoader
 
     private static readonly ConditionalWeakTable<StyledElement, ResourceDictionary> _overlays = new();
 
+    /// <summary>每个目标元素当前应用的皮肤 .axaml 样式包（StyleInclude），按目标跟踪——换肤时先移除旧样式再装新。
+    /// 与 _overlays（token ResourceDictionary）平级：token overlay 覆盖颜色/渐变画刷，styles overlay 覆盖特效/控制模板。</summary>
+    private static readonly ConditionalWeakTable<StyledElement, IStyle> _styleOverlays = new();
+
     /// <summary>内置主题清单（name→显示描述）。每个 name 对应内嵌资源 Assets/{name}.json。
     /// 新增内置主题 = 把 JSON 放进 Assets/ + 在此加一行（csproj 的 Assets\**\* glob 自动纳入资源）。</summary>
     public static readonly (string Name, string Description)[] BuiltInThemes =
     {
         ("light", "内置浅色"),
         ("dark", "内置深色"),
+        ("dream", "梦幻渐变"),
     };
 
     /// <summary>判断 name 是否为内置主题名。</summary>
@@ -90,6 +96,32 @@ public static class ThemeLoader
                 }
             }
         }
+        // 渐变画刷覆盖：在 Colors 纯色 Brush 之上覆盖为渐变（LinearGradientBrush）。给"炫"主题用（梦幻/霓虹渐变主色）。
+        if (def.Gradients is { Count: > 0 })
+        {
+            foreach (var (key, spec) in def.Gradients)
+            {
+                var g = BuildGradient(spec);
+                if (g is null) continue;
+                dict[key] = g;
+                // *Brush 渐变 → *Color 取首停靠点色（让消费 Color 资源的 XAML 不崩；colors 里显式给了则已覆盖，此处仅在缺时补）
+                if (key.EndsWith("Brush", StringComparison.Ordinal))
+                {
+                    var colorKey = key[..^"Brush".Length] + "Color";
+                    if (def.Colors?.ContainsKey(colorKey) != true)
+                    {
+                        foreach (var s in spec.Stops)
+                        {
+                            if (!string.IsNullOrWhiteSpace(s.Color) && Color.TryParse(s.Color!, out var sc))
+                            {
+                                dict[colorKey] = sc;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (def.Fonts is not null)
         {
             foreach (var (key, val) in def.Fonts)
@@ -125,6 +157,12 @@ public static class ThemeLoader
 
     private static IBrush? BuildBackground(BackgroundDef bg)
     {
+        // 优先级：渐变 > 图片 > 纯色
+        if (bg.Gradient is not null)
+        {
+            var g = BuildGradient(bg.Gradient);
+            if (g is not null) return g;
+        }
         if (!string.IsNullOrWhiteSpace(bg.Image))
         {
             try
@@ -146,21 +184,83 @@ public static class ThemeLoader
         return null;
     }
 
+    /// <summary>GradientSpec → Avalonia 渐变画刷（LinearGradientBrush）。stops<2 或色非法返 null。
+    /// 角度同 CSS linear-gradient（0=自下向上，顺时针）。注：radial 类型暂回落 linear（P1 先线性够"梦幻"）。</summary>
+    private static IBrush? BuildGradient(GradientSpec spec)
+    {
+        if (spec.Stops is null || spec.Stops.Count < 2) return null;
+        var stops = new List<GradientStop>();
+        foreach (var s in spec.Stops)
+        {
+            if (string.IsNullOrWhiteSpace(s.Color) || !Color.TryParse(s.Color!, out var c)) continue;
+            stops.Add(new GradientStop { Color = c, Offset = s.Offset ?? 0 });
+        }
+        if (stops.Count < 2) return null;
+        stops.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+
+        var angle = spec.Angle ?? 135;
+        var rad = angle * Math.PI / 180.0;
+        // 方向向量 (sinθ, -cosθ)：0°=↑、90°=→、135°=↘。StartPoint/EndPoint 居中 ± 半方向，覆盖元素四角。
+        var lg = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0.5 - 0.5 * Math.Sin(rad), 0.5 + 0.5 * Math.Cos(rad), RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.5 + 0.5 * Math.Sin(rad), 0.5 - 0.5 * Math.Cos(rad), RelativeUnit.Relative),
+        };
+        foreach (var s in stops) lg.GradientStops.Add(s);
+        return lg;
+    }
+
     /// <summary>把 JSON overlay 应用到目标元素的 Resources.MergedDictionaries。
     /// 内置 WorkbenchTheme（经 XAML ResourceInclude 合入）不动；overlay 追加覆盖其键。
-    /// 再次调用时先移除旧 overlay（按目标跟踪），实现换肤。</summary>
+    /// 若皮肤 JSON 声明了 <see cref="ThemeDefinition.Styles"/>（.axaml 样式包 URI），则同时用
+    /// StyleInclude 载入该 .axaml 并 merge 进 target.Styles——Codex-CSS 式特效/控制模板换肤。
+    /// 再次调用时先移除旧 overlay + 旧 styles（按目标跟踪），实现换肤。</summary>
     public static void Apply(StyledElement target, string? customJson)
     {
+        // 移除旧 token overlay
         if (_overlays.TryGetValue(target, out var prior))
         {
             target.Resources.MergedDictionaries.Remove(prior);
             _overlays.Remove(target);
         }
+        // 移除旧皮肤 .axaml 样式包
+        if (_styleOverlays.TryGetValue(target, out var priorStyle))
+        {
+            target.Styles.Remove(priorStyle);
+            _styleOverlays.Remove(target);
+        }
         if (string.IsNullOrWhiteSpace(customJson)) return;
         var def = Deserialize(customJson);
         if (def is null) return;
+        // token overlay：颜色/渐变/字体/圆角/间距/背景 → Resources.MergedDictionaries
         var overlay = ToResourceDictionary(def);
         target.Resources.MergedDictionaries.Add(overlay);
         _overlays.Add(target, overlay);
+        // styles overlay：.axaml 特效/控制模板 → target.Styles（Codex-CSS 式换肤）
+        if (!string.IsNullOrWhiteSpace(def.Styles))
+        {
+            var style = LoadSkinStyles(def.Styles);
+            if (style is not null)
+            {
+                target.Styles.Add(style);
+                _styleOverlays.Add(target, style);
+            }
+        }
+    }
+
+    /// <summary>按 URI 载入皮肤 .axaml 样式包（&lt;Styles&gt; 根的编译资源）。avares:// 走 StyleInclude 懒载。
+    /// 失败（资源不存在/解析错）返 null——静默跳过，token overlay 仍生效（特效是锦上添花非必需）。</summary>
+    private static IStyle? LoadSkinStyles(string stylesUri)
+    {
+        try
+        {
+            var uri = new Uri(stylesUri, UriKind.RelativeOrAbsolute);
+            // StyleInclude：avares:// 编译资源懒载（baseUri=同 URI，Source=绝对 avares 即可）。
+            return new StyleInclude(uri) { Source = uri };
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

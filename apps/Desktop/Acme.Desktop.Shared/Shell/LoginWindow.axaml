@@ -18,11 +18,11 @@
 
     <StackPanel Grid.Row="1" Spacing="12">
       <TextBox Text="{Binding ServerUrl}" PlaceholderText="服务器地址（如 https://117.72.186.128/）" Classes="input"
-               PlaceholderForeground="gray"/>
+               PlaceholderForeground="{DynamicResource TextSecondaryBrush}"/>
       <TextBox Text="{Binding Username}" PlaceholderText="用户名" Classes="input"
-               PlaceholderForeground="gray"/>
+               PlaceholderForeground="{DynamicResource TextSecondaryBrush}"/>
       <TextBox Text="{Binding Password}" PasswordChar="●" PlaceholderText="密码" Classes="input"
-               PlaceholderForeground="gray"/>
+               PlaceholderForeground="{DynamicResource TextSecondaryBrush}"/>
       <TextBlock Text="{Binding Error}" FontSize="12"
                  Foreground="{DynamicResource DangerBrush}"
                  TextWrapping="Wrap"

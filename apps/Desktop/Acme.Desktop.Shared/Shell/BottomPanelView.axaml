@@ -9,11 +9,11 @@
             <Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
         <Style Selector="Button.btab:pointerover">
-            <Setter Property="Background" Value="{DynamicResource HoverBgBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
         </Style>
         <Style Selector="Button.btab.active">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>

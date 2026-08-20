@@ -81,11 +81,11 @@
       <!-- 空态：未打开目录 -->
       <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
                   IsVisible="{Binding !HasProject}" Spacing="8">
-        <Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource SecondaryTextBrush}" Opacity="0.5"/>
+        <Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="36" Height="36" HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}" Opacity="0.5"/>
         <TextBlock Text="未打开项目目录" FontSize="13" HorizontalAlignment="Center"
-                   Foreground="{DynamicResource SecondaryTextBrush}"/>
+                   Foreground="{DynamicResource TextSecondaryBrush}"/>
         <TextBlock Text="「文件 ▾ 打开项目目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
-                   Foreground="{DynamicResource SecondaryTextBrush}"/>
+                   Foreground="{DynamicResource TextSecondaryBrush}"/>
       </StackPanel>
     </Grid>
   </Border>

@@ -25,7 +25,7 @@
         </Button>
         <StackPanel Grid.Column="1" Classes="scm-actions" Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center" HorizontalAlignment="Right"
-                    Background="{DynamicResource AccentTintBrush}">
+                    Background="{DynamicResource AccentTintBgBrush}">
           <Button Classes="scm-act" ToolTip.Tip="对比差异"
                   Command="{Binding $parent[UserControl].DataContext.OpenDiffCommand}"
                   CommandParameter="{Binding}">
@@ -139,7 +139,7 @@
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.scm-act:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
     <Style Selector="Button.scm-section-header">
@@ -151,13 +151,13 @@
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     </Style>
     <Style Selector="Button.scm-section-header:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
     <Style Selector="Grid.scm-row">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
     <Style Selector="Grid.scm-row:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
     <Style Selector="Button.scm-row-btn">
       <Setter Property="Background" Value="Transparent"/>
@@ -168,7 +168,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
     <Style Selector="Button.scm-row-btn:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     </Style>
     <Style Selector="Button.scm-row-btn:pressed /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent"/>

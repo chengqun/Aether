@@ -123,7 +123,7 @@
                     <Grid ColumnDefinitions="54,48,42,52,72,56,*">
                         <TextBlock Grid.Column="0" Text="{Binding Time, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="mono"/>
                         <TextBlock Grid.Column="1" Text="{Binding Method}" Classes="mono"/>
-                        <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="mono" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="mono" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Grid.Column="3" Text="{Binding DurationMs, StringFormat='{}{0}ms'}" Classes="muted"/>
                         <TextBlock Grid.Column="4" Text="{Binding ResourceType}" Classes="muted"/>
                         <TextBlock Grid.Column="5" Text="{Binding Size, StringFormat='{}{0}B'}" Classes="muted"/>
