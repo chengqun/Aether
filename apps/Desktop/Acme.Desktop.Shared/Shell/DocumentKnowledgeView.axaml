@@ -5,7 +5,7 @@
              x:Class="Acme.Desktop.Shared.Shell.DocumentKnowledgeView"
              Classes="form-fields">
 
-  <!-- 文档版知识对象表单（镜像 KnowledgeEditView，去 picker/图/跳转，link target 为文本）。
+  <!-- 文档版知识对象表单（镜像 KnowledgeEditView，去 picker/跳转，link target 为文本；图=BuildGraphModel 读 .ok 闭包）。
        DataContext = DocumentKnowledgeViewModel（由 DocumentsViewModel.ActiveKnowledgeVm 提供）。 -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Spacing="2" Margin="10,6">
@@ -23,7 +23,15 @@
         <StackPanel Spacing="6">
           <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
                      Text="目标显示名称（路径文件名部分）；目录前缀在下栏源码 targetId 编辑。" TextWrapping="Wrap"/>
-          <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" Padding="12,4"/>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" Padding="12,4"/>
+            <Button Click="OnViewGraphClick" Classes="tool" Padding="12,4">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Path Data="{x:Static shell:Codicons.Graph}" Stretch="Uniform" Width="12" Height="12" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+                <TextBlock Text="查看图" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
           <ItemsControl ItemsSource="{Binding Links}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>

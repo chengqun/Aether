@@ -98,6 +98,8 @@ public static class FileIcons
             ".sql"   => new(NavIcons.LangSqlite, "#00A4C2", true), // 亮蓝
             ".ps1" or ".sh" or ".bash" or ".zsh" => new(NavIcons.LangBash, "#4EAA25", true),
             ".yaml" or ".yml" => new(NavIcons.LangYaml, "#CB171E", true),
+            // 知识对象（.ok 文件）——对标 note 节点 knowledge 图标（Lucide 知识 stroke + 青），非语言 logo
+            ".ok" => new(NavIcons.Knowledge, "#0891B2", false),
             // 其余语言（无品牌 logo path）：代码文件形 + 品牌色
             ".go"   => new(FileCodeIcon, "#00ADD8", false),
             ".rs"   => new(FileCodeIcon, "#CE422B", false),

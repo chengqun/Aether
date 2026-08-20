@@ -189,6 +189,11 @@ public partial class DocumentsViewModel : ObservableObject
             ActiveTab = existing;
             return;
         }
+        // 知识对象（.ok）单例语义（对标 note 节点单例切换）：打开新 .ok 前，关闭其它 .ok tab；
+        // dirty 的先存盘（mirror note OnSelectedNodeChanged 切换前 SaveNodeInternalAsync），不丢内容。
+        // 普通 .md/代码文件仍多 tab（VSCode 式编辑器核心体验保留）。
+        if (IsKnowledgeFile(filePath))
+            CloseOtherKnowledgeTabs(filePath);
         var tab = new DocumentTab(filePath, content, syntaxKey);
         Tabs.Add(tab);
         ActiveTab = tab;
@@ -419,7 +424,13 @@ public partial class DocumentsViewModel : ObservableObject
             var parser = _serviceProvider.GetRequiredService<IDocumentKnowledgeSourceParser>();
             if (ActiveKnowledgeVm is not null)
                 ActiveKnowledgeVm.SourceChanged -= OnKnowledgeSourceChanged;
-            var knowledgeVm = new DocumentKnowledgeViewModel(parser);
+            // 图 focal 名称=当前 .ok 文件名 stem；resolveTargetDef=link targetId(相对项目根路径)→读 .ok→(名称,定义)，
+            // 供 BuildGraphModel 闭包跟出边（镜像 note 版，区别仅解析器读文件而非内存 note）。
+            var currentFileDir = System.IO.Path.GetDirectoryName(value.FilePath);
+            var name = System.IO.Path.GetFileNameWithoutExtension(value.FilePath);
+            Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef =
+                targetPath => ResolveOkTarget(parser, targetPath, currentFileDir);
+            var knowledgeVm = new DocumentKnowledgeViewModel(parser, name, resolveTargetDef);
             knowledgeVm.SourceChanged += OnKnowledgeSourceChanged;
             knowledgeVm.Load(value.Content ?? "");
             ActiveKnowledgeVm = knowledgeVm; // 生成的 setter 自动 raise PropertyChanged → XAML 重绑表单
@@ -443,6 +454,50 @@ public partial class DocumentsViewModel : ObservableObject
     /// <summary>源码→表单：用户在下栏编辑源码后由 view 调，重解析回填表单（VM _syncing 守卫不回环）。</summary>
     public void SyncKnowledgeFromSource(string source) => ActiveKnowledgeVm?.SyncFromSource(source);
 
+    /// <summary>
+    /// 文档知识对象图的目标解析器：把 link 的 targetId（相对项目根的路径，如 Hive表/fin_dw.dwd_xxx）
+    /// 解析成 (名称=stem, 定义)。沿项目根 / 当前文件目录候选找 .ok 文件，读+解析定义（供闭包跟出边）；
+    /// 找不到 / 解析失败 → 仅返回名称（画叶子节点、不跟出边），与 note 版 resolveTargetDef 同构。
+    /// 图节点标题来自此处的名称（目标文件 stem），不是 link 的 target 字段——故无需 parser/model 升级
+    /// （用户 .ok 里 target 字段=stem，与 derive-stem 一致）。
+    /// </summary>
+    private (string Title, KnowledgeObjectDefinition? Def)? ResolveOkTarget(
+        IDocumentKnowledgeSourceParser parser, string? targetPath, string? currentFileDir)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath)) return null;
+        var stem = StemOf(targetPath);
+        foreach (var full in CandidateOkPaths(targetPath, currentFileDir))
+        {
+            if (!File.Exists(full)) continue;
+            KnowledgeObjectDefinition? def = null;
+            try { _ = parser.TryParse(File.ReadAllText(full), out def, out _); }
+            catch { /* 读/解析失败 → 仅名称，不跟出边（断链仍画节点） */ }
+            return (stem, def);
+        }
+        return (stem, null); // 文件不存在 → 仅名称（断链叶子，仍画节点显示 stem）
+    }
+
+    /// <summary>路径的文件名部分（去目录前缀 + 去 .ok 扩展名）= 图节点显示名称。</summary>
+    private static string StemOf(string path)
+    {
+        var sep = path.LastIndexOfAny(new[] { '/', '\\' });
+        var stem = sep >= 0 ? path.Substring(sep + 1) : path;
+        return stem.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && stem.Length > 3
+            ? stem.Substring(0, stem.Length - 3) : stem;
+    }
+
+    /// <summary>候选 .ok 文件全路径：相对项目根 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）。</summary>
+    private IEnumerable<string> CandidateOkPaths(string targetPath, string? currentFileDir)
+    {
+        var withExt = targetPath.EndsWith(".ok", StringComparison.OrdinalIgnoreCase)
+            ? targetPath : targetPath + ".ok";
+        if (!string.IsNullOrEmpty(RootPath))
+            yield return System.IO.Path.Combine(RootPath, withExt);
+        if (!string.IsNullOrEmpty(currentFileDir))
+            yield return System.IO.Path.Combine(currentFileDir!, withExt);
+        yield return withExt; // 兜底：绝对路径或相对 cwd
+    }
+
     partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
 
     /// <summary>关闭标签。若关的是活动标签，激活邻居。</summary>
@@ -453,6 +508,35 @@ public partial class DocumentsViewModel : ObservableObject
         Tabs.RemoveAt(idx);
         if (ReferenceEquals(ActiveTab, tab))
             ActiveTab = Tabs.Count > 0 ? Tabs[Math.Min(idx, Tabs.Count - 1)] : null;
+    }
+
+    /// <summary>是否知识对象（.ok 文件）。单例判定 + 图标分流共用。</summary>
+    private static bool IsKnowledgeFile(string filePath)
+        => string.Equals(Path.GetExtension(filePath), ".ok", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>知识对象单例：关闭除 <paramref name="skipPath"/> 外的 .ok tab。dirty 的先存盘
+    /// （fire-and-forget，持有 tab 引用写 Content→FilePath，mirror note SafeFireAndForget），不丢内容。
+    /// 闭包持有 tab 对象 → GC 不回收 → 存盘完成（.ok 小文件几乎不失败）。</summary>
+    private void CloseOtherKnowledgeTabs(string skipPath)
+    {
+        var okTabs = Tabs.Where(t => IsKnowledgeFile(t.FilePath)
+            && !string.Equals(t.FilePath, skipPath, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var t in okTabs)
+        {
+            if (t.IsDirty) SaveTabContentAsync(t).SafeFireAndForget();
+            CloseTab(t);
+        }
+    }
+
+    /// <summary>存任意 tab 内容回磁盘（不限 ActiveTab）。单例切换前存 dirty tab 用（fire-and-forget）。</summary>
+    private static async Task SaveTabContentAsync(DocumentTab tab)
+    {
+        try
+        {
+            await File.WriteAllTextAsync(tab.FilePath, tab.Content);
+            tab.IsDirty = false;
+        }
+        catch { /* 存盘失败不阻断单例切换；内容仍在 tab.Content，闭包持有 tab 引用 */ }
     }
 
     // —— 实时重载：FileSystemWatcher 透明捕获 agent/外部编辑器写盘 → 刷新开着该文件的标签 ——
