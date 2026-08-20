@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+             x:Class="Acme.Desktop.Shared.Shell.DocumentKnowledgeView"
+             Classes="form-fields">
+
+  <!-- 文档版知识对象表单（镜像 KnowledgeEditView，去 picker/图/跳转，link target 为文本）。
+       DataContext = DocumentKnowledgeViewModel（由 DocumentsViewModel.ActiveKnowledgeVm 提供）。 -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="2" Margin="10,6">
+
+      <Expander Header="基本信息" IsExpanded="True">
+        <StackPanel Spacing="6">
+          <StackPanel Spacing="2">
+            <TextBlock Text="kind（分类）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Kind}" PlaceholderText="如 Entity / Rule / 情报案件"/>
+          </StackPanel>
+        </StackPanel>
+      </Expander>
+
+      <Expander Header="links（typed 引用）" IsExpanded="True">
+        <StackPanel Spacing="6">
+          <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                     Text="目标显示名称（路径文件名部分）；目录前缀在下栏源码 targetId 编辑。" TextWrapping="Wrap"/>
+          <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" Padding="12,4"/>
+          <ItemsControl ItemsSource="{Binding Links}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="*,*,Auto" Margin="0,0,0,4">
+                  <TextBox Grid.Column="0" Text="{Binding Role}" PlaceholderText="role（uses/then…）" Margin="0,0,4,0"/>
+                  <TextBox Grid.Column="1" Text="{Binding Target}" PlaceholderText="名称（目标文件名）" Margin="0,0,4,0"
+                           ToolTip.Tip="目标名称 = 路径文件名部分；改这里只换文件名、保留目录，完整 targetId 路径在下栏源码编辑"/>
+                  <Button Grid.Column="2" Command="{Binding $parent[ItemsControl].DataContext.RemoveLinkCommand}"
+                          CommandParameter="{Binding}" Padding="8,4" ToolTip.Tip="删除引用">
+                    <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="12" Height="12"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+
+      <!-- body 只读 markdown 预览（源码驱动，下栏编辑→SyncFromSource→Body 刷新） -->
+      <ctl:SelectableMarkdownViewer Markdown="{Binding Body}" MinHeight="200" Margin="0,2"/>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

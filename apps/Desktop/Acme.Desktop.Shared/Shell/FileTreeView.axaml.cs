@@ -82,7 +82,13 @@ public partial class FileTreeView : UserControl
         if (_vm is null) return;
         if (e.AddedItems.Count == 0) return;
         if (e.AddedItems[0] is not FileNode node) return;
-        if (node.IsFolder) return; // 文件夹仅展开/收起，不打开标签
+        if (node.IsFolder)
+        {
+            // 点击目录：展开/收起仍由 TreeViewItem 默认处理；额外自动打开该目录 README
+            // （.md→markdown 预览；.ok→知识对象表单；无 README 则不动编辑器）。
+            await _vm.OpenFolderReadmeAsync(node.Path);
+            return;
+        }
         // 已开则激活、不重复读盘
         if (_vm.ActivateIfOpen(node.Path)) return;
         await _vm.OpenFromDiskAsync(node.Path);

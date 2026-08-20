@@ -18,8 +18,12 @@ public partial class DocumentTab : ObservableObject
     /// <summary>语法 key（csharp/python/json/yaml…），null=纯文本。驱动 AvaloniaEdit 高亮。</summary>
     public string? SyntaxKey { get; }
 
-    /// <summary>是否 markdown 文件（驱动预览切换按钮可见性）。</summary>
-    public bool IsMarkdown => string.Equals(SyntaxKey, "markdown", StringComparison.OrdinalIgnoreCase);
+    /// <summary>是否知识对象文档（.ok 文件，front-matter kind/links + markdown body，镜像 note 知识对象）。</summary>
+    public bool IsKnowledge => string.Equals(Path.GetExtension(FilePath), ".ok", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>是否 markdown 文件（驱动预览切换按钮可见性）。.ok 的 SyntaxKey 也映射到 markdown（供源码高亮），
+    /// 但 .ok 走知识对象表单上栏而非纯 markdown 预览，故用 IsKnowledge 守卫排除。</summary>
+    public bool IsMarkdown => !IsKnowledge && string.Equals(SyntaxKey, "markdown", StringComparison.OrdinalIgnoreCase);
 
     [ObservableProperty] private string _content;
 

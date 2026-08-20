@@ -147,11 +147,17 @@
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 上：markdown 解析预览（md 文件时显示；仅预览模式跨满） -->
+        <!-- 上栏：md 解析预览（md 模式）/ 知识对象表单（.ok 模式）。两者互斥，按模式分流显隐。
+             IsPreviewPaneVisible=md||ko 控制上栏整体显隐；内层按 IsMarkdownMode/IsKnowledgeMode 切具体内容。 -->
         <Border Grid.Row="0" Grid.RowSpan="{Binding PreviewRowSpan}"
                 Background="{DynamicResource ContentBgBrush}"
                 IsVisible="{Binding IsPreviewPaneVisible}">
-          <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"/>
+          <Grid>
+            <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"
+                                            IsVisible="{Binding IsMarkdownMode}"/>
+            <shell:DocumentKnowledgeView DataContext="{Binding ActiveKnowledgeVm}"
+                                         IsVisible="{Binding IsKnowledgeMode}"/>
+          </Grid>
         </Border>
 
         <!-- 中：上下分隔条（md 双栏时显示） -->

@@ -18,7 +18,7 @@ public static class SyntaxMap
         {
             ".cs" => "csharp",
             ".py" or ".pyw" => "python",
-            ".md" or ".markdown" => "markdown",
+            ".md" or ".markdown" or ".ok" => "markdown",
             ".json" => "json",
             ".sql" => "sql",
             ".yaml" or ".yml" => "yaml",

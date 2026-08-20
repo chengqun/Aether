@@ -22,6 +22,8 @@ public static class NotesInfrastructureExtensions
         services.AddSingleton<ICodeSourceParser, CodeSourceParser>();
         services.AddSingleton<IWorkflowSourceParser, WorkflowSourceParser>();
         services.AddSingleton<IKnowledgeSourceParser, KnowledgeSourceParser>();
+        // 文档版（.ok 文件）知识对象解析器：targetId 为相对路径字符串（非 note 版 Guid?），独立 DTO + 解析器
+        services.AddSingleton<IDocumentKnowledgeSourceParser, DocumentKnowledgeSourceParser>();
         return services;
     }
 }
