@@ -16,8 +16,8 @@
         <!-- 用户文本：右气泡 -->
         <Border Classes="bubble-user" HorizontalAlignment="Right" IsVisible="{Binding IsUserText}">
           <StackPanel Spacing="3" HorizontalAlignment="Right">
-            <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" Foreground="{DynamicResource OnAccentBrush}"/>
-            <TextBlock FontSize="10" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Right" Opacity="0.9">
+            <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" Foreground="{DynamicResource UserBubbleFgBrush}"/>
+            <TextBlock FontSize="10" Foreground="{DynamicResource UserBubbleFgBrush}" HorizontalAlignment="Right" Opacity="0.9">
               <Run Text="{Binding Sender}" /><Run Text=" · " /><Run Text="{Binding Time}" />
             </TextBlock>
           </StackPanel>

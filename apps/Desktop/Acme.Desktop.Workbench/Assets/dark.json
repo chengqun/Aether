@@ -31,6 +31,7 @@
     "OnAccentColor": "#1e1e2e",
     "OnDangerColor": "#1e1e2e",
     "UserBubbleBrush": "#89b4fa",
+    "UserBubbleFgBrush": "#1e1e2e",
     "AgentBubbleBrush": "#313244",
     "ToolCallBrush": "#2a2b3e",
     "ToolCallBorderBrush": "#45475a",
