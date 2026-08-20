@@ -66,7 +66,7 @@ public partial class WorkspaceView : UserControl
     private int _chatSplitterCol = -1;                // chat 前的 GridSplitter col（= i*2-1）
     private GridLength _chatExpandedWidth = new(420, GridUnitType.Pixel); // 展开列宽（折叠前记实际值，含拖动后）
     private IChatPanelService? _chatService;
-    private int _chatTabIndex = -1;                   // chat 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 nav 入口 → 仅作可折叠右栏；切到 chat nav 时右栏自动收起，单可见无双输入框）
+    private int _chatTabIndex = -1;                   // ChatPage（全屏 AI 聊天页）在 LayoutTabbed.RegionIds 中的索引（-1 = 无 nav 入口 → 仅作可折叠右栏；切到 ChatPage nav 时右栏自动收起，单可见无双输入框）
 
     /// <summary>隐藏宿主尺寸记忆表：折叠/切 tab 隐藏后子控件 Bounds=0，ReadPixels 用此记忆的展开尺寸替换，防持久化 0。
     /// key=隐藏的 ContentControl（terminal/lefttree host），value=隐藏前的展开尺寸（像素值）。显隐时增删。</summary>
@@ -146,7 +146,7 @@ public partial class WorkspaceView : UserControl
             {
                 if (tabbed.RegionIds[i] == PanelKeys.Documents) _documentsTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.Notes) _notesTabIndex = i;
-                else if (tabbed.RegionIds[i] == PanelKeys.Chat) _chatTabIndex = i;
+                else if (tabbed.RegionIds[i] == PanelKeys.ChatPage) _chatTabIndex = i;
             }
         }
         if (_workspace is INotifyPropertyChanged pc)

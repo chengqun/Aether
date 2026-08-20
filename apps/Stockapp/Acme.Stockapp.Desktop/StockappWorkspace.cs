@@ -30,7 +30,8 @@ public static class StockappWorkspace
             new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures"),
             new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest"),
             new(PanelKeys.StockTrade, PanelKeys.StockTrade, "股票", "activity"),
-            new(PanelKeys.Chat, PanelKeys.Chat, "聊天", "chat"),
+            new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
+            new(PanelKeys.ChatPage, PanelKeys.ChatPage, "AI 聊天", "chat"),
         },
         Layout: new LayoutSplit(
             Orientation: SplitOrientation.Horizontal,
@@ -43,7 +44,7 @@ public static class StockappWorkspace
                     Orientation: SplitOrientation.Vertical,
                     Children: new LayoutNode[]
                     {
-                        new LayoutTabbed(RegionIds: new[] { PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Browser, PanelKeys.Chat, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                        new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Browser, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
                         new LayoutRegion(RegionId: PanelKeys.Terminal),
                     },
                     // Pixels: [0, 220] → 主面板区 Star（弹性）+ 终端区 220px 固定（可拖高度，拖动后持久化）。

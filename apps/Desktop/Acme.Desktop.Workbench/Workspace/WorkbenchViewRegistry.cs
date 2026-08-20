@@ -17,9 +17,14 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
 {
     public WorkbenchViewRegistry(IServiceProvider serviceProvider, IEnumerable<IViewRegistryContributor> contributors)
     {
-        // 聊天：共享 ChatView，DataContext 绑 ChatWorkspaceViewModel（行为与 Stockapp 一致）。
+        // 聊天右栏：共享 ChatView（紧凑），DataContext 绑 ChatViewModel。
         Register(PanelKeys.Chat,
             () => new ChatView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
+
+        // 全屏 AI 聊天页（nav 首项，app 启动默认页）：ChatPageView 居中 ChatGPT 式输入，与右栏 ChatView 共享同一 ChatViewModel。
+        Register(PanelKeys.ChatPage,
+            () => new ChatPageView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
 
         // 笔记编辑器：共享 NotesEditorView（从原 NotesView col2 拆出——标题栏 + 上下分栏 + 6 种 form 节点视图）。

@@ -11,8 +11,12 @@ namespace Acme.Desktop.Workbench.Abstractions;
 /// </remarks>
 public static class PanelKeys
 {
-    /// <summary>聊天面板（共享 ChatView，右 region）。</summary>
+    /// <summary>聊天面板（共享 ChatView，右 region 紧凑视图）。</summary>
     public const string Chat = "chat";
+
+    /// <summary>全屏 AI 聊天页（共享 ChatPageView，tabbed nav 首项——app 启动默认页）。
+    /// 与 <see cref="Chat"/>（右栏紧凑 ChatView）共享同一 ChatViewModel，仅头部/输入布局不同（全屏居中 ChatGPT 式输入）。</summary>
+    public const string ChatPage = "chatpage";
 
     /// <summary>笔记面板（NotesView + AvaloniaEdit + form 节点两栏）。</summary>
     public const string Notes = "notes";
