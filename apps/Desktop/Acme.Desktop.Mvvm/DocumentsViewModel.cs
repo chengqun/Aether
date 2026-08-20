@@ -26,6 +26,7 @@ public partial class DocumentsViewModel : ObservableObject
 
     private FileSystemWatcher? _watcher;
     private CancellationTokenSource? _reloadCts;
+    private CancellationTokenSource? _treeRefreshCts;
 
     /// <summary>目录树扫描时跳过的子目录（构建产物 / VCS / 依赖缓存，体积大且无编辑价值）。</summary>
     private static readonly HashSet<string> ExcludedDirs = new(StringComparer.OrdinalIgnoreCase)
@@ -396,11 +397,12 @@ public partial class DocumentsViewModel : ObservableObject
                               | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
                 InternalBufferSize = 16 * 1024,
             };
+            // 内容变（Changed）只刷标签；结构变（增删改名）须重建文件树——否则新写入的文件不出现。
             _watcher.Changed += (_, e) => ScheduleReload();
-            _watcher.Created += (_, e) => ScheduleReload();
-            _watcher.Deleted += (_, e) => ScheduleReload();
-            _watcher.Renamed += (_, e) => ScheduleReload();
-            _watcher.Error += (_, _) => ScheduleReload(); // 缓冲溢出 → 尽力刷一次
+            _watcher.Created += (_, e) => ScheduleTreeRefresh();
+            _watcher.Deleted += (_, e) => ScheduleTreeRefresh();
+            _watcher.Renamed += (_, e) => ScheduleTreeRefresh();
+            _watcher.Error += (_, _) => ScheduleReload(); // 缓冲溢出 → 尽力刷标签一次
             _watcher.EnableRaisingEvents = true;
         }
         catch { /* 无权限/路径无效 → 静默，无自动重载 */ }
@@ -416,6 +418,8 @@ public partial class DocumentsViewModel : ObservableObject
         }
         _reloadCts?.Cancel();
         _reloadCts = null;
+        _treeRefreshCts?.Cancel();
+        _treeRefreshCts = null;
     }
 
     /// <summary>去抖 400ms 后重载受影响标签（批量改动只刷一次）。FSW 后台线程触发 → marshal UI 线程。</summary>
@@ -433,6 +437,83 @@ public partial class DocumentsViewModel : ObservableObject
             if (ui is not null) ui.Post(ReloadChangedTabs);
             else ReloadChangedTabs();
         });
+    }
+
+    /// <summary>去抖 400ms 后重建文件树（保留展开态与选中）。结构变更（增删改名）走此路径；
+    /// 内容变更（Changed）只刷标签不重建树。镜像 <see cref="NotesViewModel.RefreshAsync"/> 的展开态/选中保留范式
+    ///（FileNode 无稳定 Id，按 <see cref="FileNode.Path"/> 键控）。FSW 后台线程触发 → 后台线程建树 → marshal UI 线程挂载。</summary>
+    private void ScheduleTreeRefresh()
+    {
+        _treeRefreshCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _treeRefreshCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(400, cts.Token); }
+            catch (TaskCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            if (string.IsNullOrEmpty(RootPath)) return;
+
+            // 先在调用线程快照展开态/选中（Path 是不可变值，线程安全）。
+            var expanded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var selected = SelectedNode?.Path;
+            CaptureExpanded(Roots, expanded);
+
+            // 后台线程重建整树（目录枚举可能慢；与 OpenFolderAsync 同一条 BuildNode）。
+            FileNode? root;
+            try { root = BuildNode(RootPath, isRoot: true); }
+            catch { return; /* 重建失败忽略，下次再试 */ }
+
+            if (cts.IsCancellationRequested) return;
+            var ui = _serviceProvider.GetService<IUiDispatcher>();
+            if (ui is not null) ui.Post(() => ApplyTreeRefresh(root, expanded, selected));
+            else ApplyTreeRefresh(root, expanded, selected);
+        });
+    }
+
+    /// <summary>UI 线程：替换树根 + 恢复展开态 + 恢复选中 + 刷标签（结构变更也可能 stale 打开标签）。</summary>
+    private void ApplyTreeRefresh(FileNode root, HashSet<string> expanded, string? selected)
+    {
+        if (Roots.Count == 0) return; // 用户已关闭项目 → 丢弃本次重建
+        RestoreExpanded(root, expanded);
+        Roots[0] = root; // 替换根节点（ObservableCollection Replace 通知 TreeView 重渲染）
+        if (selected is not null)
+        {
+            var found = FindByPath(root, selected);
+            if (found is not null) SelectedNode = found; // 选中已删则不动（保留旧引用也无所谓——下次刷新清）
+        }
+        ReloadChangedTabs(); // 删/改名可能使打开标签的文件失效 → IsStale
+    }
+
+    /// <summary>递归收集展开文件夹的磁盘路径（用于重建后恢复展开态）。</summary>
+    private static void CaptureExpanded(IEnumerable<FileNode> nodes, HashSet<string> expanded)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsFolder && n.IsExpanded) expanded.Add(n.Path);
+            if (n.IsFolder) CaptureExpanded(n.Children, expanded);
+        }
+    }
+
+    /// <summary>递归恢复展开态（按路径匹配，仅展开原已展开的文件夹）。</summary>
+    private static void RestoreExpanded(FileNode node, HashSet<string> expanded)
+    {
+        if (!node.IsFolder) return;
+        if (expanded.Contains(node.Path)) node.IsExpanded = true;
+        foreach (var c in node.Children) RestoreExpanded(c, expanded);
+    }
+
+    /// <summary>递归按路径查找节点（恢复选中）。</summary>
+    private static FileNode? FindByPath(FileNode node, string path)
+    {
+        if (string.Equals(node.Path, path, StringComparison.OrdinalIgnoreCase)) return node;
+        if (!node.IsFolder) return null;
+        foreach (var c in node.Children)
+        {
+            var f = FindByPath(c, path);
+            if (f is not null) return f;
+        }
+        return null;
     }
 
     /// <summary>遍历打开的标签，按磁盘 mtime 判定是否需重载。
