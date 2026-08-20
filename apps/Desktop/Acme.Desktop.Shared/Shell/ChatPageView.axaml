@@ -87,22 +87,27 @@
       </Grid>
     </Border>
 
-    <!-- 正文：两态叠放（Panel 覆盖），按 HasConversations（有无任何对话记录）切显隐。 -->
+    <!-- 正文：两态叠放（Panel 覆盖），按 HasMessages（当前会话有无消息）切显隐——对齐 ChatGPT/WorkBuddy 每会话空态。
+         有历史记录的新会话也显空态 hero（区别于旧 HasConversations 全局判断）。 -->
     <Panel Grid.Row="1">
-      <!-- 非空态：有历史记录 → 消息流 + 底部输入（现有布局，原样保留）。 -->
-      <DockPanel IsVisible="{Binding HasConversations}">
-        <!-- 居中 ChatGPT 式输入区：底部全宽条，内含居中 768 输入列（plan-accept / 活动计划 / chips / TextBox+发送 / 免责）。 -->
+      <!-- 非空态：当前会话有消息 → 消息流 + 底部输入。消息列限宽 768 居中，与下方输入框同宽对齐（ChatGPT 式居中列）。 -->
+      <DockPanel IsVisible="{Binding HasMessages}">
+        <!-- 底部全宽条，内含居中 768 输入列（plan-accept / 活动计划 / chips / TextBox+发送 / 免责）。 -->
         <Border DockPanel.Dock="Bottom" Padding="16,10,16,8" Background="{DynamicResource ContentBgBrush}">
           <shell:ChatInputView/>
         </Border>
-        <!-- 消息区委托给共享控件（与右栏紧凑视图共用模板/滚动/贴底/历史加载）。 -->
-        <shell:ChatMessagesView/>
+        <!-- 消息区委托给共享控件（与右栏紧凑视图共用模板/滚动/贴底/历史加载）。限宽 768 居中→消息与输入框同宽对齐。
+             紧凑右栏 ChatView 直接嵌入 ChatMessagesView（不经此包装）故不受影响，保持满宽窄列。 -->
+        <Panel>
+          <shell:ChatMessagesView HorizontalAlignment="Center" MaxWidth="768"/>
+        </Panel>
       </DockPanel>
 
-      <!-- 空态：无任何对话记录 → 居中 hero（问候 + 输入），WorkBuddy 式。首次发送落库后 HasConversations 翻 true，自动落回非空态。 -->
-      <StackPanel IsVisible="{Binding !HasConversations}"
+      <!-- 空态：当前会话无消息 → 居中 hero（问候 + 输入），ChatGPT/WorkBuddy 式。首次发送后 HasMessages 翻 true，自动落回非空态。
+           MaxWidth 768 软上限（非硬 Width）：窄窗跟着缩、宽窗停 768 居中——与下方输入框/消息列同行为。 -->
+      <StackPanel IsVisible="{Binding !HasMessages}"
                   VerticalAlignment="Center" HorizontalAlignment="Center"
-                  MaxWidth="768" Width="768" Spacing="24">
+                  MaxWidth="768" Spacing="24">
         <StackPanel Spacing="10" HorizontalAlignment="Center">
           <TextBlock Text="👋" FontSize="40" HorizontalAlignment="Center"/>
           <TextBlock Text="开始对话" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center"

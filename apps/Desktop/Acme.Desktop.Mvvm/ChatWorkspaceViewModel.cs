@@ -94,6 +94,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
+        // 当前会话是否有消息：控制 ChatPageView 全屏页空态 hero ↔ 非空态（消息流+输入），对齐 ChatGPT/WorkBuddy 每会话空态。
+        // 与 HasConversations（有无任何历史记录）区分——有历史记录的新会话仍显空态 hero（输入框垂直居中）。
+        Messages.CollectionChanged += (_, _) => HasMessages = Messages.Count > 0;
+
         SubscribeToConnectionStateChanges();
     }
 
@@ -847,6 +851,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     /// <summary>是否有最近会话（控制空状态"暂无会话"显示）。</summary>
     [ObservableProperty] private bool _hasConversations;
+
+    /// <summary>当前会话是否有消息（ChatPageView 全屏页空态 hero ↔ 非空态切换）。</summary>
+    [ObservableProperty] private bool _hasMessages;
 
     /// <summary>最近会话列表是否展开（ChatGPT 风，可收起）。</summary>
     [ObservableProperty] private bool _isRecentExpanded = true;
