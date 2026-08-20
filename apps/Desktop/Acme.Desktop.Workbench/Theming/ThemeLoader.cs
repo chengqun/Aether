@@ -36,6 +36,7 @@ public static class ThemeLoader
         ("light", "内置浅色"),
         ("dark", "内置深色"),
         ("dream", "梦幻渐变"),
+        ("dream-light", "梦幻浅色"),
         ("chatgpt", "ChatGPT 风（浅）"),
         ("chatgpt-dark", "ChatGPT 风（深）"),
     };
