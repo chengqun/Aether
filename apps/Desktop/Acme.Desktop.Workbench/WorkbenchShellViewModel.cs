@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Desktop.Mvvm;
-using Acme.Desktop.Mvvm.Palette;
 using Acme.Desktop.Workbench.Abstractions;
 using Acme.Desktop.Workbench.Theming;
 using Acme.Desktop.Workbench.Workspace;
@@ -35,7 +34,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private readonly IPreferencesStore _preferences;
     private readonly IServiceProvider _serviceProvider;
     private ITerminalService? _terminalService;
-    private IPaletteDialogService? _paletteDialog;
     private INotifyPropertyChanged? _navWorkspace;
 
     /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
@@ -290,22 +288,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     Task IThemeHost.SelectThemeAsync(string name, CancellationToken cancellationToken)
         => SelectThemeCoreAsync(name, cancellationToken);
 
-    /// <inheritdoc/>
-    /// <remarks>调色板实时预览用：设 <see cref="CustomThemeJson"/> overlay（[ObservableProperty] set → OnCustomThemeJsonChanged → ThemeChanged → 窗口 ThemeLoader.Apply），
-    /// 不改名不落盘。同时按 json 的 variant 字段同步 <see cref="IsDarkVariant"/>——使明暗基底 tab 切 light/dark 时 native 控件（TextBox/滚动条/ComboBox）ThemeVariant 即时翻转。
-    /// 调色板「取消」传回打开时的原 JSON（非 null，其 variant 正确）；传 null（基线无 overlay）时不动 IsDarkVariant。</remarks>
-    void IThemeHost.SetCustomThemeJson(string? json)
-    {
-        CustomThemeJson = json;
-        if (json is not null)
-        {
-            var def = ThemeLoader.Deserialize(json);
-            IsDarkVariant = !string.Equals(def?.Variant, "light", StringComparison.OrdinalIgnoreCase);
-            IsDreamLayerVisible = def?.Animated == true;   // 实时预览也同步 aurora 层（调色板切 animated 皮肤）
-            ApplyChrome(def);   // 实时预览也同步 chrome（调色板切 borderless 皮肤）
-        }
-    }
-
     /// <summary>从主题定义读 chrome 字段设 <see cref="IsBorderless"/>/<see cref="TitleBarHeight"/>。
     /// null def / 无 chrome = 系统原生 chrome（borderless=false, 高度保持默认）。两处主题设置路径共用。</summary>
     private void ApplyChrome(ThemeDefinition? def)
@@ -313,31 +295,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         IsBorderless = def?.Chrome?.Borderless == true;
         if (def?.Chrome?.TitleBarHeight is { } h and > 0)
             TitleBarHeight = h;
-    }
-
-    /// <inheritdoc/>
-    /// <remarks>调色板「保存」用：写 themes/&lt;name&gt;.json + <see cref="LoadThemesAsync"/> 重扫（新主题进菜单）+
-    /// <see cref="SelectThemeCoreAsync"/> 读回新文件设 overlay + 持久化 name。host 集中持久化，VM 不碰文件。</remarks>
-    async Task IThemeHost.SaveCustomThemeAsync(string name, string json, CancellationToken cancellationToken)
-    {
-        var dir = DesktopOptions.ThemesDirectory;
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-            await File.WriteAllTextAsync(Path.Combine(dir, name + ".json"), json, cancellationToken);
-        }
-        await LoadThemesAsync();                              // 重扫主题列表（新主题立即可选）
-        await SelectThemeCoreAsync(name, cancellationToken);  // 设 overlay + 持久化选中
-    }
-
-    /// <summary>打开调色板对话框（账号菜单「🎨 调色板…」）。从当前主题派生可调色，实时预览+保存成命名主题。
-    /// 惰性从 DI 取 IPaletteDialogService（照 ITerminalService 模式，未注册静默跳过不崩）。this 即 IThemeHost。</summary>
-    [RelayCommand]
-    private async Task OpenPaletteAsync()
-    {
-        _paletteDialog ??= _serviceProvider.GetService<IPaletteDialogService>();
-        if (_paletteDialog is not null)
-            await _paletteDialog.ShowAsync(this);
     }
 
     /// <summary>从偏好存储恢复用户自定义布局。校验区域集与 definition 一致（面板增删则回退默认），反序列化失败也回退（不崩）。</summary>
