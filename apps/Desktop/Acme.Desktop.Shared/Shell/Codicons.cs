@@ -32,7 +32,8 @@ public static class Codicons
 
     // —— chevron / 折叠指示 ——
     public static readonly string ChevronDown = R(PackIconCodiconsKind.ChevronDown);     // ▾
-    public static readonly string ChevronRight = R(PackIconCodiconsKind.ChevronRight);   // ▸
+    public static readonly string ChevronLeft = R(PackIconCodiconsKind.ChevronLeft);     // ◂ 侧栏收起
+    public static readonly string ChevronRight = R(PackIconCodiconsKind.ChevronRight);   // ▸ 侧栏展开
     public static readonly string ArrowRight = R(PackIconCodiconsKind.ArrowRight);       // →
     public static readonly string ArrowDown = R(PackIconCodiconsKind.ArrowDown);         // ↓
     public static readonly string Dot = R(PackIconCodiconsKind.CircleSmallFilled);       // ● 小实心点

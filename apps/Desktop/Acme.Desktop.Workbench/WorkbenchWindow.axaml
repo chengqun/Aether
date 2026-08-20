@@ -64,19 +64,36 @@
       </Grid>
     </Border>
 
-    <!-- ═══ 侧边栏（48px 图标导航栏，常驻不展开） ═══ -->
-    <Border DockPanel.Dock="Left" Width="48"
+    <!-- ═══ 侧边栏（收起=48px 仅图标 / 展开=200px 图标+文字；Classes.expanded 绑 IsSidebarExpanded） ═══ -->
+    <Border DockPanel.Dock="Left" Classes="sidebar-rail" Classes.expanded="{Binding IsSidebarExpanded}"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
-        <StackPanel Grid.Row="0" Margin="0,10,0,0">
+      <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+        <!-- 侧栏展开/收起 toggle（顶部 chevron：收起▸=点击展开 / 展开◂=点击收起） -->
+        <Button Grid.Row="0" Classes="nav-rail" Command="{Binding ToggleSidebarCommand}"
+                ToolTip.Tip="展开/收起侧栏" Margin="6,10,6,2">
+          <Grid>
+            <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  IsVisible="{Binding !IsSidebarExpanded}"/>
+            <Path Data="{x:Static shell:Codicons.ChevronLeft}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  IsVisible="{Binding IsSidebarExpanded}"/>
+          </Grid>
+        </Button>
+
+        <StackPanel Grid.Row="1" Margin="0,2,0,0">
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
                         ToolTip.Tip="{Binding Title}">
-                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
-                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                    <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center"
+                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  </StackPanel>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -84,7 +101,7 @@
         </StackPanel>
 
         <!-- 终端面板 toggle（VSCode 式底部面板开关）：可见时图标 accent 高亮，隐藏时灰色。PTY 不中断仅折叠 region。 -->
-        <Button Grid.Row="2" Classes="nav-rail" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端">
+        <Button Grid.Row="3" Classes="nav-rail" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端">
           <Grid>
             <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="16" Height="16"
                   Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
@@ -95,7 +112,7 @@
 
         <!-- AI 聊天右栏 toggle（VSCode 式可折叠右栏，对齐 ChatGPT 桌面端）：聊天也作 nav 全屏入口（上方 nav），此按钮仅控右栏显隐。
              tab-coupled：切到 chat nav 时右栏自动收起（单可见），按钮态反映 toggle 状态（accent 开/灰关）而非当前右栏可见性。 -->
-        <Button Grid.Row="3" Classes="nav-rail" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏">
+        <Button Grid.Row="4" Classes="nav-rail" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏">
           <Grid>
             <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="16" Height="16"
                   Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsChatVisible}"/>
@@ -104,7 +121,7 @@
           </Grid>
         </Button>
 
-        <Button Grid.Row="4" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
+        <Button Grid.Row="5" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">
