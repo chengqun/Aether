@@ -34,6 +34,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private readonly IPreferencesStore _preferences;
     private readonly IServiceProvider _serviceProvider;
     private ITerminalService? _terminalService;
+    private IChatPanelService? _chatPanelService;
     private INotifyPropertyChanged? _navWorkspace;
 
     /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
@@ -61,6 +62,13 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         {
             _isTerminalVisible = _terminalService.IsPanelVisible;
             _terminalService.PanelVisibilityChanged += OnTerminalPanelVisibilityChanged;
+        }
+        // AI 聊天面板显隐（VSCode 式可折叠右栏，对齐 ChatGPT 桌面端）：初始态从 service 读 + 订阅变更同步 IsChatVisible（侧边栏 toggle 按钮绑此）。
+        _chatPanelService = serviceProvider.GetService<IChatPanelService>();
+        if (_chatPanelService is not null)
+        {
+            _isChatVisible = _chatPanelService.IsChatVisible;
+            _chatPanelService.ChatVisibilityChanged += OnChatVisibilityChanged;
         }
     }
 
@@ -109,6 +117,11 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// 状态由 <see cref="ITerminalService.PanelVisibilityChanged"/> 事件同步——TerminalView 折叠按钮 / 本 VM 的 ToggleTerminalCommand 都经 service 改态，事件回写此属性。</summary>
     [ObservableProperty]
     private bool _isTerminalVisible = true;
+
+    /// <summary>右侧 AI 聊天面板是否可见（侧边栏「AI 聊天」toggle 按钮绑此 + 驱动高亮态）。
+    /// 状态由 <see cref="IChatPanelService.ChatVisibilityChanged"/> 事件同步——聊天面板内 ✕ 按钮 / 本 VM 的 ToggleChatCommand 都经 service 改态，事件回写此属性。</summary>
+    [ObservableProperty]
+    private bool _isChatVisible = true;
 
     /// <summary>主题变化（overlay JSON 或明暗倾向改变）时触发。子窗口（设置/Trace）订阅以即时重染——
     /// 它们不在 Workbench 层、拿不到 ThemeLoader，经 <see cref="IThemeApplier"/> 桥接。</summary>
@@ -358,4 +371,12 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         => _terminalService?.SetPanelVisible(!IsTerminalVisible);
 
     private void OnTerminalPanelVisibilityChanged(bool visible) => IsTerminalVisible = visible;
+
+    /// <summary>侧边栏「AI 聊天」toggle：切换右侧聊天面板显隐（聊天视图不销毁，仅折叠/展开 region 空间，流式不中断）。
+    /// 经 service 改态 → service 触发 ChatVisibilityChanged → WorkspaceView 折叠/展开 region + 回写 IsChatVisible。</summary>
+    [RelayCommand]
+    private void ToggleChat()
+        => _chatPanelService?.SetChatVisible(!IsChatVisible);
+
+    private void OnChatVisibilityChanged(bool visible) => IsChatVisible = visible;
 }

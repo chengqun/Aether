@@ -22,7 +22,7 @@ public static class DefaultWorkspace
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { PanelKeys.Notes, PanelKeys.Experts }, SelectedIndex: 0),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Chat }, SelectedIndex: 0),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 默认（首次/重置布局时）。

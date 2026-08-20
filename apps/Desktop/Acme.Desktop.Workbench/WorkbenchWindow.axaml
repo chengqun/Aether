@@ -68,7 +68,7 @@
     <Border DockPanel.Dock="Left" Width="48"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,*,Auto,Auto">
+      <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
         <StackPanel Grid.Row="0" Margin="0,10,0,0">
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}">
             <ItemsControl.ItemTemplate>
@@ -93,7 +93,18 @@
           </Grid>
         </Button>
 
-        <Button Grid.Row="3" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
+        <!-- AI 聊天右栏 toggle（VSCode 式可折叠右栏，对齐 ChatGPT 桌面端）：聊天也作 nav 全屏入口（上方 nav），此按钮仅控右栏显隐。
+             tab-coupled：切到 chat nav 时右栏自动收起（单可见），按钮态反映 toggle 状态（accent 开/灰关）而非当前右栏可见性。 -->
+        <Button Grid.Row="3" Classes="nav-rail" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏">
+          <Grid>
+            <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsChatVisible}"/>
+            <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="16" Height="16"
+                  Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsChatVisible}"/>
+          </Grid>
+        </Button>
+
+        <Button Grid.Row="4" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">

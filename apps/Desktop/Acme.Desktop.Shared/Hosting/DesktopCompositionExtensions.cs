@@ -135,6 +135,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IAskUserDialogService, AskUserDialogService>();
         // 集成终端服务（单例）：TerminalView 经 AttachView 持控件；run_in_terminal 工具 + TerminalViewModel 共用。
         services.AddSingleton<ITerminalService, TerminalService>();
+        // AI 聊天面板显隐服务（单例，镜像终端）：侧栏「AI 聊天」toggle + 聊天面板内 ✕ 共用。仅持显隐态 + 持久化（聊天视图常驻、IsVisible 切换不销毁）。
+        services.AddSingleton<IChatPanelService, ChatPanelService>();
         services.AddTransient<AskUserTool>();
         aether.ConfigureToolRegistry(reg => reg.Register(
             "ask_user", "向用户提问/确认并阻塞等待回答（返回用户选择或自由文本）。需要用户拍板/澄清时用此工具而非纯文本提问。", "交互",

@@ -1,4 +1,5 @@
 using Acme.Desktop.Mvvm;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -24,6 +25,9 @@ public partial class ChatView : UserControl
     private ChatMessageItem? _trackedChild;
     /// <summary>宿主窗口——订阅其 Activated，在模态弹窗（审批/ask_user）关闭后重新贴底。</summary>
     private Window? _hostWindow;
+
+    /// <summary>聊天面板显隐服务（侧栏「AI 聊天」toggle + 面板内 ✕ 共用）。OnLoaded 解析——仅折叠，展开走侧栏 toggle。</summary>
+    private IChatPanelService? _chatPanelService;
 
     /// <summary>是否跟随到底部。流式追加 Content 不触发 CollectionChanged，需靠此标志 + 属性变化驱动滚动。</summary>
     private bool _stickToBottom = true;
@@ -76,8 +80,14 @@ public partial class ChatView : UserControl
             _hostWindow = w;
             _hostWindow.Activated += OnHostActivated;
         }
+        // 解析聊天面板显隐服务（侧栏 toggle / 面板内 ✕ 共用）。OnLoaded 首次解析后缓存。
+        _chatPanelService ??= DesktopApp.Services?.GetService<IChatPanelService>();
         Dispatcher.UIThread.Post(ScrollToBottom);
     }
+
+    /// <summary>面板内 ✕ 折叠按钮：折叠聊天右栏（视图不销毁，流式不中断）。展开走侧栏「AI 聊天」toggle。</summary>
+    private void OnCollapseClick(object? sender, RoutedEventArgs e)
+        => _chatPanelService?.SetChatVisible(false);
 
     private void OnUnloaded(object? sender, RoutedEventArgs e)
     {
