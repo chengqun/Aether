@@ -7,25 +7,9 @@
   <!-- diff 区（原 SourceControlView 右栏）。SCM 面板（变更/暂存/历史 + 提交框 + 远程工具栏）已拆出为
        SourceControlPanelView，提升为 workspace 级 col0（LeftTreePanelView 叠放层之一）独占全高 →
        终端只在此 diff 区下方，不横跨变更面板，与文档/笔记页布局一致。
+       GitLens 式：commit 行 inline 展开改动文件（在 SCM 面板），点文件 → diff 在此区显示。
+       此区只放 diff——工作区 diff（选中变更）与 commit 文件 diff（点历史展开文件）互斥叠加。
        DataContext 仍由 WorkbenchViewRegistry 设为 SourceControlViewModel（与 SCM 面板共享同 VM 单例）。 -->
-
-  <UserControl.Resources>
-    <!-- 提交改动文件行：状态字母(着色) + 文件名；单击 → 看该文件 commit diff -->
-    <DataTemplate x:Key="CommitFileTemplate">
-      <Button Classes="scm-row-btn" Margin="2,1"
-              Command="{Binding $parent[UserControl].DataContext.OpenCommitFileDiffCommand}"
-              CommandParameter="{Binding}"
-              HorizontalAlignment="Stretch">
-        <Grid ColumnDefinitions="18,*">
-          <TextBlock Grid.Column="0" Text="{Binding StatusLetter}" FontSize="12" FontWeight="SemiBold"
-                     Foreground="{Binding Kind, Converter={x:Static shell:ChangeKindToBrushConverter.Instance}}"
-                     VerticalAlignment="Center" HorizontalAlignment="Center"/>
-          <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Margin="6,0,0,0"
-                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-        </Grid>
-      </Button>
-    </DataTemplate>
-  </UserControl.Resources>
 
   <UserControl.Styles>
     <Style Selector="Button.scm-act">
@@ -42,98 +26,44 @@
       <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
-    <Style Selector="Button.scm-row-btn">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="6,2"/>
-      <Setter Property="MinHeight" Value="22"/>
-      <Setter Property="HorizontalContentAlignment" Value="Left"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style Selector="Button.scm-row-btn:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
-    </Style>
-    <Style Selector="Button.scm-row-btn:pressed /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent"/>
-    </Style>
   </UserControl.Styles>
 
-  <!-- diff 区（工作区 diff / 提交详情 叠加） -->
+  <!-- diff 区（工作区 diff / 提交文件 diff 叠加；互斥——OpenDiff/OpenCommitFileDiff 互相清对方）。
+       提交文件 diff 层置顶（最后渲染 = 最上层），激活时覆盖工作区 diff 与空态。 -->
   <Grid>
-    <!-- 工作区 diff 层（未选中提交） -->
-    <Panel IsVisible="{Binding !HasSelectedCommit}">
-      <StackPanel IsVisible="{Binding !HasActiveDiff}"
-                  VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Opacity="0.6">
-        <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="36" Height="36"
-              HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
-        <TextBlock Text="选择一个变更查看差异" FontSize="13"
-                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-      </StackPanel>
-      <DockPanel IsVisible="{Binding HasActiveDiff}">
-        <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-          <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
-                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-        </Border>
-        <shell:DiffView DataContext="{Binding ActiveDiff}"/>
-      </DockPanel>
-    </Panel>
+    <!-- 空态（无任何 diff） -->
+    <StackPanel IsVisible="{Binding HasNoDiff}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Opacity="0.6">
+      <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="36" Height="36"
+            HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
+      <TextBlock Text="选择一个变更或提交文件查看差异" FontSize="13"
+                 Foreground="{DynamicResource TextSecondaryBrush}"/>
+    </StackPanel>
 
-    <!-- 提交详情层（选中提交：元信息 + 改动文件 + 文件 diff） -->
-    <Grid IsVisible="{Binding HasSelectedCommit}" RowDefinitions="Auto,*,4,*">
-      <!-- 元信息头（✕ 回工作区层） -->
-      <Border Grid.Row="0" Padding="10,6" Background="{DynamicResource SidebarBgBrush}"
+    <!-- 工作区 diff（选中变更时） -->
+    <DockPanel IsVisible="{Binding HasActiveDiff}">
+      <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <TextBlock Text="{Binding ActiveDiffPath}" FontSize="13" FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+      </Border>
+      <shell:DiffView DataContext="{Binding ActiveDiff}"/>
+    </DockPanel>
+
+    <!-- 提交文件 diff（点历史展开文件后；✕ 关闭回空态） -->
+    <DockPanel IsVisible="{Binding HasCommitDiff}">
+      <Border DockPanel.Dock="Top" Padding="8,5" Background="{DynamicResource SidebarBgBrush}"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
         <DockPanel>
           <Button DockPanel.Dock="Right" Classes="scm-act" Width="24" Height="24" ToolTip.Tip="关闭"
-                  Command="{Binding ClearSelectedCommitCommand}">
+                  Command="{Binding ClearCommitDiffCommand}">
             <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
           </Button>
-          <StackPanel Spacing="2">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="{Binding SelectedCommit.Info.ShaShort}"
-                         FontFamily="Menlo,Monaco,Consolas,monospace" FontSize="12" FontWeight="SemiBold"
-                         Foreground="{DynamicResource AccentBrush}"/>
-              <TextBlock Text="{Binding SelectedCommit.Info.Author}" FontSize="12" Opacity="0.8"/>
-              <TextBlock Text="{Binding SelectedCommit.Info.When, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
-                         FontSize="11" Opacity="0.6" Foreground="{DynamicResource TextSecondaryBrush}"/>
-            </StackPanel>
-            <TextBlock Text="{Binding SelectedCommit.Info.Message}" FontSize="13" TextWrapping="Wrap"/>
-          </StackPanel>
+          <TextBlock Text="{Binding ActiveCommitDiffPath}" FontSize="13" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
         </DockPanel>
       </Border>
-
-      <!-- 改动文件 -->
-      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel>
-          <TextBlock Text="改动文件" FontSize="11" FontWeight="SemiBold" Margin="10,8,8,2"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <ItemsControl ItemsSource="{Binding CommitFiles}" ItemTemplate="{StaticResource CommitFileTemplate}"/>
-        </StackPanel>
-      </ScrollViewer>
-
-      <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
-                    Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
-
-      <!-- 提交文件 diff -->
-      <Grid Grid.Row="3">
-        <StackPanel IsVisible="{Binding !HasCommitDiff}" VerticalAlignment="Center" HorizontalAlignment="Center"
-                    Spacing="8" Opacity="0.6">
-          <Path Data="{x:Static shell:Codicons.Diff}" Stretch="Uniform" Width="28" Height="28"
-                HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
-          <TextBlock Text="选择一个改动文件查看差异" FontSize="13"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-        </StackPanel>
-        <DockPanel IsVisible="{Binding HasCommitDiff}">
-          <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SidebarBgBrush}"
-                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <TextBlock Text="{Binding ActiveCommitDiffPath}" FontSize="12" FontWeight="SemiBold"
-                       TextTrimming="CharacterEllipsis"/>
-          </Border>
-          <shell:DiffView DataContext="{Binding ActiveCommitDiff}"/>
-        </DockPanel>
-      </Grid>
-    </Grid>
+      <shell:DiffView DataContext="{Binding ActiveCommitDiff}"/>
+    </DockPanel>
   </Grid>
 </UserControl>

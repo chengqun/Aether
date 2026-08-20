@@ -89,30 +89,67 @@
       </StackPanel>
     </DataTemplate>
 
-    <!-- 提交历史行：色点(lane色) + ref徽标 + 消息 + 短日期；单击 → 选中提交看其改动 -->
+    <!-- 提交历史行（GitLens 式 inline 展开）：chevron + 色点(lane色) + ref徽标 + 消息 + 短日期；
+         点整行 → toggle inline 展开/收起改动文件；展开的文件行点 → 右侧 diff。
+         DataContext = CommitHistoryItemViewModel（命令直达本 VM）。 -->
     <DataTemplate x:Key="CommitRowTemplate">
-      <Button Classes="scm-row-btn" Margin="2,1"
-              Command="{Binding $parent[UserControl].DataContext.SelectCommitCommand}"
-              CommandParameter="{Binding}"
-              ToolTip.Tip="{Binding Info.Message}"
-              HorizontalAlignment="Stretch">
-        <Grid ColumnDefinitions="12,Auto,*,Auto" VerticalAlignment="Center">
-          <Path Grid.Column="0" Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="9" Height="9"
-                Fill="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
-                VerticalAlignment="Center" HorizontalAlignment="Center"/>
-          <ItemsControl Grid.Column="1" ItemsSource="{Binding Refs}"
-                        ItemTemplate="{StaticResource RefBadgeTemplate}" Margin="6,0,0,0">
+      <StackPanel Margin="2,1">
+        <Button Classes="scm-row-btn"
+                Command="{Binding ToggleCommand}"
+                ToolTip.Tip="{Binding Info.Message}"
+                HorizontalAlignment="Stretch">
+          <Grid ColumnDefinitions="11,12,Auto,*,Auto" VerticalAlignment="Center">
+            <!-- chevron（展开 ▾ / 收起 ▸） -->
+            <Path Grid.Column="0" Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="11" Height="11"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding IsExpanded}"/>
+            <Path Grid.Column="0" Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="11" Height="11"
+                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                  VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding !IsExpanded}"/>
+            <Path Grid.Column="1" Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform" Width="9" Height="9"
+                  Fill="{Binding Lane, Converter={x:Static shell:LaneToBrushConverter.Instance}}"
+                  VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            <ItemsControl Grid.Column="2" ItemsSource="{Binding Refs}"
+                          ItemTemplate="{StaticResource RefBadgeTemplate}" Margin="6,0,0,0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+            </ItemsControl>
+            <TextBlock Grid.Column="3" Text="{Binding Info.Message}" FontSize="12" Margin="6,0,0,0"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="4" Text="{Binding Info.When, StringFormat='{}{0:MM-dd}'}"
+                       FontSize="10" Opacity="0.5" Margin="6,0,4,0" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+          </Grid>
+        </Button>
+        <!-- 行内改动文件（展开时；缩进对齐 dot 之下）。点文件 → 经父行 VM OpenFileCommand 取 commit diff 显于右侧。 -->
+        <StackPanel IsVisible="{Binding IsExpanded}" Margin="23,0,0,2">
+          <TextBlock Text="加载中…" FontSize="11" Opacity="0.6" Margin="0,2"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     IsVisible="{Binding IsLoading}"/>
+          <ItemsControl ItemsSource="{Binding Files}">
             <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+              <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="scm-row-btn" Margin="0,1"
+                        Command="{Binding $parent[ItemsControl].DataContext.OpenFileCommand}"
+                        CommandParameter="{Binding}"
+                        HorizontalAlignment="Stretch">
+                  <Grid ColumnDefinitions="18,*">
+                    <TextBlock Grid.Column="0" Text="{Binding StatusLetter}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{Binding Kind, Converter={x:Static shell:ChangeKindToBrushConverter.Instance}}"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Margin="6,0,0,0"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock Grid.Column="2" Text="{Binding Info.Message}" FontSize="12" Margin="6,0,0,0"
-                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-          <TextBlock Grid.Column="3" Text="{Binding Info.When, StringFormat='{}{0:MM-dd}'}"
-                     FontSize="10" Opacity="0.5" Margin="6,0,4,0" VerticalAlignment="Center"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-        </Grid>
-      </Button>
+        </StackPanel>
+      </StackPanel>
     </DataTemplate>
   </UserControl.Resources>
 
@@ -341,7 +378,7 @@
                 <TextBlock Text="历史" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
-            <ItemsControl IsVisible="{Binding IsHistoryExpanded}" ItemsSource="{Binding HistoryGraph.Commits}"
+            <ItemsControl IsVisible="{Binding IsHistoryExpanded}" ItemsSource="{Binding CommitHistory}"
                           ItemTemplate="{StaticResource CommitRowTemplate}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>

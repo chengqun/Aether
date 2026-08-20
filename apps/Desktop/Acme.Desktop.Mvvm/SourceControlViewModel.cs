@@ -73,6 +73,7 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>当前展示的 diff（选中变更时填充）；null = 右栏空态。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveDiff))]
+    [NotifyPropertyChangedFor(nameof(HasNoDiff))]
     private DiffModel? _activeDiff;
 
     /// <summary>当前 diff 对应的文件路径（diff 头显示 + 丢弃按钮）。</summary>
@@ -120,17 +121,14 @@ public partial class SourceControlViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasHistory))]
     private CommitGraphModel? _historyGraph;
 
-    /// <summary>选中的 commit（驱动右侧元信息 + 改动文件）。非空时右侧切换为「提交详情」布局。</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelectedCommit))]
-    private LaidOutCommit? _selectedCommit;
+    /// <summary>历史提交列表（驱动 section 渲染）；每项是 <see cref="CommitHistoryItemViewModel"/>，
+    /// 点行 toggle inline 展开/收起改动文件（GitLens 式），点文件 → 右侧 diff。切仓库/刷新时重载。</summary>
+    public ObservableCollection<CommitHistoryItemViewModel> CommitHistory { get; } = new();
 
-    /// <summary>选中 commit 的改动文件列表。</summary>
-    public ObservableCollection<CommitFileChange> CommitFiles { get; } = new();
-
-    /// <summary>选中 commit 某文件的 diff（驱动右侧 DiffView）。</summary>
+    /// <summary>选中 commit 某文件的 diff（驱动右侧 DiffView）。GitLens 式：点展开的文件后填充。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCommitDiff))]
+    [NotifyPropertyChangedFor(nameof(HasNoDiff))]
     private DiffModel? _activeCommitDiff;
 
     [ObservableProperty] private string? _activeCommitDiffPath;
@@ -157,11 +155,11 @@ public partial class SourceControlViewModel : ObservableObject
     /// <summary>历史图是否已加载。</summary>
     public bool HasHistory => HistoryGraph is not null && HistoryGraph.Commits.Count > 0;
 
-    /// <summary>是否选中了 commit（驱动右侧元信息/空态 + 工作区/历史布局切换）。</summary>
-    public bool HasSelectedCommit => SelectedCommit is not null;
-
-    /// <summary>是否有 commit 文件 diff 展示。</summary>
+    /// <summary>是否有 commit 文件 diff 展示（驱动右侧 commit 文件 diff 层）。</summary>
     public bool HasCommitDiff => ActiveCommitDiff is not null;
+
+    /// <summary>无任何 diff 展示（驱动右侧空态）。工作区 diff 与 commit 文件 diff 互斥。</summary>
+    public bool HasNoDiff => ActiveDiff is null && ActiveCommitDiff is null;
 
     /// <summary>当前分支是否已设上游跟踪（驱动 push/pull/sync 按钮可用性）。</summary>
     public bool HasUpstream => RemoteStatus?.HasUpstream ?? false;
@@ -224,6 +222,10 @@ public partial class SourceControlViewModel : ObservableObject
         {
             var nodes = await Task.Run(() => git.GetHistory(_projectDir, 200));
             HistoryGraph = CommitGraphBuilder.Build(nodes);
+            // GitLens 式：每个 commit 包成可 inline 展开改动文件的行 VM；点行 toggle、点文件 → 右侧 diff。
+            CommitHistory.Clear();
+            foreach (var c in HistoryGraph.Commits)
+                CommitHistory.Add(new CommitHistoryItemViewModel(c, LoadCommitFilesAsync, OpenCommitFileDiffAsync));
             // 固定上限 200，显示个数无信息量（小仓库另说）——仅空仓库提示。
             StatusMessage = HistoryGraph.Commits.Count == 0 ? "无提交" : null;
         }
@@ -231,37 +233,29 @@ public partial class SourceControlViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    /// <summary>点 commit 节点 → 设选中 + 取其改动文件。</summary>
-    [RelayCommand]
-    private async Task SelectCommitAsync(LaidOutCommit? commit)
+    /// <summary>加载某 commit 的改动文件列表（GitLens 式 inline 展开时懒加载回调；
+    /// 喂 <see cref="CommitHistoryItemViewModel"/>）。后台线程跑 LibGit2Sharp 不阻塞 UI。</summary>
+    private async Task<IReadOnlyList<CommitFileChange>> LoadCommitFilesAsync(string sha)
     {
-        if (commit is null || string.IsNullOrEmpty(_projectDir)) return;
-        SelectedCommit = commit;
-        ActiveCommitDiff = null;
-        ActiveCommitDiffPath = null;
-        CommitFiles.Clear();
         var git = _serviceProvider.GetService<IGitService>();
-        if (git is null) return;
-        try
-        {
-            var files = await Task.Run(() => git.GetCommitChanges(_projectDir!, commit.Info.Sha));
-            CommitFiles.Clear();
-            foreach (var f in files) CommitFiles.Add(f);
-        }
-        catch { /* 忽略，列表空 */ }
+        if (git is null || string.IsNullOrEmpty(_projectDir)) return Array.Empty<CommitFileChange>();
+        try { return await Task.Run(() => git.GetCommitChanges(_projectDir!, sha)); }
+        catch { return Array.Empty<CommitFileChange>(); }
     }
 
-    /// <summary>点 commit 改动文件 → 取该文件 parent-vs-commit diff。</summary>
-    [RelayCommand]
-    private async Task OpenCommitFileDiffAsync(CommitFileChange? file)
+    /// <summary>点 commit 改动文件 → 取该文件 parent-vs-commit diff，右侧显示（清工作区 diff 互斥）。
+    /// GitLens 式：sha 由 <see cref="CommitHistoryItemViewModel"/> 注入（它知道自己包的 commit）。</summary>
+    private async Task OpenCommitFileDiffAsync(string sha, CommitFileChange file)
     {
-        if (file is null || SelectedCommit is null || string.IsNullOrEmpty(_projectDir)) return;
+        if (string.IsNullOrEmpty(_projectDir)) return;
         var git = _serviceProvider.GetService<IGitService>();
         if (git is null) return;
         IsBusy = true;
         try
         {
-            var diff = await Task.Run(() => git.GetCommitFileDiff(_projectDir!, SelectedCommit.Info.Sha, file.Path));
+            var diff = await Task.Run(() => git.GetCommitFileDiff(_projectDir!, sha, file.Path));
+            ActiveDiff = null;          // 与工作区 diff 互斥——右侧只显一个 diff。
+            ActiveDiffPath = null;
             ActiveCommitDiff = diff;
             ActiveCommitDiffPath = file.Path;
         }
@@ -269,14 +263,12 @@ public partial class SourceControlViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    /// <summary>取消选中提交，回到工作区 diff 层（历史元信息头 ✕ 按钮）。</summary>
+    /// <summary>关闭右侧 commit 文件 diff（diff 头 ✕ 按钮），回空态。</summary>
     [RelayCommand]
-    private void ClearSelectedCommit()
+    private void ClearCommitDiff()
     {
-        SelectedCommit = null;
         ActiveCommitDiff = null;
         ActiveCommitDiffPath = null;
-        CommitFiles.Clear();
     }
 
     /// <summary>项目目录变化（文档页打开/切换项目）→ 切仓库 + 刷新。</summary>
@@ -297,8 +289,7 @@ public partial class SourceControlViewModel : ObservableObject
         ActiveDiffPath = null;
         // 清历史状态（切仓库）。
         HistoryGraph = null;
-        SelectedCommit = null;
-        CommitFiles.Clear();
+        CommitHistory.Clear();
         ActiveCommitDiff = null;
         ActiveCommitDiffPath = null;
         RemoteStatus = null;
@@ -444,10 +435,8 @@ public partial class SourceControlViewModel : ObservableObject
         if (item is null || string.IsNullOrEmpty(_projectDir)) return;
         var git = _serviceProvider.GetService<IGitService>();
         if (git is null) return;
-        SelectedCommit = null;
-        ActiveCommitDiff = null;
+        ActiveCommitDiff = null;       // 切回工作区 diff——清 commit 文件 diff（互斥）。
         ActiveCommitDiffPath = null;
-        CommitFiles.Clear();
         try
         {
             var diff = await Task.Run(() => git.GetDiff(_projectDir, item.Path));
@@ -621,4 +610,60 @@ public sealed record ChangeItem(string Path, ChangeKind Kind, bool IsStaged)
         ChangeKind.Renamed => "R",
         _ => "?",
     };
+}
+
+/// <summary>历史提交行 VM（GitLens 式 inline 展开）：包 <see cref="LaidOutCommit"/> + 可变展开态 + 懒加载改动文件。
+/// 点行 toggle 展开/收起（首次展开懒加载文件，缓存复用不重载）；点展开的文件 → 经回调让父
+/// <see cref="SourceControlViewModel"/> 取该文件 commit diff 显于右侧。
+/// <see cref="LaidOutCommit"/> 是 <see cref="CommitGraphBuilder"/> 产的纯 record 不可变，故包一层 VM 加可观察态。</summary>
+public sealed partial class CommitHistoryItemViewModel : ObservableObject
+{
+    private readonly Func<string, Task<IReadOnlyList<CommitFileChange>>> _loadFiles;
+    private readonly Func<string, CommitFileChange, Task> _openFileDiff;
+
+    public LaidOutCommit Commit { get; }
+    /// <summary>便利直通（XAML 绑 <c>Info.Message</c>/<c>Info.When</c> 等，免 <c>Commit.Info.X</c>）。</summary>
+    public CommitInfo Info => Commit.Info;
+    public int Lane => Commit.Lane;
+    public IReadOnlyList<CommitRef> Refs => Commit.Refs;
+
+    [ObservableProperty] private bool _isExpanded;
+    [ObservableProperty] private bool _isLoading;
+    public ObservableCollection<CommitFileChange> Files { get; } = new();
+
+    public CommitHistoryItemViewModel(LaidOutCommit commit,
+        Func<string, Task<IReadOnlyList<CommitFileChange>>> loadFiles,
+        Func<string, CommitFileChange, Task> openFileDiff)
+    {
+        Commit = commit;
+        _loadFiles = loadFiles;
+        _openFileDiff = openFileDiff;
+    }
+
+    /// <summary>点 commit 行 → toggle inline 展开/收起；首次展开懒加载改动文件。</summary>
+    [RelayCommand]
+    private async Task ToggleAsync()
+    {
+        IsExpanded = !IsExpanded;
+        if (IsExpanded && Files.Count == 0 && !IsLoading)
+        {
+            IsLoading = true;
+            try
+            {
+                var files = await _loadFiles(Info.Sha);
+                Files.Clear();
+                foreach (var f in files) Files.Add(f);
+            }
+            finally { IsLoading = false; }
+        }
+    }
+
+    /// <summary>点展开的改动文件 → 经回调让父 VM 取该文件 commit diff 显于右侧。
+    /// sha 由本 VM 注入（它知道自己包的 commit），故 diff 不依赖「选中 commit」单态。</summary>
+    [RelayCommand]
+    private Task OpenFileAsync(CommitFileChange? file)
+    {
+        if (file is null) return Task.CompletedTask;
+        return _openFileDiff(Info.Sha, file);
+    }
 }
