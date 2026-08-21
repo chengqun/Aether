@@ -1,0 +1,93 @@
+{
+  "$note": "梦幻渐变（dark）——皮肤包 showcase：宇宙渐变窗口底（indigo→purple→violet）+ 发光紫蓝渐变主色 + 半透明玻璃面板 + aurora 漂移光斑动画 + .axaml 发光特效。色值约定：8 位 hex 一律 #AARRGGBB（Avalonia/WPF alpha 在前；非 CSS 的 RRGGBBAA）。半透明面板（alpha<FF）让 aurora/渐变底透出。styles 指向 dream.styles.axaml（DropShadowEffect 发光层）。",
+  "variant": "dark",
+  "animated": true,
+  "styles": "avares://Acme.Desktop.Workbench/Theming/dream.styles.axaml",
+  "chrome": { "borderless": true, "titleBarHeight": 36 },
+  "colors": {
+    "AccentColor": "#a78bfa",
+    "AccentBrush": "#a78bfa",
+    "AccentHoverBrush": "#8b5cf6",
+    "AccentLightBrush": "#c4b5fd",
+    "SidebarBgBrush": "#cc1a1a2e",
+    "SidebarHoverBrush": "#801e1b4b",
+    "SidebarActiveBrush": "#a78bfa",
+    "SidebarIconBrush": "#c4b5fd",
+    "SidebarTextBrush": "#cdd6f4",
+    "ContentBgBrush": "#990f0c29",
+    "CardBgBrush": "#e01e1b4b",
+    "BorderBrush": "#14ffffff",
+    "TextPrimaryBrush": "#cdd6f4",
+    "TextSecondaryBrush": "#a6adc8",
+    "NavHoverBrush": "#801e1b4b",
+    "WorkspaceBackground": "#0f0c29",
+    "SurfaceBrush": "#b31e1b4b",
+    "SurfaceHoverBrush": "#d02a2a4e",
+    "SuccessBrush": "#a6e3a1",
+    "SuccessBgBrush": "#1e3b2e",
+    "DangerColor": "#f38ba8",
+    "DangerBrush": "#f38ba8",
+    "DangerBgBrush": "#3b1e24",
+    "WarningBrush": "#f9e2af",
+    "WarningBgBrush": "#3b321e",
+    "AccentTintBgBrush": "#1aa78bfa",
+    "OnAccentColor": "#ffffff",
+    "OnDangerColor": "#1e1e2e",
+    "UserBubbleBrush": "#7c3aed",
+    "UserBubbleFgBrush": "#ffffff",
+    "AgentBubbleBrush": "#d01a1a2e",
+    "ToolCallBrush": "#801e1b4b",
+    "ToolCallBorderBrush": "#33a78bfa",
+    "ToolCallTextBrush": "#c4b5fd",
+    "ToolResultBrush": "#801e3b2e",
+    "ToolResultBorderBrush": "#3310b981",
+    "ToolResultTextBrush": "#6ee7b7"
+  },
+  "gradients": {
+    "AccentBrush": {
+      "type": "linear", "angle": 135,
+      "stops": [ { "color": "#a78bfa", "offset": 0.0 }, { "color": "#60a5fa", "offset": 1.0 } ]
+    },
+    "AccentHoverBrush": {
+      "type": "linear", "angle": 135,
+      "stops": [ { "color": "#8b5cf6", "offset": 0.0 }, { "color": "#3b82f6", "offset": 1.0 } ]
+    },
+    "AccentLightBrush": {
+      "type": "linear", "angle": 135,
+      "stops": [ { "color": "#c4b5fd", "offset": 0.0 }, { "color": "#93c5fd", "offset": 1.0 } ]
+    },
+    "UserBubbleBrush": {
+      "type": "linear", "angle": 135,
+      "stops": [ { "color": "#7c3aed", "offset": 0.0 }, { "color": "#2563eb", "offset": 1.0 } ]
+    }
+  },
+  "fonts": {
+    "UiFont": "JetBrains Mono, Menlo, monospace",
+    "MonoFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace",
+    "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
+  },
+  "radius": {
+    "CornerRadiusSm": "4",
+    "CornerRadiusMd": "6",
+    "CornerRadiusLg": "12"
+  },
+  "spacing": {
+    "SpaceXs": "4",
+    "SpaceSm": "8",
+    "SpaceMd": "10",
+    "SpaceLg": "16",
+    "SpaceXl": "24"
+  },
+  "background": {
+    "gradient": {
+      "type": "linear",
+      "angle": 135,
+      "stops": [
+        { "color": "#0f0c29", "offset": 0.0 },
+        { "color": "#302b63", "offset": 0.5 },
+        { "color": "#24243e", "offset": 1.0 }
+      ]
+    },
+    "color": "#0f0c29"
+  }
+}
