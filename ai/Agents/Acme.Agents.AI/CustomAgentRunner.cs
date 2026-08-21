@@ -103,7 +103,6 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             Tools = def.Tools,
             ToolApprovals = def.ToolApprovals,
             AutoApprovalRules = def.AutoApprovalRules,
-            Skills = def.Skills,
             ModelId = def.ModelId ?? string.Empty,
             Memory = MapMemory(def.Memory),
             MaxHistory = def.MaxHistory,

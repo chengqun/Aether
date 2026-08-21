@@ -46,15 +46,6 @@ public partial class ToolOption : ObservableObject
 /// <summary>审批等级选项（值 + 中文标签）。</summary>
 public sealed record ApprovalLevelOption(string Value, string Label);
 
-/// <summary>skill 选项（skill 池项，供自定义 Agent 勾选）。</summary>
-public partial class SkillOption : ObservableObject
-{
-    public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
-    [ObservableProperty] private bool _isSelected;
-}
-
 /// <summary>工具类别分组（UI 分组展示用，支持类别整体勾选）。</summary>
 public partial class ToolCategoryGroup : ObservableObject
 {
@@ -103,13 +94,12 @@ public class ResponseFormatOption
 
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
-    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomSkillMeta> allSkills, IReadOnlyList<CustomModelOption> allModels,
+    public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels,
         IReadOnlyList<McpServerStatus>? mcpServers = null)
     {
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
-        var selectedSkillSet = new HashSet<string>(existing?.Skills ?? Enumerable.Empty<string>());
         var autoApproveSet = new HashSet<string>(existing?.AutoApprovalRules ?? Enumerable.Empty<string>());
 
         // 按分类分组构建原生工具列表（MCP 工具已在 GetAvailableTools 过滤，单独走 MCP 区）
@@ -166,18 +156,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                 }
                 McpServerGroups.Add(grp);
             }
-        }
-
-        // 构建 skill 列表（skill 通常较少，平铺即可）
-        foreach (var meta in allSkills ?? Array.Empty<CustomSkillMeta>())
-        {
-            Skills.Add(new SkillOption
-            {
-                Name = meta.Name,
-                Description = meta.Description,
-                Category = meta.Category,
-                IsSelected = selectedSkillSet.Contains(meta.Name),
-            });
         }
 
         if (existing != null)
@@ -245,7 +223,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private bool _requireToolApproval;
     [ObservableProperty] private bool _enableAgentModeProvider;
     [ObservableProperty] private bool _enableFileMemory;
-    [ObservableProperty] private bool _enableAgentSkills;
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
 
@@ -282,9 +259,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
 
     /// <summary>是否有 MCP server（控制 MCP 区显隐）。</summary>
     public bool HasMcpServers => McpServerGroups.Count > 0;
-
-    /// <summary>可选 skill 列表（含选中状态）。</summary>
-    public ObservableCollection<SkillOption> Skills { get; } = new();
 
     /// <summary>选中工具数量。</summary>
     public int SelectedToolCount => Tools.Count(t => t.IsSelected);
@@ -402,7 +376,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(Name)) return null;
         var toolList = Tools.Where(t => t.IsSelected).Select(t => t.Name).ToList();
-        var skillList = Skills.Where(s => s.IsSelected).Select(s => s.Name).ToList();
         return new ExpertItem
         {
             Id = Id,
@@ -415,7 +388,6 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             ToolApprovals = Tools.Where(t => t.IsSelected && t.ApprovalLevel != t.DeclaredLevel)
                 .ToDictionary(t => t.Name, t => t.ApprovalLevel),
             AutoApprovalRules = Tools.Where(t => t.IsSelected && t.AutoApprove).Select(t => t.Name).ToList(),
-            Skills = skillList,
             Memory = Memory,
             MaxHistory = MaxHistory,
             TopP = TopP,

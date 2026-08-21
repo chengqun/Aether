@@ -2,7 +2,6 @@ using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Harness.Agents;
-using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
 
 namespace Acme.Agents.AI;
@@ -17,18 +16,16 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 {
     private readonly INoteService _notes;
     private readonly ToolRegistry _toolRegistry;
-    private readonly SkillRegistry _skillRegistry;
     private readonly IModelSource _modelSource;
     private readonly IAgentSourceParser _agentParser;
     private readonly IRuleSourceParser _ruleParser;
     private readonly ICodeSourceParser _codeParser;
     private readonly RuleRegistry _ruleRegistry;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, SkillRegistry skillRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, ICodeSourceParser codeParser, RuleRegistry ruleRegistry)
+    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, ICodeSourceParser codeParser, RuleRegistry ruleRegistry)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
-        _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         _ruleParser = ruleParser ?? throw new ArgumentNullException(nameof(ruleParser));
@@ -125,11 +122,6 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
             .Where(m => !string.Equals(m.Name, "ask_user", StringComparison.OrdinalIgnoreCase)) // ask_user 为自动纳入的基础设施工具，不在选择器暴露
             .Where(m => !string.Equals(m.Category, "MCP", StringComparison.OrdinalIgnoreCase)) // MCP 工具在编辑器单独的 MCP 区展示
             .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category, m.ApprovalLevel.ToString()))
-            .ToList();
-
-    public IReadOnlyList<CustomSkillMeta> GetAvailableSkills()
-        => _skillRegistry.GetAllMetas()
-            .Select(m => new CustomSkillMeta(m.Name, m.Description, m.Category))
             .ToList();
 
     public IReadOnlyList<CustomModelOption> GetAvailableModels()

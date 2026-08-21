@@ -168,9 +168,6 @@ public sealed class AgentSourceParser : IAgentSourceParser
                     // 自动放行工具名列表（flow [a,b] 或 block - a）；与 tools 同构
                     result.AutoApprovalRules = ParseListValue(value, lines, ref i);
                     break;
-                case "skills":
-                    result.Skills = ParseListValue(value, lines, ref i);
-                    break;
             }
             i++;
         }
@@ -226,11 +223,6 @@ public sealed class AgentSourceParser : IAgentSourceParser
             ? "tools: []"
             : "tools:\n" + string.Join("\n", toolList.Select(t => $"- {t}"));
 
-        var skillList = f.Skills?.ToList() ?? new List<string>();
-        var skillsLine = skillList.Count == 0
-            ? "skills: []"
-            : "skills:\n" + string.Join("\n", skillList.Select(s => $"- {s}"));
-
         // tool_approvals: 仅在有覆盖时输出（JSON map，单行）
         var approvalsLine = (f.ToolApprovals is null || f.ToolApprovals.Count == 0)
             ? null
@@ -247,7 +239,6 @@ name: {f.Name}
 description: {f.Description}
 category: {f.Category}
 {toolsLine}
-{skillsLine}
 {approvalsLine}
 {autoRulesLine}
 memory: {f.Memory}

@@ -21,7 +21,6 @@ public partial class ExpertEditView : UserControl
             this.FindControl<Expander>("ExpPrompt")!,
             this.FindControl<Expander>("ExpModel")!,
             this.FindControl<Expander>("ExpSample")!,
-            this.FindControl<Expander>("ExpSkills")!,
         };
         foreach (var exp in _accordions)
         {

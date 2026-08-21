@@ -40,9 +40,6 @@ public sealed class CustomAgentDefinition
     /// <summary>自动放行的工具名列表（RequireToolApproval 开时，列入的非-Safe 工具不弹审批框）。可空。</summary>
     public List<string> AutoApprovalRules { get; set; } = new();
 
-    /// <summary>勾选启用的 skill 名（对应 SkillRegistry 中的 skill；空=启用 skills 时用全部）。</summary>
-    public IReadOnlyList<string> Skills { get; set; } = Array.Empty<string>();
-
     /// <summary>记忆模式（当前未由运行时强制，仅持久化；见计划缺口）。</summary>
     public AgentMemoryMode Memory { get; set; } = AgentMemoryMode.SlidingWindow;
 

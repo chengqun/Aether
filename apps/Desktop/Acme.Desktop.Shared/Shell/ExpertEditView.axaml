@@ -101,21 +101,6 @@
           <CheckBox Content="启用 OpenTelemetry（Trace 查看）" IsChecked="{Binding EnableOpenTelemetry}" Margin="0,4"/>
         </Expander>
 
-        <Expander x:Name="ExpSkills" Header="技能" IsExpanded="False">
-          <ItemsControl ItemsSource="{Binding Skills}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <CheckBox IsChecked="{Binding IsSelected}" Margin="0,2">
-                  <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="{Binding Name}" FontSize="11"/>
-                    <TextBlock Text="{Binding Description}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                  </StackPanel>
-                </CheckBox>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </Expander>
-
         <Expander x:Name="ExpTools" Header="内置工具" IsExpanded="False">
           <ItemsControl ItemsSource="{Binding ToolCategories}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>

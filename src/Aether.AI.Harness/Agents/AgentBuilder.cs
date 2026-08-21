@@ -19,12 +19,11 @@ public sealed class AgentBuilder
     private AgentResponseFormat _responseFormat = AgentResponseFormat.Default;
     private readonly List<string> _tools = new();
     private readonly Dictionary<string, string> _toolApprovals = new();
-    private readonly List<string> _skills = new();
     private AgentMemoryMode _memory = AgentMemoryMode.Full;
     private int _maxHistory = 20;
     private bool _requireToolApproval;
     private bool _enableWebSearch, _enableTodoProvider, _enableAgentModeProvider;
-    private bool _enableFileMemory, _enableAgentSkills, _enableOpenTelemetry, _enableLongTermMemory;
+    private bool _enableFileMemory, _enableOpenTelemetry, _enableLongTermMemory;
 
     public AgentBuilder(string id)
     {
@@ -50,10 +49,6 @@ public sealed class AgentBuilder
     public AgentBuilder WithToolApproval(string toolName, string level) { _toolApprovals[toolName] = level; return this; }
     public AgentBuilder RequireToolApproval(bool require = true) { _requireToolApproval = require; return this; }
 
-    // —— 技能 ——
-    public AgentBuilder WithSkill(string skillName) { _skills.Add(skillName); return this; }
-    public AgentBuilder WithSkills(IEnumerable<string> skillNames) { _skills.AddRange(skillNames); return this; }
-
     // —— 记忆 ——
     public AgentBuilder Memory(AgentMemoryMode memory) { _memory = memory; return this; }
     public AgentBuilder MaxHistory(int max) { _maxHistory = max; return this; }
@@ -78,7 +73,6 @@ public sealed class AgentBuilder
         ResponseFormat = _responseFormat,
         Tools = _tools,
         ToolApprovals = _toolApprovals.Count == 0 ? null : _toolApprovals,
-        Skills = _skills,
         Memory = _memory,
         MaxHistory = _maxHistory,
         RequireToolApproval = _requireToolApproval,

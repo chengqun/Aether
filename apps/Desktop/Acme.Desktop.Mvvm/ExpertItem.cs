@@ -25,8 +25,6 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private Dictionary<string, string> _toolApprovals = new();
     /// <summary>自动放行的工具名列表（RequireToolApproval 开时，列入的非-Safe 工具不弹审批框）。</summary>
     [ObservableProperty] private List<string> _autoApprovalRules = new();
-    /// <summary>勾选启用的 skill 名（空=启用 skills 时用全部）。</summary>
-    [ObservableProperty] private List<string> _skills = new();
     [ObservableProperty] private bool _isSummoned;
 
     /// <summary>记忆模式：SlidingWindow=滑动窗口, Full=全量, Off=关闭。</summary>
@@ -55,7 +53,6 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private bool _requireToolApproval;
     [ObservableProperty] private bool _enableAgentModeProvider;
     [ObservableProperty] private bool _enableFileMemory;
-    [ObservableProperty] private bool _enableAgentSkills;
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
 

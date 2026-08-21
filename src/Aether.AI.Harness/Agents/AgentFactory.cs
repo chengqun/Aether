@@ -207,7 +207,7 @@ public sealed class AgentFactory
 
         // skills provider 自建注入（见 ConfigureSkillsProvider）：聊天页无审批 UI，
         // 必须关掉 load/read/run 审批，否则 run_skill_script 被默认审批挡住、模型只 load 不执行。
-        ConfigureSkillsProvider(options, definition);
+        ConfigureSkillsProvider(options);
 
         // 长期记忆 provider：EnableLongTermMemory 时由宿主工厂构造 MemoryContextProvider 注入。
         // 与 skills provider 累加（ConfigureSkillsProvider 可能已设置 AIContextProviders）。
@@ -232,30 +232,19 @@ public sealed class AgentFactory
 
         return client.AsHarnessAgent(options, _loggerFactory);
     }
-    private void ConfigureSkillsProvider(HarnessAgentOptions options, AgentDefinition definition)
+    private void ConfigureSkillsProvider(HarnessAgentOptions options)
     {
-        // 技能选择器是唯一控制：选了技能 = 启用，没选 = 禁用。不再需要 EnableAgentSkills 开关。
-        if (definition.Skills.Count == 0)
-        {
-            options.DisableAgentSkillsProvider = true;
-            return;
-        }
-
+        // skill 全量按需加载（镜像 Claude Code / knowledge object 理念）：所有 skill 索引常驻
+        // 每轮上下文，agent 运行时自己 load_skill 取正文（按需付费）。无 per-agent 白名单——
+        // skill 是只读知识（load 只拉正文进上下文，agent 自己决定用不用），不需 ACL。
         AgentSkillsSource? source = null;
         if (!string.IsNullOrEmpty(SkillsDirectory))
         {
             source = new AgentFileSkillsSource(SkillsDirectory, _skillScriptRunner, options: null, _loggerFactory);
-            if (definition.Skills.Count > 0)
-            {
-                var allowed = new HashSet<string>(definition.Skills, StringComparer.OrdinalIgnoreCase);
-                source = new FilteringAgentSkillsSource(source, (s, _) => allowed.Contains(s.Frontmatter.Name), _loggerFactory);
-            }
         }
         else
         {
-            var skills = definition.Skills.Count > 0
-                ? _skillRegistry.ResolveAll(definition.Skills)
-                : _skillRegistry.GetAll();
+            var skills = _skillRegistry.GetAll();
             if (skills.Count == 0) { options.DisableAgentSkillsProvider = true; return; }
 
             var agentSkills = skills
@@ -412,11 +401,6 @@ public sealed class AgentFactory
         return chatOptions;
     }
 
-    /// <summary>
-    /// 当 agent 选了技能（<see cref="AgentDefinition.Skills"/> 非空）时构建 skill 源。
-    /// 配了 <see cref="SkillsDirectory"/> 时用 MAF <see cref="AgentFileSkillsSource"/>（支持 SKILL.md 正文 + 脚本/resources），
-    /// 并按 <see cref="AgentDefinition.Skills"/> 过滤；否则退回 SkillRegistry 的纯提示词 <see cref="AgentInMemorySkillsSource"/>。
-    /// </summary>
     /// <summary>
     /// skill 脚本运行器：按扩展名选解释器（.py→python3，.sh→sh，.js→node），
     /// 以子进程执行脚本并传入 CLI 参数，返回 stdout。失败时返回含退出码/ stderr 的字符串。
