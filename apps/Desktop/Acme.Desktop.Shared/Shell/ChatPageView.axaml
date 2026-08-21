@@ -99,7 +99,9 @@
         <!-- 消息区委托给共享控件（与右栏紧凑视图共用模板/滚动/贴底/历史加载）。限宽 768 居中→消息与输入框同宽对齐。
              紧凑右栏 ChatView 直接嵌入 ChatMessagesView（不经此包装）故不受影响，保持满宽窄列。 -->
         <Panel>
-          <shell:ChatMessagesView HorizontalAlignment="Center" MaxWidth="768"/>
+          <!-- Width=768 固定列宽（对齐下方输入框），消息无论长短都从 768 列左边开始——
+               原先只有 MaxWidth 无 Width，短回复按内容收缩后再居中，显得"挤在中间"。 -->
+          <shell:ChatMessagesView HorizontalAlignment="Center" MaxWidth="768" Width="768"/>
         </Panel>
       </DockPanel>
 

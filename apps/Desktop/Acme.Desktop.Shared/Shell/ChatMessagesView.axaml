@@ -27,12 +27,13 @@
              → 切到下方完成态 markdown viewer 一次性渲染格式。Claude Code/Cursor 同款做法：流式纯文本、完成后才格式化。 -->
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentStreamingAnswer}" Spacing="4">
           <TextBlock Text="回答中…" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Content}" FontSize="14" TextWrapping="Wrap" HorizontalAlignment="Stretch" />
         </StackPanel>
 
         <!-- agent markdown 回答（完成）：全宽无框 + 元信息/复制 -->
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentMarkdownText}" Spacing="4">
           <ctl:SelectableMarkdownViewer Markdown="{Binding Content}"
+                                        HorizontalAlignment="Stretch"
                                         SelectionEnabled="True" SelectionBrush="#3300A2ED" />
           <DockPanel>
             <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9" VerticalAlignment="Center">
