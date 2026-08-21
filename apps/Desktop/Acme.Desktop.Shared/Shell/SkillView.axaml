@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+             x:Class="Acme.Desktop.Shared.Shell.SkillView"
+             Background="{DynamicResource ContentBgBrush}">
+
+  <UserControl.Styles>
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- 顶部操作栏 -->
+    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="技能" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+          <TextBlock Text="{Binding Skills.Count, StringFormat={}{0} 个}" Foreground="{DynamicResource TextSecondaryBrush}"
+                     FontSize="12" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <!-- 打开 skills 目录：跳文件管理器，用文档页/外部编辑器编辑 SKILL.md（skill 是文件式，此 tab 不内置编辑器） -->
+          <Button Classes="ghost" Click="OnOpenSkillsFolder" Padding="12,5" FontSize="12"
+                  IsVisible="{Binding HasSkillsDirectory}" Content="打开 skills 目录"/>
+          <Button Classes="ghost" Command="{Binding RefreshCommand}" Padding="12,5" FontSize="12">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="12" Height="12"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+              <TextBlock Text="刷新" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Padding="20,12" HorizontalScrollBarVisibility="Disabled">
+      <Panel>
+        <!-- 加载态 -->
+        <StackPanel IsVisible="{Binding IsLoading}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+          <ProgressBar IsIndeterminate="True" Width="140" Height="3"/>
+          <TextBlock Text="正在加载技能…" FontSize="12" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <!-- 空态 -->
+        <Border IsVisible="{Binding !Skills.Count}" Padding="40" CornerRadius="12" Background="{DynamicResource CardBgBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"
+                VerticalAlignment="Top" Margin="0,30,0,0">
+          <StackPanel Spacing="6" HorizontalAlignment="Center">
+            <Path Data="{x:Static shell:Codicons.Book}" Stretch="Uniform" Width="40" Height="40"
+                  Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Text="尚未安装技能" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+            <TextBlock Text="在 skills/ 目录下放 &lt;技能名&gt;/SKILL.md（front-matter name/description/category + Markdown 正文）即可被 agent 使用。"
+                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                       TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+
+        <!-- 技能卡片列表 -->
+        <ItemsControl ItemsSource="{Binding Skills}" IsVisible="{Binding !IsLoading}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="card" Width="320" Margin="6">
+                <StackPanel Spacing="6">
+                  <!-- name + category 徽标 -->
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    <Border Grid.Column="1" Background="{DynamicResource AccentTintBgBrush}" CornerRadius="4"
+                            Padding="6,1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}"/>
+                    </Border>
+                  </Grid>
+                  <!-- 预览（description 或正文截断） -->
+                  <TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                             TextWrapping="Wrap" MaxLines="3"/>
+                  <!-- 查看正文 toggle（就地交互，照专家卡 OnToggleSummonClick 范式——Tag 带 DataContext） -->
+                  <Button Classes="ghost" Click="OnToggleContent" Tag="{Binding}" Padding="10,3" FontSize="11"
+                          HorizontalAlignment="Left">
+                    <Panel>
+                      <TextBlock Text="查看正文" IsVisible="{Binding !IsExpanded}"/>
+                      <TextBlock Text="收起" IsVisible="{Binding IsExpanded}"/>
+                    </Panel>
+                  </Button>
+                  <!-- 正文 Markdown 渲染（展开时显；SelectableMarkdownViewer 自带滚动 + Ctrl/Cmd+C 复制） -->
+                  <ctl:SelectableMarkdownViewer Markdown="{Binding Content}" IsVisible="{Binding IsExpanded}"
+                                                MaxHeight="400" Margin="0,2,0,0"/>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

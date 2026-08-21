@@ -13,7 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Desktop.Mvvm;
 
 /// <summary>专家页 tab。</summary>
-public enum ExpertsTab { Agent, Rule, Workflow, Connector, Market, Mcp }
+public enum ExpertsTab { Agent, Rule, Workflow, Connector, Market, Mcp, Skill }
 
 /// <summary>专家页面 ViewModel：从自定义 Agent 目录加载，展示为专家卡片。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject
@@ -29,7 +29,7 @@ public partial class ExpertsViewModel : ObservableObject
         IAgentMarketplaceService marketplace, IAppAuthService auth, WorkflowsViewModel workflows,
         RulesViewModel rules,
         IAgentSourceParser agentParser,
-        McpViewModel mcp, IConnectorViewModel? connector = null)
+        McpViewModel mcp, SkillViewModel skills, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -40,6 +40,7 @@ public partial class ExpertsViewModel : ObservableObject
         Rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
         Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
+        Skills = skills ?? throw new ArgumentNullException(nameof(skills));
         Connector = connector;
         RefreshLoginStateAsync().SafeFireAndForget();
     }
@@ -74,6 +75,9 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>MCP 工具服务器 VM（MCP tab）。</summary>
     public McpViewModel Mcp { get; }
 
+    /// <summary>技能 VM（技能 tab，只读展示已加载 skill：name/category/description + 正文预览）。</summary>
+    public SkillViewModel Skills { get; }
+
     public bool IsAgentTab => CurrentTab == ExpertsTab.Agent;
     public bool IsRuleTab => CurrentTab == ExpertsTab.Rule;
 
@@ -81,6 +85,7 @@ public partial class ExpertsViewModel : ObservableObject
     public bool IsConnectorTab => CurrentTab == ExpertsTab.Connector;
     public bool IsMarketTab => CurrentTab == ExpertsTab.Market;
     public bool IsMcpTab => CurrentTab == ExpertsTab.Mcp;
+    public bool IsSkillTab => CurrentTab == ExpertsTab.Skill;
     public bool HasConnector => Connector is not null;
 
     partial void OnCurrentTabChanged(ExpertsTab value)
@@ -91,6 +96,7 @@ public partial class ExpertsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsConnectorTab));
         OnPropertyChanged(nameof(IsMarketTab));
         OnPropertyChanged(nameof(IsMcpTab));
+        OnPropertyChanged(nameof(IsSkillTab));
         if (value == ExpertsTab.Rule)
             Rules.LoadAsync().SafeFireAndForget();
         if (value == ExpertsTab.Connector && Connector is not null)
@@ -102,6 +108,8 @@ public partial class ExpertsViewModel : ObservableObject
         }
         if (value == ExpertsTab.Mcp)
             Mcp.LoadAsync().SafeFireAndForget();
+        if (value == ExpertsTab.Skill)
+            Skills.LoadAsync().SafeFireAndForget();
     }
 
     [RelayCommand] private void ShowAgentTab() => CurrentTab = ExpertsTab.Agent;
@@ -110,6 +118,7 @@ public partial class ExpertsViewModel : ObservableObject
     [RelayCommand] private void ShowConnectorTab() { if (HasConnector) CurrentTab = ExpertsTab.Connector; }
     [RelayCommand] private void ShowMarketTab() => CurrentTab = ExpertsTab.Market;
     [RelayCommand] private void ShowMcpTab() => CurrentTab = ExpertsTab.Mcp;
+    [RelayCommand] private void ShowSkillTab() => CurrentTab = ExpertsTab.Skill;
 
     /// <summary>召唤变化事件（聊天页订阅）。</summary>
     public event Action? SummonChanged;

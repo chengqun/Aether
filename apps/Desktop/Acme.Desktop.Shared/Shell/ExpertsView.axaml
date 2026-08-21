@@ -25,6 +25,8 @@
                   IsVisible="{Binding CanShowMarket}" />
           <Button Classes="top-tab" Content="MCP工具" Command="{Binding ShowMcpTabCommand}"
                   IsEnabled="{Binding !IsMcpTab}" Padding="12,4" FontSize="13" />
+          <Button Classes="top-tab" Content="技能" Command="{Binding ShowSkillTabCommand}"
+                  IsEnabled="{Binding !IsSkillTab}" Padding="12,4" FontSize="13" />
         </StackPanel>
         <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick"
                 Padding="14,6" IsVisible="{Binding IsAgentTab}" />
@@ -275,6 +277,11 @@
     <!-- ===== MCP 工具服务器面板 ===== -->
     <Panel IsVisible="{Binding IsMcpTab}">
       <shell:McpView DataContext="{Binding Mcp}" />
+    </Panel>
+
+    <!-- ===== 技能面板（只读展示已加载 skill：卡片列表 + 正文 Markdown 预览 + 打开 skills 目录） ===== -->
+    <Panel IsVisible="{Binding IsSkillTab}">
+      <shell:SkillView DataContext="{Binding Skills}" />
     </Panel>
     </Grid>
   </DockPanel>
