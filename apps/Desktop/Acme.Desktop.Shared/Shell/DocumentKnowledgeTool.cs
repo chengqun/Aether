@@ -274,7 +274,13 @@ public sealed class DocumentKnowledgeTool
     }
 
     /// <summary>组装：path + kind + name + 正文 + 各 link 指向子 .ok 文件的原文（含 target 路径，2 格缩进，只展开一层）。
-    /// 镜像 note KnowledgeTool.FormatAsync——文档版"目标 Content"= 目标 .ok 文件全文（经 <see cref="OkTargetResolver.ResolveRaw"/>）。</summary>
+    /// 镜像 note KnowledgeTool.FormatAsync——文档版"目标 Content"= 目标 .ok 文件全文（经 <see cref="OkTargetResolver.ResolveRaw"/>）。
+    /// <para><b>防上下文溢出</b>：link 可能指向含完整字段表/SQL/示例的大 .ok，多目标内联会撑爆 LLM 上下文窗口
+    /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标内联有上限、累计有上限，
+    /// 超出截断头部 + 标记总数并告知 agent 如何取完整内容——同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。</para></summary>
+    private const int MaxTargetInlineChars = 8000;       // 单个目标 .ok 原文内联上限
+    private const int MaxLinkedInlineTotalChars = 20000; // 所有 link 原文内联累计上限（防多 link 累积撑爆）
+
     private string Format(KnowledgeObjectDefinition def, string relPath, string root)
     {
         var sb = new StringBuilder();
@@ -287,15 +293,38 @@ public sealed class DocumentKnowledgeTool
         if (def.Links.Count > 0)
         {
             sb.AppendLine().AppendLine("links:");
+            var linkedTotal = 0; // 已内联的目标原文累计字符
             foreach (var l in def.Links)
             {
                 var resolved = OkTargetResolver.ResolveRaw(l.Target, root, null);
                 if (resolved is null) continue; // 空白路径，跳过
                 var (title, raw) = resolved.Value;
                 sb.AppendLine($"[{l.Role}] {title} (path:{l.Target}):");
-                sb.AppendLine(raw is null
-                    ? "  （找不到 .ok 文件）"
-                    : Indent(raw, "  "));
+
+                if (linkedTotal >= MaxLinkedInlineTotalChars)
+                {
+                    // 累计已超上限：不再内联后续 link 原文，仅列名 + 提示（防多 link 累积撑爆）。
+                    sb.AppendLine("  （引用过多，已停止展开后续目标；完整内容请单独 ReadDocumentKnowledgeObject 对应路径）");
+                    continue;
+                }
+
+                if (raw is null)
+                {
+                    sb.AppendLine("  （找不到 .ok 文件）");
+                }
+                else if (raw.Length > MaxTargetInlineChars)
+                {
+                    // 单个目标过大：截断头部（字段表/schema 信息密度高从头开始）+ 标记总数。
+                    var truncated = raw[..MaxTargetInlineChars]
+                        + $"\n…（已截断，原文共 {raw.Length} 字符；如需完整内容请单独 ReadDocumentKnowledgeObject \"{l.Target}\"）";
+                    sb.AppendLine(Indent(truncated, "  "));
+                    linkedTotal += MaxTargetInlineChars;
+                }
+                else
+                {
+                    sb.AppendLine(Indent(raw, "  "));
+                    linkedTotal += raw.Length;
+                }
             }
         }
         return sb.ToString().TrimEnd();

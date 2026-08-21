@@ -69,9 +69,15 @@ public sealed class LlmConfigChatClientFactory : IChatClientFactory
         return Wrap(client.GetChatClient(config.ModelName).AsIChatClient());
     }
 
-    /// <summary>套用可选包装层（手机端 ToolHistorySanitizingChatClient；桌面 null 直通）。</summary>
+    /// <summary>套用包装层：最内层先套 <see cref="RetryOnTransientChatClient"/>（紧贴 OpenAI client，瞬态异常重试），
+    /// 再套可选 <c>_clientWrapper</c>（手机端 ToolHistorySanitizingChatClient 在最外层）。
+    /// 叠放：手机 <c>AIAgent→ToolHistorySanitizing→Retry→OpenAI</c>；桌面 <c>AIAgent→Retry→OpenAI</c>。
+    /// Retry 在 Sanitizing 内层——瞬态异常在 Sanitizing 异常包装前被重试消化（见 RetryOnTransientChatClient 注释）。</summary>
     private IChatClient Wrap(IChatClient inner)
-        => _clientWrapper is null ? inner : _clientWrapper(inner);
+    {
+        var withRetry = new RetryOnTransientChatClient(inner);
+        return _clientWrapper is null ? withRetry : _clientWrapper(withRetry);
+    }
 
     private LlmConfigDto? ResolveConfig(string configId)
     {

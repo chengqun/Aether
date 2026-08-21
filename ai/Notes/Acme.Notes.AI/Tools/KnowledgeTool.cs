@@ -253,7 +253,14 @@ public class KnowledgeTool
         return result;
     }
 
-    /// <summary>组装：id + kind + name + 正文 + 各 link 指向子笔记的内容（含 target 真实节点 id）。</summary>
+    /// <summary>组装：id + kind + name + 正文 + 各 link 指向子笔记的内容（含 target 真实节点 id）。
+    /// <para><b>防上下文溢出</b>：link 目标笔记可能含完整字段表/SQL/示例，多目标内联会撑爆 LLM 上下文窗口
+    /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标内联有上限、累计有上限，
+    /// 超出截断头部 + 标记总数并告知 agent 如何取完整内容——同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。
+    /// 与文档版 <c>DocumentKnowledgeTool.Format</c> 同构（数据源=笔记内存 Content vs .ok 文件原文）。</para></summary>
+    private const int MaxTargetInlineChars = 8000;       // 单个目标笔记内容内联上限
+    private const int MaxLinkedInlineTotalChars = 20000; // 所有 link 内容内联累计上限（防多 link 累积撑爆）
+
     private async Task<string> FormatAsync(KnowledgeObjectDefinition def, string id, string title, IReadOnlyList<NoteDto> all, CancellationToken ct)
     {
         var sb = new StringBuilder();
@@ -266,6 +273,7 @@ public class KnowledgeTool
         if (def.Links.Count > 0)
         {
             sb.AppendLine().AppendLine("links:");
+            var linkedTotal = 0; // 已内联的目标内容累计字符
             foreach (var l in def.Links)
             {
                 // 权威按 TargetId 匹配；旧数据无 id 则回退到标题
@@ -277,10 +285,35 @@ public class KnowledgeTool
                 sb.AppendLine(target is not null
                     ? $"[{l.Role}] {l.Target} (id:{target.Id}):"
                     : $"[{l.Role}] {l.Target}:");
+
+                if (linkedTotal >= MaxLinkedInlineTotalChars)
+                {
+                    // 累计已超上限：不再内联后续 link 内容，仅列名 + 提示（防多 link 累积撑爆）。
+                    sb.AppendLine("  （引用过多，已停止展开后续目标；完整内容请单独 ReadKnowledgeObject 对应名称）");
+                    continue;
+                }
+
                 if (target is null)
+                {
                     sb.AppendLine("  （找不到笔记）");
+                }
                 else
-                    sb.AppendLine(Indent(target.Content ?? "(空)", "  "));
+                {
+                    var content = target.Content ?? "(空)";
+                    if (content.Length > MaxTargetInlineChars)
+                    {
+                        // 单个目标过大：截断头部（字段表/schema 信息密度高从头开始）+ 标记总数。
+                        var truncated = content[..MaxTargetInlineChars]
+                            + $"\n…（已截断，原文共 {content.Length} 字符；如需完整内容请单独 ReadKnowledgeObject \"{l.Target}\"）";
+                        sb.AppendLine(Indent(truncated, "  "));
+                        linkedTotal += MaxTargetInlineChars;
+                    }
+                    else
+                    {
+                        sb.AppendLine(Indent(content, "  "));
+                        linkedTotal += content.Length;
+                    }
+                }
             }
         }
         return sb.ToString().TrimEnd();
