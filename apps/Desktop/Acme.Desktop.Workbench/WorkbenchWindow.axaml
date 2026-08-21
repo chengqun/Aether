@@ -164,9 +164,18 @@
     </Border>
 
     <!-- ═══ 工作台主区（Workspace 决定布局，非 Window） ═══ -->
-    <ContentControl Content="{Binding ActiveWorkspace}"
-                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
-                    Background="{DynamicResource ContentBgBrush}"/>
+    <!-- 加载占位：窗口首帧 Show 到 ActivateAsync 之间有短暂空窗，占位避免裸露空白（HasActiveWorkspace=false 时显） -->
+    <Panel>
+      <ContentControl Content="{Binding ActiveWorkspace}"
+                      HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                      Background="{DynamicResource ContentBgBrush}"
+                      IsVisible="{Binding HasActiveWorkspace}"/>
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                  IsVisible="{Binding !HasActiveWorkspace}">
+        <TextBlock Text="加载中…" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center"/>
+      </StackPanel>
+    </Panel>
     </DockPanel>
   </Grid>
 </Window>

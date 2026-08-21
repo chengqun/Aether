@@ -83,6 +83,12 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     [ObservableProperty]
     private IWorkspace? _activeWorkspace;
 
+    /// <summary>工作台是否已激活（ActiveWorkspace != null）。窗口中间区按此切「加载占位」vs「真实工作台」——
+    /// 首帧窗口 Show 到 ActivateAsync 之间有个短暂空窗，用占位避免裸露空白。</summary>
+    public bool HasActiveWorkspace => ActiveWorkspace is not null;
+
+    partial void OnActiveWorkspaceChanged(IWorkspace? value) => OnPropertyChanged(nameof(HasActiveWorkspace));
+
     /// <summary>可选主题列表（内置 light/dark + &lt;tenantDir&gt;/themes/*.json）。两 UI 绑此。</summary>
     public ObservableCollection<ThemeOption> Themes { get; } = new();
 
@@ -231,7 +237,8 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// 主题恢复也在激活前——窗口打开时已应用正确主题（设 CustomThemeJson → 窗口订阅 → ThemeLoader.Apply）。</summary>
     public override async Task InitializeAsync()
     {
-        await base.InitializeAsync();
+        // ★ 先激活工作台（纯布局 + nav，不依赖登录态/业务数据/Chat）——让窗口 Show 后中间内容区立即填充，
+        // 而非「侧栏先有、工作区空白等一堆异步（登录态+业务 LoadAsync+Chat）完成后才填」。登录态/数据加载随后补。
         await LoadThemesAsync();
         var savedTheme = await _preferences.GetAsync(ThemePrefKey);
         await SelectThemeCoreAsync(savedTheme ?? "light", default);
@@ -240,6 +247,10 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         IsSidebarExpanded = savedSidebar == "true";
         var def = await RestoreLayoutAsync(_defaultWorkspace);
         await _workspaceManager.ActivateAsync(def);
+
+        // 登录态 + 业务 VM 加载 + 聊天引擎初始化 + 调度器/MCP 启动（延后到工作台已上屏之后，
+        // 用户先看到工作台壳，再填数据——比先等数据再显示工作台感知更快）。
+        await base.InitializeAsync();
     }
 
     // ── 主题（IThemeHost 实现） ──
