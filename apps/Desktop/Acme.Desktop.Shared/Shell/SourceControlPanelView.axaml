@@ -267,11 +267,20 @@
               <TextBlock Text="提交" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
-                   TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
-                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                   ScrollViewer.VerticalScrollBarVisibility="Auto"
-                   IsVisible="{Binding IsCommitExpanded}"/>
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsCommitExpanded}">
+            <TextBox Grid.Column="0" Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
+                     TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+            <!-- ✨ 自动生成提交消息：取当前变更 diff 经 LLM 生成填入（不提交不暂存，用户可编辑后提交） -->
+            <Button Grid.Column="1" Classes="scm-act" Width="24" Height="24" Margin="4,2,0,0"
+                    VerticalAlignment="Top"
+                    ToolTip.Tip="自动生成提交消息"
+                    Command="{Binding GenerateCommitMessageCommand}">
+              <Path Data="{x:Static shell:Codicons.Sparkle}" Stretch="Uniform" Width="14" Height="14"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
+            </Button>
+          </Grid>
           <Button Classes="primary" HorizontalAlignment="Stretch"
                   HorizontalContentAlignment="Center"
                   Command="{Binding CommitCommand}"

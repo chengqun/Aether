@@ -359,6 +359,9 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<IActivityReportService, ActivityReportService>();
         services.AddSingleton<IReportDialogService, ReportDialogService>();
 
+        // 提交消息生成（SCM 页 ✨ 按钮 → 取当前 git 变更 diff 摘要 → LLM 生成提交消息填入输入框）
+        services.AddSingleton<ICommitMessageService, CommitMessageService>();
+
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
     }

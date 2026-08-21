@@ -81,6 +81,9 @@ public partial class SourceControlViewModel : ObservableObject
 
     [ObservableProperty] private string _commitMessage = string.Empty;
 
+    /// <summary>是否正在用 LLM 生成提交消息（驱动 ✨ 按钮禁用 + 状态提示）。</summary>
+    [ObservableProperty] private bool _isGeneratingCommitMessage;
+
     /// <summary>是否打开了项目目录。</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotRepository))]
@@ -176,6 +179,40 @@ public partial class SourceControlViewModel : ObservableObject
     private bool CanStageAll => Changes.Count > 0;
 
     partial void OnCommitMessageChanged(string value) => CommitCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsGeneratingCommitMessageChanged(bool value)
+    {
+        GenerateCommitMessageCommand.NotifyCanExecuteChanged();
+        if (value) StatusMessage = "正在生成提交消息…";
+    }
+
+    private bool CanGenerateCommitMessage() => IsRepository && !IsBusy && !IsGeneratingCommitMessage;
+
+    /// <summary>✨ 按当前 git 变更（staged 优先，无则全部）的 diff 经 LLM 生成提交消息，填入
+    /// <see cref="CommitMessage"/>。不提交、不暂存——只生成文本，用户可编辑后点「提交」。
+    /// 无变更 / 无 LLM 时退化提示。</summary>
+    [RelayCommand(CanExecute = nameof(CanGenerateCommitMessage))]
+    private async Task GenerateCommitMessageAsync()
+    {
+        var service = _serviceProvider.GetService<ICommitMessageService>();
+        if (service is null) { StatusMessage = "生成提交消息功能不可用"; return; }
+        IsGeneratingCommitMessage = true;
+        try
+        {
+            var msg = await service.GenerateAsync();
+            if (!string.IsNullOrWhiteSpace(msg))
+            {
+                CommitMessage = msg;
+                StatusMessage = "已生成提交消息，可编辑后提交";
+            }
+            else
+            {
+                StatusMessage = "生成失败：无变更或 LLM 不可用";
+            }
+        }
+        catch (Exception ex) { StatusMessage = $"生成失败：{ex.Message}"; }
+        finally { IsGeneratingCommitMessage = false; }
+    }
 
     [RelayCommand] private void ToggleChanges() => IsChangesExpanded = !IsChangesExpanded;
     [RelayCommand] private void ToggleStaged() => IsStagedExpanded = !IsStagedExpanded;
