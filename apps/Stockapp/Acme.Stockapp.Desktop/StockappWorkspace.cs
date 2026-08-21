@@ -45,7 +45,7 @@ public static class StockappWorkspace
                     Orientation: SplitOrientation.Vertical,
                     Children: new LayoutNode[]
                     {
-                        new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Knowledge, PanelKeys.Browser, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                        new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Knowledge, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Browser, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
                         new LayoutRegion(RegionId: PanelKeys.Terminal),
                     },
                     // Pixels: [0, 220] → 主面板区 Star（弹性）+ 终端区 220px 固定（可拖高度，拖动后持久化）。
