@@ -77,11 +77,20 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:DayCell">
                             <Border Classes="cell"
-                                    Background="{Binding Intensity, Converter={x:Static shell:IntensityToBrushConverter.Instance}}"
                                     ToolTip.Tip="{Binding Tooltip}"
                                     Classes.today="{Binding IsToday}"
                                     Classes.selected="{Binding IsSelected}"
-                                    PointerPressed="OnCellPointerPressed"/>
+                                    PointerPressed="OnCellPointerPressed">
+                                <Border.Background>
+                                    <!-- MultiBinding：Intensity + Border.ActualThemeVariant → IntensityToBrushConverter。
+                                         第二绑定项绑格子自身 ActualThemeVariant，主题切换时该属性变更触发重算，
+                                         全部格子即时从 GitHub 浅绿色阶切到深绿色阶（与 github.com 一致）。 -->
+                                    <MultiBinding Converter="{x:Static shell:IntensityToBrushConverter.Instance}}">
+                                        <Binding Path="Intensity"/>
+                                        <Binding RelativeSource="{RelativeSource Self}" Path="ActualThemeVariant"/>
+                                    </MultiBinding>
+                                </Border.Background>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

@@ -29,11 +29,6 @@
         <TextBlock Grid.Column="2" Text="{Binding TokenInfo}" VerticalAlignment="Center" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}" Margin="16,0,0,0" />
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <!-- 折叠聊天面板（仅折叠，展开走侧栏「AI 聊天」toggle）：与终端面板 ✕ 对等。聊天视图不销毁，流式不中断。 -->
-          <Button Click="OnCollapseClick" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="折叠面板">
-            <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-          </Button>
           <!-- 历史会话（Flyout 下拉） -->
           <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
             <Path Data="{x:Static shell:Codicons.Menu}" Stretch="Uniform" Width="14" Height="14"
