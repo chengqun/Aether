@@ -1,5 +1,5 @@
 using System.Text;
-using Acme.Agents.AI;
+using Acme.Notes.Domain.Agents;
 using Acme.Automation.Domain.Interfaces;
 using Aether.AI.Core.Agents;
 using Aether.AI.Core.Conversations;

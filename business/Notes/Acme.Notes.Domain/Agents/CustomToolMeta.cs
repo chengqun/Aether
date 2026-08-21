@@ -1,4 +1,4 @@
-namespace Acme.Agents.AI;
+namespace Acme.Notes.Domain.Agents;
 
 /// <summary>
 /// UI 无关的工具元数据快照（名称 + 描述 + 分类 + 审批等级标签），供专家编辑页勾选展示。

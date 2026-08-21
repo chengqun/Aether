@@ -41,7 +41,8 @@
     <ProjectReference Include="..\..\..\src\Aether.AI.Core\Aether.AI.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
-    <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <!-- 市场/Agent 目录/运行器契约住 Abstractions/Notes.Domain/Core（零 ai/Agents 适配器依赖；组合根调 AddCustomAgents 仍由 Mobile.Shared 持适配器）。 -->
+    <ProjectReference Include="..\..\..\src\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

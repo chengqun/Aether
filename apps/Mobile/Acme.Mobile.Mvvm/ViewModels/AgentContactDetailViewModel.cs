@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Acme.Agents.AI;
+using Aether.AI.Core.Agents;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Acme.Notes.Domain;

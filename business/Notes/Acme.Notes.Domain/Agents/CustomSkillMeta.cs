@@ -1,4 +1,4 @@
-namespace Acme.Agents.AI;
+namespace Acme.Notes.Domain.Agents;
 
 /// <summary>
 /// UI 无关的 skill 元数据快照（名称 + 描述 + 分类），供专家编辑页勾选展示。

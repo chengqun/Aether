@@ -1,4 +1,7 @@
+using Aether.AI.Abstractions;
+using Aether.AI.Core.Agents;
 using Aether.AI.Hosting;
+using Acme.Notes.Domain.Agents;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Agents.AI;

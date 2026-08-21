@@ -13,9 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 自定义 Agent 目录 + 运行器（UI 无关）。不引用任何 UI 框架。 -->
-    <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
-    <!-- chat shell VM 用到的业务 Application/Domain 契约（UI 无关） -->
+    <!-- chat shell VM 用到的业务 Application/Domain 契约（UI 无关）。自定义 Agent/Workflow 的目录+运行器契约住 Notes.Domain/Hosting-Core/Abstractions，无需引 ai/Agents 适配器。 -->
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\DeviceConnect\Acme.DeviceConnect.Domain\Acme.DeviceConnect.Domain.csproj" />

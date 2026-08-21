@@ -1,5 +1,6 @@
 using System.IO;
 using Acme.Agents.AI;
+using Acme.Notes.Domain.Agents;
 using Acme.AppAuth.Application.DependencyInjection;
 using Acme.AppAuth.Domain;
 using Acme.AppAuth.Infrastructure.DependencyInjection;

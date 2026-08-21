@@ -1,7 +1,10 @@
 using System.Collections.ObjectModel;
-using Acme.Agents.AI;
+using Aether.AI.Core.Agents;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
+// Core 与 Notes.Domain 各有一个平行 AgentMemoryMode 枚举（适配器在 ToAgentDefinition 处映射）；
+// 此 VM 构建 CustomAgentDefinition（Notes 域），故别名钉到 Notes 域枚举，消解歧义。
+using AgentMemoryMode = Acme.Notes.Domain.Agents.AgentMemoryMode;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

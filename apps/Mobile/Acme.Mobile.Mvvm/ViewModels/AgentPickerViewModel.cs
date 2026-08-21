@@ -1,7 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using Acme.Agents.AI;
+using Acme.Notes.Domain.Agents;
 using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Notes.Domain;

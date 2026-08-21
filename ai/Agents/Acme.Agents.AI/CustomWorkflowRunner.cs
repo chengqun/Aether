@@ -4,6 +4,7 @@ using Aether.AI.Core.Workflows;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Workflows;
+using Acme.Notes.Domain.Agents;
 using Microsoft.Agents.AI;
 
 // MAF 的 AgentSession 与 Aether 的同名，别名区分（同 HarnessRuntime）。

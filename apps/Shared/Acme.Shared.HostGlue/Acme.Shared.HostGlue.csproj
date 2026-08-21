@@ -16,7 +16,8 @@
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <!-- IModelSource / CustomModelOption 契约住 Notes.Domain.Agents（与 Mvvm 同源）。宿主胶水不引 ai/Agents 适配器。 -->
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
   </ItemGroup>
 
 </Project>

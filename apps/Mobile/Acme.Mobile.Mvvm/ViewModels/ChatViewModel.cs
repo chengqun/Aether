@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Acme.Agents.AI;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Memory;
 using Acme.Mobile.Mvvm.Services;

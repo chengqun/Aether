@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Acme.Agents.AI;
+namespace Aether.AI.Abstractions;
 
 /// <summary>市场 agent 列表项（云端返回；IsSummoned 由客户端按本地 MarketplaceId 匹配后置）。</summary>
 public sealed class MarketplaceAgentDto

@@ -1,4 +1,5 @@
-using Acme.Agents.AI;
+using Acme.Notes.Domain.Agents;
+using Aether.AI.Core.Agents;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Services;
 using Aether.AI.Hosting;

@@ -1,6 +1,6 @@
-using Acme.Agents.AI;
 using Acme.Llm.Application;
 using Acme.Llm.Domain;
+using Acme.Notes.Domain.Agents;
 
 namespace Acme.Shared.HostGlue;
 

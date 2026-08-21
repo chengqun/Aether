@@ -1,4 +1,4 @@
-namespace Acme.Agents.AI;
+namespace Acme.Notes.Domain.Agents;
 
 /// <summary>可选模型项（Id + 显示名），供专家编辑页下拉。</summary>
 public sealed record CustomModelOption(string Id, string Name);

@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Threading;
-using Acme.Agents.AI;
+using Aether.AI.Core.Agents;
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;

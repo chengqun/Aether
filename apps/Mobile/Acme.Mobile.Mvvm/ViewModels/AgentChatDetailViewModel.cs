@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Acme.Agents.AI;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Core.Agents;

@@ -26,6 +26,7 @@ using Acme.DeviceManagement.Infrastructure.DependencyInjection;
 using Acme.Llm.Application.DependencyInjection;
 using Acme.Llm.Infrastructure.DependencyInjection;
 using Acme.Notes.AI;
+using Acme.Notes.Domain.Agents;
 using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;

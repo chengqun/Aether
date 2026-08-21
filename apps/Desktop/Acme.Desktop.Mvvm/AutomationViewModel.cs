@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using Acme.Agents.AI;
+using Acme.Notes.Domain.Agents;
 using Acme.Automation.Application.Interfaces;
 using Acme.Automation.Domain;
 using Acme.Automation.Domain.Interfaces;

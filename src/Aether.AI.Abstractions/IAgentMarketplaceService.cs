@@ -1,9 +1,10 @@
-namespace Acme.Agents.AI;
+namespace Aether.AI.Abstractions;
 
 /// <summary>
 /// 云端 agent 市场客户端。走 AppServer 已认证 HTTP（JWT 自动注入），打 ABP 路由
 /// <c>api/app/agent-marketplace/*</c>。服务端待部署；未部署时调用报错（404/网络），不崩。
-/// 镜像 AlphaAgent 的 IAgentMarketplaceService。
+/// 镜像 AlphaAgent 的 IAgentMarketplaceService。契约住 Abstractions（零依赖，与 MCP 契约同层），
+/// impl 在 ai/Agents 适配器。
 /// </summary>
 public interface IAgentMarketplaceService
 {

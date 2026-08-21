@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using Acme.Agents.AI;
+using Aether.AI.Core.Agents;
 using Acme.Notes.Domain.Agents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;

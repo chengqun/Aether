@@ -1,10 +1,10 @@
-using Acme.Notes.Domain.Agents;
-
-namespace Acme.Agents.AI;
+namespace Acme.Notes.Domain.Agents;
 
 /// <summary>
 /// 自定义 Agent 目录服务：基于 Notes（<c>NoteNodeType.Agent</c>）做 CRUD，
 /// 并暴露可用工具池供编辑页勾选。UI 无关，可被任意 UI 框架的 ViewModel 复用。
+/// 契约住 Notes.Domain（与它返回的 <see cref="CustomAgentDefinition"/> 同居），impl 在 ai/Agents 适配器
+///（桥接 ToolRegistry/SkillRegistry）——同 business-port 范式（port 在 Domain、impl 在宿主/适配器）。
 /// </summary>
 public interface ICustomAgentCatalog
 {

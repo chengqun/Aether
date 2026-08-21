@@ -2,7 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Acme.Agents.AI;
+using Aether.AI.Abstractions;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Acme.Mobile.Mvvm.Events;
