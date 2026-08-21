@@ -1,14 +1,14 @@
 {
-  "$note": "ChatGPT 风（深）——中性灰基调深色皮肤（纯 Level-1，不带 dream 的 gradients/animated/styles/chrome）。对标 ChatGPT 客户端暗色模：accent 用明暗极值（深色模=近白 #ECECEC，发送按钮浅色+深字）；用户气泡中性深灰底 + 浅字。与 chatgpt.json 对称。字体用 sans 栈（非 dark.json 的 mono——ChatGPT UI 用 sans）。",
+  "$note": "ChatGPT 风（深）——中性灰基调深色皮肤（Level-1 + 极淡黑灰渐变底 background.gradient，让半透明侧栏透出层次；无 animated/styles/chrome）。对标 ChatGPT 客户端暗色模：accent 用明暗极值（深色模=近白 #ECECEC，发送按钮浅色+深字）；用户气泡中性深灰底 + 浅字。侧栏半透明 #e6 微透渐变底。字体用 sans 栈。",
   "variant": "dark",
   "colors": {
     "AccentColor": "#ECECEC",
     "AccentBrush": "#ECECEC",
     "AccentHoverBrush": "#FFFFFF",
     "AccentLightBrush": "#B8B8B8",
-    "SidebarBgBrush": "#171717",
-    "SidebarHoverBrush": "#2A2A2A",
-    "SidebarActiveBrush": "#2A2A2A",
+    "SidebarBgBrush": "#e6171717",
+    "SidebarHoverBrush": "#cc2a2a2a",
+    "SidebarActiveBrush": "#cc2a2a2a",
     "SidebarIconBrush": "#9A9A9A",
     "SidebarTextBrush": "#ECECEC",
     "ContentBgBrush": "#212121",
@@ -58,6 +58,15 @@
     "SpaceXl": "24"
   },
   "background": {
+    "gradient": {
+      "type": "linear",
+      "angle": 135,
+      "stops": [
+        { "color": "#1a1a1a", "offset": 0.0 },
+        { "color": "#262626", "offset": 0.5 },
+        { "color": "#1f1f1f", "offset": 1.0 }
+      ]
+    },
     "color": "#212121"
   }
 }
