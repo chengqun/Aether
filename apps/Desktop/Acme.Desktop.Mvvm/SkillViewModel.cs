@@ -37,24 +37,31 @@ public partial class SkillViewModel : ObservableObject
         SkillsDirectory = options?.SkillsDirectory;
     }
 
-    /// <summary>从 SkillRegistry 加载全部 skill 映射成卡片。<see cref="SkillRegistry.GetAll"/> 同步枚举 → 后台线程，
-    /// 照 <see cref="McpViewModel.LoadAsync"/> 范式（dispatcher 上 clear+add）。</summary>
+    /// <summary>重扫 skills 目录加载全部 skill 映射成卡片。照 <see cref="McpViewModel.LoadAsync"/> 范式：
+    /// 后台线程重扫盘 + dispatcher 上 clear+add。重扫让 TAB 反映磁盘实时态（新增/编辑/删除 SKILL.md
+    /// 后切 tab 或点刷新即出现，无需重启）——与运行时 <c>AgentFileSkillsSource</c> 直读目录的行为对齐。</summary>
     public async Task LoadAsync()
     {
         try
         {
             IsLoading = true;
             var items = await Task.Run(() =>
-                _registry.GetAll()
-                    .Select(s => new SkillItem
-                    {
-                        Name = s.Name,
-                        Category = string.IsNullOrWhiteSpace(s.Category) ? "通用" : s.Category,
-                        Description = s.Description ?? string.Empty,
-                        Content = s.Content ?? string.Empty,
-                        Preview = BuildPreview(s.Description, s.Content),
-                    })
-                    .ToList()).ConfigureAwait(false);
+                {
+                    // 重扫盘：registry 启动期仅被目录填充（无程序式 contributor），ReloadFromDirectory
+                    // 清空+重扫安全。磁盘 I/O 在此后台线程，不阻塞 UI。
+                    if (!string.IsNullOrEmpty(SkillsDirectory))
+                        _registry.ReloadFromDirectory(SkillsDirectory);
+                    return _registry.GetAll()
+                        .Select(s => new SkillItem
+                        {
+                            Name = s.Name,
+                            Category = string.IsNullOrWhiteSpace(s.Category) ? "通用" : s.Category,
+                            Description = s.Description ?? string.Empty,
+                            Content = s.Content ?? string.Empty,
+                            Preview = BuildPreview(s.Description, s.Content),
+                        })
+                        .ToList();
+                }).ConfigureAwait(false);
             await _dispatcher.InvokeAsync(() =>
             {
                 Skills.Clear();

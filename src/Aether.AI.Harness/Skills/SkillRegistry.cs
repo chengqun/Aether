@@ -126,6 +126,19 @@ public sealed class SkillRegistry
         return this;
     }
 
+    /// <summary>
+    /// 清空已加载 skill 并从目录重扫盘——供 UI 刷新反映磁盘实时态（新增/编辑/删除 SKILL.md 后无需重启），
+    /// 与运行时 <c>AgentFileSkillsSource</c> 直读目录的行为对齐。
+    /// </summary>
+    /// <remarks>会清空所有已注册 skill（含程序式 <see cref="Register"/> 的）。当前桌面/移动均仅以
+    /// <see cref="LoadFromDirectory"/> 为唯一来源（无 <see cref="ISkillRegistryContributor"/> 程序式贡献），故 Clear 安全；
+    /// 若将来加程序式 skill 贡献者，需在此重跑 contributor 或经注入 <c>IServiceProvider</c> 的入口重载。</remarks>
+    public SkillRegistry ReloadFromDirectory(string directory)
+    {
+        _entries.Clear();
+        return LoadFromDirectory(directory);
+    }
+
     private void LoadSkillFile(string skillDir, string skillFile)
     {
         var text = File.ReadAllText(skillFile);
