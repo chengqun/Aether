@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using RoyalTerminal.Avalonia.Controls;
+using RoyalTerminal.Terminal.Theming;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -147,8 +148,15 @@ public partial class TerminalView : UserControl
     private void ApplyTheme(TerminalControl ctrl)
     {
         var dark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
-        ctrl.DefaultBackground = dark ? Color.Parse("#1E1E1E") : Color.Parse("#FFFFFF");
-        ctrl.DefaultForeground = dark ? Color.Parse("#D4D4D4") : Color.Parse("#1E1E1E");
+        // ★ RoyalTerminal 正规换肤走 TerminalTheme（record，经 ApplyThemeToRenderer 整体重刷）。
+        // 旧的只改 ctrl.DefaultBackground/DefaultForeground 是 legacy 桥接（不完整）——「第一次可、
+        // 切回不行、回车才有」即 legacy 桥接只局部生效。这里取当前 Theme 用 With 链改两个默认色
+        // （其余 palette/cursor/selection 保持库默认），赋回 ctrl.Theme 触发正规整体重刷。
+        // 色值 uint = AARRGGBB（Avalonia Color 转 uint）。
+        uint argb(Color c) => ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+        ctrl.Theme = ctrl.Theme
+            .WithDefaultBackground(dark ? argb(Color.Parse("#1E1E1E")) : argb(Color.Parse("#FFFFFF")))
+            .WithDefaultForeground(dark ? argb(Color.Parse("#D4D4D4")) : argb(Color.Parse("#1E1E1E")));
     }
 
     // —— shell 解析（交互式登录 shell：Unix zsh/bash -l；Windows powershell）——
