@@ -177,6 +177,26 @@ internal static class CodeEditorSetup
         {
             var n = (c.Name ?? "").ToUpperInvariant();
             string? hex = null;
+            // 内置 MarkDown 定义的颜色名（Heading/BlockQuote/Link/Image/LineBreak）不匹配下方代码语言关键词桶，
+            // 不处理则深色底留内置浅色（Maroon/DarkBlue/Blue/Green + LightGray 行背景）低对比或刺眼。按 GitHub 风格重映射。
+            // Code/Emphasis/StrongEmphasis 无前景色（继承文本色），两主题皆正常，故不在内、跳过。
+            // 不清 FontWeight/FontStyle（粗/斜体由定义自身管，区别于代码桶的「VSCode 关键字不加粗」清权）。
+            if (n is "HEADING" or "BLOCKQUOTE" or "LINK" or "IMAGE" or "LINEBREAK")
+            {
+                hex = (n, dark) switch
+                {
+                    ("HEADING", true) => "#79c0ff", ("HEADING", false) => "#0550ae",
+                    ("BLOCKQUOTE", true) => "#8b949e", ("BLOCKQUOTE", false) => "#6e7681",
+                    ("LINK", true) => "#a5d6ff", ("LINK", false) => "#0a3069",
+                    ("IMAGE", true) => "#7ee787", ("IMAGE", false) => "#116329",
+                    ("LINEBREAK", true) => "#8b949e", ("LINEBREAK", false) => "#6e7681",
+                    _ => null,
+                };
+                if (hex is not null)
+                    c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));
+                c.Background = null; // 清 LineBreak 的 LightGray 背景等（深色底刺眼）→ 仅留前景
+                continue; // 不清 FontWeight/FontStyle（保留粗/斜体）
+            }
             if (n.Contains("COMMENT") || n.Contains("PREPROCESSOR") || n.Contains("DOC")) hex = dark ? "#8b949e" : "#6e7781";
             else if (n.Contains("STRING") || n.Contains("CHAR")) hex = dark ? "#a5d6ff" : "#0a3069";
             else if (n.Contains("NUMBER") || n.Contains("DIGIT")) hex = dark ? "#79c0ff" : "#0550ae";
