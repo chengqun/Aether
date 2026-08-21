@@ -17,7 +17,8 @@ namespace Acme.Desktop.Mvvm;
 /// 「知识对象」页 ViewModel（文档版 <c>.ok</c> 知识对象的一等公民 nav 页）。
 /// 左 <c>.ok</c> 树（根=独立知识库目录，跨项目复用，<see cref="IKnowledgeDirectoryProvider"/> 与文档页项目目录解耦）
 /// + 右单知识对象上下两栏（上=<see cref="DocumentKnowledgeViewModel"/> 表单，下=YAML/markdown 源码）。
-/// 镜像 <see cref="DocumentsViewModel"/> 精简：去多标签/README/markdown 预览分流，专注 <c>.ok</c> 单对象编辑。
+/// 镜像 <see cref="DocumentsViewModel"/> 精简：去多标签/markdown 预览分流，专注 <c>.ok</c> 单对象编辑
+///（含目录 README 自动打开——点目录→打开该目录 <c>readme.ok</c>，镜像文档页 <c>OpenFolderReadmeAsync</c>）。
 /// 表单↔源码双向同步经 <see cref="DocumentKnowledgeViewModel"/> 的 <c>SourceChanged</c>/<c>SyncFromSource</c>，
 /// View 持 <c>_syncing</c> 守卫防回环（照 <c>DocumentsEditorView</c> .ok 同步范式）。<c>.ok</c> 树只列 <c>.ok</c> 文件
 /// （跳 bin/obj/.git/符号链接，与 <c>DocumentKnowledgeTool.EnumerateOkFiles</c> 同守卫——用户所见=agent 所见）。
@@ -46,7 +47,7 @@ public partial class KnowledgeObjectsViewModel : ObservableObject
     /// <summary>文件树根节点（打开知识库目录后填充；空 = 未打开）。</summary>
     public ObservableCollection<FileNode> Roots { get; } = new();
 
-    /// <summary>树中选中的节点（双绑 TreeView.SelectedItem）。文件夹→忽略；<c>.ok</c> 文件→打开。</summary>
+    /// <summary>树中选中的节点（双绑 TreeView.SelectedItem）。文件夹→打开该目录 README（<c>readme.ok</c>）；<c>.ok</c> 文件→打开。</summary>
     [ObservableProperty] private FileNode? _selectedNode;
 
     /// <summary>当前打开的知识库目录绝对路径（null = 未打开）。</summary>
@@ -112,10 +113,15 @@ public partial class KnowledgeObjectsViewModel : ObservableObject
     partial void OnActiveKnowledgeVmChanged(DocumentKnowledgeViewModel? value)
         => SaveCommand.NotifyCanExecuteChanged();
 
-    /// <summary>树节点选中：<c>.ok</c> 文件→打开；文件夹→忽略（展开/收起仍由 TreeViewItem 默认处理）。</summary>
+    /// <summary>树节点选中：<c>.ok</c> 文件→打开；文件夹→打开该目录 README（<c>readme.ok</c>，无则仅展开/收起由 TreeViewItem 默认处理）。</summary>
     partial void OnSelectedNodeChanged(FileNode? value)
     {
-        if (value is null || value.IsFolder) return;
+        if (value is null) return;
+        if (value.IsFolder)
+        {
+            OpenFolderReadmeAsync(value.Path).SafeFireAndForget();
+            return;
+        }
         OpenKnowledgeAsync(value.Path).SafeFireAndForget();
     }
 
@@ -154,13 +160,13 @@ public partial class KnowledgeObjectsViewModel : ObservableObject
     /// <summary>打开 <c>.ok</c> 文件：读盘原文 → 建 <see cref="DocumentKnowledgeViewModel"/>（图闭包经
     /// <see cref="OkTargetResolver.ResolveTarget"/>，root=知识库目录）→ 载入表单 + 设 <see cref="CurrentSource"/>。
     /// 同路径跳过（树刷新恢复选中不重复读盘）。</summary>
-    private async Task OpenKnowledgeAsync(string filePath)
+    private async Task OpenKnowledgeAsync(string filePath, CancellationToken ct = default)
     {
         if (string.Equals(filePath, _activePath, StringComparison.OrdinalIgnoreCase)) return;
         if (!File.Exists(filePath)) { StatusMessage = "文件不存在"; return; }
         try
         {
-            var content = await File.ReadAllTextAsync(filePath);
+            var content = await File.ReadAllTextAsync(filePath, ct);
             _activePath = filePath;
             _currentSource = content;
 
@@ -186,6 +192,34 @@ public partial class KnowledgeObjectsViewModel : ObservableObject
         {
             StatusMessage = $"打开失败：{ex.Message}";
         }
+    }
+
+    // —— 目录 README 自动解析：点击文件树目录时，自动打开该目录下的 README ——
+    // 知识对象页的 README 候选=*.ok（知识对象本身可作目录概览；.md 走文档页，本页无 markdown 预览栏）。
+    // 复用 OpenKnowledgeAsync（同路径 _activePath 守卫跳过，无需 ActivateIfOpen——无多标签）。
+
+    /// <summary>点击目录时打开该目录下的 README（无则不打开，仅展开/收起由 TreeViewItem 默认处理）。</summary>
+    public async Task OpenFolderReadmeAsync(string folderPath, CancellationToken ct = default)
+    {
+        var readme = TryFindReadme(folderPath);
+        if (readme is null) return;
+        await OpenKnowledgeAsync(readme, ct); // 已是活动 .ok 则 _activePath 守卫跳过，不重复读盘
+    }
+
+    /// <summary>在目录顶层找 README（stem==readme 大小写不敏感，扩展名 .ok）。
+    /// 用 <c>*.ok</c> 模式枚举（与 <see cref="BuildNode"/> 同 glob），保证树中所见=README 所能找到。</summary>
+    private static string? TryFindReadme(string folderPath)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(folderPath, "*.ok"))
+            {
+                if (string.Equals(Path.GetFileNameWithoutExtension(file), "readme", StringComparison.OrdinalIgnoreCase))
+                    return file;
+            }
+        }
+        catch { /* 目录无权限/不存在 → 不打开 README */ }
+        return null;
     }
 
     /// <summary>表单→源码：表单字段变→Serialize 生成新源码→更新 <see cref="CurrentSource"/> + 置 dirty + 通知 View 刷编辑器。</summary>
