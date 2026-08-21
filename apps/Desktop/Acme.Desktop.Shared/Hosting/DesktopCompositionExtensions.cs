@@ -229,6 +229,37 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Dangerous);
         });
 
+        // MCP server 管理工具（mcp_list_servers / mcp_add_server / mcp_remove_server / mcp_refresh）：
+        // 让 agent 复用专家页「MCP工具」tab 同一套 IMcpManagementService 动态增删 MCP server。
+        // IMcpManagementService impl 在平台层 Aether.AI.Mcp（非 ai/ 业务上下文）→ 宿主层注册（同 git_*）。
+        // SaveServerAsync 内部已「写 json → RefreshAsync 重连 → RegisterMcpTool」闭环，故 add/remove 是当轮
+        // 会话即时生效的能力注入入口 → 标 Dangerous（装新工具=给 agent 装新能力，默认 AutoEdit 档每次弹确认，
+        // 防无人干预自举闭环）。list/refresh 只读无配置写入 → list 标 Safe、refresh 标 Confirm。
+        services.AddTransient<McpManagementTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("mcp_list_servers", "列出当前所有已配置的 MCP server：名称、传输方式（stdio/http）、连接状态、工具清单。只读，无副作用。", "MCP工具",
+                sp => AIFunctionFactory.Create(
+                    typeof(McpManagementTool).GetMethod(nameof(McpManagementTool.ListServersAsync))!, sp.GetRequiredService<McpManagementTool>(),
+                    "mcp_list_servers"),
+                ToolApprovalLevel.Safe);
+            reg.Register("mcp_add_server", "新增或更新一个 MCP server 配置（.mcp.json 格式），写盘后立即重连并把其工具注册进当前 agent 可用工具池（当轮会话生效）。此操作会给 agent 安装新工具/新能力，需要用户审批确认。", "MCP工具",
+                sp => AIFunctionFactory.Create(
+                    typeof(McpManagementTool).GetMethod(nameof(McpManagementTool.AddServerAsync))!, sp.GetRequiredService<McpManagementTool>(),
+                    "mcp_add_server"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("mcp_remove_server", "删除一个已配置的 MCP server（按 name 删配置文件）并重连，卸载其提供的工具。需要用户审批确认。", "MCP工具",
+                sp => AIFunctionFactory.Create(
+                    typeof(McpManagementTool).GetMethod(nameof(McpManagementTool.RemoveServerAsync))!, sp.GetRequiredService<McpManagementTool>(),
+                    "mcp_remove_server"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("mcp_refresh", "重连所有 MCP server（重读 mcp-servers 目录）。手动改过配置目录 json 或某 server 掉线需重连时调用。只读目录无配置写入。", "MCP工具",
+                sp => AIFunctionFactory.Create(
+                    typeof(McpManagementTool).GetMethod(nameof(McpManagementTool.RefreshAsync))!, sp.GetRequiredService<McpManagementTool>(),
+                    "mcp_refresh"),
+                ToolApprovalLevel.Confirm);
+        });
+
         // build/test 结构化反馈工具：让 agent 拿到结构化编译错误/测试失败，而非裸 dotnet 输出（弱模型从
         // 上千行 MSBuild 输出找错易漏）。需项目目录（同 git_*）→ 宿主层注册。标 Safe：agentic 编程闭环核心
         // 高频动作，低摩擦。命令执行复用 ShellCommandTool（登录 shell 解决 .app 受限 PATH）。
