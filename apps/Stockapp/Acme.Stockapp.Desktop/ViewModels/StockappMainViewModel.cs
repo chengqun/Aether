@@ -1,3 +1,4 @@
+using System;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Desktop.Mvvm;
@@ -18,34 +19,42 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 /// </summary>
 public sealed class StockappMainViewModel : WorkbenchShellViewModel
 {
-    private readonly CtpViewModel _ctpVm;
+    // ★ 启动性能：三个租户专属页 VM 惰性解析（Lazy<T>），而非 ctor 注入实例。
+    // TradingViewModel 的依赖链（Lean 引擎 + Roslyn 策略编译）冷启动 ~624ms、CtpViewModel ~106ms——
+    // 若作 ctor 参数同步构造，会阻塞首帧（窗口 Show 前转圈）。改为 Lazy 后，首帧不解析 Lean/Ctp，
+    // 只在切到对应 tab（contributor vmFactory 调 .Trading/.Futures）时才构建。该构建点已处异步路径，
+    // 不阻塞首帧。它们都是 singleton，Lazy.Value 解析一次后缓存。
+    private readonly Lazy<CtpViewModel> _futures;
+    private readonly Lazy<TradingViewModel> _trading;
+    private readonly Lazy<StockTradingViewModel> _stockTrade;
 
     /// <summary>期货页 VM（contributor 注册 FuturesView，DataContext 绑此）。类型化，不暴露为 object。</summary>
-    public CtpViewModel Futures { get; }
+    public CtpViewModel Futures => _futures.Value;
 
     /// <summary>回测/实盘页 VM（TradingView）。</summary>
-    public TradingViewModel Trading { get; }
+    public TradingViewModel Trading => _trading.Value;
 
     /// <summary>股票交易页 VM（StockTradingView，FlaUI/MCP 路由）。</summary>
-    public StockTradingViewModel StockTrade { get; }
+    public StockTradingViewModel StockTrade => _stockTrade.Value;
 
     public StockappMainViewModel(
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore,
         ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient,
-        ILlmConfigService llmService, CtpViewModel ctpVm, TradingViewModel tradingVm, StockTradingViewModel stockTradingVm,
+        ILlmConfigService llmService,
         IWorkspaceManager workspaceManager, WorkspaceDefinition defaultWorkspace)
         : base(auth, currentUser, loginDialog, tokenStore, settingsDialog, serviceProvider, deviceChatClient, llmService,
                workspaceManager, defaultWorkspace, "stockapp")
     {
-        _ctpVm = ctpVm;
-        Futures = ctpVm;
-        Trading = tradingVm;
-        StockTrade = stockTradingVm;
+        _futures = new Lazy<CtpViewModel>(() => serviceProvider.GetRequiredService<CtpViewModel>());
+        _trading = new Lazy<TradingViewModel>(() => serviceProvider.GetRequiredService<TradingViewModel>());
+        _stockTrade = new Lazy<StockTradingViewModel>(() => serviceProvider.GetRequiredService<StockTradingViewModel>());
     }
 
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync(); // 账号/业务 VM/Chat/调度器/MCP + 激活默认工作台
-        await _ctpVm.InitializeAsync();
+        // 期货页启动初始化（刷新连接器配置/加载主力合约/订阅；含服务器证券同步）。此处在异步路径触发
+        // _futures.Value（首帧已过，构造 CtpViewModel 不再阻塞窗口 Show）。
+        await _futures.Value.InitializeAsync();
     }
 }
