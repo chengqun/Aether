@@ -61,6 +61,9 @@ public partial class App : global::Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var vm = Services.GetRequiredService<StockappMainViewModel>();
+            // ★ 窗口 Show 前同步恢复主题，使第一帧即渲染选中主题（否则窗口先按默认 light 渲染，
+            // 再被 InitializeAsync 的 FireAndForget 异步切——闪一下默认色，侧边栏最先被看到）。
+            vm.RestoreThemeSync();
             desktop.MainWindow = new WorkbenchWindow { DataContext = vm };
             // 退出时释放 DI 容器（含 MCP server 连接等 IAsyncDisposable 单例，关闭 stdio 子进程）。
             desktop.ShutdownRequested += (_, _) =>

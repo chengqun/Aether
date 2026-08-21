@@ -282,6 +282,36 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
             name = "light";
             json = ThemeLoader.GetLightJson();
         }
+        ApplyThemeState(name, json);   // 设内存态（IsDarkVariant/动画层/chrome/CustomThemeJson/Theme/IsCurrent）
+        await _preferences.SetAsync(ThemePrefKey, name, ct);
+    }
+
+    /// <summary>★ 启动同步主题恢复：读持久化 ui.theme + 对应 JSON，设全部内存态——在窗口 Show 之前同步调，
+    /// 使第一帧即渲染选中主题（免「先 flash 默认 light 再切真主题」）。不写 pref（恢复 ≠ 选中）、不 await。
+    /// 与 <see cref="InitializeAsync"/> 里 FireAndForget 的异步主题恢复互补：二者都收敛于 <see cref="ApplyThemeState"/>，
+    /// 本方法只做「读 + 设内存态」的同步子集，其余（账号/业务 VM/MCP 连接）仍走异步不阻塞启动。</summary>
+    public void RestoreThemeSync()
+    {
+        if (Themes.Count == 0) LoadThemesAsync(); // 确保主题列表已填（IsCurrent 高亮依赖它）
+        var name = _preferences.GetAsync(ThemePrefKey).GetAwaiter().GetResult(); // GetAsync 同步完成（Task.FromResult），UI 线程安全
+        if (string.IsNullOrWhiteSpace(name)) name = "light";
+        string? json;
+        if (ThemeLoader.IsBuiltIn(name))
+        {
+            json = ReadUserThemeJsonSync(name) ?? ThemeLoader.GetBuiltInJson(name);
+        }
+        else
+        {
+            json = ReadUserThemeJsonSync(name);
+        }
+        if (json is null) { name = "light"; json = ThemeLoader.GetLightJson(); }
+        ApplyThemeState(name, json);
+    }
+
+    /// <summary>把「主题名 + JSON」落地为内存态：deserialize → IsDarkVariant/IsDreamLayerVisible/chrome/
+    /// CustomThemeJson/Theme/IsCurrent。选中与恢复两路径共用，保证状态一致。</summary>
+    private void ApplyThemeState(string name, string? json)
+    {
         // 深色倾向：读 JSON variant 字段（"light"→false，缺省/其它→true）。
         // 所有内置主题 JSON 均带 variant 字段；驱动 Avalonia 原生控件 ThemeVariant——overlay 不覆盖原生控件，须靠 variant 翻转。
         var def = ThemeLoader.Deserialize(json ?? "");
@@ -292,7 +322,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         Theme = name;             // 当前名（高亮）
         foreach (var t in Themes)
             t.IsCurrent = t.Name == name;
-        await _preferences.SetAsync(ThemePrefKey, name, ct);
     }
 
     /// <summary>读用户主题 JSON 文件。文件不存在返 null（调用方回退 light）。</summary>
@@ -302,6 +331,15 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         if (string.IsNullOrEmpty(dir)) return null;
         var path = Path.Combine(dir, name + ".json");
         return File.Exists(path) ? await File.ReadAllTextAsync(path, ct) : null;
+    }
+
+    /// <summary>同步读用户主题 JSON（启动期 <see cref="RestoreThemeSync"/> 用；文件不存在返 null）。</summary>
+    private string? ReadUserThemeJsonSync(string name)
+    {
+        var dir = DesktopOptions.ThemesDirectory;
+        if (string.IsNullOrEmpty(dir)) return null;
+        var path = Path.Combine(dir, name + ".json");
+        return File.Exists(path) ? File.ReadAllText(path) : null;
     }
 
     /// <summary>UI 绑定的选择命令（账号菜单 flyout + 设置「外观」tab）。</summary>
