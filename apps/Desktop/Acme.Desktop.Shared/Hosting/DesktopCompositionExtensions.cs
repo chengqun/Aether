@@ -161,14 +161,14 @@ public static class DesktopCompositionExtensions
                 "GetCurrentProjectDirectory")));
 
         // 文档版知识对象工具（.ok 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .ok 文件
-        // （note 版操作 note 节点）。需项目目录（同 GetCurrentProjectDirectory）→ 宿主层注册，非 ai/ 适配器
-        // （ai/ 不可引 apps 层 ICurrentProjectDirectoryProvider）。List/Read 只读标 Safe；Create/Update 写盘标 Confirm
+        // （note 版操作 note 节点）。需知识库目录（独立于项目目录）→ 宿主层注册，非 ai/ 适配器
+        // （ai/ 不可引 apps 层 IKnowledgeDirectoryProvider）。List/Read 只读标 Safe；Create/Update 写盘标 Confirm
         // （对齐 note 版 Create/Update Confirm 级；写盘可逆性低但非不可逆）。解析/序列化复用 IDocumentKnowledgeSourceParser
         // （AddNotesInfrastructure 已注册）。.ok 路径解析经 OkTargetResolver（与文档编辑器图解析同源）。
         services.AddTransient<DocumentKnowledgeTool>();
         aether.ConfigureToolRegistry(reg =>
         {
-            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在文档页打开项目目录。", "文档知识",
+            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在知识对象页打开知识库目录。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ListDocumentKnowledgeObjects))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
@@ -180,7 +180,7 @@ public static class DesktopCompositionExtensions
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ReadDocumentKnowledgeObject"),
                 ToolApprovalLevel.Safe);
-            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.ok 文件）。name=相对路径不含扩展名，将创建 <项目目录>/<name>.ok。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
+            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.ok 文件）。name=相对路径不含扩展名，将创建 <知识库目录>/<name>.ok。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.CreateDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),

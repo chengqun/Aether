@@ -81,7 +81,7 @@ public sealed class DocumentKnowledgeTool
     [Description("列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
                  "可选 folder 只列指定子目录（相对路径，如 业务分析）；不传列整个知识库目录。需先在知识对象页打开知识库目录。")]
     public async Task<ListDocumentKnowledgeOutput> ListDocumentKnowledgeObjects(
-        [Description("子目录相对路径（可选，只列该子目录下；不传列整个项目目录）")] string? folder = null,
+        [Description("子目录相对路径（可选，只列该子目录下；不传列整个知识库目录）")] string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var root = _knowledgeDir.CurrentDirectory;
@@ -126,7 +126,7 @@ public sealed class DocumentKnowledgeTool
             return await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // 解析目标 .ok 文件（项目根候选；无 currentFileDir 语境——文档工具操作全项目）。
+                // 解析目标 .ok 文件（知识库根候选；无 currentFileDir 语境——文档工具操作整个知识库）。
                 var full = OkTargetResolver.CandidateOkPaths(name, root, null)
                     .FirstOrDefault(p => File.Exists(p));
                 if (full is null)
