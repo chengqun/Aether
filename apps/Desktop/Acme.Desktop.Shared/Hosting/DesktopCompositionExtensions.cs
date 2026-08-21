@@ -260,6 +260,30 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Confirm);
         });
 
+        // skill 管理工具（skill_list / skill_add / skill_remove）：让 agent 管理文件式 skill。
+        // skill 是目录扫描式能力（<SkillsDirectory>/<name>/SKILL.md，YAML frontmatter + Markdown 正文），
+        // 运行时经 MAF AgentFileSkillsSource 直读目录、无需重启。与 MCP 工具同属宿主层（SkillRegistry/AetherAIOptions
+        // 在平台层）。add/remove 是「注入流程知识」的写入口 → 标 Dangerous；list 只读标 Safe。
+        services.AddTransient<SkillManagementTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("skill_list", "列出当前已加载的 skill（名称/描述/分类）。只读，无副作用。", "技能",
+                sp => AIFunctionFactory.Create(
+                    typeof(SkillManagementTool).GetMethod(nameof(SkillManagementTool.ListSkillsAsync))!, sp.GetRequiredService<SkillManagementTool>(),
+                    "skill_list"),
+                ToolApprovalLevel.Safe);
+            reg.Register("skill_add", "新增或更新一个 skill（写到 <skills>/<name>/SKILL.md）并立即重载索引，令其下轮起对 agent 生效。装一个 skill 等于给 agent 注入新流程知识，需要用户审批确认。", "技能",
+                sp => AIFunctionFactory.Create(
+                    typeof(SkillManagementTool).GetMethod(nameof(SkillManagementTool.AddSkillAsync))!, sp.GetRequiredService<SkillManagementTool>(),
+                    "skill_add"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("skill_remove", "删除一个 skill（按名删 <skills>/<name> 目录）并立即重载索引。需要用户审批确认。", "技能",
+                sp => AIFunctionFactory.Create(
+                    typeof(SkillManagementTool).GetMethod(nameof(SkillManagementTool.RemoveSkillAsync))!, sp.GetRequiredService<SkillManagementTool>(),
+                    "skill_remove"),
+                ToolApprovalLevel.Dangerous);
+        });
+
         // build/test 结构化反馈工具：让 agent 拿到结构化编译错误/测试失败，而非裸 dotnet 输出（弱模型从
         // 上千行 MSBuild 输出找错易漏）。需项目目录（同 git_*）→ 宿主层注册。标 Safe：agentic 编程闭环核心
         // 高频动作，低摩擦。命令执行复用 ShellCommandTool（登录 shell 解决 .app 受限 PATH）。

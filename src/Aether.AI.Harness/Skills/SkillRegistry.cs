@@ -57,6 +57,10 @@ public sealed class SkillMeta
 /// </summary>
 public sealed class SkillRegistry
 {
+    /// <summary>内容变更通知：skill 注册/重扫盘后触发（<see cref="Register"/> / <see cref="ReloadFromDirectory"/> 完成时）。
+    /// 让专家页技能 tab、agent 工具 skill_add 写入后订阅方自动刷新，无需手动切 tab/点刷新。</summary>
+    public event EventHandler? Changed;
+
     private readonly ConcurrentDictionary<string, SkillDefinition> _entries = new();
 
     public SkillRegistry() { }
@@ -136,7 +140,9 @@ public sealed class SkillRegistry
     public SkillRegistry ReloadFromDirectory(string directory)
     {
         _entries.Clear();
-        return LoadFromDirectory(directory);
+        var result = LoadFromDirectory(directory);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return result;
     }
 
     private void LoadSkillFile(string skillDir, string skillFile)

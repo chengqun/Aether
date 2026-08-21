@@ -35,6 +35,13 @@ public partial class SkillViewModel : ObservableObject
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         SkillsDirectory = options?.SkillsDirectory;
+
+        // 内容变更（agent 工具 skill_add 重扫盘后触发）→ 自动刷新列表。事件在后台线程触发，经 dispatcher marshal。
+        _registry.Changed += async (_, _) =>
+        {
+            try { await _dispatcher.InvokeAsync(() => LoadAsync()); }
+            catch { /* 刷新失败不阻断 */ }
+        };
     }
 
     /// <summary>重扫 skills 目录加载全部 skill 映射成卡片。照 <see cref="McpViewModel.LoadAsync"/> 范式：

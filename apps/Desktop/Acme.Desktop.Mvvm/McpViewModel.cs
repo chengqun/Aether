@@ -24,6 +24,14 @@ public partial class McpViewModel : ObservableObject
     {
         _mgmt = mgmt;
         _dispatcher = dispatcher;
+
+        // 配置变更（页面手动增删 / agent 工具 mcp_add_server 等后台改动）→ 自动刷新列表。
+        // 事件在后台线程触发，经 dispatcher marshal 到 UI 线程再 LoadAsync。
+        _mgmt.Changed += async (_, _) =>
+        {
+            try { await _dispatcher.InvokeAsync(() => LoadAsync()); }
+            catch { /* 刷新失败不阻断 */ }
+        };
     }
 
     public async Task LoadAsync()

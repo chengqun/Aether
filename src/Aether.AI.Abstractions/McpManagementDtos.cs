@@ -29,6 +29,12 @@ public sealed record McpServerStatus(
 /// </summary>
 public interface IMcpManagementService
 {
+    /// <summary>
+    /// 配置变更通知：server 新增/更新/删除后触发（Save/Delete 完成时）。让专家页 MCP tab、agent 工具写入后
+    /// 订阅方（<see cref="McpViewModel"/>）自动刷新列表，无需手动切 tab/点刷新。回调在后台线程触发，订阅方自行 marshal UI。
+    /// </summary>
+    event EventHandler? Changed;
+
     /// <summary>确保 MCP server 已连接 + 工具已注册进 ToolRegistry（幂等，shared-task 等到连接完成）。</summary>
     Task EnsureStartedAsync(CancellationToken cancellationToken = default);
 

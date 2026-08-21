@@ -14,6 +14,8 @@ namespace Aether.AI.Mcp;
 /// </summary>
 public sealed class McpManagementService : IMcpManagementService
 {
+    public event EventHandler? Changed;
+
     private readonly IMcpServerRegistry _registry;
     private readonly ToolRegistry? _toolRegistry;
     private readonly string _directory;
@@ -59,6 +61,7 @@ public sealed class McpManagementService : IMcpManagementService
         var json = SerializeConfig(config);
         await File.WriteAllTextAsync(path, json, cancellationToken).ConfigureAwait(false);
         await _registry.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task DeleteServerAsync(string name, CancellationToken cancellationToken = default)
@@ -67,6 +70,7 @@ public sealed class McpManagementService : IMcpManagementService
         var path = Path.Combine(_directory, SafeFileName(name) + ".json");
         if (File.Exists(path)) File.Delete(path);
         await _registry.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public Task RefreshAsync(CancellationToken cancellationToken = default)
