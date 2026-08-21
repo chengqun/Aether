@@ -15,7 +15,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// <summary>
 /// 文档版知识对象（<c>.ok</c> 文件）AI 工具，镜像 note 版 <see cref="Acme.Notes.AI.Tools.KnowledgeTool"/> 的 4 工具
 /// （List/Read/Create/Update），操作对象从 note 节点换成磁盘 <c>.ok</c> 文件。note 版注入 <c>INoteService</c>
-/// （Application 契约）；文档版操作磁盘文件需知「项目目录」—— <see cref="ICurrentProjectDirectoryProvider"/> 在
+/// （Application 契约）；文档版操作磁盘文件需知「知识库目录」—— <see cref="IKnowledgeDirectoryProvider"/> 在
 /// apps 层（<c>Acme.Desktop.Mvvm</c>），<c>ai/</c> 适配器不可引 apps/，故此工具住宿主层（同
 /// <see cref="GetCurrentProjectDirectoryTool"/>/<c>BuildTool</c>/<c>RunInTerminalTool</c>），在 <c>AddDesktopCommon</c>
 /// 内联注册。解析/序列化复用 <see cref="IDocumentKnowledgeSourceParser"/>（<c>AddNotesInfrastructure</c> 已注册 DI 单例）。
@@ -23,12 +23,12 @@ namespace Acme.Desktop.Shared.Shell;
 /// </summary>
 public sealed class DocumentKnowledgeTool
 {
-    private readonly ICurrentProjectDirectoryProvider _projectDir;
+    private readonly IKnowledgeDirectoryProvider _knowledgeDir;
     private readonly IDocumentKnowledgeSourceParser _parser;
 
-    public DocumentKnowledgeTool(ICurrentProjectDirectoryProvider projectDir, IDocumentKnowledgeSourceParser parser)
+    public DocumentKnowledgeTool(IKnowledgeDirectoryProvider knowledgeDir, IDocumentKnowledgeSourceParser parser)
     {
-        _projectDir = projectDir ?? throw new ArgumentNullException(nameof(projectDir));
+        _knowledgeDir = knowledgeDir ?? throw new ArgumentNullException(nameof(knowledgeDir));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
@@ -79,14 +79,14 @@ public sealed class DocumentKnowledgeTool
     // —— 工具方法 ——
 
     [Description("列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
-                 "可选 folder 只列指定子目录（相对路径，如 业务分析）；不传列整个项目目录。需先在文档页打开项目目录。")]
+                 "可选 folder 只列指定子目录（相对路径，如 业务分析）；不传列整个知识库目录。需先在知识对象页打开知识库目录。")]
     public async Task<ListDocumentKnowledgeOutput> ListDocumentKnowledgeObjects(
         [Description("子目录相对路径（可选，只列该子目录下；不传列整个项目目录）")] string? folder = null,
         CancellationToken cancellationToken = default)
     {
-        var root = _projectDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(root))
-            return new ListDocumentKnowledgeOutput { Error = "当前未打开项目目录。请在文档页打开项目目录后再用文档知识对象工具。" };
+            return new ListDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
 
         var baseDir = string.IsNullOrWhiteSpace(folder) ? root : Path.Combine(root, folder);
         if (!Directory.Exists(baseDir))
@@ -117,9 +117,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new ReadDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _projectDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(root))
-            return new ReadDocumentKnowledgeOutput { Error = "当前未打开项目目录。请在文档页打开项目目录后再用文档知识对象工具。" };
+            return new ReadDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
 
         try
         {
@@ -155,7 +155,7 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("创建一个文档知识对象（.ok 文件）。name=相对路径（不含扩展名），将创建 <项目目录>/<name>.ok。" +
+    [Description("创建一个文档知识对象（.ok 文件）。name=相对路径（不含扩展名），将创建 <知识库目录>/<name>.ok。" +
                  "kind 分类自由字符串（流程/数据源/规则/Entity 等）。links 可选 JSON 数组：" +
                  "[{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]（targetId=相对路径，权威）或 [{\"role\":\"uses\",\"target\":\"fin_dw\"}]。" +
                  "已存在则失败。")]
@@ -169,9 +169,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new CreateDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _projectDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(root))
-            return new CreateDocumentKnowledgeOutput { Error = "当前未打开项目目录。请在文档页打开项目目录后再用文档知识对象工具。" };
+            return new CreateDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
 
         try
         {
@@ -210,9 +210,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new UpdateDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _projectDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(root))
-            return new UpdateDocumentKnowledgeOutput { Error = "当前未打开项目目录。请在文档页打开项目目录后再用文档知识对象工具。" };
+            return new UpdateDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
 
         try
         {

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm.Syntax;
-using Acme.Notes.Domain.Knowledge;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,47 +82,37 @@ public partial class DocumentsViewModel : ObservableObject
     /// 仅活动 tab 是 .md 时有意义；镜像 NotesView 的 IsPreviewOnly。</summary>
     [ObservableProperty] private bool _isPreviewOnly;
 
-    // —— markdown / 知识对象上下分栏布局派生属性（镜像 NotesView 的 EditorRow/EditorRowSpan/SplitterVisible 体系）——
-    // md 与 .ok 双栏同构：上=预览/表单，下=源码；非 md/.ok 编辑器跨满。
+    // —— markdown 上下分栏布局派生属性（镜像 NotesView 的 EditorRow/EditorRowSpan/SplitterVisible 体系）——
+    // md 双栏：上=预览，下=源码；非 md 编辑器跨满。.ok 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏。
 
     /// <summary>活动 tab 是否 markdown（驱动上下分栏 vs 编辑器跨满）。</summary>
     public bool IsMarkdownMode => ActiveTab?.IsMarkdown ?? false;
 
-    /// <summary>活动 tab 是否知识对象文档（.ok）：上栏知识表单 + 下栏 YAML 源码。</summary>
-    public bool IsKnowledgeMode => ActiveTab?.IsKnowledge ?? false;
-
-    /// <summary>知识对象表单 VM（.ok tab 打开时建，切走清；表单↔源码双向同步）。</summary>
-    [ObservableProperty] private DocumentKnowledgeViewModel? _activeKnowledgeVm;
-
-    /// <summary>眼睛按钮可见（仅 md 文件；.ok 无眼睛，表单始终在上栏）。</summary>
+    /// <summary>眼睛按钮可见（仅 md 文件）。</summary>
     public bool IsPreviewToggleVisible => IsMarkdownMode;
 
-    /// <summary>上栏面板可见（md 预览或 .ok 表单时显示）。</summary>
-    public bool IsPreviewPaneVisible => IsMarkdownMode || IsKnowledgeMode;
+    /// <summary>上栏面板可见（md 预览时显示）。</summary>
+    public bool IsPreviewPaneVisible => IsMarkdownMode;
 
-    /// <summary>编辑器面板可见（非 md/.ok 总显示；md 时仅 IsPreviewOnly=false；.ok 双栏总显示下栏源码）。</summary>
-    public bool IsEditorPaneVisible => !IsMarkdownMode || !IsPreviewOnly || IsKnowledgeMode;
+    /// <summary>编辑器面板可见（非 md 总显示；md 时仅 IsPreviewOnly=false）。</summary>
+    public bool IsEditorPaneVisible => !IsMarkdownMode || !IsPreviewOnly;
 
-    /// <summary>上下分隔条可见（md 双栏或 .ok 双栏时显示）。</summary>
-    public bool IsSplitterVisible => (IsMarkdownMode && !IsPreviewOnly) || IsKnowledgeMode;
+    /// <summary>上下分隔条可见（md 双栏时显示）。</summary>
+    public bool IsSplitterVisible => IsMarkdownMode && !IsPreviewOnly;
 
-    /// <summary>编辑器 Grid.Row（md/.ok→下栏 row2；其它→row0 跨满）。</summary>
-    public int EditorRow => (IsMarkdownMode || IsKnowledgeMode) ? 2 : 0;
+    /// <summary>编辑器 Grid.Row（md→下栏 row2；其它→row0 跨满）。</summary>
+    public int EditorRow => IsMarkdownMode ? 2 : 0;
 
-    /// <summary>编辑器 Grid.RowSpan（其它跨 3 行满；md 双栏(.!previewOnly)或 .ok 双栏 1 行）。</summary>
-    public int EditorRowSpan => ((IsMarkdownMode && !IsPreviewOnly) || IsKnowledgeMode) ? 1 : 3;
+    /// <summary>编辑器 Grid.RowSpan（其它跨 3 行满；md 双栏 1 行）。</summary>
+    public int EditorRowSpan => (IsMarkdownMode && !IsPreviewOnly) ? 1 : 3;
 
-    /// <summary>预览上栏 Grid.RowSpan（md 仅预览时跨 3 行满，其它 1 行；.ok 不参与仅预览）。</summary>
+    /// <summary>预览上栏 Grid.RowSpan（md 仅预览时跨 3 行满，其它 1 行）。</summary>
     public int PreviewRowSpan => (IsMarkdownMode && IsPreviewOnly) ? 3 : 1;
-
-    /// <summary>表单回写源码后通知 view 刷 CodeEditor（表单→源码路径；view _syncing 守卫防回环）。</summary>
-    public event Action<string>? KnowledgeSourceUpdated;
 
     /// <summary>ActiveTab 或 IsPreviewOnly 变化后统一刷新布局派生属性绑定。</summary>
     private void RaiseLayout()
     {
         OnPropertyChanged(nameof(IsMarkdownMode));
-        OnPropertyChanged(nameof(IsKnowledgeMode));
         OnPropertyChanged(nameof(IsPreviewToggleVisible));
         OnPropertyChanged(nameof(IsPreviewPaneVisible));
         OnPropertyChanged(nameof(IsEditorPaneVisible));
@@ -189,11 +178,6 @@ public partial class DocumentsViewModel : ObservableObject
             ActiveTab = existing;
             return;
         }
-        // 知识对象（.ok）单例语义（对标 note 节点单例切换）：打开新 .ok 前，关闭其它 .ok tab；
-        // dirty 的先存盘（mirror note OnSelectedNodeChanged 切换前 SaveNodeInternalAsync），不丢内容。
-        // 普通 .md/代码文件仍多 tab（VSCode 式编辑器核心体验保留）。
-        if (IsKnowledgeFile(filePath))
-            CloseOtherKnowledgeTabs(filePath);
         var tab = new DocumentTab(filePath, content, syntaxKey);
         Tabs.Add(tab);
         ActiveTab = tab;
@@ -251,11 +235,11 @@ public partial class DocumentsViewModel : ObservableObject
     }
 
     // —— 目录 README 自动解析：点击文件树目录时，自动打开该目录下的 README ——
-    // .md README→正常 markdown 解析；.ok README→知识对象表单。复用既有打开分流
-    // （ActivateIfOpen/OpenFromDiskAsync 按扩展名自动走 md 路径或 .ok 知识对象路径）。
+    // 按 README 候选扩展名优先级取首个（.md > .markdown）。.ok 知识对象有专门的「知识对象」nav 页，
+    // 文档页只解析常规 markdown README。
 
-    /// <summary>README 候选扩展名（索引即优先级：.ok > .md > .markdown；.ok 胜出因用户聚焦知识对象）。</summary>
-    private static readonly string[] ReadmeExtensions = { ".ok", ".md", ".markdown" };
+    /// <summary>README 候选扩展名（索引即优先级：.md > .markdown）。</summary>
+    private static readonly string[] ReadmeExtensions = { ".md", ".markdown" };
 
     /// <summary>点击目录时打开该目录下的 README（无则不打开，仅展开/收起由 TreeViewItem 默认处理）。</summary>
     public async Task OpenFolderReadmeAsync(string folderPath, CancellationToken ct = default)
@@ -263,7 +247,7 @@ public partial class DocumentsViewModel : ObservableObject
         var readme = TryFindReadme(folderPath);
         if (readme is null) return;
         if (ActivateIfOpen(readme)) return; // 已开则激活不重复读盘
-        await OpenFromDiskAsync(readme, ct); // .md→markdown 预览；.ok→知识对象表单（自动分流）
+        await OpenFromDiskAsync(readme, ct); // markdown 预览/源码两栏
     }
 
     /// <summary>在目录顶层找 README（stem==readme，大小写不敏感），按扩展名优先级取首个。</summary>
@@ -418,50 +402,8 @@ public partial class DocumentsViewModel : ObservableObject
         SaveActiveCommand.NotifyCanExecuteChanged();
         // IsPreviewOnly 不随 tab 切换重置——「仅预览 / 双栏」是浏览模式（阅读 vs 编辑），
         // 切到别的 md tab 保持上次的模式，浏览多个文档不用反复点眼睛。非 md 文件 IsPreviewOnly 无意义（按钮隐）。
-        // 知识对象表单 VM：.ok tab 打开时建并载入当前内容；切走/关掉时清并退订（防 SourceChanged 回调悬空）。
-        if (value?.IsKnowledge == true)
-        {
-            var parser = _serviceProvider.GetRequiredService<IDocumentKnowledgeSourceParser>();
-            if (ActiveKnowledgeVm is not null)
-                ActiveKnowledgeVm.SourceChanged -= OnKnowledgeSourceChanged;
-            // 图 focal 名称=当前 .ok 文件名 stem；resolveTargetDef=link targetId(相对项目根路径)→读 .ok→(名称,定义)，
-            // 供 BuildGraphModel 闭包跟出边（镜像 note 版，区别仅解析器读文件而非内存 note）。
-            var currentFileDir = System.IO.Path.GetDirectoryName(value.FilePath);
-            var name = System.IO.Path.GetFileNameWithoutExtension(value.FilePath);
-            Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef =
-                targetPath => ResolveOkTarget(parser, targetPath, currentFileDir);
-            var knowledgeVm = new DocumentKnowledgeViewModel(parser, name, resolveTargetDef);
-            knowledgeVm.SourceChanged += OnKnowledgeSourceChanged;
-            knowledgeVm.Load(value.Content ?? "");
-            ActiveKnowledgeVm = knowledgeVm; // 生成的 setter 自动 raise PropertyChanged → XAML 重绑表单
-        }
-        else if (ActiveKnowledgeVm is not null)
-        {
-            ActiveKnowledgeVm.SourceChanged -= OnKnowledgeSourceChanged;
-            ActiveKnowledgeVm = null;
-        }
         RaiseLayout();
     }
-
-    /// <summary>表单→源码：表单字段变→Serialize 生成新源码→回写 tab.Content（置 IsDirty）→通知 view 刷 CodeEditor。</summary>
-    private void OnKnowledgeSourceChanged(string newSource)
-    {
-        if (ActiveTab is { } tab)
-            tab.Content = newSource; // 置 IsDirty（Ctrl+S 走既有 SaveActiveAsync 落盘）
-        KnowledgeSourceUpdated?.Invoke(newSource);
-    }
-
-    /// <summary>源码→表单：用户在下栏编辑源码后由 view 调，重解析回填表单（VM _syncing 守卫不回环）。</summary>
-    public void SyncKnowledgeFromSource(string source) => ActiveKnowledgeVm?.SyncFromSource(source);
-
-    /// <summary>
-    /// 文档知识对象图的目标解析器：委托 <see cref="OkTargetResolver.ResolveTarget"/>（沿项目根 / 当前文件目录
-    /// 候选找 .ok 文件，读+解析定义；找不到 → 仅名称叶子节点）。图节点标题 = 目标文件 stem。
-    /// 提取为共享静态 helper：DocumentKnowledgeTool 的 Read/FormatAsync 与图解析共用同一逻辑，避免漂移。
-    /// </summary>
-    private (string Title, KnowledgeObjectDefinition? Def)? ResolveOkTarget(
-        IDocumentKnowledgeSourceParser parser, string? targetPath, string? currentFileDir)
-        => OkTargetResolver.ResolveTarget(parser, targetPath, RootPath, currentFileDir);
 
     partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
 
@@ -473,35 +415,6 @@ public partial class DocumentsViewModel : ObservableObject
         Tabs.RemoveAt(idx);
         if (ReferenceEquals(ActiveTab, tab))
             ActiveTab = Tabs.Count > 0 ? Tabs[Math.Min(idx, Tabs.Count - 1)] : null;
-    }
-
-    /// <summary>是否知识对象（.ok 文件）。单例判定 + 图标分流共用。</summary>
-    private static bool IsKnowledgeFile(string filePath)
-        => string.Equals(Path.GetExtension(filePath), ".ok", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>知识对象单例：关闭除 <paramref name="skipPath"/> 外的 .ok tab。dirty 的先存盘
-    /// （fire-and-forget，持有 tab 引用写 Content→FilePath，mirror note SafeFireAndForget），不丢内容。
-    /// 闭包持有 tab 对象 → GC 不回收 → 存盘完成（.ok 小文件几乎不失败）。</summary>
-    private void CloseOtherKnowledgeTabs(string skipPath)
-    {
-        var okTabs = Tabs.Where(t => IsKnowledgeFile(t.FilePath)
-            && !string.Equals(t.FilePath, skipPath, StringComparison.OrdinalIgnoreCase)).ToList();
-        foreach (var t in okTabs)
-        {
-            if (t.IsDirty) SaveTabContentAsync(t).SafeFireAndForget();
-            CloseTab(t);
-        }
-    }
-
-    /// <summary>存任意 tab 内容回磁盘（不限 ActiveTab）。单例切换前存 dirty tab 用（fire-and-forget）。</summary>
-    private static async Task SaveTabContentAsync(DocumentTab tab)
-    {
-        try
-        {
-            await File.WriteAllTextAsync(tab.FilePath, tab.Content);
-            tab.IsDirty = false;
-        }
-        catch { /* 存盘失败不阻断单例切换；内容仍在 tab.Content，闭包持有 tab 引用 */ }
     }
 
     // —— 实时重载：FileSystemWatcher 透明捕获 agent/外部编辑器写盘 → 刷新开着该文件的标签 ——

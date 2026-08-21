@@ -61,6 +61,12 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new ActivityView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Activity);
 
+        // 知识对象（文档版 .ok 知识对象独立 nav 页）：左 .ok 树 + 右上下两栏（表单/源码）。
+        // 根目录=独立知识库目录（IKnowledgeDirectoryProvider，与文档页项目目录解耦，跨项目复用）。
+        Register(PanelKeys.Knowledge,
+            () => new KnowledgeObjectsView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Knowledge);
+
         // 浏览器网络（侧边栏 nav 全屏入口）：与底部 BottomPanelView 的「网络」tab 同源 BrowserViewModel 单例——两个 BrowserView 实例绑同一 VM，
         // 请求流双视图同步。底部 tab 适合边干别的边瞄一眼，侧边栏全屏适合细看请求流（agent browser_open/get_cookies 经同一 IBrowserService）。
         Register(PanelKeys.Browser,

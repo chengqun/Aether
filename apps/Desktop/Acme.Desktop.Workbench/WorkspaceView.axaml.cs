@@ -57,6 +57,7 @@ public partial class WorkspaceView : UserControl
     private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
     private int _notesTabIndex = -1;                 // notes 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显笔记树）
     private int _sourceControlTabIndex = -1;         // sourcecontrol 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 SCM 面板）
+    private int _knowledgeTabIndex = -1;             // knowledge 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 .ok 树）
     private INotifyPropertyChanged? _workspaceNpc;   // 订阅 SelectedTabIndex 变化切侧栏显隐（重建时解订阅旧 workspace）
 
     // ── 右侧 AI 聊天面板折叠（VSCode 式可折叠侧栏，对齐 ChatGPT 桌面端）：记 chat region 的宿主 + 父 split Grid + 列位置，折叠时改列宽 ──
@@ -139,6 +140,7 @@ public partial class WorkspaceView : UserControl
         _documentsTabIndex = -1;
         _notesTabIndex = -1;
         _sourceControlTabIndex = -1;
+        _knowledgeTabIndex = -1;
         if (tabbed is not null)
         {
             for (int i = 0; i < tabbed.RegionIds.Count; i++)
@@ -146,6 +148,7 @@ public partial class WorkspaceView : UserControl
                 if (tabbed.RegionIds[i] == PanelKeys.Documents) _documentsTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.Notes) _notesTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.SourceControl) _sourceControlTabIndex = i;
+                else if (tabbed.RegionIds[i] == PanelKeys.Knowledge) _knowledgeTabIndex = i;
             }
         }
         if (_workspace is INotifyPropertyChanged pc)
@@ -470,12 +473,13 @@ public partial class WorkspaceView : UserControl
         ApplyTerminalVisibility(_terminalService?.IsPanelVisible ?? true); // tab-coupled 终端：同上
     }
 
-    /// <summary>当前 tab → 侧栏活动树：documents→"documents" / notes→"notes" / sourcecontrol→"sourcecontrol" / 其它→null（隐藏左栏）。</summary>
+    /// <summary>当前 tab → 侧栏活动树：documents→"documents" / notes→"notes" / sourcecontrol→"sourcecontrol" / knowledge→"knowledge" / 其它→null（隐藏左栏）。</summary>
     private string? ResolveLeftTreeKind(int tabIndex)
     {
         if (tabIndex == _documentsTabIndex) return "documents";
         if (tabIndex == _notesTabIndex) return "notes";
         if (tabIndex == _sourceControlTabIndex) return "sourcecontrol";
+        if (tabIndex == _knowledgeTabIndex) return "knowledge";
         return null;
     }
 

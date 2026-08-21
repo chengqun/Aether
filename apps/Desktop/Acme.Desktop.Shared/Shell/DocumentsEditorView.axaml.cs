@@ -110,44 +110,23 @@ public partial class DocumentsEditorView : UserControl
         {
             _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.TabExternallyReloaded -= OnTabExternallyReloaded;
-            _vm.KnowledgeSourceUpdated -= OnKnowledgeSourceUpdated;
         }
         _vm = DataContext as DocumentsViewModel;
         if (_vm != null)
         {
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.TabExternallyReloaded += OnTabExternallyReloaded;
-            _vm.KnowledgeSourceUpdated += OnKnowledgeSourceUpdated;
             SyncEditor();
         }
     }
 
-    /// <summary>表单→源码：表单字段变→VM Serialize 生成新源码→回写 tab.Content 后发此事件。
-    /// _syncing 守卫使 OnCodeEditorTextChanged 早返（不回环 SyncFromSource）；tab.Content 已由 VM 设。</summary>
-    private void OnKnowledgeSourceUpdated(string newSource)
-    {
-        if (_syncing) return;
-        _syncing = true;
-        try { CodeEditor.Text = newSource; }
-        finally { _syncing = false; }
-        // 语法高亮/折叠随源码更新（kind/links 行变了 YAML 高亮不变但保险刷新）
-        if (_vm?.ActiveTab is { } tab)
-        {
-            CodeEditorSetup.ApplyHighlighting(CodeEditor, tab.SyntaxKey);
-            CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, tab.SyntaxKey);
-        }
-    }
-
     /// <summary>外部（agent/外部编辑器）写盘后标签静默重载：若重载的是当前活动标签且非用户正在输入，把编辑器刷新到新内容。
-    /// 用户键入走 OnCodeEditorTextChanged→tab.Content=，不发此事件，故不打架。
-    /// .ok 知识对象：外部写盘后表单也需重解析（SyncEditor 走 _syncing 不触发表单同步路径，须显式补）。</summary>
+    /// 用户键入走 OnCodeEditorTextChanged→tab.Content=，不发此事件，故不打架。</summary>
     private void OnTabExternallyReloaded(DocumentTab tab)
     {
         if (_vm is null || _syncing) return;
         if (!ReferenceEquals(_vm.ActiveTab, tab)) return;
         SyncEditor();
-        if (_vm.IsKnowledgeMode)
-            _vm.SyncKnowledgeFromSource(tab.Content);
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -185,9 +164,6 @@ public partial class DocumentsEditorView : UserControl
         if (_vm?.ActiveTab is { } tab)
         {
             tab.Content = CodeEditor.Text ?? ""; // 置 IsDirty
-            // 源码→表单：.ok 文件用户在下栏编辑源码后，重解析回填知识表单（VM _syncing 守卫不回环）
-            if (_vm.IsKnowledgeMode)
-                _vm.SyncKnowledgeFromSource(tab.Content);
         }
         CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, _vm?.ActiveTab?.SyntaxKey);
     }

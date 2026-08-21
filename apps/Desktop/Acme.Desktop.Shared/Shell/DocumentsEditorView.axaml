@@ -139,7 +139,8 @@
         </DockPanel>
       </Border>
 
-      <!-- 上下分栏（镜像 NotesView SplitGrid）：md 文件=上预览/下源码，眼睛切仅预览；非 md=编辑器跨满 -->
+      <!-- 上下分栏（镜像 NotesView SplitGrid）：md 文件=上预览/下源码，眼睛切仅预览；非 md=编辑器跨满。
+           .ok 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏（知识对象有专门的「知识对象」nav 页打开表单）。 -->
       <Grid Grid.Row="1" x:Name="EditorGrid">
         <Grid.RowDefinitions>
           <RowDefinition Height="*"/>
@@ -147,17 +148,11 @@
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 上栏：md 解析预览（md 模式）/ 知识对象表单（.ok 模式）。两者互斥，按模式分流显隐。
-             IsPreviewPaneVisible=md||ko 控制上栏整体显隐；内层按 IsMarkdownMode/IsKnowledgeMode 切具体内容。 -->
+        <!-- 上栏：md 解析预览（md 模式显示；IsPreviewPaneVisible=IsMarkdownMode 控制显隐）。 -->
         <Border Grid.Row="0" Grid.RowSpan="{Binding PreviewRowSpan}"
                 Background="{DynamicResource ContentBgBrush}"
                 IsVisible="{Binding IsPreviewPaneVisible}">
-          <Grid>
-            <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"
-                                            IsVisible="{Binding IsMarkdownMode}"/>
-            <shell:DocumentKnowledgeView DataContext="{Binding ActiveKnowledgeVm}"
-                                         IsVisible="{Binding IsKnowledgeMode}"/>
-          </Grid>
+          <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"/>
         </Border>
 
         <!-- 中：上下分隔条（md 双栏时显示） -->

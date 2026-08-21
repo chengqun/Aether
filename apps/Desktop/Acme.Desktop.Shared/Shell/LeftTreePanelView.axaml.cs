@@ -13,13 +13,14 @@ public partial class LeftTreePanelView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>切换活动树：documents→文件树 / notes→笔记树 / sourcecontrol→SCM 面板 / null→都隐（左栏列宽 0 由 WorkspaceView 控制）。
+    /// <summary>切换活动树：documents→文件树 / notes→笔记树 / sourcecontrol→SCM 面板 / knowledge→.ok 树 / null→都隐（左栏列宽 0 由 WorkspaceView 控制）。
     /// public 因跨程序集：LeftTreePanelView 在 Shared，WorkspaceView 在 Workbench。</summary>
     public void SetActiveTree(string? kind)
     {
-        if (FileTreePanel is null || NotesTreePanel is null || ScmTreePanel is null) return;
+        if (FileTreePanel is null || NotesTreePanel is null || ScmTreePanel is null || KoTreePanel is null) return;
         FileTreePanel.IsVisible = kind == "documents";
         NotesTreePanel.IsVisible = kind == "notes";
         ScmTreePanel.IsVisible = kind == "sourcecontrol";
+        KoTreePanel.IsVisible = kind == "knowledge";
     }
 }

@@ -148,6 +148,9 @@ public static class DesktopCompositionExtensions
         // .app 启动 CWD=/，SystemTools 的 Glob/Grep/Shell 默认 path 打不到用户打开的项目；此工具经
         // ICurrentProjectDirectoryProvider（DocumentsViewModel.RootPath 变化时回写）取真实目录。标 Safe（只读）。
         services.AddSingleton<ICurrentProjectDirectoryProvider, CurrentProjectDirectoryProvider>();
+        // 知识库目录持有者（独立单例，与项目目录 provider 解耦）：知识对象页打开知识库目录时写入，
+        // DocumentKnowledgeTool 读取找 .ok。独立单例避免知识库目录覆盖项目目录（SCM/终端/活动页订阅）。
+        services.AddSingleton<IKnowledgeDirectoryProvider, KnowledgeDirectoryProvider>();
         services.AddSingleton<Acme.Desktop.Mvvm.Git.IGitService, Acme.Desktop.Mvvm.Git.GitService>();
         services.AddTransient<GetCurrentProjectDirectoryTool>();
         aether.ConfigureToolRegistry(reg => reg.Register(

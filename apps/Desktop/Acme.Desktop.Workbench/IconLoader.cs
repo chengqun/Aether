@@ -32,6 +32,7 @@ public static class IconLoader
         ["backtest"] = PackIconCodiconsKind.Beaker,
         ["activity"] = PackIconCodiconsKind.Pulse,
         ["history"] = PackIconCodiconsKind.History,
+        ["knowledge"] = PackIconCodiconsKind.Collection,
         ["settings"] = PackIconCodiconsKind.SettingsGear,
         ["workflow"] = PackIconCodiconsKind.Rocket,
     };

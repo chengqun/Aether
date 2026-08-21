@@ -11,5 +11,6 @@
     <shell:FileTreeView x:Name="FileTreePanel" DataContext="{Binding Documents}" IsVisible="True"/>
     <shell:NotesTreeView x:Name="NotesTreePanel" DataContext="{Binding Notes}" IsVisible="False"/>
     <shell:SourceControlPanelView x:Name="ScmTreePanel" DataContext="{Binding SourceControl}" IsVisible="False"/>
+    <shell:KoTreeView x:Name="KoTreePanel" DataContext="{Binding Knowledge}" IsVisible="False"/>
   </Grid>
 </UserControl>

@@ -98,6 +98,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         Activity = new ActivityViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
 
+        // 文档版知识对象页（.ok 独立 nav 页）：根目录=独立知识库目录（IKnowledgeDirectoryProvider，
+        // 与文档页项目目录解耦——避免知识库目录覆盖 ICurrentProjectDirectoryProvider 致 SCM/终端/活动页错乱）。
+        Knowledge = new KnowledgeObjectsViewModel(serviceProvider,
+            serviceProvider.GetRequiredService<IKnowledgeDirectoryProvider>());
+
         // 聊天引擎组合：须在 Experts/Workflows/Rules 建好后构造——它订阅三者的 SummonChanged 事件
         //（召唤入池/出池 → 刷新统一下拉池 + 持久化），并在 InitializeAsync 里读这三类列表恢复召唤/选中态。
         Chat = new ChatWorkspaceViewModel(serviceProvider, deviceChatClient, llmService, settingsDialog, Experts, Workflows, Rules);
@@ -151,6 +156,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>活动热力图页 ViewModel（GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，读文档页项目目录的 git 历史）。</summary>
     public ActivityViewModel Activity { get; }
+
+    /// <summary>文档版知识对象页 ViewModel（独立 nav 页：左 .ok 树 + 右上下两栏表单/源码，根目录=独立知识库目录）。</summary>
+    public KnowledgeObjectsViewModel Knowledge { get; }
 
     // —— 账户 / 登录态 ——
     [ObservableProperty]
