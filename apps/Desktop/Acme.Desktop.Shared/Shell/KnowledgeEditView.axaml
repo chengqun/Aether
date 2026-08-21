@@ -13,21 +13,29 @@
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="2" Margin="10,6">
 
-        <Expander Header="基本信息" IsExpanded="True">
+        <!-- 名称（笔记标题）——核心字段，始终显示（不折叠） -->
+        <StackPanel Spacing="2">
+          <TextBlock Text="名称（笔记标题）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBox Text="{Binding Name}" PlaceholderText="如 ExternalIntelTable / 崇齐网络案"/>
+        </StackPanel>
+
+        <!-- 配置区（kind + links）折叠为单行「⚙ 配置 + 摘要」，点击展开细节——默认收起不占面积 -->
+        <Expander IsExpanded="False" Margin="0,6,0,0">
+          <Expander.Header>
+            <Grid ColumnDefinitions="Auto,*">
+              <TextBlock Grid.Column="0" Text="⚙ 配置" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="{Binding ConfigSummary}" FontSize="11" Margin="10,0,0,0"
+                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"/>
+            </Grid>
+          </Expander.Header>
           <StackPanel Spacing="6">
-            <StackPanel Spacing="2">
-              <TextBlock Text="名称（笔记标题）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-              <TextBox Text="{Binding Name}" PlaceholderText="如 ExternalIntelTable / 崇齐网络案"/>
-            </StackPanel>
             <StackPanel Spacing="2">
               <TextBlock Text="kind（分类）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
               <TextBox Text="{Binding Kind}" PlaceholderText="如 Entity / Rule / 情报案件"/>
             </StackPanel>
-          </StackPanel>
-        </Expander>
 
-        <Expander Header="links（typed 引用）" IsExpanded="True">
-          <StackPanel Spacing="6">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Button Content="+ 新增引用" Command="{Binding AddLinkCommand}" Padding="12,4"/>
               <Button Click="OnViewGraphClick" Classes="tool" Padding="12,4">

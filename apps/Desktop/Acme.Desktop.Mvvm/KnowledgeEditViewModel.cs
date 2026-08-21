@@ -108,8 +108,11 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
 
     public ObservableCollection<KnowledgeLinkRow> Links { get; } = new();
 
+    /// <summary>配置折叠摘要（「kind: xxx · N 引用」），供 Expander.Header 显示。Kind + Links 增删时重算。</summary>
+    public string ConfigSummary => $"kind: {(string.IsNullOrEmpty(Kind) ? "（未设置）" : Kind)} · {Links.Count} 引用";
+
     partial void OnNameChanged(string value) { OnPropertyChanged(nameof(CanSave)); ScheduleSave(); }
-    partial void OnKindChanged(string value) => ScheduleSave();
+    partial void OnKindChanged(string value) { OnPropertyChanged(nameof(ConfigSummary)); ScheduleSave(); }
     partial void OnBodyChanged(string value) { if (!_syncing) ScheduleSave(); }
 
     /// <summary>从下栏源码同步 body 到本 VM（渲染实时刷新）；_syncing 期间不触发自动保存（下栏已自行存库）。</summary>
@@ -189,6 +192,7 @@ public sealed partial class KnowledgeEditViewModel : ObservableObject
     {
         if (e.NewItems is not null) foreach (KnowledgeLinkRow r in e.NewItems) r.PropertyChanged += OnLinkRowChanged;
         if (e.OldItems is not null) foreach (KnowledgeLinkRow r in e.OldItems) r.PropertyChanged -= OnLinkRowChanged;
+        OnPropertyChanged(nameof(ConfigSummary)); // 引用数变化，刷新折叠摘要
         ScheduleSave();
     }
 

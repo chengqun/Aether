@@ -62,10 +62,18 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
 
     public ObservableCollection<DocumentKnowledgeLinkRow> Links { get; } = new();
 
+    /// <summary>配置折叠时的摘要文本（「kind: xxx · N 引用」），供 Expander.Header 显示。
+    /// Kind 变化 + Links 增删都重算（ObservableCollection 的 Count 不通知，须手动 Raise）。</summary>
+    public string ConfigSummary => $"kind: {(string.IsNullOrEmpty(Kind) ? "（未设置）" : Kind)} · {Links.Count} 引用";
+
     /// <summary>表单→源码：kind/links 变更后重新序列化的 YAML 源文本。DocumentsViewModel 订阅回写 tab.Content。</summary>
     public event Action<string>? SourceChanged;
 
-    partial void OnKindChanged(string value) => ScheduleSerialize();
+    partial void OnKindChanged(string value)
+    {
+        OnPropertyChanged(nameof(ConfigSummary)); // 摘要里含 kind
+        ScheduleSerialize();
+    }
     // body 是只读预览（源码驱动），不接 serialize——OnBodyChanged 故意不定义。
 
     /// <summary>从源文本载入（初始 / 切到该 tab）。_loading 守卫不发 SourceChanged。</summary>
@@ -97,6 +105,7 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
         _syncing = true;
         try { Load(source); } // Load 置 _loading=true；_syncing 叠加使 OnKindChanged/CollectionChanged 跳过 serialize
         finally { _syncing = false; }
+        OnPropertyChanged(nameof(ConfigSummary)); // Load 期守卫跳过了 CollectionChanged，此处补摘要刷新
     }
 
     /// <summary>重建 link 行（Load 期调用，_loading 守卫使 OnLinksCollectionChanged 早返，手动管订阅）。</summary>
@@ -183,6 +192,7 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
         if (_loading || _syncing) return;
         if (e.NewItems is not null) foreach (DocumentKnowledgeLinkRow r in e.NewItems) r.PropertyChanged += OnLinkRowChanged;
         if (e.OldItems is not null) foreach (DocumentKnowledgeLinkRow r in e.OldItems) r.PropertyChanged -= OnLinkRowChanged;
+        OnPropertyChanged(nameof(ConfigSummary)); // 引用数变化
         ScheduleSerialize();
     }
 
