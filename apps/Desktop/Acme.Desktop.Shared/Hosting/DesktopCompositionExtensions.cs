@@ -157,6 +157,40 @@ public static class DesktopCompositionExtensions
                 sp.GetRequiredService<GetCurrentProjectDirectoryTool>(),
                 "GetCurrentProjectDirectory")));
 
+        // 文档版知识对象工具（.ok 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .ok 文件
+        // （note 版操作 note 节点）。需项目目录（同 GetCurrentProjectDirectory）→ 宿主层注册，非 ai/ 适配器
+        // （ai/ 不可引 apps 层 ICurrentProjectDirectoryProvider）。List/Read 只读标 Safe；Create/Update 写盘标 Confirm
+        // （对齐 note 版 Create/Update Confirm 级；写盘可逆性低但非不可逆）。解析/序列化复用 IDocumentKnowledgeSourceParser
+        // （AddNotesInfrastructure 已注册）。.ok 路径解析经 OkTargetResolver（与文档编辑器图解析同源）。
+        services.AddTransient<DocumentKnowledgeTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在文档页打开项目目录。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ListDocumentKnowledgeObjects))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "ListDocumentKnowledgeObjects"),
+                ToolApprovalLevel.Safe);
+            reg.Register("ReadDocumentKnowledgeObject", "按相对路径读取一个文档知识对象（.ok）的完整定义：kind+正文+links 指向的子 .ok 文件内容（只展开一层）。name=相对路径不含 .ok（如 业务分析/退款会员日志分析）。先调此工具获取知识再执行。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ReadDocumentKnowledgeObject))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "ReadDocumentKnowledgeObject"),
+                ToolApprovalLevel.Safe);
+            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.ok 文件）。name=相对路径不含扩展名，将创建 <项目目录>/<name>.ok。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.CreateDocumentKnowledgeObject))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "CreateDocumentKnowledgeObject"),
+                ToolApprovalLevel.Confirm);
+            reg.Register("UpdateDocumentKnowledgeObject", "更新一个文档知识对象（.ok 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。links 全量替换。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.UpdateDocumentKnowledgeObject))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "UpdateDocumentKnowledgeObject"),
+                ToolApprovalLevel.Confirm);
+        });
+
         // git 工具（git_status 只读 / git_commit 暂存全部并提交 / git_push 推送 / git_pull 拉取合并）：
         // 让 agent 查看与提交、同步文档页当前项目的 git 变更。git 无业务上下文、GitService 在宿主 VM 库 →
         // 走宿主层注册（同 ask_user/GetCurrentProjectDirectory），非 ai/ 适配器。

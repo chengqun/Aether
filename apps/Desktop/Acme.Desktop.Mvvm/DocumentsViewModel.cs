@@ -455,48 +455,13 @@ public partial class DocumentsViewModel : ObservableObject
     public void SyncKnowledgeFromSource(string source) => ActiveKnowledgeVm?.SyncFromSource(source);
 
     /// <summary>
-    /// 文档知识对象图的目标解析器：把 link 的 targetId（相对项目根的路径，如 Hive表/fin_dw.dwd_xxx）
-    /// 解析成 (名称=stem, 定义)。沿项目根 / 当前文件目录候选找 .ok 文件，读+解析定义（供闭包跟出边）；
-    /// 找不到 / 解析失败 → 仅返回名称（画叶子节点、不跟出边），与 note 版 resolveTargetDef 同构。
-    /// 图节点标题来自此处的名称（目标文件 stem），不是 link 的 target 字段——故无需 parser/model 升级
-    /// （用户 .ok 里 target 字段=stem，与 derive-stem 一致）。
+    /// 文档知识对象图的目标解析器：委托 <see cref="OkTargetResolver.ResolveTarget"/>（沿项目根 / 当前文件目录
+    /// 候选找 .ok 文件，读+解析定义；找不到 → 仅名称叶子节点）。图节点标题 = 目标文件 stem。
+    /// 提取为共享静态 helper：DocumentKnowledgeTool 的 Read/FormatAsync 与图解析共用同一逻辑，避免漂移。
     /// </summary>
     private (string Title, KnowledgeObjectDefinition? Def)? ResolveOkTarget(
         IDocumentKnowledgeSourceParser parser, string? targetPath, string? currentFileDir)
-    {
-        if (string.IsNullOrWhiteSpace(targetPath)) return null;
-        var stem = StemOf(targetPath);
-        foreach (var full in CandidateOkPaths(targetPath, currentFileDir))
-        {
-            if (!File.Exists(full)) continue;
-            KnowledgeObjectDefinition? def = null;
-            try { _ = parser.TryParse(File.ReadAllText(full), out def, out _); }
-            catch { /* 读/解析失败 → 仅名称，不跟出边（断链仍画节点） */ }
-            return (stem, def);
-        }
-        return (stem, null); // 文件不存在 → 仅名称（断链叶子，仍画节点显示 stem）
-    }
-
-    /// <summary>路径的文件名部分（去目录前缀 + 去 .ok 扩展名）= 图节点显示名称。</summary>
-    private static string StemOf(string path)
-    {
-        var sep = path.LastIndexOfAny(new[] { '/', '\\' });
-        var stem = sep >= 0 ? path.Substring(sep + 1) : path;
-        return stem.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && stem.Length > 3
-            ? stem.Substring(0, stem.Length - 3) : stem;
-    }
-
-    /// <summary>候选 .ok 文件全路径：相对项目根 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）。</summary>
-    private IEnumerable<string> CandidateOkPaths(string targetPath, string? currentFileDir)
-    {
-        var withExt = targetPath.EndsWith(".ok", StringComparison.OrdinalIgnoreCase)
-            ? targetPath : targetPath + ".ok";
-        if (!string.IsNullOrEmpty(RootPath))
-            yield return System.IO.Path.Combine(RootPath, withExt);
-        if (!string.IsNullOrEmpty(currentFileDir))
-            yield return System.IO.Path.Combine(currentFileDir!, withExt);
-        yield return withExt; // 兜底：绝对路径或相对 cwd
-    }
+        => OkTargetResolver.ResolveTarget(parser, targetPath, RootPath, currentFileDir);
 
     partial void OnIsPreviewOnlyChanged(bool value) => RaiseLayout();
 
