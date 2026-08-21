@@ -20,6 +20,10 @@ public partial class SkillViewModel : ObservableObject
     private readonly SkillRegistry _registry;
     private readonly IUiDispatcher _dispatcher;
 
+    // 重入守卫：LoadAsync 内部会调 ReloadFromDirectory，后者触发 Changed；若 Changed 回调又 LoadAsync 则无限递归
+    // （进度条永远转）。_reloading=true 表示本轮 LoadAsync 自己触发的 Changed，回调直接跳过。
+    private int _reloading;
+
     public ObservableCollection<SkillItem> Skills { get; } = new();
 
     /// <summary>skill 目录路径（&lt;tenantDir&gt;/skills），供 View「打开目录」按钮跳文件管理器。null=未配目录（按钮隐藏）。</summary>
@@ -39,7 +43,7 @@ public partial class SkillViewModel : ObservableObject
         // 内容变更（agent 工具 skill_add 重扫盘后触发）→ 自动刷新列表。事件在后台线程触发，经 dispatcher marshal。
         _registry.Changed += async (_, _) =>
         {
-            try { await _dispatcher.InvokeAsync(() => LoadAsync()); }
+            try { await _dispatcher.InvokeAsync(() => { if (Volatile.Read(ref _reloading) == 0) LoadAsync().SafeFireAndForget(); }); }
             catch { /* 刷新失败不阻断 */ }
         };
     }
@@ -49,13 +53,15 @@ public partial class SkillViewModel : ObservableObject
     /// 后切 tab 或点刷新即出现，无需重启）——与运行时 <c>AgentFileSkillsSource</c> 直读目录的行为对齐。</summary>
     public async Task LoadAsync()
     {
+        Interlocked.Increment(ref _reloading);
         try
         {
             IsLoading = true;
             var items = await Task.Run(() =>
                 {
                     // 重扫盘：registry 启动期仅被目录填充（无程序式 contributor），ReloadFromDirectory
-                    // 清空+重扫安全。磁盘 I/O 在此后台线程，不阻塞 UI。
+                    // 清空+重扫安全。磁盘 I/O 在此后台线程，不阻塞 UI。ReloadFromDirectory 会触发 Changed，
+                    // 但 _reloading 守卫让回调跳过，避免 self-refresh 递归。
                     if (!string.IsNullOrEmpty(SkillsDirectory))
                         _registry.ReloadFromDirectory(SkillsDirectory);
                     return _registry.GetAll()
@@ -76,7 +82,11 @@ public partial class SkillViewModel : ObservableObject
             });
         }
         catch { /* 加载失败不阻断 */ }
-        finally { IsLoading = false; }
+        finally
+        {
+            Interlocked.Decrement(ref _reloading);
+            IsLoading = false;
+        }
     }
 
     [RelayCommand]
