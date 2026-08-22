@@ -75,8 +75,10 @@ public sealed partial class RuleEditViewModel : ObservableObject
                     // MCP 工具选中/权限变化同样触发自动保存
                     opt.PropertyChanged += (_, _) => ScheduleAutoSave();
                 }
+                grp.FinalizeGroup(); // HasTools 走通知（控制「无工具」提示 vs 工具列表显隐）
                 McpServerGroups.Add(grp);
             }
+            HasMcpServers = McpServerGroups.Count > 0; // 走通知（控制整个 MCP 区 Expander 显隐）
         }
 
         if (existing != null)
@@ -135,8 +137,8 @@ public sealed partial class RuleEditViewModel : ObservableObject
     /// <summary>MCP server 工具分组（编辑器 MCP 区展示）。</summary>
     public ObservableCollection<McpServerToolGroup> McpServerGroups { get; } = new();
 
-    /// <summary>是否有 MCP server（控制 MCP 区显隐）。</summary>
-    public bool HasMcpServers => McpServerGroups.Count > 0;
+    /// <summary>是否有 MCP server（控制 MCP 区显隐）。构造填充后赋值，走通知（原为零通知计算属性）。</summary>
+    [ObservableProperty] private bool _hasMcpServers;
 
     /// <summary>选中工具数量。</summary>
     public int SelectedToolCount => Tools.Count(t => t.IsSelected);

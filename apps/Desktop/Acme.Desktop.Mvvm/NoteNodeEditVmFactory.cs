@@ -36,6 +36,8 @@ public sealed class AgentEditVmFactory : INoteNodeEditVmFactory
     {
         var main = ctx.Main;
         var notes = ctx.Notes;
+        // 打开编辑器前确保 MCP 已连接 + 刷新，MCP 区才有最新工具（对齐专家页 tab 的 ExpertsView.axaml.cs）。
+        await main.Experts.Mcp.EnsureLoadedAsync();
         var expert = main.Experts.Experts.FirstOrDefault(e => e.Id == ctx.Node.Id);
         if (expert is null) return null;
         var editVm = main.Experts.CreateEditViewModel(expert);
@@ -65,6 +67,8 @@ public sealed class RuleEditVmFactory : INoteNodeEditVmFactory
     {
         var main = ctx.Main;
         var notes = ctx.Notes;
+        // 打开编辑器前确保 MCP 已连接 + 刷新，MCP 区才有最新工具。
+        await main.Rules.Mcp.EnsureLoadedAsync();
         var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == ctx.Node.Id);
         if (rule is null) return null;
         var editVm = main.Rules.CreateEditViewModel(rule);
@@ -93,6 +97,8 @@ public sealed class CodeRuleEditVmFactory : INoteNodeEditVmFactory
     {
         var main = ctx.Main;
         var notes = ctx.Notes;
+        // 打开编辑器前确保 MCP 已连接 + 刷新，MCP 区才有最新工具。
+        await main.Rules.Mcp.EnsureLoadedAsync();
         var rule = main.Rules.Rules.FirstOrDefault(r => r.Id == ctx.Node.Id);
         if (rule is null) return null;
         var editVm = main.Rules.CreateCodeRuleEditViewModel(rule);
