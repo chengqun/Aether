@@ -1,4 +1,4 @@
-using Acme.Desktop.Workbench.Theming;
+using Acme.Desktop.Shared.Theming;
 using Avalonia.Media;
 
 namespace Acme.Desktop.Mvvm.Tests;
