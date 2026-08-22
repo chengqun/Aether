@@ -5,7 +5,7 @@
         Title="同花顺连接设置" Width="520" Height="460"
         CanResize="False" WindowStartupLocation="CenterOwner"
         Background="{DynamicResource ContentBgBrush}"
-        SystemDecorations="Full" ShowInTaskbar="False">
+        WindowDecorations="Full" ShowInTaskbar="False">
 
   <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
 
