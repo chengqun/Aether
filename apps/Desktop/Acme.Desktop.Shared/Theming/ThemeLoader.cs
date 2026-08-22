@@ -220,6 +220,36 @@ public static class ThemeLoader
         return lg;
     }
 
+    /// <summary>合并编辑器配色：显式 editor 段优先；缺省的前景/背景/强调槽从主题 token 派生。
+    /// TextPrimaryBrush→foreground、ContentBgBrush→background、SurfaceBrush→currentLine、
+    /// AccentBrush→selection（@26% alpha 半透明 tint，非实色——选区须透出文字可读）。
+    /// 从 def.Colors（含 *Brush / *Color 两个 key 变体）解析 hex；解析失败回落 null（编辑器用内置 VSCode 2026）。</summary>
+    private static EditorThemeDef MergeEditorTheme(ThemeDefinition def)
+    {
+        var e = def.Editor ?? new EditorThemeDef();
+        string? ColorOf(params string[] keys)
+        {
+            foreach (var k in keys)
+                if (def.Colors.TryGetValue(k, out var v) && Color.TryParse(v, out _))
+                    return v;
+            return null;
+        }
+        // 仅在 editor 段未显式给时才用主题 token 派生（显式覆盖优先）。
+        e.Foreground ??= ColorOf("TextPrimaryBrush", "TextPrimaryColor");
+        e.Background ??= ColorOf("ContentBgBrush", "ContentBgColor");
+        e.CurrentLine ??= ColorOf("SurfaceBrush", "SurfaceColor");
+        if (e.Selection is null)
+        {
+            // 选区强调色 = accent @ 26% alpha（#42 前缀；AARRGGBB），让选中文字仍可读、又带主题 accent 色相。
+            var accent = ColorOf("AccentBrush", "AccentColor");
+            e.Selection = accent is not null && Color.TryParse(accent, out var ac)
+                ? $"#{0x42:X2}{ac.R:X2}{ac.G:X2}{ac.B:X2}"
+                : null;
+        }
+        e.SelectionForeground ??= ColorOf("OnAccentBrush", "OnAccentColor");
+        return e;
+    }
+
     /// <summary>把 JSON overlay 应用到目标元素的 Resources.MergedDictionaries。
     /// 内置 WorkbenchTheme（经 XAML ResourceInclude 合入）不动；overlay 追加覆盖其键。
     /// 若皮肤 JSON 声明了 <see cref="ThemeDefinition.Styles"/>（.axaml 样式包 URI），则同时用
@@ -242,8 +272,10 @@ public static class ThemeLoader
         if (string.IsNullOrWhiteSpace(customJson)) return;
         var def = Deserialize(customJson);
         if (def is null) return;
-        // 编辑器配色：写全局槽（供 CodeEditorSetup 查询）。editor 段存在即覆盖，缺省=null=回落内置 VSCode 2026。
-        _activeEditorTheme = def.Editor;
+        // 编辑器配色：写全局槽（供 CodeEditorSetup 查询）。editor 段存在即覆盖显式槽；
+        // 缺省的前景/背景/强调槽从主题 token 派生（TextPrimary→前景、ContentBg→背景、Accent→选区、OnAccent→选区文字）
+        // —— 保证编辑器底色/文字色/强调色跟着主题走，用户自定义主题时只覆盖想改的槽。
+        _activeEditorTheme = MergeEditorTheme(def);
         // token overlay：颜色/渐变/字体/圆角/间距/背景 → Resources.MergedDictionaries
         var overlay = ToResourceDictionary(def);
         target.Resources.MergedDictionaries.Add(overlay);

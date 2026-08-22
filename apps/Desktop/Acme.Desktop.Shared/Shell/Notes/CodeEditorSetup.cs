@@ -76,13 +76,12 @@ internal static class CodeEditorSetup
             var tv = editor.TextArea.TextView;
             tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(p?.CurrentLine ?? (dark ? "#242526" : "#40EAEAEA")));
             tv.CurrentLineBorder = null;
+            // 编辑器前景（文字色）：皮肤提供（或主题 TextPrimary 派生）则设，否则回落内置暗/浅默认。
+            editor.Foreground = new SolidColorBrush(Color.Parse(p?.Foreground ?? (dark ? "#e6e6e6" : "#1a1a1f")));
             editor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(p?.Selection ?? (dark ? "#DD276782" : "#400069CC")));
             editor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(p?.SelectionForeground ?? (dark ? "#BBBEBF" : "#202020")));
-            // 编辑器底：皮肤 editor.background 提供则覆盖（dream 类渐变/aurora 窗口配固定底），否者 null=随原生 ThemeVariant。
-            if (p?.Background is { } bg)
-                editor.TextArea.Background = new SolidColorBrush(Color.Parse(bg));
-            else
-                editor.TextArea.Background = null;
+            // 编辑器底：皮肤提供（或主题 ContentBg 派生）则覆盖；null=随原生 ThemeVariant。
+            editor.TextArea.Background = p?.Background is { } bg ? new SolidColorBrush(Color.Parse(bg)) : null;
         }
         catch { /* 控件未就绪则跳过 */ }
     }

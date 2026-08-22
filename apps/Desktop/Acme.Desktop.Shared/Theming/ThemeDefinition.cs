@@ -82,6 +82,7 @@ public sealed class EditorThemeDef
     [JsonPropertyName("heading")] public string? Heading { get; set; }
     [JsonPropertyName("link")] public string? Link { get; set; }
 
+    [JsonPropertyName("foreground")] public string? Foreground { get; set; }
     [JsonPropertyName("background")] public string? Background { get; set; }
     [JsonPropertyName("currentLine")] public string? CurrentLine { get; set; }
     [JsonPropertyName("selection")] public string? Selection { get; set; }
