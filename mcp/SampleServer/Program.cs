@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
 // ── 示例 MCP server ──────────────────────────────────────────────────────────
@@ -13,6 +14,11 @@ using ModelContextProtocol.Server;
 // ──────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// stdio 传输要求 stdout 专用于 JSON-RPC 协议流——把日志全部重定向到 stderr，防止 info 日志污染协议流。
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+
 builder.Services.AddMcpServer()
     .WithStdioServerTransport()
     .WithToolsFromAssembly();

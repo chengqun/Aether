@@ -260,6 +260,26 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Confirm);
         });
 
+        // agent 自举工具（agent_add_tools / agent_reload）：让 agent 把已装进 ToolRegistry 的工具勾选到当前
+        // agent + 重新召唤自己（页面「专家编辑器勾选 + 重新召唤」的 AI 版）。配合 mcp_add_server 构成完整闭环
+        // 装 MCP → 勾选 → 重新召唤 → 下轮用带完整 schema 的新工具。经 ambient 上下文 AgentExecutionContext.CurrentAgentId
+        // 定位当前 agent（Harness 每轮 run 写入）。add_tools 改写配置 + reload 丢弃会话记忆 → 均 Confirm（可逆性低但
+        // 非不可逆；非数据删除故不到 Dangerous）。
+        services.AddTransient<AgentManagementTool>();
+        aether.ConfigureToolRegistry(reg =>
+        {
+            reg.Register("agent_add_tools", "勾选工具给当前正在运行的 agent（把工具名加入其 Tools 列表并持久化）。常用于 mcp_add_server 装好新 MCP server 后，把它的工具勾进当前 agent。勾选后需再调 agent_reload 重新召唤才生效。需要用户审批确认。", "Agent自举",
+                sp => AIFunctionFactory.Create(
+                    typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.AddToolsAsync))!, sp.GetRequiredService<AgentManagementTool>(),
+                    "agent_add_tools"),
+                ToolApprovalLevel.Confirm);
+            reg.Register("agent_reload", "重新召唤当前 agent：使其缓存失效，下一轮 run 重建（带上最新勾选的工具、含完整 schema）。通常在 agent_add_tools 之后调用。注意这会丢弃当前会话的运行时记忆。需要用户审批确认。", "Agent自举",
+                sp => AIFunctionFactory.Create(
+                    typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.ReloadAsync))!, sp.GetRequiredService<AgentManagementTool>(),
+                    "agent_reload"),
+                ToolApprovalLevel.Confirm);
+        });
+
         // skill 管理工具（skill_list / skill_add / skill_remove）：让 agent 管理文件式 skill。
         // skill 是目录扫描式能力（<SkillsDirectory>/<name>/SKILL.md，YAML frontmatter + Markdown 正文），
         // 运行时经 MAF AgentFileSkillsSource 直读目录、无需重启。与 MCP 工具同属宿主层（SkillRegistry/AetherAIOptions

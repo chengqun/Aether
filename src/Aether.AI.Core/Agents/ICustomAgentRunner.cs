@@ -35,6 +35,13 @@ public interface ICustomAgentRunner
     void Invalidate(Guid agentId);
 
     /// <summary>
+    /// 仅换 agent 实例（下次运行按最新定义重建 agent，重新 ResolveAll 新勾选的工具），但**保留**
+    /// conversationId→sessionId 映射与会话记忆（多轮上下文不断）。供「重新加载工具但不想清会话」场景
+    /// （如 agent_add_tools 后 agent_reload）。区别于 <see cref="Invalidate"/>（编辑配置的硬重置，清记忆）。
+    /// </summary>
+    void RefreshAgent(Guid agentId);
+
+    /// <summary>
     /// 会话删除时清出该 conversationId 的运行时会话：丢弃 conversationId→sessionId 映射并调
     /// HarnessRuntime.EvictSession 清掉平台持有的 FrameworkAgentSession/AgentSession，
     /// 使 RestoringChatHistoryProvider 的 per-session 历史缓存随 GC 自动回收（防长会话累积内存泄漏）。

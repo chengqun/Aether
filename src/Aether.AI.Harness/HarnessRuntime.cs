@@ -243,6 +243,15 @@ public sealed class HarnessRuntime
         Action<string>? onToolCallName,
         bool emitTelemetry = false, string? agentId = null, string? conversationId = null, string? mode = null)
     {
+        // 每轮 run 把「当前 agent / conversation」写入 ambient 上下文（AsyncLocal），供宿主层工具
+        // （agent_add_tools / agent_reload 等）精准定位是谁在调自己。保存旧值 + finally 恢复，
+        // 保证并发/嵌套 run 不串扰（AsyncLocal 按执行流隔离，但显式恢复覆盖异常路径）。
+        var prevAgentId = AgentExecutionContext.CurrentAgentId.Value;
+        var prevConversationId = AgentExecutionContext.CurrentConversationId.Value;
+        AgentExecutionContext.CurrentAgentId.Value = agentId;
+        AgentExecutionContext.CurrentConversationId.Value = conversationId;
+        try
+        {
         var sb = new System.Text.StringBuilder();
         // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
@@ -425,6 +434,12 @@ public sealed class HarnessRuntime
         }
         if (activity is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagStatus, "ok");
         return sb.ToString();
+        }
+        finally
+        {
+            AgentExecutionContext.CurrentAgentId.Value = prevAgentId;
+            AgentExecutionContext.CurrentConversationId.Value = prevConversationId;
+        }
     }
 
     /// <summary>读 TodoProvider 当前 live 待办列表并映射为 <see cref="TodoItemInfo"/> 上抛。</summary>

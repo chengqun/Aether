@@ -75,6 +75,14 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
         _runtime.Invalidate(agentId.ToString());
     }
 
+    public void RefreshAgent(Guid agentId)
+    {
+        // 仅失效 agent 实例 + 定义（下次 run 用最新 Tools 重建 agent），保留 _sessionsByConversation
+        // 映射 → 下一轮 GetOrAdd 命中旧 sessionId → 记忆（frameworkSession）保留。区别于 Invalidate
+        // （清记忆的硬重置）。供 agent_reload（装工具后温和重建）使用。
+        _runtime.Invalidate(agentId.ToString());
+    }
+
     public void EvictConversation(Guid conversationId)
     {
         // 会话删除：丢弃 conversationId→sessionId 映射并清平台运行时会话。
