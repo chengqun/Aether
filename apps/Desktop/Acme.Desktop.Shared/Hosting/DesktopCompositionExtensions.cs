@@ -235,6 +235,9 @@ public static class DesktopCompositionExtensions
         // SaveServerAsync 内部已「写 json → RefreshAsync 重连 → RegisterMcpTool」闭环，故 add/remove 是当轮
         // 会话即时生效的能力注入入口 → 标 Dangerous（装新工具=给 agent 装新能力，默认 AutoEdit 档每次弹确认，
         // 防无人干预自举闭环）。list/refresh 只读无配置写入 → list 标 Safe、refresh 标 Confirm。
+        // McpAutoAssignToAllAgents：订阅 IMcpManagementService.Changed，添加 MCP server 后自动把工具勾选进
+        // 所有普通 agent（手动/AI 两路径共用）——「添加即全局可用」。
+        services.AddSingleton<McpAutoAssignToAllAgents>();
         services.AddTransient<McpManagementTool>();
         aether.ConfigureToolRegistry(reg =>
         {
@@ -260,14 +263,19 @@ public static class DesktopCompositionExtensions
                 ToolApprovalLevel.Confirm);
         });
 
-        // agent 自举工具（agent_reload）：让 agent 手动重新加载自己的工具集（重建 agent 带最新勾选的工具）。
-        // 平时不必用——mcp_add_server 已自动勾选 + 重建；此工具供「手动勾选后想立即生效」场景。
-        // 经 ambient 上下文 AgentExecutionContext.CurrentAgentId 定位当前 agent（Harness 每轮 run 写入）。
-        // 不丢会话记忆（RefreshAgent 只换 agent 实例，保留 conversationId→sessionId 映射）。
+        // agent 配置/召唤工具（agent_configure / agent_reload）：让 agent 像页面一样「先按名字选一个 agent → 改字段 →
+        // 保存 → 重新召唤」。配置谁由 agent 参数显式给（可配置自己也可配置任意 agent），不走 AsyncLocal 定位。
+        // configure 改配置（Dangerous——改写 agent 定义）；reload 只是重新召唤（Confirm）。
+        // 与页面 ExpertsViewModel.SaveAsync 同构：ListAsync 按名 → 改字段 → SaveAsync → Invalidate。
         services.AddTransient<AgentManagementTool>();
         aether.ConfigureToolRegistry(reg =>
         {
-            reg.Register("agent_reload", "重新加载当前 agent 的工具集：使其缓存失效，下一轮 run 重建（带上最新勾选的工具、含完整 schema）。通常在手动勾选工具后调用。保留当前会话的对话记忆。需要用户审批确认。", "Agent自举",
+            reg.Register("agent_configure", "配置一个自定义 agent（按名字定位；可配置自己或任意 agent）。只改传入字段，未传保留原值。改完自动重新召唤使其生效。此操作改写 agent 定义，需要用户审批确认。", "Agent自举",
+                sp => AIFunctionFactory.Create(
+                    typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.ConfigureAsync))!, sp.GetRequiredService<AgentManagementTool>(),
+                    "agent_configure"),
+                ToolApprovalLevel.Dangerous);
+            reg.Register("agent_reload", "重新召唤一个自定义 agent（按名字定位），使其缓存失效、下一轮 run 重建（带上最新配置）。通常在配置完工具后调用。注意会丢弃该 agent 会话的运行时记忆。需要用户审批确认。", "Agent自举",
                 sp => AIFunctionFactory.Create(
                     typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.ReloadAsync))!, sp.GetRequiredService<AgentManagementTool>(),
                     "agent_reload"),

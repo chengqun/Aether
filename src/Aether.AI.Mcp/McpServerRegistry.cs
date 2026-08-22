@@ -20,6 +20,12 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
     private readonly List<Entry> _entries = new();
     private Task? _startTask;
     private readonly object _startLock = new();
+    // RefreshAsync 串行化锁：健康监控（CheckHealthAsync → RefreshAsync）与手动 SaveServer/DeleteServer（→ RefreshAsync）
+    // 可能并发触发「DisposeEntriesAsync + 重连」，dispose 正在被流使用的 McpClient 会崩（含 native 管道竞争）。
+    // 用 SemaphoreSlim(1,1) 串行化整个 refresh 过程，避免并发 dispose/重建 _entries。
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    // _entries 的读写快照锁（Monitor）：GetServers/GetTools 读快照时与 RefreshAsync 的 Clear/Add 互斥。
+    private readonly object _entriesLock = new();
 
     public McpServerRegistry(Func<IEnumerable<McpServerConfig>> configProvider, ILoggerFactory? loggerFactory = null)
     {
@@ -29,16 +35,27 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
 
     public bool IsStarted => _startTask?.IsCompleted == true;
 
-    public IReadOnlyList<AIFunction> GetTools() => _entries.SelectMany(e => e.Tools).ToList();
+    public IReadOnlyList<AIFunction> GetTools()
+    {
+        lock (_entriesLock) return _entries.SelectMany(e => e.Tools).ToList();
+    }
 
     public IReadOnlyList<McpServerEntry> GetServers()
-        => _entries.Select(e => new McpServerEntry
+        => GetServerSnapshot();
+
+    private IReadOnlyList<McpServerEntry> GetServerSnapshot()
+    {
+        lock (_entriesLock)
         {
-            Config = e.Config,
-            IsConnected = e.IsConnected,
-            Tools = e.Tools,
-            Error = e.Error,
-        }).ToList();
+            return _entries.Select(e => new McpServerEntry
+            {
+                Config = e.Config,
+                IsConnected = e.IsConnected,
+                Tools = e.Tools,
+                Error = e.Error,
+            }).ToList();
+        }
+    }
 
     /// <summary>
     /// 连接所有已配置 server 并预解析工具。用 shared-task：首次调用发起连接，后续调用等同一个任务
@@ -58,24 +75,32 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
     /// <summary>重读目录并重连所有 server（关闭旧 client）。</summary>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        await DisposeEntriesAsync().ConfigureAwait(false);
-        _startTask = null; // 失效，下次 StartAsync 重连
-        await StartAsync(cancellationToken).ConfigureAwait(false);
+        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await DisposeEntriesAsync().ConfigureAwait(false);
+            _startTask = null; // 失效，下次 StartAsync 重连
+            await StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
     }
 
     private async Task ConnectAllAsync(CancellationToken cancellationToken)
     {
         var log = _loggerFactory?.CreateLogger<McpServerRegistry>();
-        _entries.Clear();
+        lock (_entriesLock) _entries.Clear();
         foreach (var cfg in _configProvider())
         {
             var entry = new Entry(cfg);
-            _entries.Add(entry);
+            lock (_entriesLock) _entries.Add(entry);
             try
             {
                 entry.Client = await ConnectAsync(cfg, cancellationToken).ConfigureAwait(false);
                 var tools = await entry.Client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-                foreach (var t in tools)
+                lock (_entriesLock) foreach (var t in tools)
                     if (t is AIFunction fn) entry.Tools.Add(fn);
                 log?.LogInformation("已连接 MCP server {Name}，工具 {Count} 个。", cfg.Name, tools.Count);
             }
@@ -169,7 +194,11 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
     /// <summary>健康检查：探活每个已连接 server（ListToolsAsync），任何掉线则 RefreshAsync 重连。</summary>
     public async Task CheckHealthAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var entry in _entries)
+        // 快照 entries，避免探活过程中 RefreshAsync 并发 Clear/重建导致「Collection was modified」。
+        List<Entry> snapshot;
+        lock (_entriesLock) { snapshot = _entries.ToList(); }
+
+        foreach (var entry in snapshot)
         {
             if (entry.Client is null || entry.Error is not null) continue;
             try
@@ -189,7 +218,11 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
 
     private async Task DisposeEntriesAsync()
     {
-        foreach (var e in _entries)
+        // 先快照（持锁），再逐个 DisposeAsync（await 在锁外，避免锁跨 await）。
+        List<Entry> snapshot;
+        lock (_entriesLock) { snapshot = _entries.ToList(); _entries.Clear(); }
+
+        foreach (var e in snapshot)
         {
             if (e.Client is not null)
             {
@@ -197,7 +230,6 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
                 catch { }
             }
         }
-        _entries.Clear();
     }
 
     private sealed class Entry
