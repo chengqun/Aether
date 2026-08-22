@@ -173,9 +173,8 @@
                             Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}" BorderThickness="0"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                             HorizontalAlignment="Right">
-                      <TextBlock Text="+" Foreground="{DynamicResource OnAccentBrush}" FontSize="20"
-                                 LineHeight="24"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="16" Height="16"
+                            Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                     </Button>
                   </StackPanel>
                 </Grid>
