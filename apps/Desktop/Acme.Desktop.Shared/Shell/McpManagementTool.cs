@@ -11,17 +11,15 @@ namespace Acme.Desktop.Shared.Shell;
 /// (<c>Aether.AI.Mcp.McpManagementService</c>) 在平台层，不在任何 ai/ 业务上下文，故不走 ai/ 适配器。
 /// </summary>
 /// <remarks>
-/// <see cref="SaveServerAsync"/> 内部已「写 json → RefreshAsync 重连 → RegisterMcpTool 注册工具」全程闭环，
-/// 并触发 <c>Changed</c> → <see cref="McpAutoAssignToAllAgents"/> 订阅后「自动勾选进所有 agent」（手动/AI 两路径共用）。
-/// 故本工具只负责装/删/查 server，不单独做勾选。装/删标 <c>Dangerous</c>（能力注入/卸载，须审批）。
+/// <see cref="SaveServerAsync"/> 内部已「写 json → RefreshAsync 重连 → RegisterMcpTool 注册工具」全程闭环。
+/// 故本工具只负责装/删/查 server，不单独做勾选（勾选由用户在专家编辑器完成，或 agent 经 agent_configure 显式勾）。
+/// 装/删标 <c>Dangerous</c>（能力注入/卸载，须审批）。
 /// </remarks>
 public sealed class McpManagementTool
 {
     private readonly IMcpManagementService _mgmt;
 
-    public McpManagementTool(IMcpManagementService mgmt,
-        // 注入仅为了强制 McpAutoAssignToAllAgents 被 DI 解析构造（单例懒加载——不解析则其 Changed 订阅永不挂上）。
-        McpAutoAssignToAllAgents _)
+    public McpManagementTool(IMcpManagementService mgmt)
     {
         _mgmt = mgmt;
     }

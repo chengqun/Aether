@@ -56,8 +56,8 @@ Agent 通过 MCP 协议（stdio）调用它们——和 Claude Code / Cursor 配
 
 ## 让 agent 用上 MCP 工具
 
-1. 配好 server（见上），app 启动时自动连接 + 工具注册进 `ToolRegistry`。
-2. 专家编辑器 → 工具选择器 → 勾选想要的 MCP 工具（和原生工具一起，分类 "MCP"）→ 保存。
+1. 配好 server（见上），app 启动时自动连接 + 工具注册进 `ToolRegistry`；之后**增删 server 或重连也即时注册/清理**（写完配置即生效，无需重启）。
+2. 专家编辑器 → 工具选择器 → 勾选想要的 MCP 工具（和原生工具一起，分类 "MCP"）→ 保存。添加 server 后工具只是注册进工具池，**不会自动勾选进任何 agent**——需要哪个 agent 用，就手动在它的编辑器里勾选。
 3. 该专家就只用勾选的 MCP 工具。MCP 工具默认按 Dangerous 审批等级（来源未知，`RequireToolApproval` 开启时会弹审批）。
 
 ## 源码目录 vs 配置目录

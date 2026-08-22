@@ -235,9 +235,7 @@ public static class DesktopCompositionExtensions
         // SaveServerAsync/DeleteServerAsync/RefreshAsync 内部均「重连 → 注册工具进 ToolRegistry」闭环，故 add/remove
         // 是当轮会话即时生效的能力注入入口 → 标 Dangerous（装新工具=给 agent 装新能力，默认 AutoEdit 档每次弹确认，
         // 防无人干预自举闭环）。list/refresh 只读无配置写入 → list 标 Safe、refresh 标 Confirm。
-        // McpAutoAssignToAllAgents：订阅 IMcpManagementService.Changed，添加 MCP server 后自动把工具勾选进
-        // 所有普通 agent（手动/AI 两路径共用）——「添加即全局可用」。
-        services.AddSingleton<McpAutoAssignToAllAgents>();
+        // 不自动勾选进 agent：装好 server 后工具仅进 ToolRegistry 池，勾选由用户在专家编辑器完成（或 agent 经 agent_configure 显式勾）。
         services.AddTransient<McpManagementTool>();
         aether.ConfigureToolRegistry(reg =>
         {
