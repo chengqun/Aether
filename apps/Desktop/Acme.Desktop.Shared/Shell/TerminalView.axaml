@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.TerminalView"
              Background="{DynamicResource ContentBgBrush}">
 
@@ -30,7 +31,11 @@
     </Style>
     <Style Selector="Button.term-close:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-      <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}"/>
+    </Style>
+    <!-- 关闭按钮内容已从文字「✕」改为 codicon Path；Path.Fill 绑按钮 Foreground（非 TextElement.Foreground），
+         故 :pointerover 须改按钮 Foreground 属性让图标随 accent 底反白。 -->
+    <Style Selector="Button.term-close:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     </Style>
     <Style Selector="Button.term-new">
       <Setter Property="Padding" Value="8,2"/>
@@ -64,25 +69,34 @@
                   <StackPanel Orientation="Horizontal" Spacing="4">
                     <TextBlock Text="{Binding Title}"/>
                     <!-- shell 已退出标记 -->
-                    <TextBlock Text="●" FontSize="8" Foreground="OrangeRed"
+                    <TextBlock Text="●" FontSize="8" Foreground="{DynamicResource DangerBrush}"
                                IsVisible="{Binding !IsRunning}" VerticalAlignment="Center"/>
                     <!-- 活跃会话下划线 -->
                     <Border Height="2" Background="{DynamicResource AccentBrush}"
                             IsVisible="{Binding IsActive}" VerticalAlignment="Bottom"/>
                   </StackPanel>
                 </Button>
-                <Button Grid.Column="1" Classes="term-close" Content="✕"
+                <Button Grid.Column="1" Classes="term-close"
                         Command="{Binding $parent[UserControl].DataContext.CloseSessionCommand}"
-                        CommandParameter="{Binding}"/>
+                        CommandParameter="{Binding}">
+                  <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="10" Height="10"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                </Button>
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Button Content="＋" Classes="term-new" Command="{Binding NewSessionCommand}"
-                ToolTip.Tip="新建终端会话"/>
+        <Button Classes="term-new" Command="{Binding NewSessionCommand}"
+                ToolTip.Tip="新建终端会话">
+          <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="14" Height="14"
+                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+        </Button>
       </StackPanel>
-      <Button Grid.Column="1" Classes="term-new" Content="▼" Click="OnCollapseClick"
-              ToolTip.Tip="折叠终端面板"/>
+      <Button Grid.Column="1" Classes="term-new" Click="OnCollapseClick"
+              ToolTip.Tip="折叠终端面板">
+        <Path Data="{x:Static shell:Codicons.ChevronDown}" Stretch="Uniform" Width="14" Height="14"
+              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+      </Button>
       </Grid>
     </Border>
     <!-- 终端控件宿主：每会话一个 RoyalTerminal TerminalControl，靠 IsVisible 切换 -->

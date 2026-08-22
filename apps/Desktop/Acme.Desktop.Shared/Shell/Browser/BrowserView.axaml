@@ -90,9 +90,13 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding RequestCount, StringFormat='{}({0})'}" Classes="muted" VerticalAlignment="Center"/>
-                            <Button Content="✕" Padding="4,1" Background="Transparent" BorderThickness="0"
-                                    FontSize="11" VerticalAlignment="Center"
-                                    Click="OnCloseTab"/>
+                            <Button Padding="4,1" Background="Transparent" BorderThickness="0"
+                                    VerticalAlignment="Center"
+                                    Click="OnCloseTab"
+                                    ToolTip.Tip="关闭标签">
+                                <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="11" Height="11"
+                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                            </Button>
                         </StackPanel>
                     </Border>
                 </DataTemplate>
