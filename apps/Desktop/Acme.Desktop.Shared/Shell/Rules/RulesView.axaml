@@ -21,10 +21,8 @@
     <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
         <!-- 空状态 -->
-        <Border IsVisible="{Binding !Rules.Count}" Padding="40" CornerRadius="12"
-                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                HorizontalAlignment="Center" Margin="0,40">
-          <StackPanel Spacing="8" HorizontalAlignment="Center">
+        <Border Classes="empty-state" IsVisible="{Binding !Rules.Count}" Margin="0,40">
+          <StackPanel>
             <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Text="还没有规则 Agent" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />

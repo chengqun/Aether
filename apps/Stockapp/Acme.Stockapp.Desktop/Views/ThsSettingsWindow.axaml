@@ -21,13 +21,13 @@
     <StackPanel Grid.Row="1" Spacing="14">
       <StackPanel Spacing="4">
         <TextBlock Text="xiadan.exe 路径" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-        <TextBox Text="{Binding ClientExecutablePath}" Watermark="C:\同花顺\xiadan.exe" />
+        <TextBox Text="{Binding ClientExecutablePath}" PlaceholderText="C:\同花顺\xiadan.exe" />
         <TextBlock Text="留空则只能连接已运行的客户端（手动打开同花顺并登录后点连接）"
                    FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock Text="窗口标题" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-        <TextBox Text="{Binding ClientWindowTitle}" Watermark="网上股票交易系统5.0" />
+        <TextBox Text="{Binding ClientWindowTitle}" PlaceholderText="网上股票交易系统5.0" />
         <TextBlock Text="同花顺下单客户端主窗口标题（FindWindow ByName 用），通常无需改"
                    FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
       </StackPanel>

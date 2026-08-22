@@ -24,9 +24,8 @@
 
     <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
-        <Border Classes="card" Margin="0,0,0,12" IsVisible="{Binding !Workflows.Count}"
-                HorizontalAlignment="Center" Padding="40">
-          <StackPanel Spacing="6" HorizontalAlignment="Center">
+        <Border Classes="empty-state" Margin="0,0,0,12" IsVisible="{Binding !Workflows.Count}">
+          <StackPanel Spacing="6">
             <TextBlock Text="还没有工作流" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextPrimaryBrush}" />
             <TextBlock Text="点击右上角「创建工作流」，编排多个专家协作" FontSize="12"

@@ -43,7 +43,7 @@
               </ListBox>
 
               <!-- 自定义文本 -->
-              <TextBox Text="{Binding CustomText}" Watermark="或输入自定义回答…" FontSize="13" Margin="0,4,0,0"/>
+              <TextBox Text="{Binding CustomText}" PlaceholderText="或输入自定义回答…" FontSize="13" Margin="0,4,0,0"/>
             </StackPanel>
           </ScrollViewer>
         </DataTemplate>

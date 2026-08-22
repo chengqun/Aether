@@ -33,7 +33,7 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBox Text="{Binding FilterText}" Watermark="筛选（agent / 事件关键词）"
+          <TextBox Text="{Binding FilterText}" PlaceholderText="筛选（agent / 事件关键词）"
                    Padding="8,4" FontSize="12" MinWidth="180"/>
           <ToggleButton Content="仅错误" IsChecked="{Binding ShowErrorsOnly}" Classes="compact" Margin="4,0,0,0"/>
         </StackPanel>
@@ -48,10 +48,9 @@
     <ScrollViewer Padding="16,8">
       <Panel>
         <!-- 空状态 -->
-        <Border IsVisible="{Binding !VisibleTraces.Count}" Padding="40" CornerRadius="12"
-                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,40,0,0">
-          <StackPanel Spacing="6" HorizontalAlignment="Center">
+        <Border Classes="empty-state" IsVisible="{Binding !VisibleTraces.Count}"
+                VerticalAlignment="Top" Margin="0,40,0,0">
+          <StackPanel Spacing="6">
             <Path Data="{x:Static shell:Codicons.Inbox}" Stretch="Uniform" Width="28" Height="28" Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Text="暂无运行 Trace" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
             <TextBlock Text="专家编辑器 → 遥测 → 开启 OpenTelemetry 后，每轮 agent 运行会在这里显示。"

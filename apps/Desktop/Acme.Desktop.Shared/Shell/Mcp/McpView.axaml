@@ -42,10 +42,9 @@
         </StackPanel>
 
         <!-- 空态 -->
-        <Border IsVisible="{Binding !Servers.Count}" Padding="40" CornerRadius="12" Background="{DynamicResource CardBgBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"
+        <Border Classes="empty-state" IsVisible="{Binding !Servers.Count}"
                 VerticalAlignment="Top" Margin="0,30,0,0">
-          <StackPanel Spacing="6" HorizontalAlignment="Center">
+          <StackPanel Spacing="6">
             <TextBlock Text="尚未配置 MCP 服务器" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
             <TextBlock Text="点右上「+ 添加」配置一个 MCP server（stdio 或 http），或在 mcp-servers/ 目录放 .mcp.json。"
                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"

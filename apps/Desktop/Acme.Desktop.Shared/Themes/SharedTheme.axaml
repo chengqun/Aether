@@ -420,4 +420,19 @@
     <Setter Property="Padding" Value="20,12"/>
   </Style>
 
+  <!-- 列表空态外壳：卡片描边 + 圆角 + 居中（Automation/Rules/Mcp/Workflows/Experts/Skill/Trace/Chat 共 8 处曾逐行重复）。
+       内层图标+标题+副标题因域而异留各 View——只抽重复的外壳/内层 StackPanel 布局。 -->
+  <Style Selector="Border.empty-state">
+    <Setter Property="Padding" Value="40"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.empty-state StackPanel">
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="Spacing" Value="8"/>
+  </Style>
+
 </Styles>

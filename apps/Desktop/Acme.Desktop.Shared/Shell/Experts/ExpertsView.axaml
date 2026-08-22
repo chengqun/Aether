@@ -51,10 +51,8 @@
         <ScrollViewer Padding="20,16">
           <StackPanel>
             <!-- 空状态 -->
-            <Border IsVisible="{Binding !VisibleExperts.Count}" Padding="40" CornerRadius="12"
-                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                    HorizontalAlignment="Center" Margin="0,40">
-              <StackPanel Spacing="8" HorizontalAlignment="Center">
+            <Border Classes="empty-state" IsVisible="{Binding !VisibleExperts.Count}" Margin="0,40">
+              <StackPanel Spacing="8">
                 <Path Data="{x:Static shell:Codicons.Extensions}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
@@ -196,10 +194,8 @@
                      IsVisible="{Binding MarketStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
           <!-- 空状态 -->
-          <Border IsVisible="{Binding !MarketplaceAgents.Count}" Padding="40" CornerRadius="12"
-                  Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                  HorizontalAlignment="Center" Margin="0,40">
-            <StackPanel Spacing="8" HorizontalAlignment="Center">
+          <Border Classes="empty-state" IsVisible="{Binding !MarketplaceAgents.Count}" Margin="0,40">
+            <StackPanel Spacing="8">
               <Path Data="{x:Static shell:Codicons.Megaphone}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               <TextBlock Text="市场暂无 agent" FontSize="15" FontWeight="SemiBold"
                          Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />

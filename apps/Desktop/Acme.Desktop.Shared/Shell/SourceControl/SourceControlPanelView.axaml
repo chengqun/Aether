@@ -255,7 +255,7 @@
             </StackPanel>
           </Button>
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsCommitExpanded}">
-            <TextBox Grid.Column="0" Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Watermark="提交消息…" AcceptsReturn="True"
+            <TextBox Grid.Column="0" Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="提交消息…" AcceptsReturn="True"
                      TextWrapping="Wrap" FontSize="12" MinHeight="44" MaxHeight="120"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"/>

@@ -39,10 +39,9 @@
         </StackPanel>
 
         <!-- 空态 -->
-        <Border IsVisible="{Binding !Skills.Count}" Padding="40" CornerRadius="12" Background="{DynamicResource CardBgBrush}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Center"
+        <Border Classes="empty-state" IsVisible="{Binding !Skills.Count}"
                 VerticalAlignment="Top" Margin="0,30,0,0">
-          <StackPanel Spacing="6" HorizontalAlignment="Center">
+          <StackPanel Spacing="6">
             <Path Data="{x:Static shell:Codicons.Book}" Stretch="Uniform" Width="40" Height="40"
                   Fill="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Text="尚未安装技能" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>

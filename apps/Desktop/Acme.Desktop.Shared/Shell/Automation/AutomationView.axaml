@@ -41,10 +41,8 @@
     <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
         <!-- 空状态 -->
-        <Border IsVisible="{Binding !Tasks.Count}" Padding="40" CornerRadius="12"
-                Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                HorizontalAlignment="Center" Margin="0,40">
-          <StackPanel Spacing="8" HorizontalAlignment="Center">
+        <Border Classes="empty-state" IsVisible="{Binding !Tasks.Count}" Margin="0,40">
+          <StackPanel>
             <Path Data="{x:Static shell:Codicons.Calendar}" Stretch="Uniform" Width="40" Height="40" HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
             <TextBlock Text="还没有定时任务" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />

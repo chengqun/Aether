@@ -71,7 +71,7 @@
         <!-- 工具栏：新建 + 地址栏 + 打开 + 清空 -->
         <WrapPanel Grid.Row="0" Margin="6,3">
             <Button Content="＋ 新建" Command="{Binding NewSessionCommand}" Padding="8,4" Margin="0,0,4,0"/>
-            <TextBox Text="{Binding AddressBar}" Watermark="输入 URL 回车打开（如 example.com/login）" Width="300"
+            <TextBox Text="{Binding AddressBar}" PlaceholderText="输入 URL 回车打开（如 example.com/login）" Width="300"
                      KeyDown="OnAddressKeyDown" Margin="0,0,4,0"/>
             <Button Content="打开" Command="{Binding NavigateCommand}" Padding="10,4" Margin="0,0,4,0"/>
             <Button Content="清空" Command="{Binding ClearRequestsCommand}" Padding="8,4"/>
@@ -101,7 +101,7 @@
 
         <!-- 过滤栏（TraceWindow 范式：搜索框 + 段按钮 + 计数） -->
         <WrapPanel Grid.Row="2" Margin="6,2" Orientation="Horizontal">
-            <TextBox Text="{Binding FilterText}" Watermark="搜索 URL…" Width="180" Margin="0,0,6,0"/>
+            <TextBox Text="{Binding FilterText}" PlaceholderText="搜索 URL…" Width="180" Margin="0,0,6,0"/>
             <StackPanel Orientation="Horizontal" Spacing="1" Margin="0,0,8,0">
                 <Button Classes="fseg active" Content="全部" Click="OnStatusSeg" Tag=""/>
                 <Button Classes="fseg" Content="2xx" Click="OnStatusSeg" Tag="2xx"/>
