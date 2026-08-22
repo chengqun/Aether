@@ -22,9 +22,4 @@
     <ProjectReference Include="..\Acme.Desktop.Shared\Acme.Desktop.Shared.csproj" />
   </ItemGroup>
 
-  <!-- 图标/主题 asset 经 Avalonia IAssetLoader 按 avares:// 加载（Asset Loader 技术）。 -->
-  <ItemGroup>
-    <AvaloniaResource Include="Assets\**\*" />
-  </ItemGroup>
-
 </Project>
