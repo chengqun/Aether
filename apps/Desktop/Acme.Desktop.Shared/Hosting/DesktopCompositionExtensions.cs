@@ -280,6 +280,11 @@ public static class DesktopCompositionExtensions
                     typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.ReloadAsync))!, sp.GetRequiredService<AgentManagementTool>(),
                     "agent_reload"),
                 ToolApprovalLevel.Confirm);
+            reg.Register("get_current_agent", "查询一个自定义 agent 的当前定义（缺省定位「正在调用本工具的当前 agent」，留空名字即可，无须知道自己叫什么；也可显式按名字查别的 agent）。返回 id/名字/描述/分类/模型/已勾选工具/是否开启工具审批。只读。", "Agent自举",
+                sp => AIFunctionFactory.Create(
+                    typeof(AgentManagementTool).GetMethod(nameof(AgentManagementTool.GetCurrentAgentAsync))!, sp.GetRequiredService<AgentManagementTool>(),
+                    "get_current_agent"),
+                ToolApprovalLevel.Safe);
         });
 
         // skill 管理工具（skill_list / skill_add / skill_remove）：让 agent 管理文件式 skill。

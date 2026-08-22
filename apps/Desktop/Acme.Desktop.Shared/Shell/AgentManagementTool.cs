@@ -65,6 +65,45 @@ public sealed class AgentManagementTool
         public string? Error { get; set; }
     }
 
+    public sealed class CurrentAgentOutput
+    {
+        public bool Success { get; set; }
+        public string? AgentId { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public string? Category { get; set; }
+        public string? ModelId { get; set; }
+        public string[]? Tools { get; set; }
+        public bool? RequireToolApproval { get; set; }
+        public string? Error { get; set; }
+    }
+
+    [Description("查询一个自定义 agent 的当前定义（缺省定位「正在调用本工具的当前 agent」）。只读，无副作用。")]
+    public async Task<CurrentAgentOutput> GetCurrentAgentAsync(
+        [Description("目标 agent 的名字。留空则定位「正在调用本工具的当前 agent」。")] string? agent = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (def, label) = await ResolveTargetAsync(agent, cancellationToken).ConfigureAwait(false);
+        if (def is null)
+        {
+            var hint = string.IsNullOrWhiteSpace(agent)
+                ? "不在 agent 运行上下文内；请显式指定 agent 名字。"
+                : $"找不到名为「{agent}」的 agent。";
+            return new CurrentAgentOutput { Success = false, Error = hint };
+        }
+        return new CurrentAgentOutput
+        {
+            Success = true,
+            AgentId = def.Id.ToString(),
+            Name = def.Name,
+            Description = def.Description,
+            Category = def.Category,
+            ModelId = def.ModelId,
+            Tools = def.Tools.ToArray(),
+            RequireToolApproval = def.RequireToolApproval,
+        };
+    }
+
     [Description("配置一个自定义 agent（按名字定位；可配置自己或任意 agent）。只改传入的字段，未传的保留原值。")]
     public async Task<ConfigureOutput> ConfigureAsync(
         [Description("目标 agent 的名字（精确匹配；可用 ListCustomAgents 查看现有名字）。留空则定位「正在调用本工具的当前 agent」。")] string? agent = null,
