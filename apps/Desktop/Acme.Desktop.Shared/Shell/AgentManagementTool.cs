@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using Acme.Notes.Domain.Agents;
+using Aether.AI.Abstractions;
 using Aether.AI.Core.Agents;
+using Aether.AI.Harness.Tools;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -19,11 +21,52 @@ public sealed class AgentManagementTool
 {
     private readonly ICustomAgentCatalog _catalog;
     private readonly ICustomAgentRunner _runner;
+    private readonly IMcpManagementService? _mgmt;
+    private readonly ToolRegistry? _toolRegistry;
 
-    public AgentManagementTool(ICustomAgentCatalog catalog, ICustomAgentRunner runner)
+    public AgentManagementTool(ICustomAgentCatalog catalog, ICustomAgentRunner runner,
+        IMcpManagementService? mgmt = null, ToolRegistry? toolRegistry = null)
     {
         _catalog = catalog;
         _runner = runner;
+        _mgmt = mgmt;
+        _toolRegistry = toolRegistry;
+    }
+
+    /// <summary>
+    /// 确保 MCP 就绪（连接 + 工具注册进 <see cref="ToolRegistry"/>），并返回该 agent 勾选的工具里
+    /// 「此刻仍未在 ToolRegistry 注册」的名字列表（MCP 未连接/连接失败时非空——这些工具重建 agent 也拿不到）。
+    /// </summary>
+    private async Task<string[]> EnsureMcpReadyAsync(IEnumerable<string> selectedTools, CancellationToken ct)
+    {
+        if (_toolRegistry is null)
+            return Array.Empty<string>();
+
+        var selected = selectedTools.Distinct().ToList();
+        string[] Missing() => selected.Where(n => !_toolRegistry.Contains(n)).ToArray();
+
+        if (_mgmt is null)
+            return Missing();
+
+        // 先确保已连接（shared-task：若启动时已连过，直接返回）并注册工具。
+        try { await _mgmt.EnsureStartedAsync(ct).ConfigureAwait(false); }
+        catch { /* 连接失败不阻断——下面用 MissingTools 反映 */ }
+
+        var missingAfterStart = Missing();
+        if (missingAfterStart.Length == 0)
+            return Array.Empty<string>();
+
+        // 仍缺：可能是启动时连接失败、后来 server 已可连。RefreshAsync 会重读目录 + 重连（置空 _startTask），
+        // 把「启动期连失败、现在可连」的 MCP server 恢复出来。重连后还要再 EnsureStartedAsync 把新工具注册进 ToolRegistry
+        // （RefreshAsync 本身不注册工具，见 McpManagementService.RefreshAsync）。
+        try
+        {
+            await _mgmt.RefreshAsync(ct).ConfigureAwait(false);
+            await _mgmt.EnsureStartedAsync(ct).ConfigureAwait(false);
+        }
+        catch { /* 重连失败仍不阻断 */ }
+
+        return Missing();
     }
 
     /// <summary>
@@ -56,6 +99,8 @@ public sealed class AgentManagementTool
         public bool Success { get; set; }
         public string? Agent { get; set; }
         public string? Error { get; set; }
+        /// <summary>保存后仍未在 ToolRegistry 注册的工具名（通常是 MCP server 未连接/连接失败）。非空 ≠ 保存失败，只是这些工具 agent 暂无法调用。</summary>
+        public string[]? MissingTools { get; set; }
     }
 
     public sealed class ReloadOutput
@@ -63,6 +108,8 @@ public sealed class AgentManagementTool
         public bool Success { get; set; }
         public string? AgentId { get; set; }
         public string? Error { get; set; }
+        /// <summary>重建后仍未在 ToolRegistry 注册的工具名（通常是 MCP server 未连接/连接失败）。非空 = 这些工具 agent 暂无法调用。</summary>
+        public string[]? MissingTools { get; set; }
     }
 
     public sealed class CurrentAgentOutput
@@ -75,6 +122,8 @@ public sealed class AgentManagementTool
         public string? ModelId { get; set; }
         public string[]? Tools { get; set; }
         public bool? RequireToolApproval { get; set; }
+        /// <summary>已勾选但未注册进 ToolRegistry 的工具名（MCP server 未连接时非空）。</summary>
+        public string[]? MissingTools { get; set; }
         public string? Error { get; set; }
     }
 
@@ -101,6 +150,8 @@ public sealed class AgentManagementTool
             ModelId = def.ModelId,
             Tools = def.Tools.ToArray(),
             RequireToolApproval = def.RequireToolApproval,
+            MissingTools = _toolRegistry is null ? Array.Empty<string>()
+                : def.Tools.Where(n => !_toolRegistry.Contains(n)).ToArray(),
         };
     }
 
@@ -136,9 +187,12 @@ public sealed class AgentManagementTool
             if (requireToolApproval is not null) def.RequireToolApproval = requireToolApproval.Value;
 
             await _catalog.SaveAsync(def, cancellationToken).ConfigureAwait(false);
+
+            // 保存后确保 MCP 就绪（连接 + 工具注册），再重建——否则刚勾选的 MCP 工具因未注册被静默跳过。
+            var missing = await EnsureMcpReadyAsync(def.Tools, cancellationToken).ConfigureAwait(false);
             _runner.Invalidate(def.Id); // 若它正在被召唤/运行，重建使其生效
 
-            return new ConfigureOutput { Success = true, Agent = def.Name };
+            return new ConfigureOutput { Success = true, Agent = def.Name, MissingTools = missing };
         }
         catch (Exception ex)
         {
@@ -161,7 +215,9 @@ public sealed class AgentManagementTool
             return new ReloadOutput { Success = false, Error = hint };
         }
 
+        // 重建前确保 MCP 就绪（连接 + 工具注册）——否则勾选了的 MCP 工具因未注册被 ResolveAll 静默跳过。
+        var missing = await EnsureMcpReadyAsync(resolved.Tools, cancellationToken).ConfigureAwait(false);
         _runner.Invalidate(resolved.Id);
-        return new ReloadOutput { Success = true, AgentId = resolved.Id.ToString() };
+        return new ReloadOutput { Success = true, AgentId = resolved.Id.ToString(), MissingTools = missing };
     }
 }
