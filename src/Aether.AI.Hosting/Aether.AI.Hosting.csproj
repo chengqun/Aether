@@ -8,9 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.18.0" />
-    <!-- Microsoft.Extensions.* (DI, Options, Logging) flow transitively from
-         Microsoft.Agents.AI.OpenAI at the framework's pinned versions, so no
-         explicit versions are required here. -->
+    <!-- DI/Options 仍靠 Microsoft.Agents.AI.OpenAI 传递（框架 pin 版本）；Logging 改为显式声明（见下），
+         统一全 src 标准，不依赖传递链。 -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
     <PackageReference Include="OpenTelemetry" Version="1.12.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.12.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.12.0" />

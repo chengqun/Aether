@@ -9,6 +9,9 @@
     <PackageReference Include="Microsoft.Agents.AI.Harness" Version="1.18.0" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
+    <!-- ILogger/ILoggerFactory（AgentFactory/ToolRegistry/RuleChatClient 等用）——显式声明，不依赖传递，
+         与 Harness.Scripting 的 10.0.9 基准一致。 -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
   </ItemGroup>
 
   <PropertyGroup>
