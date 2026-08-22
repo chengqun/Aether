@@ -64,12 +64,12 @@
         <ItemsControl ItemsSource="{Binding Servers}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" />
+              <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="card" Margin="0,0,12,12" Width="300">
+              <Border Classes="card" Width="300">
                 <StackPanel Spacing="8">
                   <!-- 头部：名称 + 状态 + 操作 -->
                   <Grid ColumnDefinitions="*,Auto">

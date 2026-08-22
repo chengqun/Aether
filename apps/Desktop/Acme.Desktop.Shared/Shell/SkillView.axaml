@@ -66,12 +66,12 @@
         <ItemsControl ItemsSource="{Binding Skills}" IsVisible="{Binding !IsLoading}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" />
+              <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="card" Width="320" Margin="6">
+              <Border Classes="card" Width="320">
                 <StackPanel Spacing="6">
                   <!-- name + category 徽标 -->
                   <Grid ColumnDefinitions="*,Auto">

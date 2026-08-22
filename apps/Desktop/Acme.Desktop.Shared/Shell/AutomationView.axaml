@@ -62,12 +62,12 @@
         <ItemsControl ItemsSource="{Binding Tasks}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel Orientation="Horizontal" />
+              <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="auto-card" Margin="0,0,12,12" Width="320">
+              <Border Classes="auto-card" Width="320">
                 <StackPanel Spacing="6">
                   <!-- 标题行 + 启用徽章 -->
                   <StackPanel Orientation="Horizontal" Spacing="8">

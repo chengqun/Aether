@@ -10,12 +10,9 @@
   <FontFamily x:Key="MonoFont">JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace</FontFamily>
   <FontFamily x:Key="CodeFont">JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace</FontFamily>
 
-  <!-- ═══ 设计 token 层：圆角（CornerRadius Resource） ═══ -->
-  <CornerRadius x:Key="CornerRadiusSm">4</CornerRadius>
-  <CornerRadius x:Key="CornerRadiusMd">8</CornerRadius>
-  <CornerRadius x:Key="CornerRadiusLg">12</CornerRadius>
+  <!-- ═══ 设计 token 层：圆角 —— 已上移至 SharedTheme.axaml（App 级基线，卡片/按钮样式接线用）。此为换肤覆盖目标，勿在此重复定义。 ═══ -->
 
-  <!-- ═══ 设计 token 层：间距（Thickness Resource） ═══ -->
+  <!-- ═══ 设计 token 层：间距（Thickness Resource）═══ -->
   <Thickness x:Key="SpaceXs">4</Thickness>
   <Thickness x:Key="SpaceSm">8</Thickness>
   <Thickness x:Key="SpaceMd">12</Thickness>

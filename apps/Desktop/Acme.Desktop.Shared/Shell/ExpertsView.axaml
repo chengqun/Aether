@@ -68,12 +68,12 @@
             <ItemsControl ItemsSource="{Binding VisibleExperts}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <WrapPanel Orientation="Horizontal" />
+                  <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Classes="card" Margin="0,0,12,12" Width="300">
+                  <Border Classes="card" Width="300">
                     <StackPanel Spacing="6">
                       <!-- 标题行 -->
                       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -134,12 +134,12 @@
         <ItemsControl ItemsSource="{Binding Connector.Cards}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <WrapPanel />
+              <WrapPanel ItemSpacing="12" LineSpacing="12" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Classes="card" Width="300" Margin="0,0,12,12">
+              <Border Classes="card" Width="300">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel Grid.Column="0" Spacing="10">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
@@ -213,12 +213,12 @@
           <ItemsControl ItemsSource="{Binding MarketplaceAgents}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <WrapPanel Orientation="Horizontal" />
+                <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="card" Margin="0,0,12,12" Width="300">
+                <Border Classes="card" Width="300">
                   <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <Path Data="{x:Static shell:Codicons.Hubot}" Stretch="Uniform" Width="18" Height="18" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>

@@ -69,6 +69,9 @@
       <Color x:Key="OnDangerColor">#FFFFFF</Color>
       <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
       <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource SurfaceHoverColor}"/>
+      <!-- 终端面板底色：始终深色（VSCode 经典深底），刻意不参与换肤——终端对比度要求稳定。 -->
+      <Color x:Key="TerminalBgColor">#1E1E1E</Color>
+      <SolidColorBrush x:Key="TerminalBgBrush" Color="{StaticResource TerminalBgColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
       <SolidColorBrush x:Key="SuccessBgBrush" Color="{StaticResource SuccessBgColor}"/>
       <SolidColorBrush x:Key="DangerBgBrush" Color="{StaticResource DangerBgColor}"/>
@@ -77,6 +80,13 @@
       <SolidColorBrush x:Key="AccentTintBgBrush" Color="{StaticResource AccentTintBgColor}"/>
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}"/>
       <SolidColorBrush x:Key="OnDangerBrush" Color="{StaticResource OnDangerColor}"/>
+
+      <!-- 圆角 token（换肤可覆盖）：Sm=按钮/输入框/消息卡，Md=侧边栏项/卡片，Lg=气泡/输入卡。
+           统一三档 8/12/16（4 的倍数），换肤 JSON 的 "radius" 段覆盖同名键。chip/bubble-user 不对称圆角
+           是刻意形状，不走这三档。 -->
+      <CornerRadius x:Key="CornerRadiusSm">8</CornerRadius>
+      <CornerRadius x:Key="CornerRadiusMd">12</CornerRadius>
+      <CornerRadius x:Key="CornerRadiusLg">16</CornerRadius>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -90,7 +100,7 @@
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
     <Setter Property="Padding" Value="20,8"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -104,7 +114,7 @@
     <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
     <Setter Property="Foreground" Value="{DynamicResource OnDangerBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
     <Setter Property="Padding" Value="20,8"/>
     <Setter Property="FontSize" Value="14"/>
   </Style>
@@ -113,7 +123,7 @@
   <Style Selector="TextBox.input">
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
     <Setter Property="Padding" Value="10,7"/>
     <Setter Property="FontSize" Value="14"/>
     <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
@@ -126,7 +136,7 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="14,11"/>
     <Setter Property="MinHeight" Value="40"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -144,7 +154,7 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="0,9"/>
     <Setter Property="MinHeight" Value="40"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -162,7 +172,7 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="8,8"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
@@ -176,7 +186,7 @@
   <Style Selector="Button.account-rail">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="4"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
@@ -217,7 +227,7 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
     <Setter Property="Padding" Value="16,8"/>
     <Setter Property="MinHeight" Value="36"/>
     <Setter Property="FontSize" Value="14"/>
@@ -238,7 +248,7 @@
   </Style>
   <Style Selector="Border.bubble-agent">
     <Setter Property="Background" Value="{DynamicResource AgentBubbleBrush}"/>
-    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusLg}"/>
     <Setter Property="Padding" Value="16,12"/>
   </Style>
 
@@ -247,7 +257,7 @@
     <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="18"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusLg}"/>
     <Setter Property="Padding" Value="0"/>
     <Setter Property="BoxShadow" Value="0 4 12 0 #14000000"/>
     <Setter Property="ClipToBounds" Value="True"/>
@@ -283,7 +293,7 @@
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusLg}"/>
     <Setter Property="Width" Value="34"/>
     <Setter Property="Height" Value="34"/>
     <Setter Property="Padding" Value="0"/>
@@ -306,7 +316,7 @@
 
   <!-- 工具卡片 -->
   <Style Selector="Border.tool-card">
-    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="10,7"/>
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
@@ -316,7 +326,7 @@
     <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="14"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
     <Setter Property="Padding" Value="18"/>
   </Style>
 
@@ -325,7 +335,7 @@
     <Setter Property="Background" Value="{DynamicResource ToolCallBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource ToolCallBorderBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
     <Setter Property="Padding" Value="12,8"/>
   </Style>
 

@@ -86,6 +86,6 @@
       </Grid>
     </Border>
     <!-- 终端控件宿主：每会话一个 RoyalTerminal TerminalControl，靠 IsVisible 切换 -->
-    <Grid Grid.Row="1" x:Name="ContentHost" Background="#1E1E1E"/>
+    <Grid Grid.Row="1" x:Name="ContentHost" Background="{DynamicResource TerminalBgBrush}"/>
   </Grid>
 </UserControl>

@@ -46,9 +46,9 @@
     "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
   },
   "radius": {
-    "CornerRadiusSm": "4",
-    "CornerRadiusMd": "8",
-    "CornerRadiusLg": "12"
+    "CornerRadiusSm": "8",
+    "CornerRadiusMd": "12",
+    "CornerRadiusLg": "16"
   },
   "spacing": {
     "SpaceXs": "4",
