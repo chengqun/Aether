@@ -2,7 +2,7 @@
   "$note": "梦幻渐变（dark）——皮肤包 showcase：宇宙渐变窗口底（indigo→purple→violet）+ 发光紫蓝渐变主色 + 半透明玻璃面板 + aurora 漂移光斑动画 + .axaml 发光特效。色值约定：8 位 hex 一律 #AARRGGBB（Avalonia/WPF alpha 在前；非 CSS 的 RRGGBBAA）。半透明面板（alpha<FF）让 aurora/渐变底透出。styles 指向 dream.styles.axaml（DropShadowEffect 发光层）。",
   "variant": "dark",
   "animated": true,
-  "styles": "avares://Acme.Desktop.Workbench/Theming/dream.styles.axaml",
+  "styles": "avares://Acme.Desktop.Shared/Theming/dream.styles.axaml",
   "chrome": { "borderless": true, "titleBarHeight": 36 },
   "colors": {
     "AccentColor": "#a78bfa",

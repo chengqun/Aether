@@ -10,7 +10,7 @@ using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Desktop.Mvvm;
 using Acme.Desktop.Workbench.Abstractions;
-using Acme.Desktop.Workbench.Theming;
+using Acme.Desktop.Shared.Theming;
 using Acme.Desktop.Workbench.Workspace;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
@@ -139,7 +139,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private bool _isSidebarExpanded;
 
     /// <summary>主题变化（overlay JSON 或明暗倾向改变）时触发。子窗口（设置/Trace）订阅以即时重染——
-    /// 它们不在 Workbench 层、拿不到 ThemeLoader，经 <see cref="IThemeApplier"/> 桥接。</summary>
+    /// 主题引擎已下沉 Shared，<see cref="ThemedWindow"/> 直接读 <see cref="IThemeHost"/> 调 ThemeLoader。</summary>
     public event EventHandler? ThemeChanged;
 
     /// <inheritdoc/>

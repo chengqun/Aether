@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Acme.Desktop.Workbench.Theming;
+namespace Acme.Desktop.Shared.Theming;
 
 /// <summary>JSON 主题 DTO。用户自定义主题：颜色/字体/圆角/间距/背景。经 <see cref="ThemeLoader"/> 反序列化成运行时 ResourceDictionary。</summary>
 public sealed class ThemeDefinition

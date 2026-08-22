@@ -2,7 +2,7 @@
   "$note": "梦幻浅色（light）——dream 皮肤包的浅色变体，与 dream-dark.json（深色）对称成对。共享 aurora 漂移光斑层（WorkbenchWindow.StartAurora 硬编码紫/蓝/品红 pastel 光斑——浅底上呈黎明极光感，无需改代码）+ dream.styles.axaml 紫色发光特效（浅底上呈空灵紫光环）+ 无边框自绘 chrome。浅色宇宙渐变窗口底（pale pink→lavender→blue dawn）+ 半透明白/淡紫玻璃面板（alpha<FF 让 aurora 透出）+ 紫蓝渐变主色（dream 签名色 #a78bfa 系，浅底上仍可读）。色值约定：8 位 hex 一律 #AARRGGBB（Avalonia/WPF alpha 在前；非 CSS 的 RRGGBBAA）。",
   "variant": "light",
   "animated": true,
-  "styles": "avares://Acme.Desktop.Workbench/Theming/dream.styles.axaml",
+  "styles": "avares://Acme.Desktop.Shared/Theming/dream.styles.axaml",
   "chrome": { "borderless": true, "titleBarHeight": 36 },
   "colors": {
     "AccentColor": "#a78bfa",

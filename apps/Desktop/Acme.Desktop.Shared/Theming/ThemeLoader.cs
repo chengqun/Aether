@@ -11,7 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Styling;
 
-namespace Acme.Desktop.Workbench.Theming;
+namespace Acme.Desktop.Shared.Theming;
 
 /// <summary>
 /// JSON 主题加载器：ThemeDefinition（JSON）→ 运行时 ResourceDictionary（Color/SolidColorBrush/LinearGradientBrush/FontFamily/CornerRadius/Thickness/ImageBrush）。
@@ -53,7 +53,7 @@ public static class ThemeLoader
     /// <summary>读内嵌主题 JSON（Assets/{name}.json）为字符串。资源不存在返 null。</summary>
     public static string? GetBuiltInJson(string name)
     {
-        var uri = new Uri($"avares://Acme.Desktop.Workbench/Assets/{name}.json");
+        var uri = new Uri($"avares://Acme.Desktop.Shared/Assets/{name}.json");
         if (!AssetLoader.Exists(uri)) return null;
         using var s = AssetLoader.Open(uri);
         using var r = new StreamReader(s);

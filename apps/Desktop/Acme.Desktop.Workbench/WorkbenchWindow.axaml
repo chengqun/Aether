@@ -14,7 +14,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <!-- 设计 token 基线层（字体/圆角/间距/背景）。内置 light/dark 均为 JSON overlay 经 ThemeLoader 叠加覆盖颜色 token。 -->
-        <ResourceInclude Source="avares://Acme.Desktop.Workbench/Themes/WorkbenchTheme.axaml"/>
+        <ResourceInclude Source="avares://Acme.Desktop.Shared/Themes/WorkbenchTheme.axaml"/>
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Window.Resources>

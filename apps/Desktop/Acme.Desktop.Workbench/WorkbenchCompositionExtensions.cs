@@ -1,15 +1,14 @@
 using Acme.Desktop.Shared.Shell;
 using Acme.Desktop.Workbench.Abstractions;
-using Acme.Desktop.Workbench.Theming;
 using Acme.Desktop.Workbench.Workspace;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Workbench;
 
 /// <summary>
-/// Codex 工作台 DI 入口。注册工作台引擎（view registry / region manager / workspace manager）+ 默认工作台定义
-/// + 主题应用器（让 Shared 层子窗口设置/Trace 经 <see cref="IThemeApplier"/> 叠加 overlay）。
-/// 宿主在 <c>AddDesktopCommon</c> 之后调 <c>services.AddWorkbench()</c>。
+/// Codex 工作台 DI 入口。注册工作台引擎（view registry / region manager / workspace manager）+ 默认工作台定义。
+/// 主题引擎（ThemeLoader/ThemeDefinition）已下沉到 Shared 层，子窗口经 <see cref="ThemedWindow"/> 直接调用，
+/// 无需在此注册桥接。宿主在 <c>AddDesktopCommon</c> 之后调 <c>services.AddWorkbench()</c>。
 /// </summary>
 public static class WorkbenchCompositionExtensions
 {
@@ -21,7 +20,6 @@ public static class WorkbenchCompositionExtensions
         services.AddSingleton<IRegionManager, RegionManager>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton(defaultWorkspace ?? DefaultWorkspace.Definition);
-        services.AddSingleton<IThemeApplier, ThemeApplier>();
         return services;
     }
 }

@@ -27,6 +27,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 内置主题 JSON（light/dark/dream/dream-dark）—— ThemeLoader 经 avares://Acme.Desktop.Shared/Assets/{name}.json 加载。
+         .axaml（SharedTheme/WorkbenchTheme/dream.styles）走 Avalonia SDK 默认 glob 自动纳入 AvaloniaResource，无需显式声明。 -->
+    <AvaloniaResource Include="Assets\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- AI 平台 + 公共业务上下文（两租户共用）+ 公共 ai/ 适配器。租户专属上下文由各租户入口项目引用。 -->
     <ProjectReference Include="..\..\Shared\Acme.Shared.HostGlue\Acme.Shared.HostGlue.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
 using Acme.Desktop.Shared.Shell;
 using Acme.Desktop.Workbench.Abstractions;
-using Acme.Desktop.Workbench.Theming;
+using Acme.Desktop.Shared.Theming;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
