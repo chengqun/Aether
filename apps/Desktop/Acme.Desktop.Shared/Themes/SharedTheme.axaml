@@ -69,9 +69,16 @@
       <Color x:Key="OnDangerColor">#FFFFFF</Color>
       <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
       <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource SurfaceHoverColor}"/>
+      <!-- TreeView 选中行文字色：浅主题白字（深色 accent 选中底上可读）；深主题主文字色（浅选中底上可读）。
+           三处 TreeView（NotesTree/FileTree/KoTree）共用，由主题 JSON 的 TreeSelectedFgColor 键控制。 -->
+      <Color x:Key="TreeSelectedFgColor">#FFFFFF</Color>
+      <SolidColorBrush x:Key="TreeSelectedFgBrush" Color="{StaticResource TreeSelectedFgColor}"/>
       <!-- 终端面板底色：始终深色（VSCode 经典深底），刻意不参与换肤——终端对比度要求稳定。 -->
       <Color x:Key="TerminalBgColor">#1E1E1E</Color>
       <SolidColorBrush x:Key="TerminalBgBrush" Color="{StaticResource TerminalBgColor}"/>
+      <!-- 文本选区高亮（MarkdownViewer/ReportWindow 共用；原硬编码 #3300A2ED 两处去重） -->
+      <Color x:Key="SelectionColor">#00A2ED</Color>
+      <SolidColorBrush x:Key="SelectionBrush" Color="{StaticResource SelectionColor}"/>
       <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
       <SolidColorBrush x:Key="SuccessBgBrush" Color="{StaticResource SuccessBgColor}"/>
       <SolidColorBrush x:Key="DangerBgBrush" Color="{StaticResource DangerBgColor}"/>
@@ -84,6 +91,7 @@
       <!-- 圆角 token（换肤可覆盖）：Sm=按钮/输入框/消息卡，Md=侧边栏项/卡片，Lg=气泡/输入卡。
            统一三档 8/12/16（4 的倍数），换肤 JSON 的 "radius" 段覆盖同名键。chip/bubble-user 不对称圆角
            是刻意形状，不走这三档。 -->
+      <CornerRadius x:Key="CornerRadiusXs">4</CornerRadius>
       <CornerRadius x:Key="CornerRadiusSm">8</CornerRadius>
       <CornerRadius x:Key="CornerRadiusMd">12</CornerRadius>
       <CornerRadius x:Key="CornerRadiusLg">16</CornerRadius>
@@ -357,6 +365,59 @@
   </Style>
   <Style Selector="UserControl.form-fields NumericUpDown">
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
+  </Style>
+
+  <!-- ═══ 共享去重样式（原散落在各 View 的 UserControl.Styles，上移至此一次定义）═══ -->
+
+  <!-- 幽灵按钮：透明底 + 描边（Skill/Mcp/McpServerEdit 三处曾逐字重复） -->
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}"/>
+  </Style>
+
+  <!-- 工具条按钮（Workflows/Automation 两处曾重复） -->
+  <Style Selector="Button.tool">
+    <Setter Property="Padding" Value="12,4"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+
+  <!-- SCM 动作按钮（SourceControlView/SourceControlPanelView 两处曾逐字重复） -->
+  <Style Selector="Button.scm-act">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="2"/>
+    <Setter Property="Width" Value="20"/>
+    <Setter Property="Height" Value="20"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.scm-act:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+  <!-- TreeView 共享块：三棵文件/笔记/知识树各自带 class（notes-tree/docs-tree/ko-tree）——
+        ScrollViewer 横滚禁用 + TreeViewItem 选中白字 + IsExpanded 双向绑定均一致，上移去重。
+        chevron 箭头 IsVisible 绑定因树而异（NotesTree 用 Children.Count，File/Ko 用 IsFolder），留各树。 -->
+  <Style Selector="TreeView.notes-tree /template/ ScrollViewer, TreeView.docs-tree /template/ ScrollViewer, TreeView.ko-tree /template/ ScrollViewer">
+    <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+  </Style>
+  <Style Selector="TreeViewItem">
+    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+  </Style>
+  <Style Selector="TreeView.notes-tree TreeViewItem:selected, TreeView.docs-tree TreeViewItem:selected, TreeView.ko-tree TreeViewItem:selected">
+    <Setter Property="Foreground" Value="{DynamicResource TreeSelectedFgBrush}"/>
+  </Style>
+
+  <!-- 页头栏：内容面板顶部标题栏（卡片底 + 底部 1px 描边）。18 处手写 Border DockPanel.Dock=Top 的共用形态。 -->
+  <Style Selector="Border.page-header">
+    <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="Padding" Value="20,12"/>
   </Style>
 
 </Styles>

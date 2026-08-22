@@ -5,18 +5,11 @@
              Background="{DynamicResource CardBgBrush}">
 
   <UserControl.Styles>
-    <!-- 树样式写在 UserControl 级（非 TreeView.Styles）：Avalonia 控件自身 .Styles 里的 /template/
+    <!-- 共享样式（ScrollViewer 横滚禁用 / TreeViewItem 选中白字 / IsExpanded 双绑）已上移 SharedTheme.axaml，
+         匹配 TreeView.notes-tree class 选择器。此处仅留树特有的 chevron 箭头 IsVisible 绑定（Children.Count）。
+         树样式写在 UserControl 级（非 TreeView.Styles）：Avalonia 控件自身 .Styles 里的 /template/
          选择器作用于自己模板部件不可靠，横向滚动禁用会失效——选中长标题子节点时 BringIntoView 把树横向
-         推走、根节点跟着位移。移到 UserControl 级 + 带 class 选择器后禁用真正生效（镜像 FileTreeView docs-tree）。 -->
-    <Style Selector="TreeView.notes-tree /template/ ScrollViewer">
-      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
-    </Style>
-    <Style Selector="TreeViewItem">
-      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
-    </Style>
-    <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
-      <Setter Property="Foreground" Value="White"/>
-    </Style>
+         推走、根节点跟着位移。 -->
     <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
       <Setter Property="IsVisible" Value="{Binding Children.Count, Converter={x:Static shell:CountToBoolConverter.Instance}}"/>
     </Style>

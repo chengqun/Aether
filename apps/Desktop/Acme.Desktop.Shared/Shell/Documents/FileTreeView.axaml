@@ -23,18 +23,8 @@
   </UserControl.Resources>
 
   <UserControl.Styles>
-    <!-- 文件树：镜像 NotesView 的 TreeView 样式 -->
-    <Style Selector="TreeView.docs-tree /template/ ScrollViewer">
-      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
-    </Style>
-    <Style Selector="TreeViewItem">
-      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
-    </Style>
-    <!-- 选中行文字反白（镜像 NotesView TreeViewItem:selected 修） -->
-    <Style Selector="TreeViewItem:selected">
-      <Setter Property="Foreground" Value="White"/>
-    </Style>
-    <!-- 叶子文件节点隐藏展开箭头 -->
+    <!-- 共享样式（ScrollViewer 横滚禁用 / TreeViewItem 选中反白 / IsExpanded 双绑）已上移 SharedTheme.axaml，
+         匹配 TreeView.docs-tree class 选择器。此处仅留树特有的 chevron 箭头（IsFolder）+ 树头菜单栏样式。 -->
     <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
       <Setter Property="IsVisible" Value="{Binding IsFolder}"/>
     </Style>

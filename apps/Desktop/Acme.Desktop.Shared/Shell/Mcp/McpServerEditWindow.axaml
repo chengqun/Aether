@@ -7,15 +7,6 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
-  <Window.Styles>
-    <Style Selector="Button.ghost">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="6"/>
-    </Style>
-  </Window.Styles>
-
   <DockPanel LastChildFill="True">
     <!-- 顶部说明 -->
     <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource CardBgBrush}"

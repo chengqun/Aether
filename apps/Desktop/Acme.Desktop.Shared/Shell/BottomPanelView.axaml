@@ -10,7 +10,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
         </Style>
         <Style Selector="Button.btab:pointerover">
             <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>

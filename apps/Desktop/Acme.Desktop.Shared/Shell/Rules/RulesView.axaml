@@ -9,8 +9,7 @@
 
   <DockPanel>
     <!-- 顶部标题栏 + 添加按钮 -->
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Classes="page-header">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" Text="规则 Agent" FontSize="15" FontWeight="SemiBold"
                    Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />

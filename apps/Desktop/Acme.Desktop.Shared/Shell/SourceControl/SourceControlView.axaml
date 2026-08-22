@@ -9,24 +9,8 @@
        终端只在此 diff 区下方，不横跨变更面板，与文档/笔记页布局一致。
        GitLens 式：commit 行 inline 展开改动文件（在 SCM 面板），点文件 → diff 在此区显示。
        此区只放 diff——工作区 diff（选中变更）与 commit 文件 diff（点历史展开文件）互斥叠加。
-       DataContext 仍由 WorkbenchViewRegistry 设为 SourceControlViewModel（与 SCM 面板共享同 VM 单例）。 -->
-
-  <UserControl.Styles>
-    <Style Selector="Button.scm-act">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="2"/>
-      <Setter Property="Width" Value="20"/>
-      <Setter Property="Height" Value="20"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    </Style>
-    <Style Selector="Button.scm-act:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-    </Style>
-  </UserControl.Styles>
+       DataContext 仍由 WorkbenchViewRegistry 设为 SourceControlViewModel（与 SCM 面板共享同 VM 单例）。
+       Button.scm-act 样式已上移 SharedTheme.axaml（与 SourceControlPanelView 去重）。 -->
 
   <!-- diff 区（工作区 diff / 提交文件 diff 叠加；互斥——OpenDiff/OpenCommitFileDiff 互相清对方）。
        提交文件 diff 层置顶（最后渲染 = 最上层），激活时覆盖工作区 diff 与空态。 -->

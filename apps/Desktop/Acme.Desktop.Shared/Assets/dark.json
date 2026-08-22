@@ -17,6 +17,8 @@
     "TextPrimaryBrush": "#E6E6E6",
     "TextSecondaryBrush": "#9A9A9A",
     "NavHoverBrush": "#cc2a2a2a",
+    "TreeSelectedFgColor": "#E6E6E6",
+    "SelectionColor": "#00A2ED",
     "WorkspaceBackground": "#212121",
     "SurfaceBrush": "#2A2A2A",
     "SurfaceHoverBrush": "#3A3A3A",
@@ -46,6 +48,7 @@
     "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
   },
   "radius": {
+    "CornerRadiusXs": "4",
     "CornerRadiusSm": "8",
     "CornerRadiusMd": "12",
     "CornerRadiusLg": "16"

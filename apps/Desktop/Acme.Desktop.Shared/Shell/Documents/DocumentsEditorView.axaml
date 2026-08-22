@@ -28,7 +28,7 @@
     <Style Selector="ListBox.docs-tabs > ListBoxItem">
       <Setter Property="Padding" Value="0"/>
       <Setter Property="Margin" Value="2,4,2,4"/>
-      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
       <Setter Property="MinHeight" Value="0"/>
     </Style>
     <Style Selector="ListBox.docs-tabs > ListBoxItem:selected">

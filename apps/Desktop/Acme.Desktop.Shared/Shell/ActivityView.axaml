@@ -13,11 +13,11 @@
             <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
         </Style>
         <Style Selector="Button.range:pointerover">
             <Setter Property="Background" Value="{DynamicResource AccentLightBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
         </Style>
         <Style Selector="TextBlock.muted">
             <Setter Property="Opacity" Value="0.6"/>
@@ -26,6 +26,7 @@
         <Style Selector="Border.cell">
             <Setter Property="Width" Value="13"/>
             <Setter Property="Height" Value="13"/>
+            <!-- 2px 是 GitHub 方块热力格的形状常量（13×13 数据格子，非组件圆角），不走上档 token -->
             <Setter Property="CornerRadius" Value="2"/>
             <Setter Property="Margin" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>

@@ -4,16 +4,8 @@
              x:Class="Acme.Desktop.Shared.Shell.WorkflowsView"
              Background="{DynamicResource ContentBgBrush}">
 
-  <UserControl.Styles>
-    <Style Selector="Button.tool">
-      <Setter Property="Padding" Value="12,4"/>
-      <Setter Property="FontSize" Value="12"/>
-    </Style>
-  </UserControl.Styles>
-
   <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Classes="page-header">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">

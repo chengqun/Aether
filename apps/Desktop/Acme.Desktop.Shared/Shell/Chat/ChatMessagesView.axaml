@@ -34,7 +34,7 @@
         <StackPanel HorizontalAlignment="Stretch" IsVisible="{Binding IsAgentMarkdownText}" Spacing="4">
           <ctl:SelectableMarkdownViewer Markdown="{Binding Content}"
                                         HorizontalAlignment="Stretch"
-                                        SelectionEnabled="True" SelectionBrush="#3300A2ED" />
+                                        SelectionEnabled="True" SelectionBrush="{DynamicResource SelectionBrush}" />
           <DockPanel>
             <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.9" VerticalAlignment="Center">
               <Run Text="{Binding Sender}" /><Run Text=" · " /><Run Text="{Binding Time}" />

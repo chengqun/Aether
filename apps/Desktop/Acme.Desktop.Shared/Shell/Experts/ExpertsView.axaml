@@ -7,8 +7,7 @@
 
   <DockPanel>
     <!-- 顶部标题栏 + tab -->
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Classes="page-header">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Classes="top-tab" Content="专家" Command="{Binding ShowAgentTabCommand}"

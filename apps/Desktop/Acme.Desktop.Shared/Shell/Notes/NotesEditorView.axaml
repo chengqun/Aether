@@ -11,7 +11,7 @@
       <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
       <Setter Property="Padding" Value="16,14"/>
     </Style>
     <Style Selector="Button.notes-tool">
@@ -29,7 +29,7 @@
       <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
       <Setter Property="Padding" Value="12,4"/>
       <Setter Property="FontSize" Value="12"/>
     </Style>

@@ -17,7 +17,7 @@
         <Style Selector="Border.tabrow">
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="Margin" Value="0,0,2,0"/>
-            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>

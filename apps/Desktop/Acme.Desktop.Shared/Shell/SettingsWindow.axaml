@@ -156,7 +156,7 @@
                              TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <Border CornerRadius="4" Padding="5,1" VerticalAlignment="Center"
                           Background="{Binding ConnectionStatusColor}">
-                    <TextBlock Text="{Binding ConnectionStatusText}" FontSize="9" Foreground="White"/>
+                    <TextBlock Text="{Binding ConnectionStatusText}" FontSize="9" Foreground="{DynamicResource OnAccentBrush}"/>
                   </Border>
                 </StackPanel>
 

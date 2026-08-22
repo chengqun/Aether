@@ -9,19 +9,14 @@
       <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
       <Setter Property="Padding" Value="16,14"/>
-    </Style>
-    <Style Selector="Button.tool">
-      <Setter Property="Padding" Value="12,4"/>
-      <Setter Property="FontSize" Value="12"/>
     </Style>
   </UserControl.Styles>
 
   <DockPanel>
     <!-- 顶部标题栏 -->
-    <Border DockPanel.Dock="Top" Padding="20,12" Background="{DynamicResource CardBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Classes="page-header">
       <StackPanel Spacing="6">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
