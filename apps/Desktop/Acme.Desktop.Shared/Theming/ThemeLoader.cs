@@ -29,6 +29,15 @@ public static class ThemeLoader
     /// 与 _overlays（token ResourceDictionary）平级：token overlay 覆盖颜色/渐变画刷，styles overlay 覆盖特效/控制模板。</summary>
     private static readonly ConditionalWeakTable<StyledElement, IStyle> _styleOverlays = new();
 
+    /// <summary>当前激活主题的编辑器配色（全局槽）。编辑器是进程级全局（AvaloniaEdit HighlightingManager 缓存 +
+    /// CodeEditorSetup 静态类），配色不能挂 per-window ResourceDictionary——由 <see cref="Apply"/> 从 JSON 的
+    /// editor 段解析写入此槽，<see cref="Acme.Desktop.Shared.Shell.CodeEditorSetup"/> 查询。null=未配 editor 段，
+    /// 编辑器回落内置 VSCode 2026 双配色。写入是幂等的（同 JSON 反复 Apply 结果一致）。</summary>
+    private static EditorThemeDef? _activeEditorTheme;
+
+    /// <summary>读当前编辑器配色槽（可能为 null）。线程安全：Apply 都在 UI 线程，此读也在 UI 线程，无需 lock。</summary>
+    public static EditorThemeDef? ActiveEditorTheme => _activeEditorTheme;
+
     /// <summary>内置主题清单（name→显示描述）。每个 name 对应内嵌资源 Assets/{name}.json。
     /// 新增内置主题 = 把 JSON 放进 Assets/ + 在此加一行（csproj 的 Assets\**\* glob 自动纳入资源）。</summary>
     public static readonly (string Name, string Description)[] BuiltInThemes =
@@ -233,6 +242,8 @@ public static class ThemeLoader
         if (string.IsNullOrWhiteSpace(customJson)) return;
         var def = Deserialize(customJson);
         if (def is null) return;
+        // 编辑器配色：写全局槽（供 CodeEditorSetup 查询）。editor 段存在即覆盖，缺省=null=回落内置 VSCode 2026。
+        _activeEditorTheme = def.Editor;
         // token overlay：颜色/渐变/字体/圆角/间距/背景 → Resources.MergedDictionaries
         var overlay = ToResourceDictionary(def);
         target.Resources.MergedDictionaries.Add(overlay);

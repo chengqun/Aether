@@ -20,8 +20,8 @@ public partial class DiffView : UserControl
     {
         InitializeComponent();
         DataContextChanged += (_, _) => RenderDiff(DataContext as DiffModel);
-        LeftEditor.ActualThemeVariantChanged += (_, _) => ReapplyTheme();
-        RightEditor.ActualThemeVariantChanged += (_, _) => ReapplyTheme();
+        CodeEditorSetup.WireThemeReapply(LeftEditor, ReapplyTheme);
+        CodeEditorSetup.WireThemeReapply(RightEditor, ReapplyTheme);
     }
 
     private void RenderDiff(DiffModel? m)

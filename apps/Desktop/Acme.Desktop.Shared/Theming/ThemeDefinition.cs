@@ -57,6 +57,35 @@ public sealed class ThemeDefinition
     /// （light/dark 即此——保留 OS 标题栏/交通灯按钮）。只对 WorkbenchWindow 生效；子窗（ThemedWindow）不变。</summary>
     [JsonPropertyName("chrome")]
     public ChromeDef? Chrome { get; set; }
+
+    /// <summary>编辑器（AvaloniaEdit）配色：语法着色 token + 外观色（当前行/选区/底）。
+    /// 缺省/=null = 回落到 CodeEditorSetup 内置 VSCode 2026 双配色（浅/深）。提供了即按语义槽覆盖——
+    /// 编辑器是进程级全局（HighlightingManager 缓存 + CodeEditorSetup 静态），故此段由 ThemeLoader 写入
+    /// 全局静态槽（非 per-window ResourceDictionary），供 CodeEditorSetup 查询。</summary>
+    [JsonPropertyName("editor")]
+    public EditorThemeDef? Editor { get; set; }
+}
+
+/// <summary>编辑器配色定义。每个槽 = hex 色（#RRGGBB / #AARRGGBB）。未提供的槽缺省回落 VSCode 2026 内置色。
+/// 语义槽分两层：语法高亮（keyword/string/number/comment/function/type/tag/attribute/heading/link）+ 外观
+/// （background=编辑器底 / currentLine=当前行底 / selection=选区底 / selectionForeground=选区文字）。</summary>
+public sealed class EditorThemeDef
+{
+    [JsonPropertyName("keyword")] public string? Keyword { get; set; }
+    [JsonPropertyName("string")] public string? String { get; set; }
+    [JsonPropertyName("number")] public string? Number { get; set; }
+    [JsonPropertyName("comment")] public string? Comment { get; set; }
+    [JsonPropertyName("function")] public string? Function { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; set; }
+    [JsonPropertyName("tag")] public string? Tag { get; set; }
+    [JsonPropertyName("attribute")] public string? Attribute { get; set; }
+    [JsonPropertyName("heading")] public string? Heading { get; set; }
+    [JsonPropertyName("link")] public string? Link { get; set; }
+
+    [JsonPropertyName("background")] public string? Background { get; set; }
+    [JsonPropertyName("currentLine")] public string? CurrentLine { get; set; }
+    [JsonPropertyName("selection")] public string? Selection { get; set; }
+    [JsonPropertyName("selectionForeground")] public string? SelectionForeground { get; set; }
 }
 
 /// <summary>窗口 chrome 定义。当前仅 borderless 开关 + 标题栏高度；后续可扩（按钮位/圆角等）。</summary>

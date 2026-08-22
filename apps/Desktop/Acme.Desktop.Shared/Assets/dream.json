@@ -4,6 +4,22 @@
   "animated": true,
   "styles": "avares://Acme.Desktop.Shared/Theming/dream.styles.axaml",
   "chrome": { "borderless": true, "titleBarHeight": 36 },
+  "editor": {
+    "keyword": "#cf222e",
+    "string": "#0a3069",
+    "number": "#0550ae",
+    "comment": "#6e7781",
+    "function": "#8250df",
+    "type": "#b45309",
+    "tag": "#116329",
+    "attribute": "#7c3aed",
+    "heading": "#8250df",
+    "link": "#0a3069",
+    "background": "#fdf2f8",
+    "currentLine": "#20c4b5fd",
+    "selection": "#308b5cf6",
+    "selectionForeground": "#1a1a2e"
+  },
   "colors": {
     "AccentColor": "#a78bfa",
     "AccentBrush": "#a78bfa",

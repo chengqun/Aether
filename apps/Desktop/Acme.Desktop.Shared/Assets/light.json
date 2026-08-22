@@ -1,6 +1,22 @@
 {
   "$note": "ChatGPT 风（浅）——中性灰基调皮肤（纯 Level-1，不带 dream 的 gradients/animated/styles/chrome）。对标 ChatGPT 客户端：无品牌色 accent，accent 用明暗极值（浅色模=近黑 #0D0D0D）；用户气泡中性浅灰底 + 主文色字（非 accent 彩底白字）。与 light.json 同结构，仅色值中性化。用户可在 <tenantDir>/themes/chatgpt.json 放同名文件覆盖。",
   "variant": "light",
+  "editor": {
+    "keyword": "#cf222e",
+    "string": "#0a3069",
+    "number": "#0550ae",
+    "comment": "#6e7781",
+    "function": "#8250df",
+    "type": "#953800",
+    "tag": "#116329",
+    "attribute": "#0550ae",
+    "heading": "#0550ae",
+    "link": "#0a3069",
+    "background": "#FFFFFF",
+    "currentLine": "#40EAEAEA",
+    "selection": "#400069CC",
+    "selectionForeground": "#202020"
+  },
   "colors": {
     "AccentColor": "#0D0D0D",
     "AccentBrush": "#0D0D0D",

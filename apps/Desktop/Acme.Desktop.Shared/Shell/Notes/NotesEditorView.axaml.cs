@@ -47,12 +47,13 @@ public partial class NotesEditorView : UserControl
             ConfigureEditorAppearance();
             SyncCodeEditor();
         };
-        // 主题明暗切换时重染编辑器：原生 TextArea 背景随 ThemeVariant 翻转，但语法着色/当前行/选中色是这里硬编码的——须随 ActualThemeVariant 重设。
-        CodeEditor.ActualThemeVariantChanged += (_, _) =>
+        // 主题明暗切换 + 主题 JSON 换肤（含 variant 相同但 editor 段不同）时重染编辑器——
+        // 语法着色/当前行/选中色改由皮肤 editor 段驱动（回落内置 VSCode 2026），须随两信号重设。
+        CodeEditorSetup.WireThemeReapply(CodeEditor, () =>
         {
             ApplyEditorTheme();
             ApplyHighlighting();
-        };
+        });
         this.Loaded += OnLoaded;
     }
 

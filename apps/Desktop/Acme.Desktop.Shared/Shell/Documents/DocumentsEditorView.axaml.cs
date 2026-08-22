@@ -38,13 +38,13 @@ public partial class DocumentsEditorView : UserControl
             CodeEditorSetup.ConfigureAppearance(CodeEditor);
             SyncEditor();
         };
-        // 主题明暗切换时重染编辑器（语法着色/当前行/选中色随 ActualThemeVariant 重设）。
-        CodeEditor.ActualThemeVariantChanged += (_, _) =>
+        // 主题明暗切换 + 主题 JSON 换肤时重染编辑器（语法着色/当前行/选中色随两信号重设）。
+        CodeEditorSetup.WireThemeReapply(CodeEditor, () =>
         {
             CodeEditorSetup.ApplyTheme(CodeEditor);
             if (_vm?.ActiveTab is { } tab)
                 CodeEditorSetup.ApplyHighlighting(CodeEditor, tab.SyntaxKey);
-        };
+        });
         this.Loaded += (_, _) =>
         {
             SyncEditor();

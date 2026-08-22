@@ -46,12 +46,12 @@ public partial class KnowledgeObjectsView : UserControl
             CodeEditorSetup.ConfigureAppearance(CodeEditor);
             SyncEditor();
         };
-        // 主题明暗切换时重染编辑器（.ok=markdown 高亮随 ActualThemeVariant 重设）。
-        CodeEditor.ActualThemeVariantChanged += (_, _) =>
+        // 主题明暗切换 + 主题 JSON 换肤时重染编辑器（.ok=markdown 高亮随两信号重设）。
+        CodeEditorSetup.WireThemeReapply(CodeEditor, () =>
         {
             CodeEditorSetup.ApplyTheme(CodeEditor);
             CodeEditorSetup.ApplyHighlighting(CodeEditor, OkSyntax);
-        };
+        });
         this.Loaded += (_, _) =>
         {
             SyncEditor();
