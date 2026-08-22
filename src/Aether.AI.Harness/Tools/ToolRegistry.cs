@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Aether.AI.Core.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aether.AI.Harness.Tools;
 
@@ -47,12 +48,16 @@ public sealed class ToolRegistry
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, ToolEntry> _entries = new();
+    private readonly ILogger? _logger;
 
     public ToolRegistry() : this(NullServiceProvider.Instance) { }
 
     public ToolRegistry(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
+        _logger = serviceProvider is NullServiceProvider
+            ? null
+            : (serviceProvider.GetService(typeof(ILoggerFactory)) as ILoggerFactory)?.CreateLogger<ToolRegistry>();
 
         // 执行各 AddXxx 模块通过 ConfigureToolRegistry 注册的元数据 + 工厂
         if (serviceProvider is NullServiceProvider) return;
@@ -87,6 +92,22 @@ public sealed class ToolRegistry
         return _entries.TryAdd(tool.Name, new ToolEntry(tool.Name, tool.Description ?? "", category, _ => tool, approvalLevel));
     }
 
+    /// <summary>
+    /// 同步 MCP 工具集：移除「已注册为 MCP 类、但不在 <paramref name="currentMcpToolNames"/>」的条目。
+    /// MCP server 重连后工具集可能变化（删工具/改名/换 server）——旧的 CLI 工具会残留指向已 dispose 的
+    /// McpClient，不清理则 <see cref="ResolveAll"/> 时工厂仍返回失效 AIFunction、运行时调用报错。
+    /// </summary>
+    public void SyncMcpTools(IEnumerable<string> currentMcpToolNames)
+    {
+        var keep = new HashSet<string>(currentMcpToolNames, StringComparer.Ordinal);
+        foreach (var name in _entries.Where(kv => kv.Value.Category == "MCP" && !keep.Contains(kv.Key))
+                                      .Select(kv => kv.Key).ToList())
+        {
+            if (_entries.TryRemove(name, out _))
+                _logger?.LogInformation("已移除失效 MCP 工具 {Tool}。", name);
+        }
+    }
+
     /// <summary>获取所有工具的元数据（名称 + 描述 + 分类 + 审批等级），不实例化 AIFunction。</summary>
     public IReadOnlyList<ToolMeta> GetAllMetas()
         => _entries.Values
@@ -107,7 +128,17 @@ public sealed class ToolRegistry
             if (_entries.TryGetValue(name, out var entry))
             {
                 try { resolved.Add(entry.Factory(_serviceProvider)); }
-                catch { /* skip tools that fail to instantiate */ }
+                catch (Exception ex)
+                {
+                    // 静默跳过但仍记录——agent 勾选了却拿不到该工具，通常是 MCP server 未连接/连接失败所致，
+                    // 日志可追溯「哪个工具、为何缺」。
+                    _logger?.LogWarning(ex, "工具 {Tool} 实例化失败，已跳过。", name);
+                }
+            }
+            else
+            {
+                // 名字未注册：大概率是 MCP 工具未就绪（server 未连上），或 agent 持久化里残留了已删除的工具名。
+                _logger?.LogDebug("工具 {Tool} 未注册，已跳过（可能是 MCP server 未连接）。", name);
             }
         }
         return resolved;

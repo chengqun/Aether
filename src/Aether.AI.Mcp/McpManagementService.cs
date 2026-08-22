@@ -35,7 +35,12 @@ public sealed class McpManagementService : IMcpManagementService
         await _registry.StartAsync(cancellationToken).ConfigureAwait(false);
         // 连接完成后把工具注册进 ToolRegistry（TryAdd 幂等，多次调用安全）。
         if (_toolRegistry is not null)
-            foreach (var t in _registry.GetTools()) _toolRegistry.RegisterMcpTool(t);
+        {
+            var tools = _registry.GetTools().ToList();
+            foreach (var t in tools) _toolRegistry.RegisterMcpTool(t);
+            // 重连后清理已不存在的 MCP 工具（删除/改名/换 server 的残留会指向已 dispose 的 client）。
+            _toolRegistry.SyncMcpTools(tools.Select(t => t.Name));
+        }
     }
 
     public Task<IReadOnlyList<McpServerStatus>> GetServersAsync(CancellationToken cancellationToken = default)
@@ -60,7 +65,10 @@ public sealed class McpManagementService : IMcpManagementService
         var path = Path.Combine(_directory, SafeFileName(config.Name) + ".json");
         var json = SerializeConfig(config);
         await File.WriteAllTextAsync(path, json, cancellationToken).ConfigureAwait(false);
+        // 重连后把工具注册进 ToolRegistry（EnsureStartedAsync 内做 RegisterMcpTool）——
+        // 仅 RefreshAsync 不注册工具，会导致「配置已写、重连成功，但工具没进可用池」的时灵时不灵。
         await _registry.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -70,11 +78,16 @@ public sealed class McpManagementService : IMcpManagementService
         var path = Path.Combine(_directory, SafeFileName(name) + ".json");
         if (File.Exists(path)) File.Delete(path);
         await _registry.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public Task RefreshAsync(CancellationToken cancellationToken = default)
-        => _registry.RefreshAsync(cancellationToken);
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        await _registry.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        // 重连后把工具重新注册进 ToolRegistry（含清理后时灵时不灵，见 SaveServerAsync 注释）。
+        await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     public Task StartHealthMonitoringAsync(TimeSpan interval, CancellationToken cancellationToken = default)
     {

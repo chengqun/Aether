@@ -232,8 +232,8 @@ public static class DesktopCompositionExtensions
         // MCP server 管理工具（mcp_list_servers / mcp_add_server / mcp_remove_server / mcp_refresh）：
         // 让 agent 复用专家页「MCP工具」tab 同一套 IMcpManagementService 动态增删 MCP server。
         // IMcpManagementService impl 在平台层 Aether.AI.Mcp（非 ai/ 业务上下文）→ 宿主层注册（同 git_*）。
-        // SaveServerAsync 内部已「写 json → RefreshAsync 重连 → RegisterMcpTool」闭环，故 add/remove 是当轮
-        // 会话即时生效的能力注入入口 → 标 Dangerous（装新工具=给 agent 装新能力，默认 AutoEdit 档每次弹确认，
+        // SaveServerAsync/DeleteServerAsync/RefreshAsync 内部均「重连 → 注册工具进 ToolRegistry」闭环，故 add/remove
+        // 是当轮会话即时生效的能力注入入口 → 标 Dangerous（装新工具=给 agent 装新能力，默认 AutoEdit 档每次弹确认，
         // 防无人干预自举闭环）。list/refresh 只读无配置写入 → list 标 Safe、refresh 标 Confirm。
         // McpAutoAssignToAllAgents：订阅 IMcpManagementService.Changed，添加 MCP server 后自动把工具勾选进
         // 所有普通 agent（手动/AI 两路径共用）——「添加即全局可用」。

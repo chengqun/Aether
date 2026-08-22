@@ -62,6 +62,8 @@ public sealed class McpAutoAssignToAllAgents
 
                 def.Tools = merged.ToList();
                 await _catalog.SaveAsync(def, cancellationToken).ConfigureAwait(false);
+                // 勾选变更后失效重建——已召唤/正在跑的 agent 也立即带新工具，无需手动 agent_reload（「添加即全局可用」）。
+                _runner.Invalidate(def.Id);
             }
         }
         catch { /* 自动勾选失败不阻断（页面/添加仍成功） */ }
