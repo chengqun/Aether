@@ -161,8 +161,21 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     {
         public ChatMessageItem Current;
         public readonly Dictionary<string, ChatMessageItem> PendingTools = new();
+        // 轮询型工具去重：连续重复调用同一轮询工具（如 PollSqlTaskStatus/FetchSqlTaskStatus）时复用同一张工具卡，
+        // 而非每轮新建一张（否则「轮询」工具卡刷屏）。记录最近一次该工具的工具卡 + 已轮询次数。
+        public ChatMessageItem? LastPollingCard;
+        public string? LastPollingTool;
+        public int PollCount;
         public StreamCursor(ChatMessageItem initial) => Current = initial;
     }
+
+    // 轮询型工具名单：这些工具语义上就是「检查当前状态/等待完成」，agent 会反复调用直到终态。
+    // 连续重复调用时合并为一张卡（刷新状态 + 轮询计数），避免刷屏。名字按工具注册时的 key 匹配。
+    private static readonly HashSet<string> PollingToolNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PollSqlTaskStatus",
+        "FetchSqlTaskStatus",
+    };
 
     /// <summary>
     /// 分段交错运行：agent 推理→调工具→再推理→… 的过程中，把每段推理(<c>TextReasoningContent</c>)、
@@ -267,11 +280,16 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         // todos_* 调用由 OnTodoList 渲染为计划卡，不重复出工具卡。
                         if (ev.Name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
                             return Task.CompletedTask;
+                        var isPollingTool = IsPollingTool(ev.Name);
+                        var isPollingRepeat = isPollingTool && cursor.LastPollingTool == ev.Name;
                         _dispatcher.Post(() => HandleToolEventSegmented(cursor, items, ev, senderName));
-                        // 关键节点广播：工具起止。
-                        EmitProgress(ev.Kind == ToolStreamEventKind.Call
-                            ? new RunProgress(RunProgressKind.ToolStarted, ToolName: ev.Name, ToolArgument: ExtractToolArgument(ev.Input))
-                            : new RunProgress(RunProgressKind.ToolFinished, ToolName: ev.Name), onRemoteProgress);
+                        // 关键节点广播：工具起止。轮询型工具连续重复调用时跳过心跳（合并为单卡，避免「轮询」刷屏）。
+                        if (!isPollingRepeat)
+                        {
+                            EmitProgress(ev.Kind == ToolStreamEventKind.Call
+                                ? new RunProgress(RunProgressKind.ToolStarted, ToolName: ev.Name, ToolArgument: ExtractToolArgument(ev.Input))
+                                : new RunProgress(RunProgressKind.ToolFinished, ToolName: ev.Name), onRemoteProgress);
+                        }
                         return Task.CompletedTask;
                     },
                     OnApprovalRequest: (req, _) =>
@@ -425,6 +443,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     /// <summary>从工具入参提取主参数摘要（取第一个字符串/数值值，截断 ~20 字符），供关键节点信号展示。
     /// 拿不到则返回 null（消费方退化为只显工具名）。</summary>
+    private static bool IsPollingTool(string toolName)
+    {
+        return !string.IsNullOrEmpty(toolName) && PollingToolNames.Contains(toolName);
+    }
+
     private static string? ExtractToolArgument(Dictionary<string, object>? input)
     {
         if (input is null) return null;
@@ -501,6 +524,37 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             items.Insert(idx, tool);
             cursor.Current = tool;
             if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = tool;
+
+            // 轮询型工具去重：连续重复调用同一工具时复用上一张卡（刷新 callId/input/轮询计数），不新建。
+            // 「轮询」工具（PollSqlTaskStatus/FetchSqlTaskStatus）agent 会反复调用直到终态，每轮新建会刷屏。
+            if (IsPollingTool(ev.Name))
+            {
+                if (cursor.PendingTools.TryGetValue(ev.CallId, out var p)) cursor.PendingTools.Remove(ev.CallId);
+                if (cursor.LastPollingCard is not null && cursor.LastPollingTool == ev.Name)
+                {
+                    // 复用：拿掉刚插入的新卡，复用旧卡（刷新 CallId/Input）。轮询计数 +1。
+                    items.Remove(tool);
+                    cursor.Current = cursor.LastPollingCard;
+                    cursor.LastPollingCard.CallId = ev.CallId;
+                    cursor.LastPollingCard.Input = ev.Input;
+                    // 复用卡时旧卡的 result 已落，这里置为「再轮询中」——保持单卡形态，result 到达再置完成。
+                    cursor.LastPollingCard.IsToolCompleted = false;
+                    cursor.PollCount++;
+                    if (!string.IsNullOrEmpty(ev.CallId)) cursor.PendingTools[ev.CallId] = cursor.LastPollingCard;
+                    cursor.LastPollingCard.ToolName = $"{ev.Name}（第 {cursor.PollCount} 次轮询）";
+                    return; // 复用卡不重复走文件编辑快照等分支
+                }
+                cursor.LastPollingCard = tool;
+                cursor.LastPollingTool = ev.Name;
+                cursor.PollCount = 1;
+            }
+            else
+            {
+                // 非轮询工具打断了轮询序列 → 清状态（后续若再轮询，重新计一张）。
+                cursor.LastPollingCard = null;
+                cursor.LastPollingTool = null;
+                cursor.PollCount = 0;
+            }
 
             // 文件编辑工具：call 阶段读盘快照 old（供事后算 diff + 一键撤销写回）。后台读盘避免大文件阻塞 UI。
             // 撤销按钮建卡即注入（点按 → UndoFileEdit 写回 old）。
