@@ -54,6 +54,11 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     // 替换 Lottie → Spine/Live2D 只动 OnOpened 里这一处 setup，信号链零改动。
     private IAvatarEngine? _avatar;
 
+    // 位置持久化：Window.Position 是普通 CLR 属性（无 PositionProperty 静态字段，Avalonia 12 无 Moved 事件），
+    // 无法经 PropertyChanged 监听 → 用低频定时器对比检测位置变化的后保存（开销可忽略）。
+    private DispatcherTimer? _posWatch;
+    private PixelPoint? _lastPos;
+
     public PetWindow()
     {
         InitializeComponent();
@@ -65,6 +70,17 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         base.OnOpened(e);
         // 初始定位：有保存的拖拽位置 → 恢复；否则 → 主屏右上角。
         RestoreOrDefaultPosition();
+        _lastPos = Position;
+        _posWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _posWatch.Tick += (_, _) =>
+        {
+            if (_lastPos is { } lp && lp != Position)
+            {
+                _lastPos = Position;
+                PersistPosition();
+            }
+        };
+        _posWatch.Start();
 
         // setup：Lottie 引擎加载全部 mood 动画（Assets/pet/{idle,thinking,working,speaking}.json，缺省回退 idle）。
         PetLottie?.LoadAllFromAssets();
@@ -109,12 +125,11 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 
     private void OnPetPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        // 释放时若指针几乎没动 = 点击 → 弹泡；动了 = 拖拽（BeginMoveDrag 已移动窗口）→ 不弹泡 + 保存新位置。
+        // 拖窗时窗口随指针一起动，窗口内坐标几乎不变 → 用指针位移判断「点击 vs 拖拽」不可靠。
+        // 点击（几乎没拖）就 Say 一句；位置保存由 _posWatch 定时对比 Position 变化（见 OnOpened）。
         var d = e.GetPosition(this) - _pressPoint;
         if (d.X * d.X + d.Y * d.Y < 16) // <4px
             Say(_idleLines[_rand!.Next(_idleLines.Length)]);
-        else
-            PersistPosition();
     }
 
     // —— 位置持久化 ——
@@ -324,6 +339,8 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 
     protected override void OnClosed(EventArgs e)
     {
+        _posWatch?.Stop();
+        _posWatch = null;
         StopBubbleStream();
         _bubbleAutoHide?.Dispose();
         _avatar?.StopAndDispose();   // 释放动画 + 定时器 + 位图（替换引擎时同路径清理）
