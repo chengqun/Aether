@@ -6,3 +6,6 @@
 	path = externals/FlaUI-MCP
 	url = https://github.com/shanselman/FlaUI-MCP.git
 	shallow = true
+[submodule "externals/MAF"]
+	path = externals/MAF
+	url = https://github.com/microsoft/agent-framework.git
