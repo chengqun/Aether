@@ -54,6 +54,14 @@ public sealed class SignalRChatService : ISignalRChatService
                 if (_httpMessageHandlerFactory != null)
                     options.HttpMessageHandlerFactory = _ => _httpMessageHandlerFactory();
             })
+            .AddJsonProtocol(options =>
+            {
+                // 关键：服务端 SignalR 广播是 camelCase（messageType/sentAt/...）。SignalR 客户端默认
+                // System.Text.Json 反序列化是大小写敏感的 PascalCase 匹配，导致 MessageType 等字段反序列化成空 →
+                // 手机端 isProgress 判断失败 → 每条进度心跳都被当普通消息累加（「消息一直累加很多」根因）。
+                // 显式开 case-insensitive，让 messageType→MessageType 等 camelCase 字段正确映射。
+                options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+            })
             .WithAutomaticReconnect(new[]
             {
                 TimeSpan.FromSeconds(0),
