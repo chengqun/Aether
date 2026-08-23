@@ -13,19 +13,23 @@ using SkiaSharp.Skottie;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 桌宠语义状态（信号联动用）。不同状态对应不同动画节奏/缩放脉冲/口型，映射自
-/// <c>RunProgressKind</c> + 待机 + 说话（token 流）。后续换多素材时，每个 mood 可绑不同 Lottie 文件。
+/// 桌宠语义状态（信号联动用）。不同状态 = 不同动画（多 JSON 预加载）+ 不同节奏/脉冲，映射自
+/// <c>RunProgressKind</c> + 待机 + 说话（token 流）。后续换多素材时，每个 mood 绑不同 Lottie 文件。
 /// </summary>
 public enum PetMood
 {
     /// <summary>待机：原速循环 + 轻微呼吸。</summary>
     Idle,
-    /// <summary>思考：慢速 + 明显上下浮（模型在推理）。</summary>
+    /// <summary>思考：慢速（模型在推理）。</summary>
     Thinking,
-    /// <summary>工作中：快速 + 脉冲（执行工具/等审批/计划）。</summary>
+    /// <summary>工作中：执行工具/等审批/计划。</summary>
     Working,
-    /// <summary>说话：口型节奏缩放（逐字 token 驱动）。</summary>
+    /// <summary>说话：口型节奏（逐字 token 驱动）。</summary>
     Speaking,
+    /// <summary>开心/成功：本轮正常结束的瞬态（脉冲后回落待机）。</summary>
+    Happy,
+    /// <summary>出错：本轮报错的瞬态（抖动后回落待机）。</summary>
+    Error,
 }
 
 /// <summary>
@@ -38,7 +42,7 @@ public enum PetMood
 /// 播放循环用 <see cref="DispatcherTimer"/> ~30fps 驱动 <c>SeekFrameTime</c>，绕开 Avalonia <c>Animation.RunAsync</c>
 /// （TransformAnimator 把 Transform cast 成 Visual 的坑——见桌宠/aurora 教训）。
 /// </summary>
-public class LottiePetControl : Control
+public class LottiePetControl : Control, IAvatarEngine
 {
     private readonly Dictionary<PetMood, Animation> _animations = new();
     private Animation? _active;
@@ -248,6 +252,14 @@ public class LottiePetControl : Control
                 pulse = Math.Sin(t * twoPi / 0.35) * 0.025;         // 口型节奏（~3Hz）
                 floatY = Math.Sin(t * twoPi / 0.7) * 0.8;
                 break;
+            case PetMood.Happy:
+                pulse = Math.Sin(t * twoPi / 0.7) * 0.05;           // 欢快弹跳（更高频缩放）
+                floatY = -Math.Abs(Math.Sin(t * twoPi / 0.7)) * 4.0; // 上跳
+                break;
+            case PetMood.Error:
+                pulse = Math.Sin(t * twoPi / 0.22) * 0.03;          // 高频抖动（左右要另加 shakeX，此处仅竖直微抖）
+                floatY = Math.Sin(t * twoPi / 0.22) * 1.0;
+                break;
             default: // Idle
                 pulse = Math.Sin(t * twoPi / 3.5) * 0.02;           // 轻微呼吸
                 floatY = Math.Sin(t * twoPi / 4.0) * 0.6;
@@ -317,8 +329,8 @@ public class LottiePetControl : Control
     {
         if (_mood == mood && _active is not null)
         {
-            // Speaking 需持续刷新口型节奏相位，不因同 mood 短路跳过。
-            if (mood != PetMood.Speaking) return;
+            // Speaking/Happy/Error 是瞬态/持续流——同 mood 重复触发也要刷新相位（口型续跳/再弹一次/再抖一次）。
+            if (mood is not PetMood.Speaking and not PetMood.Happy and not PetMood.Error) return;
             _startMs = Environment.TickCount64;
             InvalidateVisual();
             return;
@@ -329,7 +341,17 @@ public class LottiePetControl : Control
     /// <summary>当前语义状态。</summary>
     public PetMood Mood => _mood;
 
-    /// <summary>停播并释放全部动画 + 定时器 + 位图（窗口关闭/换形象时调）。</summary>
+    /// <summary>追加一片说话 token——保持说话 mood + 刷新口型节奏相位（持续触发时不短路）。</summary>
+    public void AppendSpeakToken(string token)
+    {
+        // 说话是持续流：每次都刷新相位，让口型节奏随 token 持续跳动（否则 SetMood 同 mood 短路会停住）。
+        SetMood(PetMood.Speaking);
+    }
+
+    /// <summary>本轮说话结束——回落到待机。</summary>
+    public void EndSpeak() => SetMood(PetMood.Idle);
+
+    /// <summary>停播并释放全部动画 + 定时器 + 位图（窗口关闭/换引擎时调）。</summary>
     public void StopAndDispose()
     {
         StopTimer();

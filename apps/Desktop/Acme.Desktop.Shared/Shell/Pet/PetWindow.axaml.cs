@@ -50,6 +50,10 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     // 偏好（位置持久化）：懒解析，设计期 DesktopApp.Services 未就绪则为 null。
     private readonly IPreferencesStore? _prefs = DesktopApp.Services.GetService<IPreferencesStore>();
 
+    // 表现引擎抽象（Avatar Runtime）：PetWindow 的运行时状态控制只依赖此接口，
+    // 替换 Lottie → Spine/Live2D 只动 OnOpened 里这一处 setup，信号链零改动。
+    private IAvatarEngine? _avatar;
+
     public PetWindow()
     {
         InitializeComponent();
@@ -62,9 +66,10 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         // 初始定位：有保存的拖拽位置 → 恢复；否则 → 主屏右上角。
         RestoreOrDefaultPosition();
 
-        // 加载全部 mood 动画（Assets/pet/{idle,thinking,working,speaking}.json，缺省回退 idle）。
+        // setup：Lottie 引擎加载全部 mood 动画（Assets/pet/{idle,thinking,working,speaking}.json，缺省回退 idle）。
         PetLottie?.LoadAllFromAssets();
-        PetLottie?.SetMood(PetMood.Idle);
+        _avatar = PetLottie as IAvatarEngine;
+        _avatar?.SetMood(PetMood.Idle);
 
         var menu = new ContextMenu();
 
@@ -187,8 +192,8 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             if (_answerBuf.Length > 30)
                 _answerBuf.Remove(0, _answerBuf.Length - 30);
             StartBubbleStream();
-            // Lottie 形象层：说话节奏（口型）。
-            PetLottie?.SetMood(PetMood.Speaking);
+            // 经 IAvatarEngine 说话流 → 口型节奏。
+            _avatar?.AppendSpeakToken(token);
         });
     }
 
@@ -201,7 +206,7 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             _answerBuf.Clear();
             StopBubbleStream();
             // 说完了回到待机。
-            PetLottie?.SetMood(PetMood.Idle);
+            _avatar?.EndSpeak();
         });
     }
 
@@ -240,28 +245,27 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             case RunProgressKind.RunDone:
                 // 完成只冒一句固定短话，不显示回答原文/摘要——正文留主窗，桌宠气泡不驻留长段。
                 ShowLine("搞定啦 ✨", autoHide: true);
-                ApplyKind(RunProgressKind.RunDone);
+                _avatar?.SetMood(PetMood.Happy);
                 break;
 
             case RunProgressKind.RunError:
                 StopBubbleStream();
                 ShowLine($"⚠️ 出错了{(string.IsNullOrEmpty(signal.Text) ? "" : "：" + Truncate(signal.Text, 40))}", autoHide: true);
-                ApplyKind(RunProgressKind.RunDone);
+                _avatar?.SetMood(PetMood.Error);
                 break;
         }
     }
 
-    /// <summary>按语义状态切换 Lottie 形象 mood（思考/工作/待机）。</summary>
+    /// <summary>按语义状态切换形象 mood（思考/工作/待机）。</summary>
     private void ApplyKind(RunProgressKind kind)
     {
-        PetLottie?.SetMood(kind switch
+        _avatar?.SetMood(kind switch
         {
             RunProgressKind.Reasoning => PetMood.Thinking,
             RunProgressKind.ToolStarted
-                or RunProgressKind.ToolFinished
                 or RunProgressKind.ApprovalRequested
                 or RunProgressKind.PlanUpdated => PetMood.Working,
-            _ => PetMood.Idle,
+            _ => PetMood.Idle, // ToolFinished / 其它 → 回待机
         });
     }
 
@@ -322,7 +326,7 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     {
         StopBubbleStream();
         _bubbleAutoHide?.Dispose();
-        PetLottie?.StopAndDispose();   // 释放 Lottie 动画 + 其 Skottie 播放定时器
+        _avatar?.StopAndDispose();   // 释放动画 + 定时器 + 位图（替换引擎时同路径清理）
         base.OnClosed(e);
     }
 }
