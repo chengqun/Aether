@@ -6,45 +6,31 @@ using Aether.AI.Core.Agents;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 桌宠（悬浮宠物）：无边框透明底置顶小窗，emoji 形象飘在桌面上。P0~P2：
-/// P0 悬浮/置顶/拖拽/待机动画；P1 点击气泡说话 + 右键菜单（换造型/置顶开关/隐藏）；
-/// P2 与聊天联动——由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化调 <see cref="SetThinking"/>，
-/// agent 运行时切「思考中」造型 + 随机气泡；P3 实时反馈镜——实现 <see cref="IRunProgressSink"/>
-/// （关键节点：工具/审批/计划/完成/错误 → 气泡）+ <see cref="IPetTokenStream"/>（逐字答案打字机）。
-/// 关键节点走 Core 的 <see cref="RunProgress"/>（与手机端同源），逐字 token 是桌宠专属细粒度通道——两者分层。
-/// 动画复用 aurora 的成熟先例：DispatcherTimer（~30fps）直赋 TranslateTransform/ScaleTransform 的
-/// X/Y/ScaleX/ScaleY，绕开 Avalonia 12.1.1 的 Animation.RunAsync(TranslateTransform) 会抛
-/// InvalidCastException 的坑（TransformAnimator 把 Animatable cast 成 Visual；见 CLAUDE.md aurora cast 坑）。
+/// 桌宠（悬浮宠物）：无边框透明底置顶小窗。形象层 = <see cref="LottiePetControl"/>（Skottie 渲染 Lottie 动画）。
+/// P0 悬浮/置顶/拖拽；P1 点击气泡说话 + 右键菜单（置顶开关/回到主界面/退出程序）；
+/// P2 与聊天联动——WorkbenchWindow 订阅 Chat.IsAgentRunning 调 <see cref="SetThinking"/>，agent 运行时切「思考」mood；
+/// P3 实时反馈镜——实现 <see cref="IRunProgressSink"/>（关键节点 → 气泡 + mood）+ <see cref="IPetTokenStream"/>
+/// （逐字答案打字机 + 说话 mood）。关键节点走 Core 的 <see cref="RunProgress"/>（与手机端同源），
+/// 逐字 token 是桌宠专属细粒度通道——两者分层。语义状态经 <see cref="LottiePetControl.SetMood"/> 映射为
+/// <see cref="PetMood"/>（思考/工作/说话/待机）驱动动画节奏与脉冲。
 /// </summary>
 public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 {
-    private static readonly string[] PetGlyphPool = { "🐱", "🐻", "🐸", "🐤", "🐰", "🐶", "🦊", "🐼", "🐨", "🦉" };
-    private readonly string[] _thinkingGlyphs = { "💭", "🤔", "🧠" };
     private readonly string[] _idleLines =
     {
         "你好呀～", "有什么要我帮忙的吗？", "我在哦。",
         "今天也要加油呀！", "(伸个懒腰)…喵～", "盯……",
     };
-    private readonly string[] _thinkingLines =
-    {
-        "让我想想……", "嗯……正在处理。", "稍等，我在算。", "这个有点意思。",
-    };
 
-    private int _glyphIndex;
-    private bool _isThinking;
-    private DispatcherTimer? _animTimer;
-    private long _startMs;
     private Random? _rand;
 
     // —— P3 实时反馈镜：关键节点 → 造型 + 气泡；逐字 token → 气泡打字机 ——
-    private RunProgressKind _kind = RunProgressKind.RunDone; // 当前语义状态（决定造型/动画节奏）
     private readonly StringBuilder _answerBuf = new();     // 本轮回答累积（逐字流，节流渲染进气泡）
     private DispatcherTimer? _bubbleTimer;                  // 气泡内容节流 flush（50ms，与主窗同节奏）
     private IDisposable? _bubbleAutoHide;                   // 气泡自动收起（工具/关键节点句 2.5s；流式回答持续到本轮结束）
@@ -61,10 +47,6 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     /// <summary>「回到主界面」回调（宿主注入 = WorkbenchWindow.RestoreFromPet）。双击/右键菜单走它。</summary>
     public Action? RestoreRequested { get; set; }
 
-    // 动画 transform（每帧直赋，不重建对象；Transform 非 StyledElement，x:Name 不生成字段，故 C# 持有引用并挂 RenderTransform）
-    private readonly TranslateTransform _translate = new();
-    private readonly ScaleTransform _scale = new();
-
     // 偏好（位置持久化）：懒解析，设计期 DesktopApp.Services 未就绪则为 null。
     private readonly IPreferencesStore? _prefs = DesktopApp.Services.GetService<IPreferencesStore>();
 
@@ -72,11 +54,6 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     {
         InitializeComponent();
         _rand = new Random();
-
-        _animTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30fps
-        _animTimer.Tick += OnAnimTick;
-        _startMs = Environment.TickCount64;
-        _animTimer.Start();
     }
 
     protected override void OnOpened(EventArgs e)
@@ -85,16 +62,7 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         // 初始定位：有保存的拖拽位置 → 恢复；否则 → 主屏右上角。
         RestoreOrDefaultPosition();
 
-        // OnOpened 后才挂 RenderTransform（PetGlyph 已 realization），并建右键菜单。
-        var group = new TransformGroup();
-        group.Children.Add(_scale);
-        group.Children.Add(_translate);
-        PetGlyph.RenderTransform = group;
-
         var menu = new ContextMenu();
-        var change = new MenuItem { Header = "换个造型" };
-        change.Click += (_, _) => RandomizeGlyph();
-        menu.Items.Add(change);
 
         var topmost = new MenuItem { Header = $"置顶{(Topmost ? " ✓" : "")}" };
         topmost.Click += (_, _) =>
@@ -114,31 +82,6 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         menu.Items.Add(quit);
 
         PetBody.ContextMenu = menu;
-    }
-
-    // —— 动画（DispatcherTimer 直赋，绕开 Animation API）——
-
-    private void OnAnimTick(object? sender, EventArgs e)
-    {
-        // emoji 形象层已隐藏（Lottie 形象层接管时），跳过变换动画——否则与 Lottie 的 30fps 重绘叠加，
-        // 两个 DispatcherTimer 并发 invalidate 导致桌宠闪烁。
-        if (PetBody is null || PetGlyph is null || !PetGlyph.IsVisible) return;
-        var t = (Environment.TickCount64 - _startMs) / 1000.0;
-        double floatY, breathe;
-        if (_isThinking)
-        {
-            // 思考中：更快抖动 + 上浮 + 明显呼吸
-            floatY = -Math.Abs(Math.Sin(t * 6.0)) * 6.0;
-            breathe = 1.0 + Math.Sin(t * 8.0) * 0.08;
-        }
-        else
-        {
-            floatY = Math.Sin(t * 2.0) * 4.0;
-            breathe = 1.0 + Math.Sin(t * 3.0) * 0.04;
-        }
-        _translate.Y = floatY;
-        _scale.ScaleX = breathe;
-        _scale.ScaleY = breathe;
     }
 
     // —— 拖拽 / 点击 ——
@@ -216,27 +159,9 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             TimeSpan.FromMilliseconds(2500));
     }
 
-    private void RandomizeGlyph()
-    {
-        _glyphIndex = _rand!.Next(PetGlyphPool.Length);
-        PetGlyph.Text = PetGlyphPool[_glyphIndex];
-    }
-
-    /// <summary>切思考态/待机态。由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化时调用。true=专注思考造型。
-    /// 保留（宿主最小联动）；P3 起更细粒度语义状态经 <see cref="IRunProgressSink.Post"/> 驱动造型+气泡。</summary>
+    /// <summary>切思考态/待机态。由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化时调用。true=专注思考造型。</summary>
     public void SetThinking(bool thinking)
-    {
-        _isThinking = thinking;
-        if (thinking)
-        {
-            ApplyKind(RunProgressKind.Reasoning);
-        }
-        else
-        {
-            _isThinking = false;
-            ApplyKind(RunProgressKind.RunDone);
-        }
-    }
+        => ApplyKind(thinking ? RunProgressKind.Reasoning : RunProgressKind.RunDone);
 
     // —— P3：IRunProgressSink（关键节点）+ IPetTokenStream（逐字打字机）实现 ——
 
@@ -257,10 +182,7 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             _answerBuf.Append(token);
             if (_answerBuf.Length > 30)
                 _answerBuf.Remove(0, _answerBuf.Length - 30);
-            // 打字机时回到普通宠物造型（非 🛠️/🤔），呼吸平稳。只在思考→回答边界切一次。
             StartBubbleStream();
-            if (_isThinking)
-                ApplyKind(RunProgressKind.RunDone);
             // Lottie 形象层：说话节奏（口型）。
             PetLottie?.SetMood(PetMood.Speaking);
         });
@@ -325,11 +247,9 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         }
     }
 
-    /// <summary>按语义状态切换造型 + 动画节奏。_isThinking 由 SetThinking 与状态联动；动画 tick 依 _kind 选速度。</summary>
+    /// <summary>按语义状态切换 Lottie 形象 mood（思考/工作/待机）。</summary>
     private void ApplyKind(RunProgressKind kind)
     {
-        _kind = kind;
-        // Lottie 形象层：语义状态 → mood（思考/工作/待机）。emoji 层隐藏，但保留原逻辑无害。
         PetLottie?.SetMood(kind switch
         {
             RunProgressKind.Reasoning => PetMood.Thinking,
@@ -339,28 +259,6 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
                 or RunProgressKind.PlanUpdated => PetMood.Working,
             _ => PetMood.Idle,
         });
-
-        if (PetGlyph is null) return;
-        switch (kind)
-        {
-            case RunProgressKind.Reasoning:
-                _isThinking = true;
-                PetGlyph.Text = _thinkingGlyphs[_rand!.Next(_thinkingGlyphs.Length)];
-                break;
-            case RunProgressKind.ToolStarted:
-                _isThinking = false;
-                PetGlyph.Text = "🛠️";
-                break;
-            case RunProgressKind.ToolFinished:
-            case RunProgressKind.ApprovalRequested:
-            case RunProgressKind.PlanUpdated:
-            case RunProgressKind.RunDone:
-            case RunProgressKind.RunError:
-            default:
-                _isThinking = false;
-                PetGlyph.Text = PetGlyphPool[_glyphIndex];
-                break;
-        }
     }
 
     /// <summary>气泡内容节流：启动 50ms flush 定时器，把 _answerBuf 累积文本写进气泡（打字机效果）。
@@ -418,8 +316,6 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 
     protected override void OnClosed(EventArgs e)
     {
-        _animTimer?.Stop();
-        _animTimer = null;
         StopBubbleStream();
         _bubbleAutoHide?.Dispose();
         PetLottie?.StopAndDispose();   // 释放 Lottie 动画 + 其 Skottie 播放定时器

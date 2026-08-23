@@ -25,23 +25,15 @@
                  FontSize="12" Foreground="#1A1A1A" TextWrapping="Wrap" MaxWidth="140"/>
     </Border>
 
-    <!-- 宠物形象。拖拽 + 右键菜单 + 点击互动 + 双击回主界面。
-         Lottie 形象层（当前技术壳：加载 Assets/pet-placeholder.json 验证 Skottie 渲染）；
-         emoji 形象层（IsVisible=false 占位，随状态切换的代码仍保留，后续由 Lottie 动画段替代）。 -->
+    <!-- 宠物形象：Lottie 形象层（Skottie 渲染角色），拖拽 + 右键菜单 + 点击互动 + 双击回主界面。 -->
     <Border x:Name="PetBody" HorizontalAlignment="Center" VerticalAlignment="Center"
             Background="Transparent" Cursor="Hand"
             PointerPressed="OnPetPointerPressed" PointerReleased="OnPetPointerReleased"
             DoubleTapped="OnPetDoubleTapped">
-      <Grid Background="Transparent">
-        <shell:LottiePetControl x:Name="PetLottie" IsVisible="True"
-                                SourceUri="avares://Acme.Desktop.Shared/Assets/pet-placeholder.json"
-                                Width="100" Height="100"
-                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        <TextBlock x:Name="PetGlyph" Text="🐱" IsVisible="False"
-                   FontSize="64"
-                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                   RenderTransformOrigin="50%,50%"/>
-      </Grid>
+      <shell:LottiePetControl x:Name="PetLottie"
+                              SourceUri="avares://Acme.Desktop.Shared/Assets/pet-placeholder.json"
+                              Width="100" Height="100"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Border>
   </Grid>
 </Window>
