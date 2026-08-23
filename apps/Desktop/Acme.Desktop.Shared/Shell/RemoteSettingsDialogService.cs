@@ -21,7 +21,7 @@ public sealed class RemoteSettingsDialogService : IRemoteSettingsDialogService
         await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var window = new RemoteSettingsWindow();
-            await window.ShowDialog(desktop.MainWindow);
+            await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
         });
     }
 }

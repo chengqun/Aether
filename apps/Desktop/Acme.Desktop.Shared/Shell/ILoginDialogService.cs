@@ -31,7 +31,7 @@ public sealed class LoginDialogService : ILoginDialogService
         var vm = new LoginViewModel(_auth, _preferences);
         var window = new LoginWindow { DataContext = vm };
         vm.LoggedIn += window.Close;
-        await window.ShowDialog(desktop.MainWindow);
+        await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
         return vm.LoginSucceededFlag;
     }
 }

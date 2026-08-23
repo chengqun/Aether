@@ -301,7 +301,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             window.Close();
         };
 
-        await window.ShowDialog(desktop.MainWindow);
+        await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
     }
 
     [RelayCommand]

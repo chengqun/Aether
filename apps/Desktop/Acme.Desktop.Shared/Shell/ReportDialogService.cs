@@ -23,7 +23,7 @@ public sealed class ReportDialogService : IReportDialogService
             vm.Finished += window.Close;
             window.ShowActivated = true;
             window.Opened += (_, _) => window.Activate();
-            await window.ShowDialog(desktop.MainWindow);
+            await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
         });
     }
 }
