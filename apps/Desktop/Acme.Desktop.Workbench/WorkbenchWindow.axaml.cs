@@ -65,6 +65,11 @@ public partial class WorkbenchWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        // 模态窗口 owner 解析：主窗可见 → 主窗；桌宠模式（主窗已 Hide，桌宠 Show）→ 桌宠。
+        // 供 ApprovalDialogService 等取可见 owner，避免 ShowDialog(已 Hide 的主窗) 抛
+        // "Cannot show window with non-visible owner"（桌宠模式下等审批即踩此坑）。
+        DesktopApp.ModalOwnerResolver = () =>
+            IsVisible ? this : (_pet is { IsVisible: true } ? _pet : null);
         // 初始主题应用（若有自定义 JSON）。
         ThemeLoader.Apply(this, _vm?.CustomThemeJson);
         ApplyThemeVariant();
@@ -109,12 +114,19 @@ public partial class WorkbenchWindow : Window
         Activate();
     }
 
-    /// <summary>懒建桌宠（含聊天联动订阅 + 退出回调）。</summary>
+    /// <summary>懒建桌宠（含聊天联动订阅 + 退出回调 + 状态流路由接线）。</summary>
     private void EnsurePet()
     {
         if (_pet is not null) return;
         _pet = new PetWindow { OwnerWindow = this, ExitRequested = ExitApplication, RestoreRequested = RestoreFromPet };
-        _pet.Closed += (_, _) => _pet = null;
+        _pet.Closed += (_, _) =>
+        {
+            // 桌宠关闭：清空路由器目标（聊天流回无通知），再置 null。PetWindow 自身实现 IRunProgressSink + IPetTokenStream。
+            DesktopApp.Services.GetService<Acme.Desktop.Shared.Hosting.PetStatusFeedRouter>()?.SetTarget(null);
+            _pet = null;
+        };
+        // 把活的桌宠指向常驻路由器——ChatWorkspaceViewModel 已解析的路由器实例从此刻起把关键节点 + 逐字流喂给它。
+        DesktopApp.Services.GetService<Acme.Desktop.Shared.Hosting.PetStatusFeedRouter>()?.SetTarget(_pet);
         if (_vm?.Chat is { } chat)
             chat.PropertyChanged += (_, args) =>
             {

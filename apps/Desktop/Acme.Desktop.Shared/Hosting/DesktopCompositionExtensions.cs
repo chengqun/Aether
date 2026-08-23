@@ -244,6 +244,12 @@ public static class DesktopCompositionExtensions
         // 提交消息生成（SCM 页 ✨ 按钮 → 取当前 git 变更 diff 摘要 → LLM 生成提交消息填入输入框）
         services.AddSingleton<ICommitMessageService, CommitMessageService>();
 
+        // 运行关键节点信号 + 桌宠逐字流路由器：ChatWorkspaceViewModel 解析 IRunProgressSink/IPetTokenStream（常驻），
+        // 桌宠懒建后 WorkbenchWindow 经 PetStatusFeedRouter.SetTarget 指向活的 PetWindow；未建宠物时静默丢弃。
+        services.AddSingleton<PetStatusFeedRouter>();
+        services.AddSingleton<IRunProgressSink>(sp => sp.GetRequiredService<PetStatusFeedRouter>());
+        services.AddSingleton<IPetTokenStream>(sp => sp.GetRequiredService<PetStatusFeedRouter>());
+
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;
     }

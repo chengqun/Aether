@@ -28,7 +28,9 @@ public sealed class AskUserDialogService : IAskUserDialogService
             // → 父窗禁用、弹窗不可见 = 假死。显式激活确保可见。
             window.ShowActivated = true;
             window.Opened += (_, _) => window.Activate();
-            await window.ShowDialog(desktop.MainWindow);
+            // 同 ApprovalDialogService：桌宠模式下主窗已 Hide，经可见-owner helper 弹窗（审批/ask_user 是 agent
+            // 运行中弹出的同类模态窗——同一坑）。见 DesktopApp.ShowModalWithVisibleOwnerAsync。
+            await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
             return vm.Result;
         });
     }

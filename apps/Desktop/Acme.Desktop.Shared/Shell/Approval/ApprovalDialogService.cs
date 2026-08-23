@@ -31,7 +31,11 @@ public sealed class ApprovalDialogService : IApprovalDialogService
             // 却看不到审批框）。显式 ShowActivated + Opened 时 Activate() 确保弹窗置前可见。
             window.ShowActivated = true;
             window.Opened += (_, _) => window.Activate();
-            await window.ShowDialog(desktop.MainWindow);
+
+            // owner 选可见窗口：桌宠模式下主窗已 Hide，ShowDialog(主窗) 会抛
+            // "Cannot show window with non-visible owner"。经 DesktopApp.ShowModalWithVisibleOwnerAsync
+            // 拿可见 owner（主窗或桌宠）模态显示；无可见 owner 退回无 owner 的 Show()。
+            await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
             return vm.Result;
         });
     }

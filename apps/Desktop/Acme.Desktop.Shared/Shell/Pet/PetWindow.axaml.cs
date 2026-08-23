@@ -1,6 +1,8 @@
 using System;
+using System.Text;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
+using Aether.AI.Core.Agents;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,12 +16,14 @@ namespace Acme.Desktop.Shared.Shell;
 /// 桌宠（悬浮宠物）：无边框透明底置顶小窗，emoji 形象飘在桌面上。P0~P2：
 /// P0 悬浮/置顶/拖拽/待机动画；P1 点击气泡说话 + 右键菜单（换造型/置顶开关/隐藏）；
 /// P2 与聊天联动——由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化调 <see cref="SetThinking"/>，
-/// agent 运行时切「思考中」造型 + 随机气泡。
+/// agent 运行时切「思考中」造型 + 随机气泡；P3 实时反馈镜——实现 <see cref="IRunProgressSink"/>
+/// （关键节点：工具/审批/计划/完成/错误 → 气泡）+ <see cref="IPetTokenStream"/>（逐字答案打字机）。
+/// 关键节点走 Core 的 <see cref="RunProgress"/>（与手机端同源），逐字 token 是桌宠专属细粒度通道——两者分层。
 /// 动画复用 aurora 的成熟先例：DispatcherTimer（~30fps）直赋 TranslateTransform/ScaleTransform 的
 /// X/Y/ScaleX/ScaleY，绕开 Avalonia 12.1.1 的 Animation.RunAsync(TranslateTransform) 会抛
 /// InvalidCastException 的坑（TransformAnimator 把 Animatable cast 成 Visual；见 CLAUDE.md aurora cast 坑）。
 /// </summary>
-public partial class PetWindow : Window
+public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 {
     private static readonly string[] PetGlyphPool = { "🐱", "🐻", "🐸", "🐤", "🐰", "🐶", "🦊", "🐼", "🐨", "🦉" };
     private readonly string[] _thinkingGlyphs = { "💭", "🤔", "🧠" };
@@ -38,6 +42,13 @@ public partial class PetWindow : Window
     private DispatcherTimer? _animTimer;
     private long _startMs;
     private Random? _rand;
+
+    // —— P3 实时反馈镜：关键节点 → 造型 + 气泡；逐字 token → 气泡打字机 ——
+    private RunProgressKind _kind = RunProgressKind.RunDone; // 当前语义状态（决定造型/动画节奏）
+    private readonly StringBuilder _answerBuf = new();     // 本轮回答累积（逐字流，节流渲染进气泡）
+    private DispatcherTimer? _bubbleTimer;                  // 气泡内容节流 flush（50ms，与主窗同节奏）
+    private IDisposable? _bubbleAutoHide;                   // 气泡自动收起（工具/关键节点句 2.5s；流式回答持续到本轮结束）
+    // 注：DispatcherTimer.RunOnce 返回 IDisposable（非 DispatcherTimer），故 _bubbleAutoHide 用 IDisposable。
 
     /// <summary>主界面窗口引用。桌宠是 Topmost 浮窗，被点击会被 macOS 激活成 key window、
     /// 把主窗压到后台——为使「点击桌宠后仍能切回主界面」，桌宠被激活时立即把焦点还给主窗。</summary>
@@ -209,20 +220,167 @@ public partial class PetWindow : Window
         PetGlyph.Text = PetGlyphPool[_glyphIndex];
     }
 
-    /// <summary>切思考态/待机态。由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化时调用。true=专注思考造型。</summary>
+    /// <summary>切思考态/待机态。由 WorkbenchWindow 订阅 Chat.IsAgentRunning 变化时调用。true=专注思考造型。
+    /// 保留（宿主最小联动）；P3 起更细粒度语义状态经 <see cref="IRunProgressSink.Post"/> 驱动造型+气泡。</summary>
     public void SetThinking(bool thinking)
     {
         _isThinking = thinking;
-        if (PetGlyph is null) return;
         if (thinking)
         {
-            PetGlyph.Text = _thinkingGlyphs[_rand!.Next(_thinkingGlyphs.Length)];
-            Say(_thinkingLines[_rand.Next(_thinkingLines.Length)]);
+            ApplyKind(RunProgressKind.Reasoning);
         }
         else
         {
-            PetGlyph.Text = PetGlyphPool[_glyphIndex];
+            _isThinking = false;
+            ApplyKind(RunProgressKind.RunDone);
         }
+    }
+
+    // —— P3：IRunProgressSink（关键节点）+ IPetTokenStream（逐字打字机）实现 ——
+
+    /// <summary>关键节点信号（聊天流 → Core RunProgress → 此处）。UI 线程 marshal + 按 Kind 驱动造型 + 更新气泡。
+    /// 宿主 WorkbenchWindow 把 PetWindow 注册为 IRunProgressSink 后，ChatWorkspaceViewModel 直接 Post 到此处。</summary>
+    public void Post(RunProgress signal)
+    {
+        Dispatcher.UIThread.Post(() => ApplyProgress(signal));
+    }
+
+    /// <summary>逐字答案 token（桌宠专属打字机；关键节点另走 <see cref="Post"/>）。</summary>
+    public void AppendToken(string token)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            _answerBuf.Append(token);
+            StartBubbleStream();
+            // 只在「思考 → 回答」边界切一次普通造型（🤔→🐱）；此后打字机持续、造型不再每 token 重设。
+            if (_isThinking)
+                ApplyKind(RunProgressKind.RunDone);
+        });
+    }
+
+    /// <summary>本轮答案流结束（flush 残留 + 停打字机，气泡交由终态 Done/Error 收敛）。</summary>
+    public void EndAnswer()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            FlushAnswer();
+            _answerBuf.Clear();
+            StopBubbleStream();
+        });
+    }
+
+    private void ApplyProgress(RunProgress signal)
+    {
+        switch (signal.Kind)
+        {
+            case RunProgressKind.Reasoning:
+                ApplyKind(RunProgressKind.Reasoning);
+                break;
+
+            case RunProgressKind.ToolStarted:
+                ApplyKind(RunProgressKind.ToolStarted);
+                if (signal.ToolName is not null)
+                    ShowLine($"🔧 正在{signal.ToolName}{(signal.ToolArgument is null ? "" : $"（{signal.ToolArgument}）")}", autoHide: false);
+                break;
+
+            case RunProgressKind.ToolFinished:
+                ShowLine($"✅ 完成 {signal.ToolName}", autoHide: true);
+                break;
+
+            case RunProgressKind.ApprovalRequested:
+                ApplyKind(RunProgressKind.ToolStarted);
+                ShowLine($"⛔ 需要你确认「{signal.ToolName}」", autoHide: true);
+                break;
+
+            case RunProgressKind.PlanUpdated:
+                ApplyKind(RunProgressKind.ToolStarted);
+                ShowLine($"📋 计划已生成 {signal.PlanStepCount} 步", autoHide: true);
+                break;
+
+            case RunProgressKind.RunDone:
+                if (signal.Text is not null)
+                    ShowLine($"✅ {signal.Text}", autoHide: true);
+                else
+                    ShowLine("搞定啦 ✨", autoHide: true);
+                ApplyKind(RunProgressKind.RunDone);
+                break;
+
+            case RunProgressKind.RunError:
+                StopBubbleStream();
+                ShowLine($"⚠️ 出错了{(string.IsNullOrEmpty(signal.Text) ? "" : "：" + signal.Text)}", autoHide: true);
+                ApplyKind(RunProgressKind.RunDone);
+                break;
+        }
+    }
+
+    /// <summary>按语义状态切换造型 + 动画节奏。_isThinking 由 SetThinking 与状态联动；动画 tick 依 _kind 选速度。</summary>
+    private void ApplyKind(RunProgressKind kind)
+    {
+        _kind = kind;
+        if (PetGlyph is null) return;
+        switch (kind)
+        {
+            case RunProgressKind.Reasoning:
+                _isThinking = true;
+                PetGlyph.Text = _thinkingGlyphs[_rand!.Next(_thinkingGlyphs.Length)];
+                break;
+            case RunProgressKind.ToolStarted:
+                _isThinking = false;
+                PetGlyph.Text = "🛠️";
+                break;
+            case RunProgressKind.ToolFinished:
+            case RunProgressKind.ApprovalRequested:
+            case RunProgressKind.PlanUpdated:
+            case RunProgressKind.RunDone:
+            case RunProgressKind.RunError:
+            default:
+                _isThinking = false;
+                PetGlyph.Text = PetGlyphPool[_glyphIndex];
+                break;
+        }
+    }
+
+    /// <summary>气泡内容节流：启动 50ms flush 定时器，把 _answerBuf 累积文本写进气泡（打字机效果）。
+    /// 与主窗 flushTimer 同节奏（50ms），避免逐 token 重排。</summary>
+    private void StartBubbleStream()
+    {
+        if (_bubbleTimer is null && SpeechBubble is not null && SpeechText is not null)
+        {
+            _bubbleTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            _bubbleTimer.Tick += (_, _) => FlushAnswer();
+            _bubbleTimer.Start();
+        }
+        if (SpeechBubble is not null) SpeechBubble.IsVisible = true;
+    }
+
+    private void FlushAnswer()
+    {
+        if (SpeechBubble is null || SpeechText is null) return;
+        if (_answerBuf.Length > 0)
+        {
+            SpeechText.Text = _answerBuf.ToString();
+            SpeechBubble.IsVisible = true;
+        }
+    }
+
+    private void StopBubbleStream()
+    {
+        _bubbleTimer?.Stop();
+        _bubbleTimer = null;
+    }
+
+    /// <summary>气泡显一句（关键节点/工具句/摘要——autoHide=true 2.5s 自动收；false 持续到本轮收敛或下一条覆盖）。</summary>
+    private void ShowLine(string line, bool autoHide)
+    {
+        if (SpeechBubble is null || SpeechText is null) return;
+        SpeechText.Text = line;
+        SpeechBubble.IsVisible = true;
+        _bubbleAutoHide?.Dispose();
+        _bubbleAutoHide = null;
+        if (autoHide)
+            _bubbleAutoHide = DispatcherTimer.RunOnce(
+                () => { if (SpeechBubble is not null) SpeechBubble.IsVisible = false; },
+                TimeSpan.FromMilliseconds(2500));
     }
 
     // —— 生命周期 ——

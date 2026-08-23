@@ -35,6 +35,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly IDeviceAutoConnectService _autoConnect;
     private readonly IApprovalDialogService? _approvalDialog;
     private readonly IToolApprovalLevelLookup? _levelLookup; // AutoEdit 模式按工具等级区分自动批/弹框；null 退化为全弹（Manual 语义）
+    private readonly IRunProgressSink? _progressSink; // 运行关键节点信号出口（可空：未注册则不广播，桌宠/手机端行为不变）
+    private readonly IPetTokenStream? _petTokens;    // 桌宠专属逐字答案流（可空：未注册则桌宠无打字机，关键节点仍走 _progressSink）
 
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
@@ -81,6 +83,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
         _levelLookup = serviceProvider.GetService<IToolApprovalLevelLookup>();
+        _progressSink = serviceProvider.GetService<IRunProgressSink>();
+        _petTokens = serviceProvider.GetService<IPetTokenStream>();
         _experts = experts;
         _workflows = workflows;
         _rules = rules;
@@ -171,9 +175,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         string senderName,
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default,
-        // 远程路径传：todos 变化时格式化成短文本经 SignalR 以 "Progress" type 发回手机（进度心跳）。
-        // 本地路径不传（默认 null）→ 不发 Progress，行为不变。
-        Action<IReadOnlyList<TodoItemInfo>>? onRemoteProgress = null)
+        // 远程路径传：关键节点信号（工具/审批/计划/错误）格式化成短文本经 SignalR 以 "Progress" type 发回手机
+        // （老板视角：过程中看进度）。本地路径不传（默认 null）→ 不发 Progress。注意：本地桌宠走 IRunProgressSink（广播），
+        // 与手机端这条互不相干——手机端是 remote-only，桌宠是 local+remote 都可见。逐字 token 两边都不传（噪音）。
+        Action<RunProgress>? onRemoteProgress = null)
     {
         var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
         var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
@@ -247,12 +252,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         fullText.Append(token);
                         lock (pendingLock) pendingChunks.Add((token, false));
                         flushTimer.Change(50, Timeout.Infinite); // 50ms 后批量刷新
+                        _petTokens?.AppendToken(token); // 桌宠专属打字机（逐字）；关键节点另走 _progressSink
                         return Task.CompletedTask;
                     },
                     OnReasoning: (text, _) =>
                     {
                         lock (pendingLock) pendingChunks.Add((text, true));
                         flushTimer.Change(50, Timeout.Infinite);
+                        EmitProgress(new RunProgress(RunProgressKind.Reasoning), onRemoteProgress);
                         return Task.CompletedTask;
                     },
                     OnToolEvent: (ev, _) =>
@@ -261,11 +268,17 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         if (ev.Name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
                             return Task.CompletedTask;
                         _dispatcher.Post(() => HandleToolEventSegmented(cursor, items, ev, senderName));
+                        // 关键节点广播：工具起止。
+                        EmitProgress(ev.Kind == ToolStreamEventKind.Call
+                            ? new RunProgress(RunProgressKind.ToolStarted, ToolName: ev.Name, ToolArgument: ExtractToolArgument(ev.Input))
+                            : new RunProgress(RunProgressKind.ToolFinished, ToolName: ev.Name), onRemoteProgress);
                         return Task.CompletedTask;
                     },
                     OnApprovalRequest: (req, _) =>
                     {
                         pendingApproval = req;
+                        // 关键节点广播：审批请求（下单/删除/推送等危险操作需确认）。
+                        EmitProgress(new RunProgress(RunProgressKind.ApprovalRequested, ToolName: req.ToolName), onRemoteProgress);
                         // 按当前模式算自动决定（Auto 全自动批；AutoEdit 自动批非 Dangerous；Manual/Plan 弹框）。
                         // 读 SelectedChatMode 是逐工具调用即时生效——运行中切档立即影响下一个工具（解决中途切模式）。
                         autoDecision = TryAutoApprove(req);
@@ -295,8 +308,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     OnTodoList: (list, _) =>
                     {
                         _dispatcher.Post(() => HandleTodoList(items, list, senderName));
-                        // 远程路径：todos 快照格式化成短文本发回手机（Progress 心跳）；本地路径 null 不调。
-                        onRemoteProgress?.Invoke(list);
+                        // 关键节点广播：计划更新（含手机端进度心跳——须带 Todos 供手机端逐条渲染）。
+                        EmitProgress(new RunProgress(RunProgressKind.PlanUpdated, PlanStepCount: list.Count, Todos: list), onRemoteProgress);
                         return Task.CompletedTask;
                     },
                     OnError: (text, _) =>
@@ -306,6 +319,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                             EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                             cursor.Current.Content += $"\n\n[错误：{text}]";
                         });
+                        EmitProgress(new RunProgress(RunProgressKind.RunError, Text: text), onRemoteProgress);
                         return Task.CompletedTask;
                     },
                     OnUsage: info => _dispatcher.Post(() => TokenInfo = info));
@@ -384,6 +398,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 _runCts?.Dispose();
                 _runCts = null;
             });
+
+            // 桌宠逐字流收尾（打字机 flush 后停止）。RUN 不考虑 remote——桌宠本地/远程都收逐字。
+            _petTokens?.EndAnswer();
+            // 终态关键节点广播：本轮收敛为 Done（带一句精简摘要，纯截断不调 LLM——主窗已有完整正文、
+            // 手机端已有 ConversationSummaryService 概览）或 Error。逐字 token 不走这条（噪音）。
+            EmitProgress(errored
+                ? new RunProgress(RunProgressKind.RunError)
+                : new RunProgress(RunProgressKind.RunDone, Text: Summarize(fullText.ToString())), onRemoteProgress);
         }
         return items.ToList();
     }
@@ -401,7 +423,40 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         IsReasoningContent = isReasoningContent,
     };
 
-    /// <summary>确保当前段是目标类型（TextContent 思考/答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。串行在 UI 线程调用。</summary>
+    /// <summary>从工具入参提取主参数摘要（取第一个字符串/数值值，截断 ~20 字符），供关键节点信号展示。
+    /// 拿不到则返回 null（消费方退化为只显工具名）。</summary>
+    private static string? ExtractToolArgument(Dictionary<string, object>? input)
+    {
+        if (input is null) return null;
+        foreach (var v in input.Values)
+        {
+            if (v is null) continue;
+            var s = v.ToString();
+            if (string.IsNullOrWhiteSpace(s)) continue;
+            s = s.Trim();
+            return s.Length > 20 ? s[..20] + "…" : s;
+        }
+        return null;
+    }
+
+    /// <summary>把本轮全文压成一行精简摘要（纯截断，不调 LLM——轻量，不与手机端 ConversationSummaryService 抢资源）。
+    /// 取第一段可见文本、压平换行为空格、截 ~60 字符。</summary>
+    private static string? Summarize(string fullText)
+    {
+        if (string.IsNullOrWhiteSpace(fullText)) return null;
+        var normalized = fullText.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (normalized.Length == 0) return null;
+        return normalized.Length > 60 ? normalized[..60] + "…" : normalized;
+    }
+
+    /// <summary>把一条关键节点信号广播给本地消费者（IRunProgressSink，桌宠等）+ 可选地转发给手机端
+    /// （onRemoteProgress，remote-only 路径）。两通道互不相干：本地桌宠 local+remote 都可见，手机端仅 remote 触发。
+    /// 逐字 token 不走此处（见 RunProgress 粒度约定）。</summary>
+    private void EmitProgress(RunProgress signal, Action<RunProgress>? onRemoteProgress)
+    {
+        _progressSink?.Post(signal);
+        onRemoteProgress?.Invoke(signal);
+    }    /// <summary>确保当前段是目标类型（TextContent 思考/答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。串行在 UI 线程调用。</summary>
     private void EnsureTextSegment(StreamCursor cursor, IList<ChatMessageItem> items, string senderName, bool isReasoningContent)
     {
         if (cursor.Current.IsText && cursor.Current.IsReasoningContent == isReasoningContent) return;
@@ -613,10 +668,26 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         catch { return null; }
     }
 
-    /// <summary>把 todos 快照格式化成手机端可读的短文本（Progress 心跳内容）。
-    /// 与 <see cref="HandleTodoList"/> 同源数据（TodoItemInfo），但输出纯文本供手机 MarkdownView 渲染：
-    /// 完成项打 ✅、待办项打 ⏳。空列表返回"进行中…"占位（agent 已起跑但还没建计划）。</summary>
-    private static string FormatTodosForRemote(IReadOnlyList<TodoItemInfo> todos)
+    /// <summary>把一条关键节点信号格式化成手机端可读的短文本（Progress 心跳内容）。
+    /// 老板视角：过程中看进度、跑完收概览——各关键节点转一句短文本，逐字 token 不在这里（噪音）：
+    /// 工具起止 → 🔧/✅ 工具名；审批 → ⛔ 需确认；计划 → 📋 进度 + 逐条 ✅/⏳；完成/错误 → 权威由概览摘要承担（Progress 心跳不发 long-form）。</summary>
+    private static string? FormatProgressForRemote(RunProgress signal)
+    {
+        return signal.Kind switch
+        {
+            RunProgressKind.Reasoning => "💭 思考中…",
+            RunProgressKind.ToolStarted => $"🔧 正在 {signal.ToolName}{(signal.ToolArgument is null ? "" : $"（{signal.ToolArgument}）")}",
+            RunProgressKind.ToolFinished => $"✅ 完成 {signal.ToolName}",
+            RunProgressKind.ApprovalRequested => $"⛔ 需要你确认「{signal.ToolName}」",
+            RunProgressKind.PlanUpdated => FormatPlanForRemote(signal.Todos),
+            // 完成/错误不在此发 long-form——最终结果由概览摘要（Text type）承担；心跳只做过程提示。
+            RunProgressKind.RunDone => "🏁 已完成",
+            RunProgressKind.RunError => "⚠️ 运行出错",
+            _ => null,
+        };
+    }
+
+    private static string FormatPlanForRemote(IReadOnlyList<TodoItemInfo>? todos)
     {
         if (todos is null || todos.Count == 0) return "📋 进行中…";
         var sb = new System.Text.StringBuilder("📋 进度\n");
@@ -728,12 +799,12 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     ? _workflowRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
                     : _agentRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
                 fullText,
-                // 进度心跳：todos 快照格式化成短文本经 SignalR 以 "Progress" type 发回手机（老板视角：过程中看进度）。
-                // 心跳丢失不影响主流程；不 await（避免阻塞流式）。Rule/未开 plan 的 agent 无 OnTodoList → 自然不发。
-                onRemoteProgress: list =>
+                // 进度心跳：关键节点信号（工具/审批/计划/完成/错误）格式化成短文本经 SignalR 以 "Progress" type 发回手机
+                // （老板视角：过程中看进度）。心跳丢失不影响主流程；不 await（避免阻塞流式）。Rule agent 无 OnReasoning/OnToolEvent → 自然不发。
+                onRemoteProgress: signal =>
                 {
-                    var progressText = FormatTodosForRemote(list);
-                    if (_deviceChatClient.IsConnected)
+                    var progressText = FormatProgressForRemote(signal);
+                    if (progressText is not null && _deviceChatClient.IsConnected)
                         _deviceChatClient.SendMessageAsync(convId, progressText, "Progress").SafeFireAndForget();
                 });
             if (remoteKind != ChatTargetKind.Rule) await RefreshModeAsync(msg.ConversationId);
