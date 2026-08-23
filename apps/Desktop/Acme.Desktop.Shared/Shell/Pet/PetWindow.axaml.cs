@@ -62,6 +62,10 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         // 初始定位：有保存的拖拽位置 → 恢复；否则 → 主屏右上角。
         RestoreOrDefaultPosition();
 
+        // 加载全部 mood 动画（Assets/pet/{idle,thinking,working,speaking}.json，缺省回退 idle）。
+        PetLottie?.LoadAllFromAssets();
+        PetLottie?.SetMood(PetMood.Idle);
+
         var menu = new ContextMenu();
 
         var topmost = new MenuItem { Header = $"置顶{(Topmost ? " ✓" : "")}" };

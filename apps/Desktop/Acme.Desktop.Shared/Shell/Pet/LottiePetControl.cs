@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -39,65 +40,73 @@ public enum PetMood
 /// </summary>
 public class LottiePetControl : Control
 {
-    private Animation? _animation;
+    private readonly Dictionary<PetMood, Animation> _animations = new();
+    private Animation? _active;
     private DispatcherTimer? _timer;
     private TimeSpan _elapsed;
     private DateTime? _lastTick;
     private long _startMs;
 
-    // 语义状态（信号联动）：mood 驱动播放速度 + 缩放/位置脉冲；Pulse 由外部信号触发（说话/完成/出错）。
+    // 语义状态（信号联动）：mood 决定当前动画 + 播放速度/脉冲节奏。
     private PetMood _mood = PetMood.Idle;
 
     // 离屏渲染与显示位图
     private SKBitmap? _frameBitmap;         // 离屏画布副本（动画内在尺寸）
     private WriteableBitmap? _displayBitmap; // Avalonia display 位图（控件尺寸）
-    private int _aw, _ah;                   // 动画内在尺寸
     private int _dw, _dh;                   // display 尺寸（= 控件尺寸）
 
-    /// <summary>动画文件内容（Lottie json 字节）。set 时（重新）加载并启动循环播放。</summary>
-    private byte[]? _jsonBytes;
-    public byte[]? JsonBytes
+    /// <summary>
+    /// 从 avares:// 资源按约定一次加载全部 mood 动画。约定路径：<c>Assets/pet/{mood}.json</c>
+    /// （idle/thinking/working/speaking）。缺某个文件的 mood 回退到 idle（保证永远有动画可播）。
+    /// </summary>
+    public void LoadAllFromAssets()
     {
-        get => _jsonBytes;
-        set
+        foreach (var mood in (PetMood[])Enum.GetValues(typeof(PetMood)))
         {
-            _jsonBytes = value;
-            _sourceUri = null;
-            LoadAnimation();
+            var uri = new Uri($"avares://Acme.Desktop.Shared/Assets/pet/{mood.ToString().ToLowerInvariant()}.json");
+            LoadMoodFromUri(mood, uri, fallbackToIdle: mood != PetMood.Idle);
         }
+        Activate(_mood);
     }
 
-    private Uri? _sourceUri;
-
-    /// <summary>从 avares://（或相对资源）URI 加载动画。与 <see cref="JsonBytes"/> 二选一。</summary>
-    public Uri? SourceUri
-    {
-        get => _sourceUri;
-        set
-        {
-            _sourceUri = value;
-            if (value is not null) ReadFromUri(value);
-            else { _jsonBytes = null; LoadAnimation(); }
-        }
-    }
-
-    private void ReadFromUri(Uri uri)
+    /// <summary>为单个 mood 加载动画（bytes）。失败或缺少时回退 idle（若 mood 非 idle）。</summary>
+    public void LoadMood(PetMood mood, byte[] jsonBytes)
     {
         try
         {
-            using var s = AssetLoader.Open(uri);
-            using var ms = new System.IO.MemoryStream();
-            s.CopyTo(ms);
-            _jsonBytes = ms.ToArray();
-            LoadAnimation();
+            using var data = SKData.CreateCopy(jsonBytes);
+            _animations[mood] = Animation.Create(data);
+            System.Diagnostics.Trace.WriteLine(
+                $"[LottiePetControl] {mood} 加载成功 {_animations[mood].Size.Width}x{_animations[mood].Size.Height} dur={_animations[mood].Duration}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[LottiePetControl] 读取资源失败 {uri}: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[LottiePetControl] {mood} 加载失败: {ex.Message}");
         }
     }
 
-    /// <summary>播放速度倍率（1=原速）。</summary>
+    private void LoadMoodFromUri(PetMood mood, Uri uri, bool fallbackToIdle)
+    {
+        try
+        {
+            if (!AssetLoader.Exists(uri))
+            {
+                if (fallbackToIdle)
+                    System.Diagnostics.Trace.WriteLine($"[LottiePetControl] 缺少 {mood} 动画 {uri} → 回退 idle");
+                return; // 回退 idle：字典里无该 mood 时 Activate 会落到 idle
+            }
+            using var s = AssetLoader.Open(uri);
+            using var ms = new System.IO.MemoryStream();
+            s.CopyTo(ms);
+            LoadMood(mood, ms.ToArray());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"[LottiePetControl] {mood} 读取失败 {uri}: {ex.Message}");
+        }
+    }
+
+    /// <summary>播放速度倍率（1=原速）。多动画时各动画自带节奏，此值仅作全局调速。</summary>
     public double Speed { get; set; } = 1.0;
 
     /// <summary>是否循环（false=播到结尾停在末帧）。</summary>
@@ -109,31 +118,19 @@ public class LottiePetControl : Control
         _startMs = Environment.TickCount64;
     }
 
-    private void LoadAnimation()
+    /// <summary>激活指定 mood 的动画（换引用 + 重置播放时间，零重新加载）。缺该 mood 时回退 idle。</summary>
+    private void Activate(PetMood mood)
     {
-        StopTimer();
-        _animation?.Dispose();
-        _animation = null;
+        _mood = mood;
+        _active = _animations.TryGetValue(mood, out var a)
+            ? a
+            : (_animations.TryGetValue(PetMood.Idle, out var idle) ? idle : null);
+
         _elapsed = TimeSpan.Zero;
         _lastTick = null;
+        _startMs = Environment.TickCount64; // 重置脉冲相位
 
-        if (_jsonBytes is not { Length: > 0 }) { InvalidateVisual(); return; }
-
-        try
-        {
-            using var data = SKData.CreateCopy(_jsonBytes);
-            _animation = Animation.Create(data);
-            _aw = (int)_animation.Size.Width;
-            _ah = (int)_animation.Size.Height;
-            System.Diagnostics.Trace.WriteLine(
-                $"[LottiePetControl] 加载成功 size={_aw}x{_ah} dur={_animation.Duration} fps={_animation.Fps}");
-            StartTimer();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Trace.WriteLine($"[LottiePetControl] 加载失败: {ex.Message}");
-            _animation = null;
-        }
+        if (_active is not null && _timer is null) StartTimer();
         InvalidateVisual();
     }
 
@@ -155,33 +152,39 @@ public class LottiePetControl : Control
 
     private void OnTick(object? sender, EventArgs e)
     {
-        if (_animation is null) return;
+        var anim = _active;
+        if (anim is null) return;
         var now = DateTime.UtcNow;
         if (_lastTick is { } last)
         {
             _elapsed += TimeSpan.FromSeconds((now - last).TotalSeconds * EffectiveSpeed);
-            if (Loop && _animation.Duration > TimeSpan.Zero && _elapsed > _animation.Duration)
+            if (Loop && anim.Duration > TimeSpan.Zero && _elapsed > anim.Duration)
                 _elapsed = TimeSpan.Zero;
-            else if (!Loop && _elapsed >= _animation.Duration)
-                _elapsed = _animation.Duration;
+            else if (!Loop && _elapsed >= anim.Duration)
+                _elapsed = anim.Duration;
         }
         _lastTick = now;
         InvalidateVisual();
     }
 
-    /// <summary>按 mood 的有效播放速度（= 用户 Speed × mood 倍率）。</summary>
+    /// <summary>按 mood 的有效播放速度（= 用户 Speed × mood 倍率）。多动画时各动画已设计好节奏，
+    /// 仅保留轻量调速：thinking 略慢、working 略快，speaking/idle 原速。</summary>
     private double EffectiveSpeed => _mood switch
     {
-        PetMood.Thinking => Speed * 0.55, // 深思慢放
-        PetMood.Working   => Speed * 1.35, // 忙碌快进
-        PetMood.Speaking  => Speed * 1.0,
+        PetMood.Thinking => Speed * 0.85,
+        PetMood.Working   => Speed * 1.1,
         _                 => Speed,
     };
 
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        if (_animation is null || _aw <= 0 || _ah <= 0) return;
+        var anim = _active;
+        if (anim is null) return;
+
+        int aw = (int)anim.Size.Width;
+        int ah = (int)anim.Size.Height;
+        if (aw <= 0 || ah <= 0) return;
 
         int dw = (int)(Width > 0 ? Width : Bounds.Width);
         int dh = (int)(Height > 0 ? Height : Bounds.Height);
@@ -192,15 +195,15 @@ public class LottiePetControl : Control
         using (var canvas = new SKCanvas(_frameBitmap!))
         {
             canvas.Clear(SKColors.Transparent);
-            var sx = (float)dw / _aw;
-            var sy = (float)dh / _ah;
+            var sx = (float)dw / aw;
+            var sy = (float)dh / ah;
             canvas.Scale(sx, sy);
 
-            // 语义状态动效：呼吸/脉冲缩放 + 上下浮，围绕中心按 mood 节奏变化。
+            // 语义状态动效：围绕中心的脉冲/上下浮（各动画已自带动画，这里仅加轻量呼吸，说话加口型节奏）。
             ApplyMoodMotion(canvas, dw, dh);
 
-            _animation.SeekFrameTime(_elapsed, null);
-            _animation.Render(canvas, new SKRect(0, 0, _aw, _ah));
+            anim.SeekFrameTime(_elapsed, null);
+            anim.Render(canvas, new SKRect(0, 0, aw, ah));
         }
 
         // 2. 复制到 Avalonia WriteableBitmap（同尺寸，逐行拷贝）。
@@ -307,30 +310,32 @@ public class LottiePetControl : Control
     }
 
     /// <summary>
-    /// 切换语义状态（信号联动入口）。Waiting/Thinking/Working/Speaking 映射自聊天信号，
-    /// 经 <see cref="PetWindow.ApplyProgress"/>/token 流调用。改 mood 只调节奏与脉冲，不重载动画。
+    /// 切换语义状态（信号联动入口）。换当前动画引用 + 重置播放时间，零重新加载/读盘。
+    /// 缺该 mood 动画时经 <see cref="Activate"/> 回退 idle，保证永远有画面。
     /// </summary>
     public void SetMood(PetMood mood)
     {
-        if (_mood == mood)
+        if (_mood == mood && _active is not null)
         {
-            if (mood != PetMood.Speaking) return; // Speaking 需持续刷新口型节奏，不跳过
+            // Speaking 需持续刷新口型节奏相位，不因同 mood 短路跳过。
+            if (mood != PetMood.Speaking) return;
+            _startMs = Environment.TickCount64;
+            InvalidateVisual();
+            return;
         }
-        _mood = mood;
-        // 切换状态时重置节奏相位，避免脉冲/浮动从旧相位跳变。
-        _startMs = Environment.TickCount64;
-        InvalidateVisual();
+        Activate(mood);
     }
 
     /// <summary>当前语义状态。</summary>
     public PetMood Mood => _mood;
 
-    /// <summary>停播并释放动画 + 定时器 + 位图（窗口关闭/换形象时调）。</summary>
+    /// <summary>停播并释放全部动画 + 定时器 + 位图（窗口关闭/换形象时调）。</summary>
     public void StopAndDispose()
     {
         StopTimer();
-        _animation?.Dispose();
-        _animation = null;
+        foreach (var a in _animations.Values) a.Dispose();
+        _animations.Clear();
+        _active = null;
         _frameBitmap?.Dispose();
         _frameBitmap = null;
         _displayBitmap?.Dispose();
