@@ -12,6 +12,22 @@ using SkiaSharp.Skottie;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
+/// 桌宠语义状态（信号联动用）。不同状态对应不同动画节奏/缩放脉冲/口型，映射自
+/// <c>RunProgressKind</c> + 待机 + 说话（token 流）。后续换多素材时，每个 mood 可绑不同 Lottie 文件。
+/// </summary>
+public enum PetMood
+{
+    /// <summary>待机：原速循环 + 轻微呼吸。</summary>
+    Idle,
+    /// <summary>思考：慢速 + 明显上下浮（模型在推理）。</summary>
+    Thinking,
+    /// <summary>工作中：快速 + 脉冲（执行工具/等审批/计划）。</summary>
+    Working,
+    /// <summary>说话：口型节奏缩放（逐字 token 驱动）。</summary>
+    Speaking,
+}
+
+/// <summary>
 /// 桌宠形象层：用 Skia 官方 Skottie（Lottie）渲染会动的角色，替换原 emoji &lt;see cref="TextBlock"/&gt;。
 /// Lottie 是「软件骨骼 + 矢量路径形变」动画（呼吸/眨眼/转头/口型），观感近似 Live2D 的轻量版，且零新增原生库
 /// （libSkiaSharp 已内置 skottie；见 csproj <c>SkiaSharp.Skottie</c> 引用）。
@@ -27,6 +43,10 @@ public class LottiePetControl : Control
     private DispatcherTimer? _timer;
     private TimeSpan _elapsed;
     private DateTime? _lastTick;
+    private long _startMs;
+
+    // 语义状态（信号联动）：mood 驱动播放速度 + 缩放/位置脉冲；Pulse 由外部信号触发（说话/完成/出错）。
+    private PetMood _mood = PetMood.Idle;
 
     // 离屏渲染与显示位图
     private SKBitmap? _frameBitmap;         // 离屏画布副本（动画内在尺寸）
@@ -86,6 +106,7 @@ public class LottiePetControl : Control
     public LottiePetControl()
     {
         ClipToBounds = false;
+        _startMs = Environment.TickCount64;
     }
 
     private void LoadAnimation()
@@ -138,7 +159,7 @@ public class LottiePetControl : Control
         var now = DateTime.UtcNow;
         if (_lastTick is { } last)
         {
-            _elapsed += TimeSpan.FromSeconds((now - last).TotalSeconds * Speed);
+            _elapsed += TimeSpan.FromSeconds((now - last).TotalSeconds * EffectiveSpeed);
             if (Loop && _animation.Duration > TimeSpan.Zero && _elapsed > _animation.Duration)
                 _elapsed = TimeSpan.Zero;
             else if (!Loop && _elapsed >= _animation.Duration)
@@ -147,6 +168,15 @@ public class LottiePetControl : Control
         _lastTick = now;
         InvalidateVisual();
     }
+
+    /// <summary>按 mood 的有效播放速度（= 用户 Speed × mood 倍率）。</summary>
+    private double EffectiveSpeed => _mood switch
+    {
+        PetMood.Thinking => Speed * 0.55, // 深思慢放
+        PetMood.Working   => Speed * 1.35, // 忙碌快进
+        PetMood.Speaking  => Speed * 1.0,
+        _                 => Speed,
+    };
 
     public override void Render(DrawingContext context)
     {
@@ -165,6 +195,10 @@ public class LottiePetControl : Control
             var sx = (float)dw / _aw;
             var sy = (float)dh / _ah;
             canvas.Scale(sx, sy);
+
+            // 语义状态动效：呼吸/脉冲缩放 + 上下浮，围绕中心按 mood 节奏变化。
+            ApplyMoodMotion(canvas, dw, dh);
+
             _animation.SeekFrameTime(_elapsed, null);
             _animation.Render(canvas, new SKRect(0, 0, _aw, _ah));
         }
@@ -184,6 +218,46 @@ public class LottiePetControl : Control
             _frameBitmap?.Dispose();
             _frameBitmap = new SKBitmap(w, h, SKColorType.Rgba8888, SKAlphaType.Unpremul);
         }
+    }
+
+    /// <summary>
+    /// 按当前 mood 施加缩放脉冲 + 上下浮（围绕控件中心）。缩放相位用 <c>_startMs</c> 保证切状态时重置，
+    /// 避免从旧相位跳变。待机=轻微呼吸；思考=慢速大浮；工作=快速小脉冲；说话=中频口型节奏。
+    /// </summary>
+    private void ApplyMoodMotion(SKCanvas canvas, int dw, int dh)
+    {
+        var t = (Environment.TickCount64 - _startMs) / 1000.0;
+        const double twoPi = 2.0 * Math.PI;
+
+        double pulse;  // 缩放幅度（相对中心）
+        double floatY; // 上下浮幅度（像素，动画内在坐标 → 需乘 display 缩放比）
+        switch (_mood)
+        {
+            case PetMood.Thinking:
+                pulse = Math.Sin(t * twoPi / 2.6) * 0.06;           // 慢呼吸
+                floatY = -Math.Abs(Math.Sin(t * twoPi / 3.2)) * 3.0; // 缓慢上浮
+                break;
+            case PetMood.Working:
+                pulse = Math.Sin(t * twoPi / 0.9) * 0.04;           // 较快脉冲
+                floatY = Math.Sin(t * twoPi / 1.3) * 1.2;
+                break;
+            case PetMood.Speaking:
+                pulse = Math.Sin(t * twoPi / 0.35) * 0.025;         // 口型节奏（~3Hz）
+                floatY = Math.Sin(t * twoPi / 0.7) * 0.8;
+                break;
+            default: // Idle
+                pulse = Math.Sin(t * twoPi / 3.5) * 0.02;           // 轻微呼吸
+                floatY = Math.Sin(t * twoPi / 4.0) * 0.6;
+                break;
+        }
+
+        // 围绕中心缩放 + 上下浮（display 像素坐标）。
+        var cx = dw / 2.0;
+        var cy = dh / 2.0;
+        var s = 1.0 + pulse;
+        canvas.Translate((float)cx, (float)cy);
+        canvas.Scale((float)s, (float)s);
+        canvas.Translate((float)-cx, (float)(-cy + floatY));
     }
 
     private void EnsureDisplayBitmap(int w, int h)
@@ -231,6 +305,25 @@ public class LottiePetControl : Control
         _lastTick = null;
         InvalidateVisual();
     }
+
+    /// <summary>
+    /// 切换语义状态（信号联动入口）。Waiting/Thinking/Working/Speaking 映射自聊天信号，
+    /// 经 <see cref="PetWindow.ApplyProgress"/>/token 流调用。改 mood 只调节奏与脉冲，不重载动画。
+    /// </summary>
+    public void SetMood(PetMood mood)
+    {
+        if (_mood == mood)
+        {
+            if (mood != PetMood.Speaking) return; // Speaking 需持续刷新口型节奏，不跳过
+        }
+        _mood = mood;
+        // 切换状态时重置节奏相位，避免脉冲/浮动从旧相位跳变。
+        _startMs = Environment.TickCount64;
+        InvalidateVisual();
+    }
+
+    /// <summary>当前语义状态。</summary>
+    public PetMood Mood => _mood;
 
     /// <summary>停播并释放动画 + 定时器 + 位图（窗口关闭/换形象时调）。</summary>
     public void StopAndDispose()

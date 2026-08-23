@@ -261,6 +261,8 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             StartBubbleStream();
             if (_isThinking)
                 ApplyKind(RunProgressKind.RunDone);
+            // Lottie 形象层：说话节奏（口型）。
+            PetLottie?.SetMood(PetMood.Speaking);
         });
     }
 
@@ -272,6 +274,8 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             FlushAnswer();
             _answerBuf.Clear();
             StopBubbleStream();
+            // 说完了回到待机。
+            PetLottie?.SetMood(PetMood.Idle);
         });
     }
 
@@ -325,6 +329,17 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     private void ApplyKind(RunProgressKind kind)
     {
         _kind = kind;
+        // Lottie 形象层：语义状态 → mood（思考/工作/待机）。emoji 层隐藏，但保留原逻辑无害。
+        PetLottie?.SetMood(kind switch
+        {
+            RunProgressKind.Reasoning => PetMood.Thinking,
+            RunProgressKind.ToolStarted
+                or RunProgressKind.ToolFinished
+                or RunProgressKind.ApprovalRequested
+                or RunProgressKind.PlanUpdated => PetMood.Working,
+            _ => PetMood.Idle,
+        });
+
         if (PetGlyph is null) return;
         switch (kind)
         {
