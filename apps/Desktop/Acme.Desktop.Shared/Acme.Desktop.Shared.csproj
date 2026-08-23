@@ -24,6 +24,12 @@
     <!-- Roslyn 语义分析（EditSymbolTool：符号级 C# 编辑）。宿主层独有——不复用 ai/SystemTools 的轻量工具集。 -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.13.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.13.0" />
+    <!-- Lottie 动画（桌宠形象层）：Skia 官方 Skottie 模块的 managed 绑定。与主 SkiaSharp（3.119.4，
+         经 RoyalTerminal/Avalonia 传递引入）版本同步；原生 libSkiaSharp.dylib 已内置 skottie 符号，零新增原生库。 -->
+    <PackageReference Include="SkiaSharp.Skottie" Version="3.119.4" />
+    <!-- Avalonia 的 Skia 渲染后端（显式引用以取 ISkiaSharpApiLeaseFeature——DrawingContext → SKCanvas 桥，
+         桌宠 Lottie 自绘用）。桌面默认即 Skia 后端，本就是传递依赖，此处仅为编译期类型访问。 -->
+    <PackageReference Include="Avalonia.Skia" Version="12.1.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -120,7 +120,9 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 
     private void OnAnimTick(object? sender, EventArgs e)
     {
-        if (PetBody is null) return;
+        // emoji 形象层已隐藏（Lottie 形象层接管时），跳过变换动画——否则与 Lottie 的 30fps 重绘叠加，
+        // 两个 DispatcherTimer 并发 invalidate 导致桌宠闪烁。
+        if (PetBody is null || PetGlyph is null || !PetGlyph.IsVisible) return;
         var t = (Environment.TickCount64 - _startMs) / 1000.0;
         double floatY, breathe;
         if (_isThinking)
@@ -403,6 +405,9 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     {
         _animTimer?.Stop();
         _animTimer = null;
+        StopBubbleStream();
+        _bubbleAutoHide?.Dispose();
+        PetLottie?.StopAndDispose();   // 释放 Lottie 动画 + 其 Skottie 播放定时器
         base.OnClosed(e);
     }
 }
