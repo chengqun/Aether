@@ -133,6 +133,9 @@
               <MenuItem Header="重置布局" Command="{Binding ResetLayoutCommand}">
                 <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Refresh}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
               </MenuItem>
+              <MenuItem Header="桌宠" Click="OnTogglePet">
+                <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Sparkle}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
+              </MenuItem>
               <MenuItem Header="主题" ItemsSource="{Binding Themes}" Click="OnSelectTheme">
                 <MenuItem.Icon><Path Data="{x:Static shell:Codicons.ColorMode}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
                 <MenuItem.ItemTemplate>

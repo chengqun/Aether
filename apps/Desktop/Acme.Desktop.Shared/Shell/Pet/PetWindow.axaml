@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Desktop.Shared.Shell.PetWindow"
+        Width="120" Height="140"
+        CanResize="False"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
+        WindowStartupLocation="Manual"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        WindowDecorations="None"
+        Topmost="True">
+
+  <!-- 桌宠：透明底悬浮窗。形象=emoji（居中），外层 Border 承载拖拽/菜单；
+       气泡（说话）叠加在形象上方。无边框无缩放，纯悬浮。 -->
+  <Grid Background="Transparent">
+    <!-- 气泡说话框（点击/agent 运行时显示台词） -->
+    <Border x:Name="SpeechBubble" IsVisible="False"
+            HorizontalAlignment="Center" VerticalAlignment="Top"
+            Margin="0,0,0,0" Padding="10,6" CornerRadius="12"
+            Background="#FDFDFDFD" BorderBrush="#CCCCCCCC" BorderThickness="1">
+      <TextBlock x:Name="SpeechText" Text=""
+                 FontSize="12" Foreground="#1A1A1A" TextWrapping="Wrap" MaxWidth="140"/>
+    </Border>
+
+    <!-- 宠物形象（emoji，随状态切换）。拖拽 + 右键菜单 + 点击互动 + 双击回主界面。 -->
+    <Border x:Name="PetBody" HorizontalAlignment="Center" VerticalAlignment="Center"
+            Background="Transparent" Cursor="Hand"
+            PointerPressed="OnPetPointerPressed" PointerReleased="OnPetPointerReleased"
+            DoubleTapped="OnPetDoubleTapped">
+      <TextBlock x:Name="PetGlyph" Text="🐱"
+                 FontSize="64"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 RenderTransformOrigin="50%,50%"/>
+    </Border>
+  </Grid>
+</Window>

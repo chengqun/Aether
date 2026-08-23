@@ -226,7 +226,15 @@ public sealed class McpServerRegistry : IMcpServerRegistry, IAsyncDisposable
         {
             if (e.Client is not null)
             {
-                try { await e.Client.DisposeAsync().ConfigureAwait(false); }
+                try
+                {
+                    // 每个 client 释放加 2s 超时：MAF 的 McpClient.DisposeAsync 关闭 stdio 子进程
+                    // （等子进程退出）无超时，子进程不响应会死等 → 退出卡死。超时后放弃，残留子进程由 OS 回收。
+                    await e.Client.DisposeAsync()
+                        .AsTask()
+                        .WaitAsync(TimeSpan.FromSeconds(2))
+                        .ConfigureAwait(false);
+                }
                 catch { }
             }
         }

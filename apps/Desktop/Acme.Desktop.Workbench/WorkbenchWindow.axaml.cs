@@ -38,6 +38,12 @@ public partial class WorkbenchWindow : Window
     private List<(TranslateTransform Tf, double Drift, double DurX, double DurY)>? _auroraBlobs;
     private long _auroraStartMs;
 
+    /// <summary>桌宠悬浮窗（懒建，首次开启时 new）。null=未开启。</summary>
+    private PetWindow? _pet;
+
+    /// <summary>真退出标志：X（关闭）被拦截为「最小化到桌宠」；只有显式「退出」路径置 true 才真正关闭。</summary>
+    private bool _isReallyExiting;
+
     public WorkbenchWindow()
     {
         InitializeComponent();
@@ -73,9 +79,55 @@ public partial class WorkbenchWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        // X（关闭）拦截为「最小化到桌宠」——桌宠是主窗的最小化驻留形态。真退出（_isReallyExiting）才放行关闭。
+        if (!_isReallyExiting)
+        {
+            e.Cancel = true;
+            EnterPetMode();
+            return;
+        }
         base.OnClosing(e);
         StopAurora();      // 取消漂移动画（免关窗后空转）
         PersistWindowSize();
+        _pet?.Close();
+    }
+
+    /// <summary>进入桌宠形态：Hide 主窗（从屏幕消失，不依赖 OS 迷你化协议——WindowState=Minimized 在
+    /// Avalonia 12.1.1/macOS 上不可靠）+ 显式显示桌宠。桌宠 = 主窗隐藏在桌面的驻留形态。</summary>
+    private void EnterPetMode()
+    {
+        EnsurePet();
+        Hide();
+        if (!_pet!.IsVisible) _pet.Show();
+    }
+
+    /// <summary>从桌宠回到主界面：隐藏桌宠 + 还原主窗（Show+Activate）。</summary>
+    public void RestoreFromPet()
+    {
+        _pet?.Hide();
+        Show();
+        Activate();
+    }
+
+    /// <summary>懒建桌宠（含聊天联动订阅 + 退出回调）。</summary>
+    private void EnsurePet()
+    {
+        if (_pet is not null) return;
+        _pet = new PetWindow { OwnerWindow = this, ExitRequested = ExitApplication, RestoreRequested = RestoreFromPet };
+        _pet.Closed += (_, _) => _pet = null;
+        if (_vm?.Chat is { } chat)
+            chat.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(ChatWorkspaceViewModel.IsAgentRunning))
+                    _pet?.SetThinking(chat.IsAgentRunning);
+            };
+    }
+
+    /// <summary>真正退出程序：置真退出标志（绕过 X→最小化拦截）→ Close。</summary>
+    public void ExitApplication()
+    {
+        _isReallyExiting = true;
+        Close();
     }
 
     /// <summary>打开运行 Trace 查看窗口（OTel agent.run span）。</summary>
@@ -87,6 +139,10 @@ public partial class WorkbenchWindow : Window
             window.Show();
         }
     }
+
+    /// <summary>账号菜单「桌宠」：立即 Hide 主窗 → 桌宠（等同点 X 的行为）。双击桌宠还原主窗。
+    /// 桌宠订阅 <see cref="ChatWorkspaceViewModel.IsAgentRunning"/>——agent 运行时切思考态+气泡。</summary>
+    public void OnTogglePet(object? sender, RoutedEventArgs e) => EnterPetMode();
 
     /// <summary>账号菜单「🎨 主题」子项点击：MenuItem.Click 从叶子子项冒泡到父「🎨 主题」，
     /// <c>e.Source</c> 的 DataContext 是被点的 ThemeOption。父项自身 DataContext 是 shell VM（非 ThemeOption）
@@ -151,6 +207,9 @@ public partial class WorkbenchWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
+    /// <summary>最小化（自绘标题栏按钮）：系统原生最小化到 Dock，不联动桌宠。
+    /// 主流桌宠只拦「关闭」不拦「最小化」——最小化语义是「暂时收起稍后还用」，关闭才是「缩到桌宠驻留」。
+    /// macOS 黄色交通灯本就走的 OS 原生最小化（不经过此 handler），此处自绘按钮恢复同语义。</summary>
     public void OnMinimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     public void OnMaximizeRestore(object? sender, RoutedEventArgs e)
@@ -192,7 +251,8 @@ public partial class WorkbenchWindow : Window
         catch { /* 读取失败用默认尺寸 */ }
     }
 
-    /// <summary>关闭时持久化窗口尺寸。后台线程写文件（避免 UI 线程 await 死锁），Wait 确保关闭前落盘。</summary>
+    /// <summary>关闭时持久化窗口尺寸。fire-and-forget 异步写（不阻塞 UI 线程——之前的 Task.Run().Wait()
+    /// 在退出路径上同步阻塞等磁盘 IO，是退出卡顿根因）。窗口尺寸属低价值数据，极端情况丢写仅是下次用默认尺寸。</summary>
     private void PersistWindowSize()
     {
         var store = PreferencesStore;
@@ -200,11 +260,11 @@ public partial class WorkbenchWindow : Window
         double winW = Width, winH = Height;
         try
         {
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 await store.SetAsync("ui.winW", winW.ToString("0.#"));
                 await store.SetAsync("ui.winH", winH.ToString("0.#"));
-            }).Wait();
+            });
         }
         catch { /* 关闭期写入失败忽略 */ }
     }
