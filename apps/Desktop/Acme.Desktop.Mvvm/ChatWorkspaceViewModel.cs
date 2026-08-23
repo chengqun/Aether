@@ -401,11 +401,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             // 桌宠逐字流收尾（打字机 flush 后停止）。RUN 不考虑 remote——桌宠本地/远程都收逐字。
             _petTokens?.EndAnswer();
-            // 终态关键节点广播：本轮收敛为 Done（带一句精简摘要，纯截断不调 LLM——主窗已有完整正文、
-            // 手机端已有 ConversationSummaryService 概览）或 Error。逐字 token 不走这条（噪音）。
+            // 终态关键节点广播：本轮收敛为 Done 或 Error。不带原文/摘要——桌宠只冒固定短话「搞定啦」，
+            // 手机端最终结果由 ConversationSummaryService 的 LLM 概览单独发（Text type），Progress 心跳不发 long-form。
             EmitProgress(errored
                 ? new RunProgress(RunProgressKind.RunError)
-                : new RunProgress(RunProgressKind.RunDone, Text: Summarize(fullText.ToString())), onRemoteProgress);
+                : new RunProgress(RunProgressKind.RunDone), onRemoteProgress);
         }
         return items.ToList();
     }
@@ -437,16 +437,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             return s.Length > 20 ? s[..20] + "…" : s;
         }
         return null;
-    }
-
-    /// <summary>把本轮全文压成一行精简摘要（纯截断，不调 LLM——轻量，不与手机端 ConversationSummaryService 抢资源）。
-    /// 取第一段可见文本、压平换行为空格、截 ~60 字符。</summary>
-    private static string? Summarize(string fullText)
-    {
-        if (string.IsNullOrWhiteSpace(fullText)) return null;
-        var normalized = fullText.Replace("\r", " ").Replace("\n", " ").Trim();
-        if (normalized.Length == 0) return null;
-        return normalized.Length > 60 ? normalized[..60] + "…" : normalized;
     }
 
     /// <summary>把一条关键节点信号广播给本地消费者（IRunProgressSink，桌宠等）+ 可选地转发给手机端

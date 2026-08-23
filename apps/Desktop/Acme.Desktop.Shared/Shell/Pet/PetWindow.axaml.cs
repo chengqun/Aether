@@ -250,9 +250,13 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     {
         Dispatcher.UIThread.Post(() =>
         {
+            // 只保留「滚动尾巴」——最近 ~30 字，让气泡有「在输出」的动感，但绝不驻留整段回答原文。
+            // 全文字在气泡里既挤又无信息，用户要看正文回主窗。超过窗口即丢旧字（滚动窗口）。
             _answerBuf.Append(token);
+            if (_answerBuf.Length > 30)
+                _answerBuf.Remove(0, _answerBuf.Length - 30);
+            // 打字机时回到普通宠物造型（非 🛠️/🤔），呼吸平稳。只在思考→回答边界切一次。
             StartBubbleStream();
-            // 只在「思考 → 回答」边界切一次普通造型（🤔→🐱）；此后打字机持续、造型不再每 token 重设。
             if (_isThinking)
                 ApplyKind(RunProgressKind.RunDone);
         });
@@ -280,34 +284,36 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
             case RunProgressKind.ToolStarted:
                 ApplyKind(RunProgressKind.ToolStarted);
                 if (signal.ToolName is not null)
-                    ShowLine($"🔧 正在{signal.ToolName}{(signal.ToolArgument is null ? "" : $"（{signal.ToolArgument}）")}", autoHide: false);
+                    // 短句，不带参数（参数在审批时才需要）；6s 超时，避免「正在 X」无后续完成事件时永久驻留。
+                    ShowLine($"🔧 {signal.ToolName}", autoHide: true, autoHideMs: 6000);
                 break;
 
             case RunProgressKind.ToolFinished:
-                ShowLine($"✅ 完成 {signal.ToolName}", autoHide: true);
+                // 完成也短句，不带参数；2.5s 收。连续多工具完成会覆盖前一句，不刷屏。
+                if (signal.ToolName is not null)
+                    ShowLine($"✅ {signal.ToolName}", autoHide: true);
                 break;
 
             case RunProgressKind.ApprovalRequested:
                 ApplyKind(RunProgressKind.ToolStarted);
-                ShowLine($"⛔ 需要你确认「{signal.ToolName}」", autoHide: true);
+                // 审批是唯一必须带关键信息的节点：工具名 +（若源头给了）参数都要，且停久一点（8s）等人看。
+                ShowLine($"⛔ 需要你确认「{signal.ToolName}」", autoHide: true, autoHideMs: 8000);
                 break;
 
             case RunProgressKind.PlanUpdated:
                 ApplyKind(RunProgressKind.ToolStarted);
-                ShowLine($"📋 计划已生成 {signal.PlanStepCount} 步", autoHide: true);
+                ShowLine($"📋 计划 {signal.PlanStepCount} 步", autoHide: true);
                 break;
 
             case RunProgressKind.RunDone:
-                if (signal.Text is not null)
-                    ShowLine($"✅ {signal.Text}", autoHide: true);
-                else
-                    ShowLine("搞定啦 ✨", autoHide: true);
+                // 完成只冒一句固定短话，不显示回答原文/摘要——正文留主窗，桌宠气泡不驻留长段。
+                ShowLine("搞定啦 ✨", autoHide: true);
                 ApplyKind(RunProgressKind.RunDone);
                 break;
 
             case RunProgressKind.RunError:
                 StopBubbleStream();
-                ShowLine($"⚠️ 出错了{(string.IsNullOrEmpty(signal.Text) ? "" : "：" + signal.Text)}", autoHide: true);
+                ShowLine($"⚠️ 出错了{(string.IsNullOrEmpty(signal.Text) ? "" : "：" + Truncate(signal.Text, 40))}", autoHide: true);
                 ApplyKind(RunProgressKind.RunDone);
                 break;
         }
@@ -369,8 +375,9 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         _bubbleTimer = null;
     }
 
-    /// <summary>气泡显一句（关键节点/工具句/摘要——autoHide=true 2.5s 自动收；false 持续到本轮收敛或下一条覆盖）。</summary>
-    private void ShowLine(string line, bool autoHide)
+    /// <summary>气泡显一句短话（关键节点/工具句——autoHide=true 按 <paramref name="autoHideMs"/> 自动收；false 持续到下一句覆盖）。
+    /// 文本一律短句——桌宠气泡不驻留长段（工具名/参数/错误全文都截短，正文回主窗看）。</summary>
+    private void ShowLine(string line, bool autoHide, int autoHideMs = 2500)
     {
         if (SpeechBubble is null || SpeechText is null) return;
         SpeechText.Text = line;
@@ -380,7 +387,14 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         if (autoHide)
             _bubbleAutoHide = DispatcherTimer.RunOnce(
                 () => { if (SpeechBubble is not null) SpeechBubble.IsVisible = false; },
-                TimeSpan.FromMilliseconds(2500));
+                TimeSpan.FromMilliseconds(autoHideMs));
+    }
+
+    /// <summary>截短文本到 <paramref name="max"/> 字符（超长加省略号）。桌宠气泡绝不驻留长段，错误/参数等一律截短。</summary>
+    private static string Truncate(string? text, int max)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        return text.Length > max ? text[..max] + "…" : text;
     }
 
     // —— 生命周期 ——
