@@ -62,7 +62,49 @@
       <TreeView Grid.Row="1" x:Name="KoTree" Classes="ko-tree" Margin="4,4"
                 ItemsSource="{Binding Roots}"
                 SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
-                ItemTemplate="{StaticResource FileNodeTemplate}"/>
+                ItemTemplate="{StaticResource FileNodeTemplate}">
+        <!-- 右键菜单（镜像 FileTreeView，对标 VSCode 常用文件操作）。.ok 树「新建文件」= 新知识对象。
+             文件夹才有「新建」，文件才有「打开」；菜单 DataContext 继承当前节点的 FileNode。 -->
+        <TreeView.ContextMenu>
+          <!-- 绑定 VM.SelectedNode（右键时已选中该节点），菜单项 DataContext 继承 TreeView=VM 非 TreeViewItem——
+               IsEnabled 绑 VM.SelectedNode + FileNodeIsFolderConverter 判 IsFolder。镜像 FileTreeView。 -->
+          <ContextMenu>
+            <MenuItem Header="新建知识对象" Click="OnNewFileClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.NewFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="新建文件夹" Click="OnNewFolderClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.NewFolder}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="打开" Click="OnOpenNodeClick">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.File}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="重命名…" Click="OnRenameClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Edit}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="删除" Click="OnDeleteClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Trash}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="复制路径" Click="OnCopyPathClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Copy}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="复制相对路径" Click="OnCopyRelativePathClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.GoToFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="在文件管理器中显示" Click="OnRevealInFileManagerClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.FolderActive}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+          </ContextMenu>
+        </TreeView.ContextMenu>
+      </TreeView>
       <!-- 空态：未打开知识库目录 -->
       <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
                   IsVisible="{Binding !HasRoot}" Spacing="8">

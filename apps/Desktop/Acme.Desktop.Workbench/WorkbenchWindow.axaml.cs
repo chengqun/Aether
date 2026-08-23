@@ -94,7 +94,8 @@ public partial class WorkbenchWindow : Window
         base.OnClosing(e);
         StopAurora();      // 取消漂移动画（免关窗后空转）
         PersistWindowSize();
-        _pet?.Close();
+        // 不再在此同步 _pet.Close()——真退出路径在 ExitApplication 里已先关桌宠（见下）。此处失序/重入
+        // 关桌宠会与其自身 ContextMenu/Click handler 仍在栈上冲突，是退出卡死根因之一。
     }
 
     /// <summary>进入桌宠形态：Hide 主窗（从屏幕消失，不依赖 OS 迷你化协议——WindowState=Minimized 在
@@ -135,11 +136,19 @@ public partial class WorkbenchWindow : Window
             };
     }
 
-    /// <summary>真正退出程序：置真退出标志（绕过 X→最小化拦截）→ Close。</summary>
+    /// <summary>真正退出程序：置真退出标志（绕过 X→最小化拦截）→ 先关桌宠再关主窗。
+    /// 经 Dispatcher.UIThread.Post 延迟一帧执行——桌宠右键「退出程序」是在桌宠自身的
+    /// MenuItem.Click handler 里调本方法，若在此同步 Close 会在桌宠窗口自己的 handler 栈上
+    /// 重入关闭（ContextMenu popup 仍开），配合 ShutdownRequested 的同步释放阻塞 UI 线程 → 退出卡死。
+    /// 延后到 handler 弹回后跑：先关桌宠从视觉树摘除，再关主窗触发 Avalonia 收尾。</summary>
     public void ExitApplication()
     {
         _isReallyExiting = true;
-        Close();
+        Dispatcher.UIThread.Post(() =>
+        {
+            _pet?.Close(); // 先关桌宠（其 OnClosed 停动画定时器）
+            Close();       // 再关主窗——OnClosing 见 _isReallyExiting=true 直接放行
+        });
     }
 
     /// <summary>打开运行 Trace 查看窗口（OTel agent.run span）。</summary>

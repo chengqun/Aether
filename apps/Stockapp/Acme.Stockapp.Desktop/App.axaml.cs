@@ -66,11 +66,26 @@ public partial class App : global::Avalonia.Application
             vm.RestoreThemeSync();
             desktop.MainWindow = new WorkbenchWindow { DataContext = vm };
             // 退出时释放 DI 容器（含 MCP server 连接等 IAsyncDisposable 单例，关闭 stdio 子进程）。
-            // 加 3s 超时：MCP stdio 子进程关闭无超时机制（MAF McpClient.DisposeAsync 等子进程退出），
-            // 若子进程不响应会死等 → 退出卡死。超时后放弃释放、继续退出（残留子进程由 OS 回收）。
+            // 不阻塞 UI 线程：DisposeAsync 里 MCP McpClient.DisposeAsync 等子进程退出无超时机制（死等），
+            // 旧版 .Wait(3s) 在本回调（UI 线程）同步阻塞 → 退出卡顿。改后台线程 + 3s 超时竞速：
+            // 超时放弃释放、主进程照常退出（MCP 子进程属本进程树，随进程退出由 OS 回收）。
             desktop.ShutdownRequested += (_, _) =>
             {
-                try { (Services as System.IAsyncDisposable)?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3)); }
+                try
+                {
+                    if (Services is System.IAsyncDisposable disposable)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var disposeTask = disposable.DisposeAsync().AsTask();
+                                await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(3)));
+                            }
+                            catch { /* 退出期释放失败/超时忽略 */ }
+                        });
+                    }
+                }
                 catch { /* 退出期释放失败/超时忽略 */ }
             };
             // 窗口打开后异步初始化登录态（检查已缓存 token，刷新账户显示），不阻塞 UI

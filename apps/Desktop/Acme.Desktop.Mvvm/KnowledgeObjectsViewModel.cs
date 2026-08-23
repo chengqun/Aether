@@ -159,6 +159,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         await OpenKnowledgeAsync(readme, ct); // 已是活动 .ok 则 _activePath 守卫跳过，不重复读盘
     }
 
+    /// <summary>按路径打开 .ok 知识对象（右键菜单「新建知识对象」/「打开」用）。薄包装 <see cref="OpenKnowledgeAsync"/>。</summary>
+    public Task OpenKnowledgeByPathAsync(string filePath, CancellationToken ct = default)
+        => OpenKnowledgeAsync(filePath, ct);
+
     /// <summary>在目录顶层找 README（stem==readme 大小写不敏感，扩展名 .ok）。
     /// 用 <c>*.ok</c> 模式枚举（与 <see cref="BuildNode"/> 同 glob），保证树中所见=README 所能找到。</summary>
     private static string? TryFindReadme(string folderPath)

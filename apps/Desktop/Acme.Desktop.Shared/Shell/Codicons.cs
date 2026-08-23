@@ -91,6 +91,11 @@ public static class Codicons
     public static readonly string Files = R(PackIconCodiconsKind.Files);
     public static readonly string CommentDiscussion = R(PackIconCodiconsKind.CommentDiscussion);
     public static readonly string Collection = R(PackIconCodiconsKind.Collection);  // 📚 知识对象/集合资产
+    public static readonly string NewFile = R(PackIconCodiconsKind.NewFile);        // 📄+ 新建文件
+    public static readonly string NewFolder = R(PackIconCodiconsKind.NewFolder);    // 📁+ 新建文件夹
+    public static readonly string Copy = R(PackIconCodiconsKind.Copy);              // ⧉ 复制路径
+    public static readonly string GoToFile = R(PackIconCodiconsKind.GoToFile);      // →📄 复制相对路径
+    public static readonly string FolderActive = R(PackIconCodiconsKind.FolderActive); // 📂 在文件管理器中显示
 
     // —— SCM 源代码管理 ——
     public static readonly string RepoPull = R(PackIconCodiconsKind.RepoPull);       // ↓ 拉取

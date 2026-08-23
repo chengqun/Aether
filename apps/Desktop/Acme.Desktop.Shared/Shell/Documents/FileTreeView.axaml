@@ -67,7 +67,52 @@
                 ItemsSource="{Binding Roots}"
                 SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                 SelectionChanged="OnTreeSelectionChanged"
-                ItemTemplate="{StaticResource FileNodeTemplate}"/>
+                ItemTemplate="{StaticResource FileNodeTemplate}">
+        <!-- 文件树右键菜单（对标 VSCode 资源管理器常用文件操作）：新建文件/文件夹、打开文件、
+             重命名、删除、复制路径、在文件管理器中显示。菜单 DataContext 继承 TreeView.ItemTemplate
+             当前节点（TreeViewItem 的 DataContext=FileNode），故 CommandParameter 绑当前 FileNode。
+             根节点/文件夹才有「新建」，文件才有「打开」；其余按文件/文件夹分显隐（IsFolder 绑。 -->
+        <TreeView.ContextMenu>
+          <!-- 绑定 VM.SelectedNode（右键时 TreeView 已选中该节点），菜单项 DataContext 继承自 TreeView=VM，
+               不继承每个 TreeViewItem 的 FileNode——故 IsEnabled 绑 VM.SelectedNode + FileNodeIsFolderConverter 判 IsFolder。 -->
+          <ContextMenu>
+            <MenuItem Header="新建文件" Click="OnNewFileClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.NewFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="新建文件夹" Click="OnNewFolderClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.NewFolder}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="打开" Click="OnOpenNodeClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}, ConverterParameter='!'}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.File}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="重命名…" Click="OnRenameClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Edit}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="删除" Click="OnDeleteClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Trash}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="复制路径" Click="OnCopyPathClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Copy}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="复制相对路径" Click="OnCopyRelativePathClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.GoToFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="在文件管理器中显示" Click="OnRevealInFileManagerClick"
+                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+              <MenuItem.Icon><Path Data="{x:Static shell:Codicons.FolderActive}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+            </MenuItem>
+          </ContextMenu>
+        </TreeView.ContextMenu>
+      </TreeView>
       <!-- 空态：未打开目录 -->
       <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
                   IsVisible="{Binding !HasProject}" Spacing="8">

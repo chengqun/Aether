@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -92,5 +94,150 @@ public partial class FileTreeView : UserControl
         // 已开则激活、不重复读盘
         if (_vm.ActivateIfOpen(node.Path)) return;
         await _vm.OpenFromDiskAsync(node.Path);
+    }
+
+    // —— 右键菜单（对标 VSCode 资源管理器常用文件操作）——
+    // 右键时 TreeView 已选中该节点 → 节点经 VM.SelectedNode 取（与 NotesTreeView 同范式），
+    // 不依赖菜单项 DataContext（ContextMenu 是独立 popup，DataContext 继承 TreeView=VM 而非 TreeViewItem）。
+    // 共用动作（对话框/剪贴板/在文件管理器中显示/废纸篓删除）在 <see cref="FileTreeOps"/>。
+
+    private async void OnNewFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { IsFolder: true } node) return;
+        var parent = TopLevel.GetTopLevel(this) as Window;
+        if (parent is null) return;
+        var name = await FileTreeOps.PromptNameAsync(parent, "新建文件", $"在「{node.Name}」中新建文件", "文件名");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var target = Path.Combine(node.Path, name.Trim());
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            _vm.StatusMessage = $"已存在同名文件：{name.Trim()}";
+            return;
+        }
+        try
+        {
+            await File.WriteAllTextAsync(target, string.Empty);
+            await _vm.OpenFromDiskAsync(target);
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = $"新建文件失败：{ex.Message}";
+        }
+    }
+
+    private async void OnNewFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { IsFolder: true } node) return;
+        var parent = TopLevel.GetTopLevel(this) as Window;
+        if (parent is null) return;
+        var name = await FileTreeOps.PromptNameAsync(parent, "新建文件夹", $"在「{node.Name}」中新建文件夹", "文件夹名");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var target = Path.Combine(node.Path, name.Trim());
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            _vm.StatusMessage = $"已存在同名文件夹：{name.Trim()}";
+            return;
+        }
+        try { Directory.CreateDirectory(target); }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = $"新建文件夹失败：{ex.Message}";
+        }
+    }
+
+    // —— 打开文件（文件节点）——
+
+    private async void OnOpenNodeClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { IsFolder: false } node) return;
+        if (_vm.ActivateIfOpen(node.Path)) return;
+        await _vm.OpenFromDiskAsync(node.Path);
+    }
+
+    // —— 重命名（文件/文件夹通用。输入框弹窗；成功后 watcher 自动刷树）——
+
+    private async void OnRenameClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        var parent = TopLevel.GetTopLevel(this) as Window;
+        if (parent is null) return;
+        var name = await FileTreeOps.PromptNameAsync(parent, "重命名", $"重命名「{node.Name}」", "新名称", node.Name);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var newName = name.Trim();
+        if (string.Equals(newName, node.Name, StringComparison.Ordinal)) return; // 未改
+        if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            _vm.StatusMessage = "名称包含非法字符";
+            return;
+        }
+        var target = Path.Combine(Path.GetDirectoryName(node.Path)!, newName);
+        if (string.Equals(target, node.Path, StringComparison.OrdinalIgnoreCase)) return;
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            _vm.StatusMessage = $"已存在同名项：{newName}";
+            return;
+        }
+        try
+        {
+            // 文件夹→移动目录；文件→File.Move（保留 opened tab 在其下的引用，VM 重载会刷新）
+            if (node.IsFolder) Directory.Move(node.Path, target);
+            else File.Move(node.Path, target);
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = $"重命名失败:{ex.Message}";
+        }
+    }
+
+    // —— 删除（文件/文件夹通用。经确认对话框；macOS 移入废纸篓可恢复，其它平台永久删除。watcher 自动刷树）——
+
+    private async void OnDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        var parent = TopLevel.GetTopLevel(this) as Window;
+        if (parent is null) return;
+        var disposal = node.IsFolder ? "将删除该文件夹及其全部内容。" : "文件将被删除。";
+        if (OperatingSystem.IsMacOS())
+            disposal = node.IsFolder ? "该文件夹及其内容将移入废纸篓。" : "文件将移入废纸篓。";
+        var ok = await FileTreeOps.ConfirmAsync(parent, "删除", $"确定删除「{node.Name}」？\n{disposal}", "删除");
+        if (!ok) return;
+        try { FileTreeOps.Delete(node); }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = $"删除失败：{ex.Message}";
+        }
+    }
+
+    // —— 复制路径（绝对）/ 复制相对路径（相对项目根）——
+
+    private void OnCopyPathClick(object? sender, RoutedEventArgs e)
+        => CopyToClipboard(relative: false);
+
+    private void OnCopyRelativePathClick(object? sender, RoutedEventArgs e)
+        => CopyToClipboard(relative: true);
+
+    private async void CopyToClipboard(bool relative)
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        var parent = TopLevel.GetTopLevel(this) as Window;
+        if (parent is null) return;
+        var text = node.Path;
+        if (relative && !string.IsNullOrEmpty(_vm.RootPath))
+        {
+            var root = _vm.RootPath!;
+            if (text.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                text = text.Length > root.Length
+                    ? text.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    : string.Empty;
+        }
+        await FileTreeOps.CopyToClipboardAsync(parent, text);
+    }
+
+    // —— 在文件管理器中显示 ——
+
+    private void OnRevealInFileManagerClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedNode is not { } node) return;
+        FileTreeOps.RevealInFileManager(node);
     }
 }
