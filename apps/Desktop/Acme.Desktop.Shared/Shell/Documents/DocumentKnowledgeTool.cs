@@ -109,7 +109,8 @@ public sealed class DocumentKnowledgeTool
     }
 
     [Description("按相对路径读取一个文档知识对象（.md 文件）的完整定义：kind + 正文 + links 指向的子 .md 文件内容（只展开一层）。" +
-                 "name=相对路径（不含 .md，如 业务分析/退款会员日志分析）。先调此工具获取知识再执行任务。")]
+                 "name=相对路径（不含 .md，如 业务分析/退款会员日志分析）。先调此工具获取知识再执行任务。" +
+                 "link 解析支持三种 targetId 写法：知识库根相对（权威）/ 相对源文件目录（./b、../xx/b）/ 裸名（全局 basename 匹配）。")]
     public async Task<ReadDocumentKnowledgeOutput> ReadDocumentKnowledgeObject(
         [Description("相对路径（不含 .md，如 业务分析/退款会员日志分析）；也可带 .md 后缀")] string name,
         CancellationToken cancellationToken = default)
@@ -126,8 +127,9 @@ public sealed class DocumentKnowledgeTool
             return await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // 解析目标 .ok 文件（知识库根候选；无 currentFileDir 语境——文档工具操作整个知识库）。
-                var full = OkTargetResolver.CandidateOkPaths(name, root, null)
+                // 解析目标 .ok 文件。root 相对优先；currentFileDir=知识库根（Read 的 name 语境是"知识库根相对路径"，
+                // 传根与不传等价，但保持与图视图同构——图打开 .ok 时传源文件目录，此处 name 语境即根，故传 root）。
+                var full = OkTargetResolver.CandidateOkPaths(name, root, root)
                     .FirstOrDefault(p => File.Exists(p));
                 if (full is null)
                     return new ReadDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
@@ -157,7 +159,8 @@ public sealed class DocumentKnowledgeTool
 
     [Description("创建一个文档知识对象（.md 文件）。name=相对路径（不含扩展名），将创建 <知识库目录>/<name>.md。" +
                  "kind 分类自由字符串（流程/数据源/规则/Entity 等）。links 可选 JSON 数组：" +
-                 "[{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]（targetId=相对路径，权威）或 [{\"role\":\"uses\",\"target\":\"fin_dw\"}]。" +
+                 "{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}（targetId 三种写法：知识库根相对=权威；" +
+                 "相对源文件目录 ./b 或 ../xx/b；裸名 b 全局匹配——推荐目录内互链用裸名/相对路径，目录迁移不断链）。" +
                  "已存在则失败。")]
     public async Task<CreateDocumentKnowledgeOutput> CreateDocumentKnowledgeObject(
         [Description("相对路径（不含 .md 扩展名，如 业务分析/测试KO）")] string name,
@@ -216,7 +219,7 @@ public sealed class DocumentKnowledgeTool
 
         try
         {
-            var full = OkTargetResolver.CandidateOkPaths(name, root, null)
+            var full = OkTargetResolver.CandidateOkPaths(name, root, root)
                 .FirstOrDefault(p => File.Exists(p));
             if (full is null)
                 return new UpdateDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
@@ -294,9 +297,13 @@ public sealed class DocumentKnowledgeTool
         {
             sb.AppendLine().AppendLine("links:");
             var linkedTotal = 0; // 已内联的目标原文累计字符
+            // link 解析语境：currentFileDir=被读文件自身目录（与图视图打开 .ok 时传 Path.GetDirectoryName(filePath) 同构）。
+            // 这使裸名（b）/同目录（./b）/上层目录（../xx/b）写法在 Read 展开时也能解析，与图口径统一；
+            // 根相对（毓数平台项目/xxx）仍是第一优先级，兼容既有 42 条根相对 links。
+            var currentFileDir = Path.GetDirectoryName(Path.Combine(root, relPath));
             foreach (var l in def.Links)
             {
-                var resolved = OkTargetResolver.ResolveRaw(l.Target, root, null);
+                var resolved = OkTargetResolver.ResolveRaw(l.Target, root, currentFileDir);
                 if (resolved is null) continue; // 空白路径，跳过
                 var (title, raw) = resolved.Value;
                 sb.AppendLine($"[{l.Role}] {title} (path:{l.Target}):");

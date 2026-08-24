@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Acme.Notes.Domain.Knowledge;
 
 namespace Acme.Desktop.Mvvm;
@@ -54,6 +55,58 @@ public static class OkTargetResolver
         return null;
     }
 
+    /// <summary>targetId 是否为裸名（无目录分隔符、无 <c>..</c>、非 <c>.</c>、非绝对路径）——只有裸名才允许全局 basename 兜底，
+    /// 防止 <c>Hive表/xxx</c>（目录迁移后断链的根相对路径）误链到别处同名文件。裸名（如 <c>b</c>）本身就是<b>无位置语义</b>的，
+    /// 全局匹配唯一目标时不改变语义；多同名时取序最小者。</summary>
+    private static bool IsBareName(string path)
+        => path.IndexOfAny(new[] { '/', '\\' }) < 0
+           && !path.Contains("..")
+           && path != "."
+           && !Path.IsPathRooted(path);
+
+    /// <summary>按 basename 全局匹配（知识库根递归枚举 <c>*.md</c>/<c>*.ok</c>，忽略点开头目录/bin/obj/node_modules，上限 200 文件）。
+    /// <b>最后兜底</b>：仅当按路径候选全 miss 且 targetId 为裸名时启用——目录整体迁移后，旧根相对 targetId 已断，
+    /// 但图与 Read 仍能经此兜底找到目标，不掉线。多个同名时取路径序最小者（确定性）。</summary>
+    private static string? TryFindByNameGlobal(string targetPath, string? rootPath)
+    {
+        if (rootPath is null || !Directory.Exists(rootPath)) return null;
+        var stem = StemOf(targetPath);
+        string? best = null;
+        var scanned = 0;
+        var queue = new Queue<string>();
+        queue.Enqueue(rootPath);
+        while (queue.Count > 0 && scanned < 200)
+        {
+            var dir = queue.Dequeue();
+            string[] files;
+            try { files = Directory.GetFiles(dir, "*.md").Concat(Directory.GetFiles(dir, "*.ok")).ToArray(); }
+            catch { continue; }
+
+            foreach (var f in files)
+            {
+                scanned++;
+                if (!string.Equals(Path.GetFileNameWithoutExtension(f), stem, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (best is null || string.CompareOrdinal(f, best) < 0) best = f;
+            }
+
+            string[] subdirs;
+            try { subdirs = Directory.GetDirectories(dir); }
+            catch { continue; }
+
+            foreach (var sub in subdirs)
+            {
+                var name = Path.GetFileName(sub);
+                if (name.StartsWith(".") || name.Equals("bin", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                queue.Enqueue(sub);
+            }
+        }
+        return best;
+    }
+
     /// <summary>解析 link target 到 (显示名称=stem, 定义)。首个存在 <c>.ok</c> → 读 + TryParse；
     /// 找不到文件 → (stem, null)（断链仍画叶子节点，不崩）。读/解析失败 → 仅名称不跟出边。空白路径 → null（无 link）。
     /// 供图闭包构建（跟出边需定义）。</summary>
@@ -62,7 +115,8 @@ public static class OkTargetResolver
     {
         if (string.IsNullOrWhiteSpace(targetPath)) return null;
         var stem = StemOf(targetPath);
-        var full = TryFindOkFile(targetPath, rootPath, currentFileDir);
+        var full = TryFindOkFile(targetPath, rootPath, currentFileDir)
+                   ?? (IsBareName(targetPath) ? TryFindByNameGlobal(targetPath, rootPath) : null);
         if (full is null) return (stem, null);
         KnowledgeObjectDefinition? def = null;
         try { _ = parser.TryParse(File.ReadAllText(full), out def, out _); }
@@ -78,7 +132,8 @@ public static class OkTargetResolver
     {
         if (string.IsNullOrWhiteSpace(targetPath)) return null;
         var stem = StemOf(targetPath);
-        var full = TryFindOkFile(targetPath, rootPath, currentFileDir);
+        var full = TryFindOkFile(targetPath, rootPath, currentFileDir)
+                   ?? (IsBareName(targetPath) ? TryFindByNameGlobal(targetPath, rootPath) : null);
         if (full is null) return (stem, null);
         try { return (stem, File.ReadAllText(full)); }
         catch { return (stem, null); }
