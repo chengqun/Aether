@@ -79,7 +79,7 @@
     }
   },
   "fonts": {
-    "UiFont": "JetBrains Mono, Menlo, monospace",
+    "UiFont": "Segoe UI, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif",
     "MonoFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace",
     "CodeFont": "JetBrains Mono, Cascadia Code, Consolas, Menlo, monospace"
   },
@@ -92,7 +92,7 @@
   "spacing": {
     "SpaceXs": "4",
     "SpaceSm": "8",
-    "SpaceMd": "10",
+    "SpaceMd": "12",
     "SpaceLg": "16",
     "SpaceXl": "24"
   },
