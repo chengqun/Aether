@@ -14,25 +14,34 @@ namespace Acme.Desktop.Mvvm;
 /// </summary>
 public static class OkTargetResolver
 {
-    /// <summary>路径的文件名部分（去目录前缀 + 去 <c>.ok</c> 扩展名）= 图节点/知识对象显示名称。</summary>
+    /// <summary>路径的文件名部分（去目录前缀 + 去 <c>.md</c>/<c>.ok</c> 扩展名）= 图节点/知识对象显示名称。</summary>
     public static string StemOf(string path)
     {
         var sep = path.LastIndexOfAny(new[] { '/', '\\' });
         var stem = sep >= 0 ? path.Substring(sep + 1) : path;
-        return stem.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && stem.Length > 3
-            ? stem.Substring(0, stem.Length - 3) : stem;
+        if (stem.EndsWith(".md", StringComparison.OrdinalIgnoreCase) && stem.Length > 3)
+            return stem.Substring(0, stem.Length - 3);
+        if (stem.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && stem.Length > 3)
+            return stem.Substring(0, stem.Length - 3);
+        return stem;
     }
 
-    /// <summary>候选 <c>.ok</c> 文件全路径（按优先序）：相对项目根 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）。</summary>
+    /// <summary>候选知识对象文件全路径（按优先序）：无后缀时先 <c>.md</c>（现行格式）后 <c>.ok</c>（legacy 兼容），
+    /// 各按 相对项目根 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）展开。</summary>
     public static IEnumerable<string> CandidateOkPaths(string targetPath, string? rootPath, string? currentFileDir)
     {
-        var withExt = targetPath.EndsWith(".ok", StringComparison.OrdinalIgnoreCase)
-            ? targetPath : targetPath + ".ok";
-        if (!string.IsNullOrEmpty(rootPath))
-            yield return Path.Combine(rootPath, withExt);
-        if (!string.IsNullOrEmpty(currentFileDir))
-            yield return Path.Combine(currentFileDir!, withExt);
-        yield return withExt; // 兜底：绝对路径或相对 cwd
+        var hasExt = targetPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                  || targetPath.EndsWith(".ok", StringComparison.OrdinalIgnoreCase);
+        var exts = hasExt ? new[] { string.Empty } : new[] { ".md", ".ok" };
+        foreach (var ext in exts)
+        {
+            var withExt = targetPath + ext;
+            if (!string.IsNullOrEmpty(rootPath))
+                yield return Path.Combine(rootPath, withExt);
+            if (!string.IsNullOrEmpty(currentFileDir))
+                yield return Path.Combine(currentFileDir!, withExt);
+            yield return withExt; // 兜底：绝对路径或相对 cwd
+        }
     }
 
     /// <summary>首个存在的候选 <c>.ok</c> 文件全路径；找不到返 null。</summary>

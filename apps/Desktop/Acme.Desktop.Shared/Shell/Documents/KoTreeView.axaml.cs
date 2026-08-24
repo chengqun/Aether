@@ -52,7 +52,7 @@ public partial class KoTreeView : UserControl
     // 节点经 VM.SelectedNode 取（右键时已选中），不依赖菜单项 DataContext（ContextMenu 是 popup，DataContext=VM）。
     // 「新建知识对象」写带 front-matter 的 .ok 模板；「打开」复用 VM.OnSelectedNodeChanged 的 OpenKnowledgeAsync。
 
-    /// <summary>新 .ok 知识对象默认内容（与 NoteNodeTypeRegistry.KnowledgeTemplate 同构：kind+links front-matter + body）。</summary>
+    /// <summary>新知识对象默认内容（与 NoteNodeTypeRegistry.KnowledgeTemplate 同构：kind+links front-matter + body）。</summary>
     private const string OkTemplate = "---\nkind: Entity\nlinks: []\n---\n（在此写知识说明 / 粘贴结构化数据 / 任何 markdown）\n";
 
     private async void OnNewFileClick(object? sender, RoutedEventArgs e)
@@ -60,10 +60,11 @@ public partial class KoTreeView : UserControl
         if (_vm?.SelectedNode is not { IsFolder: true } node) return;
         var parent = TopLevel.GetTopLevel(this) as Window;
         if (parent is null) return;
-        var name = await FileTreeOps.PromptNameAsync(parent, "新建知识对象", $"在「{node.Name}」中新建知识对象", "文件名（不含 .ok）");
+        var name = await FileTreeOps.PromptNameAsync(parent, "新建知识对象", $"在「{node.Name}」中新建知识对象", "文件名（不含 .md）");
         if (string.IsNullOrWhiteSpace(name)) return;
         var trimmed = name.Trim();
-        var target = Path.Combine(node.Path, trimmed.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) ? trimmed : trimmed + ".ok");
+        var target = Path.Combine(node.Path, trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || trimmed.EndsWith(".ok", StringComparison.OrdinalIgnoreCase)
+            ? trimmed : trimmed + ".md");
         if (File.Exists(target) || Directory.Exists(target))
         {
             _vm.StatusMessage = $"已存在同名项：{Path.GetFileName(target)}";

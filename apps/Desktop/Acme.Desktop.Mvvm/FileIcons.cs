@@ -17,6 +17,9 @@ public static class FileIcons
     /// <summary>通用文件图标（无匹配时回退）。描边灰，明暗两主题均可见。</summary>
     public static Icon Default { get; } = new(FileNode.FileIcon, "#7A8290", false);
 
+    /// <summary>知识对象图标（<c>.md</c>/<c>.ok</c> 知识对象文件——对标 note 节点 knowledge 图标：Lucide 知识 stroke + 青，非语言 logo）。</summary>
+    public static Icon Knowledge { get; } = new(NavIcons.Knowledge, "#0891B2", false);
+
     // —— 内联 Lucide stroke 图标（IsFill=false）。品牌色配语义，明暗两主题均可见。 ——
     // 项目文件（.csproj 等）——立方体/包。
     private const string ProjectIcon =

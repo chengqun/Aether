@@ -168,13 +168,16 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public Task OpenKnowledgeByPathAsync(string filePath, CancellationToken ct = default)
         => OpenKnowledgeAsync(filePath, ct);
 
-    /// <summary>在目录顶层找 README（stem==readme 大小写不敏感，扩展名 .ok）。
-    /// 用 <c>*.ok</c> 模式枚举（与 <see cref="BuildNode"/> 同 glob），保证树中所见=README 所能找到。</summary>
+    /// <summary>在目录顶层找 README（stem==readme 大小写不敏感，扩展名 .md 现行 / .ok legacy）。
+    /// 用与 <see cref="BuildNode"/> 同规则枚举，保证树中所见=README 所能找到。</summary>
     private static string? TryFindReadme(string folderPath)
     {
         try
         {
-            foreach (var file in Directory.EnumerateFiles(folderPath, "*.ok"))
+            foreach (var file in Directory.EnumerateFiles(folderPath, "*.md")
+                .Concat(Directory.EnumerateFiles(folderPath, "*.ok"))
+                .GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderBy(f => f, StringComparer.Ordinal).First()))
             {
                 if (string.Equals(Path.GetFileNameWithoutExtension(file), "readme", StringComparison.OrdinalIgnoreCase))
                     return file;
@@ -255,11 +258,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             catch (UnauthorizedAccessException) { /* 跳过无权限目录 */ }
             catch (IOException) { /* 跳过不可访问目录 */ }
         }
-        foreach (var file in Directory.EnumerateFiles(fullPath, "*.ok")
+        foreach (var file in Directory.EnumerateFiles(fullPath, "*.md")
+                     .Concat(Directory.EnumerateFiles(fullPath, "*.ok"))
+                     .GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase)
+                     .Select(g => g.OrderBy(f => f, StringComparer.Ordinal).First()) // 同 stem 只列一份（.md/.ok 迁移期并存）
                      .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
         {
-            // 树里只列 .ok 一种文件，后缀是冗余信息——显示名去 .ok（图标仍按完整名解析知识对象图标）。
-            node.Children.Add(new FileNode(Path.GetFileNameWithoutExtension(file), Path.GetFileName(file), file, isFolder: false));
+            // 树里只列知识对象一种文件，后缀是冗余信息——显示名去后缀；图标统一知识对象图标（不随 .md 走 markdown logo）。
+            node.Children.Add(new FileNode(Path.GetFileNameWithoutExtension(file), Path.GetFileName(file), file, isFolder: false, iconOverride: FileIcons.Knowledge));
         }
         return node;
     }

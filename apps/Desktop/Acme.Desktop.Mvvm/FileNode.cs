@@ -54,14 +54,15 @@ public partial class FileNode : ObservableObject
         : this(name, name, path, isFolder) { }
 
     /// <summary>同名重载：<paramref name="displayName"/> 显示名、<paramref name="iconFileName"/> 图标解析名。
-    /// 知识对象页 .ok 树显示名去 .ok 但图标仍按完整名解析知识对象图标时用。</summary>
-    public FileNode(string displayName, string iconFileName, string path, bool isFolder)
+    /// 知识对象页树显示名去后缀但图标仍按完整名解析知识对象图标时用；<paramref name="iconOverride"/> 显式指定图标
+    ///（知识对象页 <c>.md</c> 文件统一知识对象图标，不随扩展名走 markdown logo）。</summary>
+    public FileNode(string displayName, string iconFileName, string path, bool isFolder, FileIcons.Icon? iconOverride = null)
     {
         Name = displayName;
         Path = path;
         IsFolder = isFolder;
         // 文件夹不显图标，但仍给占位值（HasIcon=false 时 View 两个 Path 都不显）。
-        var icon = isFolder ? FileIcons.Default : FileIcons.ForFile(iconFileName);
+        var icon = iconOverride ?? (isFolder ? FileIcons.Default : FileIcons.ForFile(iconFileName));
         _icon = icon.Path;
         _iconColor = icon.Color;
         _iconIsFill = icon.IsFill;

@@ -78,7 +78,7 @@ public sealed class DocumentKnowledgeTool
 
     // —— 工具方法 ——
 
-    [Description("列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
+    [Description("列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
                  "可选 folder 只列指定子目录（相对路径，如 业务分析）；不传列整个知识库目录。需先在知识对象页打开知识库目录。")]
     public async Task<ListDocumentKnowledgeOutput> ListDocumentKnowledgeObjects(
         [Description("子目录相对路径（可选，只列该子目录下；不传列整个知识库目录）")] string? folder = null,
@@ -108,10 +108,10 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("按相对路径读取一个文档知识对象（.ok 文件）的完整定义：kind + 正文 + links 指向的子 .ok 文件内容（只展开一层）。" +
-                 "name=相对路径（不含 .ok，如 业务分析/退款会员日志分析）。先调此工具获取知识再执行任务。")]
+    [Description("按相对路径读取一个文档知识对象（.md 文件）的完整定义：kind + 正文 + links 指向的子 .md 文件内容（只展开一层）。" +
+                 "name=相对路径（不含 .md，如 业务分析/退款会员日志分析）。先调此工具获取知识再执行任务。")]
     public async Task<ReadDocumentKnowledgeOutput> ReadDocumentKnowledgeObject(
-        [Description("相对路径（不含 .ok，如 业务分析/退款会员日志分析）；也可带 .ok 后缀")] string name,
+        [Description("相对路径（不含 .md，如 业务分析/退款会员日志分析）；也可带 .md 后缀")] string name,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -130,7 +130,7 @@ public sealed class DocumentKnowledgeTool
                 var full = OkTargetResolver.CandidateOkPaths(name, root, null)
                     .FirstOrDefault(p => File.Exists(p));
                 if (full is null)
-                    return new ReadDocumentKnowledgeOutput { Error = $"找不到 .ok 文件: {name}" };
+                    return new ReadDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
 
                 string raw;
                 try { raw = File.ReadAllText(full); }
@@ -155,12 +155,12 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("创建一个文档知识对象（.ok 文件）。name=相对路径（不含扩展名），将创建 <知识库目录>/<name>.ok。" +
+    [Description("创建一个文档知识对象（.md 文件）。name=相对路径（不含扩展名），将创建 <知识库目录>/<name>.md。" +
                  "kind 分类自由字符串（流程/数据源/规则/Entity 等）。links 可选 JSON 数组：" +
                  "[{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]（targetId=相对路径，权威）或 [{\"role\":\"uses\",\"target\":\"fin_dw\"}]。" +
                  "已存在则失败。")]
     public async Task<CreateDocumentKnowledgeOutput> CreateDocumentKnowledgeObject(
-        [Description("相对路径（不含 .ok 扩展名，如 业务分析/测试KO）")] string name,
+        [Description("相对路径（不含 .md 扩展名，如 业务分析/测试KO）")] string name,
         [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
         [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
         [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]")] string? linksJson = null,
@@ -176,7 +176,7 @@ public sealed class DocumentKnowledgeTool
         try
         {
             var nameNoExt = StripOkExt(name);
-            var full = Path.Combine(root, nameNoExt + ".ok");
+            var full = Path.Combine(root, nameNoExt + ".md");
             if (File.Exists(full))
                 return new CreateDocumentKnowledgeOutput { Error = $"已存在: {nameNoExt}" };
 
@@ -198,10 +198,10 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("更新一个文档知识对象（.ok 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。" +
-                 "links 全量替换。name=相对路径（不含 .ok）。")]
+    [Description("更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。" +
+                 "links 全量替换。name=相对路径（不含 .md）。")]
     public async Task<UpdateDocumentKnowledgeOutput> UpdateDocumentKnowledgeObject(
-        [Description("相对路径（不含 .ok，如 业务分析/退款会员日志分析）")] string name,
+        [Description("相对路径（不含 .md，如 业务分析/退款会员日志分析）")] string name,
         [Description("新 kind（可选，不传保留原值）")] string? kind = null,
         [Description("新 markdown 正文（可选，不传保留原值）")] string? body = null,
         [Description("新 links（可选，JSON 数组，全量替换；不传保留原 links）。targetId=相对路径权威 或 target=名称")] string? linksJson = null,
@@ -219,7 +219,7 @@ public sealed class DocumentKnowledgeTool
             var full = OkTargetResolver.CandidateOkPaths(name, root, null)
                 .FirstOrDefault(p => File.Exists(p));
             if (full is null)
-                return new UpdateDocumentKnowledgeOutput { Error = $"找不到 .ok 文件: {name}" };
+                return new UpdateDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
 
             var raw = await File.ReadAllTextAsync(full, cancellationToken);
             if (!_parser.TryParse(raw, out var def, out var err) || def is null)
@@ -310,7 +310,7 @@ public sealed class DocumentKnowledgeTool
 
                 if (raw is null)
                 {
-                    sb.AppendLine("  （找不到 .ok 文件）");
+                    sb.AppendLine("  （找不到知识对象文件）");
                 }
                 else if (raw.Length > MaxTargetInlineChars)
                 {
@@ -330,7 +330,7 @@ public sealed class DocumentKnowledgeTool
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>递归枚举 <c>.ok</c> 文件（跳过构建产物/VCS/依赖目录 + 符号链接目录，上限 200）。</summary>
+    /// <summary>递归枚举知识对象文件（<c>.md</c> 现行 + <c>.ok</c> legacy 兼容，同 stem 只取一份；跳过构建产物/VCS/依赖目录 + 符号链接目录，上限 200）。</summary>
     private void EnumerateOkFiles(string dir, string root, List<DocumentKnowledgeSummary> list, CancellationToken ct)
     {
         if (list.Count >= 200) return;
@@ -338,7 +338,11 @@ public sealed class DocumentKnowledgeTool
         string[]? files = null;
         try
         {
-            files = Directory.GetFiles(dir, "*.ok");
+            files = Directory.GetFiles(dir, "*.md")
+                .Concat(Directory.GetFiles(dir, "*.ok"))
+                .GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderBy(f => f, StringComparer.Ordinal).First()) // 同 stem 取 .md/.ok 一份（避免旧 .ok 与新 .md 双列）
+                .ToArray();
             subdirs = Directory.GetDirectories(dir);
         }
         catch { /* 无权限/不存在 → 跳过该目录 */ }
@@ -381,9 +385,12 @@ public sealed class DocumentKnowledgeTool
         catch { return full; }
     }
 
+    /// <summary>去掉末尾的 <c>.md</c>/<c>.ok</c> 扩展名（知识对象相对路径规范=无扩展名）。</summary>
     private static string StripOkExt(string path)
-        => path.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && path.Length > 3
-            ? path.Substring(0, path.Length - 3) : path;
+        => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) && path.Length > 3
+            ? path.Substring(0, path.Length - 3)
+            : path.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && path.Length > 3
+                ? path.Substring(0, path.Length - 3) : path;
 
     private static readonly HashSet<string> _ignoredDirs = new(StringComparer.OrdinalIgnoreCase)
     {
