@@ -12,5 +12,7 @@
     <shell:NotesTreeView x:Name="NotesTreePanel" DataContext="{Binding Notes}" IsVisible="False"/>
     <shell:SourceControlPanelView x:Name="ScmTreePanel" DataContext="{Binding SourceControl}" IsVisible="False"/>
     <shell:KoTreeView x:Name="KoTreePanel" DataContext="{Binding Knowledge}" IsVisible="False"/>
+    <!-- 知识对象 SCM tab：左栏 = 知识库目录的 git 变更列表（复用项目 SCM 面板，DataContext 绑 Knowledge.SourceControl） -->
+    <shell:SourceControlPanelView x:Name="KoScmPanel" DataContext="{Binding Knowledge.SourceControl}" IsVisible="False"/>
   </Grid>
 </UserControl>

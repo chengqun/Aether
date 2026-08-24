@@ -24,10 +24,10 @@ public sealed class CommitMessageService : ICommitMessageService
     public CommitMessageService(IServiceProvider services)
         => _services = services ?? throw new ArgumentNullException(nameof(services));
 
-    public async Task<string?> GenerateAsync(string? modelId = null, CancellationToken cancellationToken = default)
+    public async Task<string?> GenerateAsync(string? modelId = null, CancellationToken cancellationToken = default, string? repoPath = null)
     {
         var git = _services.GetService<IGitService>();
-        var projectDir = _services.GetService<ICurrentProjectDirectoryProvider>()?.CurrentDirectory;
+        var projectDir = repoPath ?? _services.GetService<ICurrentProjectDirectoryProvider>()?.CurrentDirectory;
         if (git is null || string.IsNullOrEmpty(projectDir) || !git.IsRepository(projectDir))
             return null;
 

@@ -82,11 +82,16 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         : base(serviceProvider)
     {
         _knowledgeDirProvider = knowledgeDirProvider;
+        SourceControl = new KnowledgeSourceControlViewModel(serviceProvider, knowledgeDirProvider);
         LoadLastRootAsync().SafeFireAndForget(); // 恢复上次打开的知识库目录（provider 字段已就绪，无虚方法调用坑）
     }
 
     partial void OnActiveKnowledgeVmChanged(DocumentKnowledgeViewModel? value)
         => SaveCommand.NotifyCanExecuteChanged();
+
+    /// <summary>知识对象页专属源代码管理 VM（独立知识库目录的 git；镜像 <c>MainViewModelBase.SourceControl</c>）。
+    /// 由「知识对象 SCM」独立 nav tab 绑定——左栏 <c>SourceControlPanelView</c> + 右 <c>SourceControlView</c> 复用项目 SCM 视图。</summary>
+    public KnowledgeSourceControlViewModel SourceControl { get; }
 
     /// <summary>树节点选中：<c>.ok</c> 文件→打开；文件夹→打开该目录 README（<c>readme.ok</c>，无则仅展开/收起由 TreeViewItem 默认处理）。</summary>
     protected override void OnSelectedNodeChanged(FileNode? value)
@@ -253,7 +258,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         foreach (var file in Directory.EnumerateFiles(fullPath, "*.ok")
                      .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
         {
-            node.Children.Add(new FileNode(Path.GetFileName(file), file, isFolder: false));
+            // 树里只列 .ok 一种文件，后缀是冗余信息——显示名去 .ok（图标仍按完整名解析知识对象图标）。
+            node.Children.Add(new FileNode(Path.GetFileNameWithoutExtension(file), Path.GetFileName(file), file, isFolder: false));
         }
         return node;
     }

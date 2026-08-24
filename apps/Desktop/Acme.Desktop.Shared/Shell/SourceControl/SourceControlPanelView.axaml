@@ -291,7 +291,7 @@
           <StackPanel IsVisible="{Binding !HasProject}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Opacity="0.6">
             <TextBlock Text="未打开项目目录" FontSize="13" HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock Text="在「文档」页打开一个 git 项目" FontSize="11" HorizontalAlignment="Center"
+            <TextBlock Text="{Binding $parent[UserControl].EmptyHint}" FontSize="11" HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
           </StackPanel>
           <!-- 非 git 仓库 → 初始化仓库（VSCode/Cursor 标准：非仓库目录给一键 init） -->

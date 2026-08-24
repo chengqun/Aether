@@ -48,6 +48,11 @@ public static class PanelKeys
     /// note 版知识对象仍在笔记树（<see cref="Notes"/>），本面板只承载文档版。</summary>
     public const string Knowledge = "knowledge";
 
+    /// <summary>知识对象源代码管理面板（独立 nav tab，与 <see cref="Knowledge"/> 编辑页并列——两 tab 各管各的，零状态串扰）。
+    /// 左=SCM 变更列表（SourceControlPanelView）+ 右=diff（SourceControlView），DataContext 绑
+    /// <c>Knowledge.SourceControl</c>（知识库目录的 git——与项目 SCM 页 <see cref="SourceControl"/> 分别走不同目录 provider）。</summary>
+    public const string KnowledgeScm = "knowledgescm";
+
     /// <summary>专家面板（ExpertsView，6 tab）。</summary>
     public const string Experts = "experts";
 

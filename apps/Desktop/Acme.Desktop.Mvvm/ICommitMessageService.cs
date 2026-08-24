@@ -10,6 +10,7 @@ namespace Acme.Desktop.Mvvm;
 public interface ICommitMessageService
 {
     /// <summary>生成提交消息文本。modelId=null 用当前选中 LLM（镜像 TitleService 范式——提交消息非某 agent 产物，不绑 agent 模型）。
-    /// 返回首行简明描述（可选附 body）；失败 / 无变更 / 无 LLM 返回 null。</summary>
-    Task<string?> GenerateAsync(string? modelId = null, CancellationToken cancellationToken = default);
+    /// <paramref name="repoPath"/>：目标仓库目录；null = 用当前文档页项目目录（<see cref="ICurrentProjectDirectoryProvider"/>）——
+    /// 知识对象 SCM 传知识库目录覆盖之。返回首行简明描述（可选附 body）；失败 / 无变更 / 无 LLM 返回 null。</summary>
+    Task<string?> GenerateAsync(string? modelId = null, CancellationToken cancellationToken = default, string? repoPath = null);
 }

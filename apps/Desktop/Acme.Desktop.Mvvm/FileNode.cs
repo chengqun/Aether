@@ -51,12 +51,17 @@ public partial class FileNode : ObservableObject
     public bool ShowStrokeIcon => HasIcon && !_iconIsFill;
 
     public FileNode(string name, string path, bool isFolder)
+        : this(name, name, path, isFolder) { }
+
+    /// <summary>同名重载：<paramref name="displayName"/> 显示名、<paramref name="iconFileName"/> 图标解析名。
+    /// 知识对象页 .ok 树显示名去 .ok 但图标仍按完整名解析知识对象图标时用。</summary>
+    public FileNode(string displayName, string iconFileName, string path, bool isFolder)
     {
-        Name = name;
+        Name = displayName;
         Path = path;
         IsFolder = isFolder;
         // 文件夹不显图标，但仍给占位值（HasIcon=false 时 View 两个 Path 都不显）。
-        var icon = isFolder ? FileIcons.Default : FileIcons.ForFile(name);
+        var icon = isFolder ? FileIcons.Default : FileIcons.ForFile(iconFileName);
         _icon = icon.Path;
         _iconColor = icon.Color;
         _iconIsFill = icon.IsFill;

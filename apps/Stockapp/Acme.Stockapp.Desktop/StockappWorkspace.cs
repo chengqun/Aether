@@ -27,6 +27,7 @@ public static class StockappWorkspace
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation"),
             new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history"),
             new(PanelKeys.Knowledge, PanelKeys.Knowledge, "知识对象", "knowledge"),
+            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "知识·SCM", "sourcecontrol"),
             new(PanelKeys.Browser, PanelKeys.Browser, "网络", "browser"),
             new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures"),
             new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest"),
@@ -45,7 +46,7 @@ public static class StockappWorkspace
                     Orientation: SplitOrientation.Vertical,
                     Children: new LayoutNode[]
                     {
-                        new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Knowledge, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Browser, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                        new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Knowledge, PanelKeys.KnowledgeScm, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Notes, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Browser, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
                         new LayoutRegion(RegionId: PanelKeys.Terminal),
                     },
                     // Pixels: [0, 220] → 主面板区 Star（弹性）+ 终端区 220px 固定（可拖高度，拖动后持久化）。

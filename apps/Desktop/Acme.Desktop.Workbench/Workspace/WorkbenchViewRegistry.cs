@@ -67,6 +67,12 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new KnowledgeObjectsView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Knowledge);
 
+        // 知识对象源代码管理（独立 nav tab，与知识对象编辑页并列）：右 = 复用 SourceControlView（diff），
+        // DataContext 绑 Knowledge.SourceControl（知识库目录的 git）；左栏变更列表由 LeftTreePanelView 的 knowledgescm 层提供。
+        Register(PanelKeys.KnowledgeScm,
+            () => new SourceControlView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Knowledge.SourceControl);
+
         // 浏览器网络（侧边栏 nav 全屏入口）：与底部 BottomPanelView 的「网络」tab 同源 BrowserViewModel 单例——两个 BrowserView 实例绑同一 VM，
         // 请求流双视图同步。底部 tab 适合边干别的边瞄一眼，侧边栏全屏适合细看请求流（agent browser_open/get_cookies 经同一 IBrowserService）。
         Register(PanelKeys.Browser,
