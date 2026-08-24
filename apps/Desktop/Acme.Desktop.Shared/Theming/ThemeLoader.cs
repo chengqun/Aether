@@ -38,6 +38,14 @@ public static class ThemeLoader
     /// <summary>读当前编辑器配色槽（可能为 null）。线程安全：Apply 都在 UI 线程，此读也在 UI 线程，无需 lock。</summary>
     public static EditorThemeDef? ActiveEditorTheme => _activeEditorTheme;
 
+    /// <summary>编辑器配色槽被写入时触发（<see cref="Apply"/> 内 <see cref="MergeEditorTheme"/> 之后立即Invoke）。
+    /// 供已 realize 的编辑器在启动期补染——<see cref="Acme.Desktop.Shared.Shell.CodeEditorSetup.WireThemeReapply"/>
+    /// 订阅：编辑器 <c>Loaded</c> 早于窗口 <c>OnOpened</c> 的首次 <see cref="Apply"/>（启动竞态），故 <c>Loaded</c>
+    /// 读槽=null 用内置兜底染色后，首次 <see cref="Apply"/> 写槽并触发本事件，编辑器据此重染为 JSON 配色。
+    /// 主题切换另由 <see cref="IThemeHost.ThemeChanged"/> 驱动；本事件额外覆盖「槽从 null→有值」这一启动一次性场景。
+    /// 幂等：同 JSON 反复 Apply 会多次触发，编辑器重染无副作用（颜色原地改，同值不闪）。</summary>
+    public static event EventHandler? EditorThemeApplied;
+
     /// <summary>内置主题清单（name→显示描述）。每个 name 对应内嵌资源 Assets/{name}.json。
     /// 新增内置主题 = 把 JSON 放进 Assets/ + 在此加一行（csproj 的 Assets\**\* glob 自动纳入资源）。</summary>
     public static readonly (string Name, string Description)[] BuiltInThemes =
@@ -276,6 +284,9 @@ public static class ThemeLoader
         // 缺省的前景/背景/强调槽从主题 token 派生（TextPrimary→前景、ContentBg→背景、Accent→选区、OnAccent→选区文字）
         // —— 保证编辑器底色/文字色/强调色跟着主题走，用户自定义主题时只覆盖想改的槽。
         _activeEditorTheme = MergeEditorTheme(def);
+        // 通知已 realize 的编辑器：配色槽就绪，触发重染。启动竞态补染的关键——编辑器 Loaded 早于窗口
+        // OnOpened 首次 Apply，Loaded 时读槽=null 走内置兜底；此处写槽后 Invoke，编辑器重染为 JSON 配色。
+        EditorThemeApplied?.Invoke(null, EventArgs.Empty);
         // token overlay：颜色/渐变/字体/圆角/间距/背景 → Resources.MergedDictionaries
         var overlay = ToResourceDictionary(def);
         target.Resources.MergedDictionaries.Add(overlay);

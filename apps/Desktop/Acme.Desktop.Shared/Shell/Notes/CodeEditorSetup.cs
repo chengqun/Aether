@@ -28,9 +28,11 @@ internal static class CodeEditorSetup
     public static bool IsDark(AvaloniaEdit.TextEditor editor)
         => editor.ActualThemeVariant == ThemeVariant.Dark;
 
-    /// <summary>订阅「编辑器需重染」的两个触发源并执行 <paramref name="reapply"/>：
+    /// <summary>订阅「编辑器需重染」的三个触发源并执行 <paramref name="reapply"/>：
     /// ① <see cref="StyledElement.ActualThemeVariantChanged"/>（light↔dark variant 翻转）② <see cref="IThemeHost.ThemeChanged"/>
-    /// （主题 JSON 换肤——含 variant 相同但 editor 段不同的情况，如 light→dream 同为 light 变体）。
+    /// （主题 JSON 换肤——含 variant 相同但 editor 段不同的情况，如 light→dream 同为 light 变体）
+    /// ③ <see cref="ThemeLoader.EditorThemeApplied"/>（启动竞态补染——编辑器 Loaded 早于窗口 OnOpened 首次 Apply，
+    /// 槽从 null→有值时由 ThemeLoader 主动通知，使首帧即用 JSON 配色而非内置兜底）。
     /// 供 4 个编辑器宿主（Notes/Documents/Knowledge/DiffView）共用，替代各自重复的 ActualThemeVariantChanged += 样板。</summary>
     public static void WireThemeReapply(AvaloniaEdit.TextEditor editor, Action reapply)
     {
@@ -38,6 +40,8 @@ internal static class CodeEditorSetup
         var host = DesktopApp.Services.GetService<MainViewModelBase>() as IThemeHost;
         if (host is not null)
             host.ThemeChanged += (_, _) => reapply();
+        // 启动竞态补染：ThemeLoader.Apply 写入配色槽后主动通知（首次 Apply 在 OnOpened，编辑器已 Loaded 用了内置兜底）。
+        ThemeLoader.EditorThemeApplied += (_, _) => reapply();
     }
 
     /// <summary>取当前皮肤 JSON 的编辑器配色槽（可能 null=未配 editor 段）。编辑器配色经皮肤系统可配——
