@@ -288,6 +288,76 @@ public sealed class GitService : IGitService
         catch (Exception ex) { return (false, $"推送失败：{ex.Message}"); }
     }
 
+    public string? GetRemoteUrl(string repoPath)
+    {
+        using var repo = Open(repoPath);
+        return repo is null ? null : GetRemoteUrl(repo);
+    }
+
+    public (bool Success, string Message) AddRemote(string repoPath, string name, string url)
+    {
+        using var repo = Open(repoPath);
+        if (repo is null) return (false, "未找到 git 仓库。");
+        if (string.IsNullOrWhiteSpace(url)) return (false, "远端地址不能为空。");
+        name = string.IsNullOrWhiteSpace(name) ? "origin" : name;
+        url = url.Trim();
+        try
+        {
+            var existing = repo.Network.Remotes.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.Ordinal));
+            if (existing is null)
+                repo.Network.Remotes.Add(name, url);
+            else
+                repo.Network.Remotes.Update(name, r => r.Url = url);
+            return (true, $"已{(existing is null ? "绑定" : "更新")}远端 {name} = {url}");
+        }
+        catch (Exception ex) { return (false, $"绑定远端失败：{ex.Message}"); }
+    }
+
+    public (bool Success, string Message) RenameCurrentBranch(string repoPath, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName)) return (false, "分支名不能为空。");
+        var branch = newName.Trim();
+        // 拒绝含空格/控制字符的分支名——shell-out 不引号转义，防注入。合法分支名不含空格。
+        if (branch.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
+            return (false, "分支名不能含空格或控制字符。");
+        using var repo = Open(repoPath);
+        if (repo is null) return (false, "未找到 git 仓库。");
+        var git = FindGitExecutable();
+        if (git is null) return (false, "未找到系统 git 可执行文件。");
+        // shell out `git -C <repo> branch -M <newName>`（LibGit2Sharp 无干净的分支重命名 API，且 GitService 既有 shell-out 先例）。
+        var (exit, _, stderr) = RunGit(git, repo.Info.WorkingDirectory, $"branch -M {branch}");
+        return exit == 0 ? (true, $"已重命名当前分支为 {branch}。")
+                         : (false, $"重命名分支失败：{stderr.Trim()}");
+    }
+
+    /// <summary>跑系统 <c>git</c> 子命令（无 stdin）。复用 <see cref="FindGitExecutable"/> 取绝对路径，避 .app PATH 受限坑。
+    /// 镜像 <see cref="TryGetCredentialsFromHelper"/> 的 Process 模式但不碰 stdin。8s 超时防挂起。
+    /// stdout/stderr 并发读（WaitForExit 前启动——避免写满管道缓冲死锁，见仓库「子进程工具先杀后读」坑）。</summary>
+    private static (int ExitCode, string Stdout, string Stderr) RunGit(string gitExe, string repoPath, string args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = gitExe,
+                Arguments = $"-C \"{repoPath}\" {args}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            using var p = Process.Start(psi);
+            if (p is null) return (-1, string.Empty, "无法启动 git 进程。");
+            // 并发读 stdout+stderr（WaitForExit 前启动——避免写满管道缓冲死锁）。
+            var stdoutTask = p.StandardOutput.ReadToEndAsync();
+            var stderrTask = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(8000)) { try { p.Kill(); } catch { /* 忽略 */ } return (-1, string.Empty, "git 命令超时。"); }
+            return (p.ExitCode, stdoutTask.GetAwaiter().GetResult(), stderrTask.GetAwaiter().GetResult());
+        }
+        catch (Exception ex) { return (-1, string.Empty, ex.Message); }
+    }
+
     // —— 远程凭证 ——
     // 仅复用系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret
     // 等已存凭证，VSCode 式免填）。不在应用内存储 PAT——未配置时引导用户在终端配 credential helper。

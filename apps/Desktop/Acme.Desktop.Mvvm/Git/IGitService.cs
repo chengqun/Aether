@@ -57,4 +57,13 @@ public interface IGitService
 
     /// <summary>推送当前分支到上游（无上游时推到 origin 并设置跟踪）。不可逆。</summary>
     (bool Success, string Message) Push(string repoPath);
+
+    /// <summary>当前仓库的远端 URL（origin 优先，回退首个 remote；无 remote 返回 null）。用于绑定/换远端 UI 预填 + 显示。</summary>
+    string? GetRemoteUrl(string repoPath);
+
+    /// <summary>添加远端（默认名 origin；已存在同名则改其 URL，支持「换远端」）。本地操作，不联网。URL 空返回失败。</summary>
+    (bool Success, string Message) AddRemote(string repoPath, string name, string url);
+
+    /// <summary>重命名当前分支（<c>git branch -M</c>，强制移动 ref + 更新 HEAD 指向）。本地操作。newName 空/含空格返回失败（防 shell 注入）。</summary>
+    (bool Success, string Message) RenameCurrentBranch(string repoPath, string newName);
 }

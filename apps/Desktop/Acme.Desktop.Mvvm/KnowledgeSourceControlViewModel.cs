@@ -143,6 +143,8 @@ public partial class KnowledgeSourceControlViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Ahead))]
     [NotifyPropertyChangedFor(nameof(Behind))]
     [NotifyPropertyChangedFor(nameof(HasRemoteCommits))]
+    [NotifyPropertyChangedFor(nameof(HasRemote))]
+    [NotifyPropertyChangedFor(nameof(RemoteUrl))]
     private RemoteStatus? _remoteStatus;
 
     /// <summary>能否提交：有变更（暂存或未暂存均可——无暂存时自动暂存全部）且消息非空。</summary>
@@ -174,6 +176,12 @@ public partial class KnowledgeSourceControlViewModel : ObservableObject
 
     /// <summary>是否有待推送/待拉取的提交（驱动同步徽标显示）。</summary>
     public bool HasRemoteCommits => Ahead > 0 || Behind > 0;
+
+    /// <summary>当前仓库的远端 URL（origin 优先，回退首个 remote；无 remote 返回 null）。</summary>
+    public string? RemoteUrl => RemoteStatus?.RemoteUrl;
+
+    /// <summary>是否已绑定远端（驱动「未绑定远端」hint 显隐）。</summary>
+    public bool HasRemote => !string.IsNullOrEmpty(RemoteStatus?.RemoteUrl);
 
     private bool CanStageAll => Changes.Count > 0;
 
@@ -597,13 +605,13 @@ public partial class KnowledgeSourceControlViewModel : ObservableObject
         finally { IsBusy = false; }
     }
 
-    /// <summary>打开远程设置对话框（GitHub 用户名 + PAT）。关闭后刷新远程状态。</summary>
+    /// <summary>打开远程设置对话框（绑定/更换远端 + 凭证诊断；不存 PAT）。传入知识库目录，关闭后刷新远程状态。</summary>
     [RelayCommand]
     private async Task OpenRemoteSettingsAsync()
     {
         var dlg = _serviceProvider.GetService<IRemoteSettingsDialogService>();
         if (dlg is null) return;
-        await dlg.ShowAsync();
+        await dlg.ShowAsync(_repoDir);
         await RefreshAsync();
     }
 

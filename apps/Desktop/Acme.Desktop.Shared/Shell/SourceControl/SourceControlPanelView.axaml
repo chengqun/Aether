@@ -208,6 +208,10 @@
               <Path Data="{x:Static shell:Codicons.SettingsGear}" Stretch="Uniform" Width="14" Height="14"
                     Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center"/>
             </Button>
+            <!-- 未绑定远端提示（仅在仓库已初始化但无 remote 时显，引导点 ⚙ 绑定） -->
+            <TextBlock Text="未绑定远端 — 点 ⚙ 绑定" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{DynamicResource WarningBrush}"
+                       IsVisible="{Binding !HasRemote}" Margin="4,0,0,0"/>
             <!-- 同步（pull + push） -->
             <Button Classes="scm-act" Width="24" Height="24" ToolTip.Tip="同步（拉取并推送）"
                     Command="{Binding SyncCommand}" IsVisible="{Binding IsRepository}"

@@ -1,23 +1,51 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Acme.Desktop.Shared.Shell.RemoteSettingsWindow"
-        Title="Git 远程凭证" Width="540" Height="340"
+        Title="Git 远程设置" Width="560" Height="500"
         CanResize="False" WindowStartupLocation="CenterOwner"
         Background="{DynamicResource ContentBgBrush}"
         ShowInTaskbar="False">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,20">
 
-    <!-- 认证状态条：已认证（绿）/ 未认证（黄） -->
-    <Border Grid.Row="0" x:Name="AuthBanner" CornerRadius="6" Padding="12,10" Margin="0,0,0,16">
+    <!-- 认证/远端状态条：已认证（绿）/ 未认证（黄）/ 未绑定远端（中性） -->
+    <Border Grid.Row="0" x:Name="AuthBanner" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock x:Name="AuthIcon" Text="●" FontSize="14" VerticalAlignment="Center"/>
         <TextBlock x:Name="AuthStatusText" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
       </StackPanel>
     </Border>
 
-    <!-- 详情 / 指引 -->
-    <StackPanel Grid.Row="1" Spacing="12" VerticalAlignment="Top">
+    <!-- 绑定远端区：远端地址（预填当前 URL 或空）+ 可选分支名 + 绑定并推送 -->
+    <Border Grid.Row="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12"
+            Background="{DynamicResource CardBgBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+      <StackPanel Spacing="8">
+        <TextBlock Text="绑定 / 更换远端" FontSize="12" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+        <Grid ColumnDefinitions="Auto,*">
+          <TextBlock Grid.Column="0" Text="远端地址" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBox Grid.Column="1" x:Name="RemoteUrlBox" FontSize="12"
+                    PlaceholderText="https://gitlab.example.com/group/repo.git"/>
+        </Grid>
+        <Grid ColumnDefinitions="Auto,*">
+          <TextBlock Grid.Column="0" Text="分支名（可选）" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <TextBox Grid.Column="1" x:Name="BranchBox" FontSize="12"
+                   PlaceholderText="留空保持当前分支名（如填 master 则 git branch -M master）"/>
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button x:Name="BindButton" Content="绑定并推送" Click="OnBindClick" Classes="primary" Padding="16,6"/>
+          <TextBlock x:Name="BindHint" FontSize="10" VerticalAlignment="Center" Opacity="0.75"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     Text="添加远端 →（可选重命名分支）→ push（自动设上游）"/>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- 详情 / 凭证指引 -->
+    <StackPanel Grid.Row="2" Spacing="12" VerticalAlignment="Top">
       <TextBlock x:Name="DetailText" FontSize="12" TextWrapping="Wrap"
                  Foreground="{DynamicResource TextSecondaryBrush}"/>
 
@@ -38,7 +66,7 @@
     </StackPanel>
 
     <!-- 按钮 -->
-    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
       <Button Content="测试连接" Click="OnTestClick" x:Name="TestButton" Padding="14,6"/>
       <Button Content="关闭" Click="OnCloseClick" Classes="primary" Padding="18,6" Margin="8,0,0,0"/>
     </StackPanel>
