@@ -1,5 +1,5 @@
 {
-  "$note": "ChatGPT 风（深）——中性灰基调深色皮肤（Level-1 + 极淡黑灰渐变底 background.gradient，让半透明侧栏透出层次；无 animated/styles/chrome）。对标 ChatGPT 客户端暗色模：accent 用明暗极值（深色模=近白 #ECECEC，发送按钮浅色+深字）；用户气泡中性深灰底 + 浅字。侧栏半透明 #e6 微透渐变底。字体用 sans 栈。",
+  "$note": "ChatGPT 风（深）——中性灰基调深色皮肤（Level-1 + 极淡黑灰渐变底 background.gradient，让半透明侧栏透出层次；无 animated/styles/chrome）。对标 ChatGPT 客户端暗色模：accent 用明暗极值（深色模=近白 #ECECEC，发送按钮浅色+深字）；用户气泡中性深灰底 + 浅字。侧栏半透明 #e6 微透渐变底。字体用 sans 栈。编辑器走 GitHub Dark 配色（与浅色 GitHub Light 对称）：语法 token 保留 GitHub Dark 亮色；appearance 校准——底 #1a1a1a 比 #212121 内容区略低成「凹陷代码面」、前景 #d4d4d4 较 #e6e6e6 更柔和不抢语法、当前行 #2a2a2a 与底拉开 16 级看得见、选区 #66388bfd（GitHub 蓝 40% alpha，对称浅色 #400069CC 蓝）+ 选区前景 #e6e6e6 亮字保可读。",
   "variant": "dark",
   "editor": {
     "keyword": "#ff7b72",
@@ -12,11 +12,11 @@
     "attribute": "#79c0ff",
     "heading": "#79c0ff",
     "link": "#a5d6ff",
-    "foreground": "#e6e6e6",
-    "background": "#212121",
-    "currentLine": "#242526",
-    "selection": "#DD276782",
-    "selectionForeground": "#BBBEBF"
+    "foreground": "#d4d4d4",
+    "background": "#1a1a1a",
+    "currentLine": "#2a2a2a",
+    "selection": "#66388bfd",
+    "selectionForeground": "#e6e6e6"
   },
   "colors": {
     "AccentColor": "#ECECEC",

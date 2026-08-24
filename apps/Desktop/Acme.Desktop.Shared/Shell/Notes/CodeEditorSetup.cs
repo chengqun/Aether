@@ -69,7 +69,7 @@ internal static class CodeEditorSetup
 
     /// <summary>编辑器主题色（当前行底 + 选中底/前景）。随 ActualThemeVariant 切——Loaded 与主题切换都调。
     /// 配色优先取皮肤 JSON 的 editor 段（ThemeLoader.ActiveEditorTheme），缺省回落 VSCode 2026 内置：
-    /// 当前行 #EAEAEA40/#242526、选区 #0069CC40/#276782dd、选区前景 #202020/#BBBEBF。
+    /// 当前行 #EAEAEA40/#2a2a2a、选区 #400069CC/#66388bfd、选区前景 #202020/#e6e6e6、底 null/#1a1a1a。
     /// alpha 用 #AARRGGBB（Avalonia Color.Parse 格式）。</summary>
     public static void ApplyTheme(AvaloniaEdit.TextEditor editor)
     {
@@ -78,14 +78,14 @@ internal static class CodeEditorSetup
             var dark = IsDark(editor);
             var p = Palette;
             var tv = editor.TextArea.TextView;
-            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(p?.CurrentLine ?? (dark ? "#242526" : "#40EAEAEA")));
+            tv.CurrentLineBackground = new SolidColorBrush(Color.Parse(p?.CurrentLine ?? (dark ? "#2a2a2a" : "#40EAEAEA")));
             tv.CurrentLineBorder = null;
             // 编辑器前景（文字色）：皮肤提供（或主题 TextPrimary 派生）则设，否则回落内置暗/浅默认。
-            editor.Foreground = new SolidColorBrush(Color.Parse(p?.Foreground ?? (dark ? "#e6e6e6" : "#1a1a1f")));
-            editor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(p?.Selection ?? (dark ? "#DD276782" : "#400069CC")));
-            editor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(p?.SelectionForeground ?? (dark ? "#BBBEBF" : "#202020")));
-            // 编辑器底：皮肤提供（或主题 ContentBg 派生）则覆盖；null=随原生 ThemeVariant。
-            editor.TextArea.Background = p?.Background is { } bg ? new SolidColorBrush(Color.Parse(bg)) : null;
+            editor.Foreground = new SolidColorBrush(Color.Parse(p?.Foreground ?? (dark ? "#d4d4d4" : "#1a1a1f")));
+            editor.TextArea.SelectionBrush = new SolidColorBrush(Color.Parse(p?.Selection ?? (dark ? "#66388bfd" : "#400069CC")));
+            editor.TextArea.SelectionForeground = new SolidColorBrush(Color.Parse(p?.SelectionForeground ?? (dark ? "#e6e6e6" : "#202020")));
+            // 编辑器底：皮肤提供（或主题 ContentBg 派生）则覆盖；深色回落 #1a1a1a（凹陷代码面，避免原生白闪），浅色随原生。
+            editor.TextArea.Background = p?.Background is { } bg ? new SolidColorBrush(Color.Parse(bg)) : (dark ? new SolidColorBrush(Color.Parse("#1a1a1a")) : null);
         }
         catch { /* 控件未就绪则跳过 */ }
     }
