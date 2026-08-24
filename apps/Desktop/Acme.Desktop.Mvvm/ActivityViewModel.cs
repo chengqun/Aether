@@ -13,15 +13,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Acme.Desktop.Mvvm;
 
 /// <summary>「活动」页 ViewModel：GitHub 式贡献热力图（近 N 天日历网格，颜色深浅=当天活动量）。
-/// 数据=两者综合：Agent 执行（<see cref="IConversationStore.GetRunsInRangeAsync"/> 跨会话按时段查）+ Git 提交
-///（<see cref="IGitService.GetHistory"/> 按日聚合，读文档页打开的项目目录）。点格看当天明细（runs + commits）；
-/// 点 run 跳聊天页 resume（复用 <see cref="ChatWorkspaceViewModel.ResumeConversationCommand"/>）。UI-agnostic（零 Avalonia）。</summary>
+/// 数据=三者综合：Agent 执行（<see cref="IConversationStore.GetRunsInRangeAsync"/> 跨会话按时段查）+ Git 提交
+///（<see cref="IGitService.GetHistory"/> 按日聚合，读文档页打开的项目目录）+ 知识对象变更（知识库目录 git 提交历史）。
+/// 点格看当天明细（runs + commits + 知识变更）；点 run 跳聊天页 resume（复用 <see cref="ChatWorkspaceViewModel.ResumeConversationCommand"/>）。UI-agnostic（零 Avalonia）。</summary>
 public partial class ActivityViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
+    private readonly IKnowledgeDirectoryProvider _knowledgeDirProvider;
     private readonly IUiDispatcher _dispatcher;
     private string? _projectDir;
+    private string? _knowledgeDir;
 
     /// <summary>中国标准时区（UTC+8）——分桶日期 + UI 显示均硬编码 +8，不依赖系统时区（出差/海外开发机也准）。</summary>
     private static readonly TimeSpan ChinaOffset = TimeSpan.FromHours(8);
@@ -39,15 +41,20 @@ public partial class ActivityViewModel : ObservableObject
     [ObservableProperty] private bool _isGeneratingReport;
     [ObservableProperty] private ActivityRange _range = ActivityRange.Year;
 
-    public ActivityViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider)
+    public ActivityViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider,
+        IKnowledgeDirectoryProvider knowledgeDirProvider)
     {
         _serviceProvider = serviceProvider;
         _projectDirProvider = projectDirProvider;
+        _knowledgeDirProvider = knowledgeDirProvider;
         _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
         _projectDirProvider.DirectoryChanged += OnProjectDirChanged;
-        // 启动期若文档页已恢复上次项目，立即同步一次。
+        _knowledgeDirProvider.DirectoryChanged += OnKnowledgeDirChanged;
+        // 启动期若文档页/知识对象页已恢复上次目录，立即同步一次。
         if (!string.IsNullOrEmpty(_projectDirProvider.CurrentDirectory))
             SetProjectAsync(_projectDirProvider.CurrentDirectory).SafeFireAndForget();
+        if (!string.IsNullOrEmpty(_knowledgeDirProvider.CurrentDirectory))
+            SetKnowledgeAsync(_knowledgeDirProvider.CurrentDirectory).SafeFireAndForget();
     }
 
     private void OnProjectDirChanged(string? dir) => SetProjectAsync(dir).SafeFireAndForget();
@@ -55,6 +62,14 @@ public partial class ActivityViewModel : ObservableObject
     private async Task SetProjectAsync(string? dir)
     {
         _projectDir = dir;
+        await LoadAsync();
+    }
+
+    private void OnKnowledgeDirChanged(string? dir) => SetKnowledgeAsync(dir).SafeFireAndForget();
+
+    private async Task SetKnowledgeAsync(string? dir)
+    {
+        _knowledgeDir = dir;
         await LoadAsync();
     }
 
@@ -97,6 +112,17 @@ public partial class ActivityViewModel : ObservableObject
                 commits = history.Select(n => n.Info).Where(c => c.When >= fromDto).ToList();
             }
 
+            // 知识对象变更维度：知识库目录（.ok 文件所在，独立于项目目录）的 git 提交历史。
+            // 同路径防双计——用户可能把知识库目录指向项目目录，commits 已计入项目维度。
+            var knowledgeCommits = new List<CommitInfo>();
+            if (git is not null && !string.IsNullOrEmpty(_knowledgeDir)
+                && !string.Equals(_knowledgeDir, _projectDir, StringComparison.OrdinalIgnoreCase)
+                && git.IsRepository(_knowledgeDir))
+            {
+                var khistory = git.GetHistory(_knowledgeDir, 5000);
+                knowledgeCommits = khistory.Select(n => n.Info).Where(c => c.When >= fromDto).ToList();
+            }
+
             // 按日分桶。
             var buckets = new Dictionary<DateOnly, DayBucket>();
             foreach (var r in runs)
@@ -111,6 +137,12 @@ public partial class ActivityViewModel : ObservableObject
                 if (!buckets.TryGetValue(d, out var b)) buckets[d] = b = new DayBucket();
                 b.Commits.Add(c);
             }
+            foreach (var c in knowledgeCommits)
+            {
+                var d = DateOnly.FromDateTime(c.When.ToOffset(ChinaOffset).DateTime);
+                if (!buckets.TryGetValue(d, out var b)) buckets[d] = b = new DayBucket();
+                b.KnowledgeChanges.Add(c);
+            }
             _buckets = buckets;
 
             // 构建网格 DayCell（GitHub 式 53 列×7 行：首列对齐到 from 的周日，按周列×周几行排；UniformGrid 按行填）。
@@ -119,10 +151,11 @@ public partial class ActivityViewModel : ObservableObject
             var cells = new List<DayCell>();
             while (cursor <= today)
             {
-                var count = buckets.TryGetValue(cursor, out var bu) ? bu.Runs.Count + bu.Commits.Count : 0;
+                var count = buckets.TryGetValue(cursor, out var bu)
+                    ? bu.Runs.Count + bu.Commits.Count + bu.KnowledgeChanges.Count : 0;
                 var intensity = count switch { 0 => 0, <= 2 => 1, <= 5 => 2, <= 9 => 3, _ => 4 };
                 var tip = count == 0 ? $"{cursor:yyyy-MM-dd}：无活动"
-                                        : $"{cursor:yyyy-MM-dd}：{bu!.Runs.Count} 次执行 + {bu.Commits.Count} 次提交";
+                                        : $"{cursor:yyyy-MM-dd}：{bu!.Runs.Count} 次执行 + {bu.Commits.Count} 次提交 + {bu.KnowledgeChanges.Count} 次知识变更";
                 cells.Add(new DayCell { Date = cursor, Intensity = intensity, Count = count, Tooltip = tip, IsToday = cursor == today });
                 cursor = cursor.AddDays(1);
             }
@@ -162,8 +195,8 @@ public partial class ActivityViewModel : ObservableObject
         cell.IsSelected = true;
         SelectedDay = cell;
         DayDetail = _buckets.TryGetValue(cell.Date, out var b)
-            ? new ActivityDayDetail(cell.Date, b.Runs.ToList(), b.Commits.ToList())
-            : new ActivityDayDetail(cell.Date, new(), new());
+            ? new ActivityDayDetail(cell.Date, b.Runs.ToList(), b.Commits.ToList(), b.KnowledgeChanges.ToList())
+            : new ActivityDayDetail(cell.Date, new(), new(), new());
     }
 
     /// <summary>生成当天日报（基于 SelectedDay，无则今天）→ LLM 汇总 runs+commits → markdown 弹窗展示。
@@ -210,6 +243,7 @@ public partial class ActivityViewModel : ObservableObject
     {
         public List<RunSummary> Runs { get; } = new();
         public List<CommitInfo> Commits { get; } = new();
+        public List<CommitInfo> KnowledgeChanges { get; } = new();
     }
 }
 
@@ -227,5 +261,5 @@ public sealed partial class DayCell : ObservableObject
     [ObservableProperty] private bool _isSelected;
 }
 
-/// <summary>当天明细：agent runs + git commits（只读快照，从已加载桶构建）。</summary>
-public sealed record ActivityDayDetail(DateOnly Date, List<RunSummary> Runs, List<CommitInfo> Commits);
+/// <summary>当天明细：agent runs + git commits + 知识对象变更（只读快照，从已加载桶构建）。</summary>
+public sealed record ActivityDayDetail(DateOnly Date, List<RunSummary> Runs, List<CommitInfo> Commits, List<CommitInfo> KnowledgeChanges);

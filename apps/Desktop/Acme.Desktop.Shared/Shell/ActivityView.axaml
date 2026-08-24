@@ -6,6 +6,16 @@
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.ActivityView"
              Background="{DynamicResource ContentBgBrush}">
+    <UserControl.Resources>
+        <!-- CommitInfo 行模板（Git 提交 + 知识对象变更两区共用：sha + 消息 + 时间） -->
+        <DataTemplate x:Key="CommitItemTemplate" DataType="git:CommitInfo">
+            <Grid ColumnDefinitions="64,*,60" Margin="0,0,0,4">
+                <TextBlock Grid.Column="0" Text="{Binding ShaShort}" Classes="muted" FontFamily="Cascadia Code,Menlo,monospace"/>
+                <TextBlock Grid.Column="1" Text="{Binding Message}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="2" Text="{Binding When, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="muted" HorizontalAlignment="Right"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Button.range">
             <Setter Property="Padding" Value="10,4"/>
@@ -60,7 +70,7 @@
                     <TextBlock Classes="muted" Text="正在生成报告…" IsVisible="{Binding IsGeneratingReport}"
                                VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
-                <TextBlock Classes="muted" Text="每天一格，颜色深浅 = 当天活动量（Agent 执行 + Git 提交）" VerticalAlignment="Center" Margin="24,0,0,0"/>
+                <TextBlock Classes="muted" Text="每天一格，颜色深浅 = 当天活动量（Agent 执行 + Git 提交 + 知识变更）" VerticalAlignment="Center" Margin="24,0,0,0"/>
             </StackPanel>
 
             <!-- 加载态 -->
@@ -127,17 +137,12 @@
                     <!-- Git 提交 -->
                     <TextBlock Text="Git 提交" FontWeight="SemiBold" Margin="0,8,0,2"
                                IsVisible="{Binding DayDetail}"/>
-                    <ItemsControl ItemsSource="{Binding DayDetail.Commits}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="git:CommitInfo">
-                                <Grid ColumnDefinitions="64,*,60" Margin="0,0,0,4">
-                                    <TextBlock Grid.Column="0" Text="{Binding ShaShort}" Classes="muted" FontFamily="Cascadia Code,Menlo,monospace"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding When, Converter={x:Static shell:LocalTimeConverter.Instance}}" Classes="muted" HorizontalAlignment="Right"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding DayDetail.Commits}" ItemTemplate="{StaticResource CommitItemTemplate}"/>
+
+                    <!-- 知识对象变更（知识库目录 git 提交历史，独立于项目目录 Git 提交） -->
+                    <TextBlock Text="知识对象变更" FontWeight="SemiBold" Margin="0,8,0,2"
+                               IsVisible="{Binding DayDetail}"/>
+                    <ItemsControl ItemsSource="{Binding DayDetail.KnowledgeChanges}" ItemTemplate="{StaticResource CommitItemTemplate}"/>
                 </StackPanel>
             </Border>
         </Grid>

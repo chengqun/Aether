@@ -97,7 +97,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetService<IConnectorViewModel>());
 
         Activity = new ActivityViewModel(serviceProvider,
-            serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
+            serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>(),
+            serviceProvider.GetRequiredService<IKnowledgeDirectoryProvider>());
 
         // 文档版知识对象页（.ok 独立 nav 页）：根目录=独立知识库目录（IKnowledgeDirectoryProvider，
         // 与文档页项目目录解耦——避免知识库目录覆盖 ICurrentProjectDirectoryProvider 致 SCM/终端/活动页错乱）。
