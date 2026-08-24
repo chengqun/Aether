@@ -49,6 +49,12 @@ public interface IGitService
     /// <summary>系统 git credential helper（如 macOS keychain）是否已存有当前远程的凭证（免填 PAT 判断）。不联网，仅查 helper。</summary>
     bool HasSystemCredentials(string repoPath);
 
+    /// <summary>把用户名+凭证存入系统 git credential helper（macOS keychain / Windows Credential Manager / Linux libsecret）——
+    /// <c>git credential approve</c>（<see cref="HasSystemCredentials"/> 的写对称）。应用内不留存 PAT：仅 pipe 给 git 子进程 stdin，
+    /// 存的是系统 helper（与终端 <c>git push</c> 存的是同一处），之后 <see cref="Push"/> 走 credential fill 免填。
+    /// 用于绑定新远端首推时系统无凭证的场景。url/password 空返回失败。</summary>
+    (bool Success, string Message) StoreCredentials(string url, string username, string password);
+
     /// <summary>从远程拉取更新（fetch）但不合并。凭证复用系统 git credential helper（不读应用内存储）。</summary>
     (bool Success, string Message) Fetch(string repoPath);
 

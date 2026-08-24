@@ -41,6 +41,24 @@
                      Foreground="{DynamicResource TextSecondaryBrush}"
                      Text="添加远端 →（可选重命名分支）→ push（自动设上游）"/>
         </StackPanel>
+        <!-- 凭证输入区：仅 push 因系统未存该站点凭证失败时显示。填一次用户名 + 密码/PAT，
+             经 git credential approve 存入系统 keychain（应用不保存，与终端 git push 同处），之后免填。 -->
+        <Border x:Name="CredentialSection" CornerRadius="6" Padding="10,8" Margin="0,4,0,0" IsVisible="False"
+                Background="{DynamicResource AccentTintBgBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <TextBlock Text="该站点系统未存凭证——填一次用户名 + 密码/PAT，将存入系统 git 凭证库（应用不保存，与终端 git push 同处），之后免填。"
+                       FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <Grid ColumnDefinitions="*,4,*">
+              <TextBox Grid.Column="0" x:Name="CredUserBox" FontSize="12" PlaceholderText="用户名（Git 账号名）"/>
+              <TextBox Grid.Column="2" x:Name="CredPassBox" FontSize="12" PasswordChar="●" PlaceholderText="密码 / PAT"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="StoreCredButton" Content="存入并重试推送" Click="OnStoreCredClick" Classes="primary" Padding="14,5"/>
+              <Button Content="取消" Click="OnCancelCredClick" Padding="14,5"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
       </StackPanel>
     </Border>
 

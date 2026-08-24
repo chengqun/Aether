@@ -71,6 +71,9 @@ public partial class App : global::Avalonia.Application
             // 超时放弃释放、主进程照常退出（MCP 子进程属本进程树，随进程退出由 OS 回收）。
             desktop.ShutdownRequested += (_, _) =>
             {
+                // dock 右键 Quit / Cmd+Q 不经 ExitApplication——先标主窗真退出 + 关桌宠，
+                // 否则 OnClosing 见 _isReallyExiting=false 会拦截系统退出 → 退出崩溃（虽最终退出）。
+                try { (desktop.MainWindow as WorkbenchWindow)?.PrepareForShutdown(); } catch { /* 忽略 */ }
                 try
                 {
                     if (Services is System.IAsyncDisposable disposable)

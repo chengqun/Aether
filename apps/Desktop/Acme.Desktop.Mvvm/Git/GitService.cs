@@ -409,6 +409,47 @@ public sealed class GitService : IGitService
         catch { return null; }
     }
 
+    /// <summary>调系统 <c>git credential approve</c> 把用户名+凭证写入 credential helper（<see cref="TryGetCredentialsFromHelper"/> 的写对称）。
+    /// 应用内不留存 PAT——input 经 stdin 喂给 git 子进程，由 git 存入系统 keychain/Credential Manager/libsecret（与终端 git push 同处），
+    /// 进程结束 input 即消失，应用代码不持有任何字段存它。url/password 空返回失败。</summary>
+    public (bool Success, string Message) StoreCredentials(string url, string username, string password)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return (false, "远端地址不能为空。");
+        if (string.IsNullOrEmpty(password)) return (false, "凭证（密码/PAT）不能为空。");
+        var git = FindGitExecutable();
+        if (git is null) return (false, "未找到系统 git 可执行文件。");
+        try
+        {
+            var user = string.IsNullOrWhiteSpace(username) ? "token" : username.Trim();
+            // git credential approve 接受 url= 行，自己解析 protocol/host；附 username/password 行写入 helper。
+            var input = $"url={url.Trim()}\nusername={user}\npassword={password}\n\n";
+            var psi = new ProcessStartInfo
+            {
+                FileName = git,
+                Arguments = "credential approve",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            // 禁止交互式提示（askpass / 终端），避免进程挂起。
+            psi.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            using var p = Process.Start(psi);
+            if (p is null) return (false, "无法启动 git 进程。");
+            // 并发读 stdout+stderr（approve 正常无 stdout，但守卫防管道满死锁，见仓库「子进程工具先杀后读」坑）。
+            var stdoutTask = p.StandardOutput.ReadToEndAsync();
+            var stderrTask = p.StandardError.ReadToEndAsync();
+            p.StandardInput.Write(input);
+            p.StandardInput.Close();
+            if (!p.WaitForExit(8000)) { try { p.Kill(); } catch { /* 忽略 */ } return (false, "存凭证超时。"); }
+            var stderr = stderrTask.GetAwaiter().GetResult();
+            return p.ExitCode == 0 ? (true, "凭证已存入系统 git 凭证库（macOS keychain / Windows Credential Manager / Linux libsecret）。")
+                                   : (false, $"存凭证失败：{stderr.Trim()}");
+        }
+        catch (Exception ex) { return (false, $"存凭证失败：{ex.Message}"); }
+    }
+
     /// <summary>定位系统 git 可执行文件。.app 启动 PATH 受限时逐个尝试常见安装路径兜底。</summary>
     private static string? FindGitExecutable()
     {

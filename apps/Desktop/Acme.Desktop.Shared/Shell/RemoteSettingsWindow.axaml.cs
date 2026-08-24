@@ -12,7 +12,9 @@ namespace Acme.Desktop.Shared.Shell;
 /// <summary>Git 远程设置窗口。不存储任何 PAT——凭证完全由系统 git credential helper
 /// 管理（macOS keychain / Windows Credential Manager / Linux libsecret）。此窗口职责：
 /// ① 绑定/更换远端（<c>git remote add origin &lt;url&gt;</c> + 可选 <c>git branch -M</c> + 复用 <see cref="IGitService.Push"/> 首推设上游）
-/// ② 探测系统凭证状态（已认证/未认证/未绑定远端）③ 测试连接（fetch 验证）。
+/// ② 探测系统凭证状态（已认证/未认证/未绑定远端）③ 测试连接（fetch 验证）
+/// ④ 首推凭证缺失时，应用内输入一次用户名+PAT 经 <see cref="IGitService.StoreCredentials"/>（<c>git credential approve</c>）
+/// 存入系统 helper——应用代码不持有 PAT（仅 pipe 给 git 子进程 stdin，存的是系统 keychain，与终端 git push 同处），之后免填。
 /// <para>仓库路径由 ctor 参 <c>repoPath</c> 指定（VM 传入——项目 SCM 传项目目录、知识对象 SCM 传知识库目录），
 /// 不再硬解析 <see cref="ICurrentProjectDirectoryProvider"/>——修「从知识对象 SCM 打开会误探项目目录」的旧 bug。</para></summary>
 public partial class RemoteSettingsWindow : ThemedWindow
@@ -132,22 +134,8 @@ public partial class RemoteSettingsWindow : ThemedWindow
                 }
             }
 
-            // 3. 首推（联网，复用 Push 的 refspec + 设上游）。凭证缺失会失败——显示 HelpBox 指引。
-            var (pushOk, pushMsg) = await Task.Run(() => _git!.Push(_repoPath!));
-            SetAuthBanner(pushOk, pushMsg);
-            if (!pushOk && pushMsg.Contains("凭证", StringComparison.Ordinal))
-            {
-                // 凭证失败：远端已绑定成功，引导终端 push 存凭证。HelpCmd 指向具体命令。
-                HelpBox.IsVisible = true;
-                HelpCmd.Text = $"git push -u origin HEAD";
-                DetailText.Text = "远端已绑定，但首次推送因系统未存该站点凭证而失败。请在终端执行上述命令（git 会保存凭证），之后回面板 push/pull/sync 即可。";
-            }
-            // 成功 → 重探 auth + 重载 URL 框（按钮文案驱动用）。
-            if (pushOk)
-            {
-                await LoadRemoteUrlAsync();
-                await ProbeAuthStatusAsync();
-            }
+            // 3. 首推（联网，复用 Push 的 refspec + 设上游）。凭证缺失由 TryPushAsync 引导应用内输入存 keychain。
+            await TryPushAsync(url!);
         }
         catch (Exception ex) { SetAuthBanner(false, $"绑定推送失败：{ex.Message}"); }
         finally
@@ -155,6 +143,80 @@ public partial class RemoteSettingsWindow : ThemedWindow
             BindButton.IsEnabled = true;
             TestButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>推送当前分支到远端并按结果更新 UI。成功→重探 auth+重载 URL；凭证缺失→显示应用内凭证输入区
+    ///（经 git credential approve 存系统 keychain，应用不保存）；其他失败→显示消息。</summary>
+    private async Task TryPushAsync(string url)
+    {
+        CredentialSection.IsVisible = false;
+        var (pushOk, pushMsg) = await Task.Run(() => _git!.Push(_repoPath!));
+        SetAuthBanner(pushOk, pushMsg);
+        if (pushOk)
+        {
+            await LoadRemoteUrlAsync();
+            await ProbeAuthStatusAsync();
+            return;
+        }
+        if (IsCredentialFailure(pushMsg))
+        {
+            // 系统未存该站点凭证：引导应用内输入一次（存系统 keychain，应用不持有），或取消走终端。
+            CredentialSection.IsVisible = true;
+            CredUserBox.Text = string.Empty;
+            CredPassBox.Text = string.Empty;
+            DetailText.Text = $"首次推送 {url} 时系统未存该站点凭证。请在上方输入用户名 + 密码/PAT（经 git 存入系统凭证库，应用不保存），或点取消后用终端 git push。";
+            HelpBox.IsVisible = false;
+        }
+        else
+        {
+            DetailText.Text = pushMsg;
+        }
+    }
+
+    /// <summary>判定 push 失败是否为凭证缺失（vs 网络/分支保护/其他）。宽松匹配中英文关键词 + 401。</summary>
+    private static bool IsCredentialFailure(string msg) =>
+        msg.Contains("凭证", StringComparison.Ordinal) ||
+        msg.Contains("认证", StringComparison.Ordinal) ||
+        msg.Contains("credential", StringComparison.OrdinalIgnoreCase) ||
+        msg.Contains("Authentication", StringComparison.OrdinalIgnoreCase) ||
+        msg.Contains("401", StringComparison.Ordinal);
+
+    /// <summary>把输入的用户名+密码/PAT 经 git credential approve 存入系统 keychain（应用不保存），随后重试推送。</summary>
+    private async void OnStoreCredClick(object? sender, RoutedEventArgs e)
+    {
+        if (_git is null || string.IsNullOrEmpty(_repoPath)) return;
+        var url = RemoteUrlBox.Text?.Trim();
+        var user = CredUserBox.Text;
+        var pass = CredPassBox.Text;
+        if (string.IsNullOrEmpty(url)) { SetAuthBanner(false, "远端地址为空。"); return; }
+        if (string.IsNullOrEmpty(pass)) { SetAuthBanner(false, "请输入密码 / PAT。"); return; }
+
+        StoreCredButton.IsEnabled = false;
+        SetAuthBanner(true, "存入凭证并重试推送中…");
+        try
+        {
+            // PAT 仅 pipe 给 git 子进程 stdin 存系统 keychain——应用代码不持有字段、不写盘、不进 git config。
+            var (ok, msg) = await Task.Run(() => _git!.StoreCredentials(url!, user ?? string.Empty, pass!));
+            if (!ok)
+            {
+                SetAuthBanner(false, msg);
+                return;
+            }
+            // 凭证已存系统 keychain——重试 push（这次 credential fill 能读到）。成功会隐藏凭证区 + 重探 auth。
+            await TryPushAsync(url!);
+        }
+        catch (Exception ex) { SetAuthBanner(false, $"存凭证失败：{ex.Message}"); }
+        finally { StoreCredButton.IsEnabled = true; }
+    }
+
+    /// <summary>取消应用内凭证输入，回退到终端指引（git push 让 git 自己存凭证）。</summary>
+    private void OnCancelCredClick(object? sender, RoutedEventArgs e)
+    {
+        CredentialSection.IsVisible = false;
+        CredPassBox.Text = string.Empty; // 清空明文，减少驻留。
+        HelpBox.IsVisible = true;
+        HelpCmd.Text = "git push";
+        DetailText.Text = "已取消应用内输入。请在终端执行上述命令（git 会保存凭证），之后回面板 push/pull/sync 即可。";
     }
 
     private void SetAuthBanner(bool ok, string text)

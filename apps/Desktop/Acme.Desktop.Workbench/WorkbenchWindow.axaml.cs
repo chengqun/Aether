@@ -151,6 +151,19 @@ public partial class WorkbenchWindow : Window
         });
     }
 
+    /// <summary>系统级退出（macOS dock 右键 Quit / Cmd+Q 等 <see cref="IClassicDesktopStyleApplicationLifetime.ShutdownRequested"/>）
+    /// 前的准备：置真退出标志 + 关桌宠，使 <see cref="OnClosing"/> 放行而非拦截成「最小化到桌宠」。
+    /// dock Quit 不经 <see cref="ExitApplication"/>——若不调此方法，OnClosing 见 _isReallyExiting=false 会
+    /// e.Cancel=true + EnterPetMode 拦截系统退出，与 macOS terminate 流程冲突 → 退出崩溃（虽最终退出）。
+    /// 在 ShutdownRequested 开头调（早于 lifetime 关窗口）；dock 操作时 PetWindow 无活跃 handler（非桌宠菜单点击），
+    /// 故 _pet.Close() 不重入栈（区别 ExitApplication 需 Dispatcher.Post 延迟避开桌宠自身 handler 栈）。</summary>
+    public void PrepareForShutdown()
+    {
+        _isReallyExiting = true;
+        try { _pet?.Close(); }
+        catch { /* 退出期忽略桌宠关闭异常 */ }
+    }
+
     /// <summary>打开运行 Trace 查看窗口（OTel agent.run span）。</summary>
     public void OnOpenTrace(object? sender, RoutedEventArgs e)
     {
