@@ -22,18 +22,12 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            shell: bash
-            script: bash scripts/build-stockapp-macos.sh
             artifact: stockapp-macos-x64
             glob: dist/Aether-Stockapp-*-macos-x64.zip
           - os: ubuntu-latest
-            shell: bash
-            script: bash scripts/build-stockapp-linux.sh
             artifact: stockapp-linux-x64
             glob: dist/Aether-Stockapp-*-linux-x64.tar.gz
           - os: windows-latest
-            shell: pwsh
-            script: "& ./scripts/build-stockapp-windows.ps1"
             artifact: stockapp-win-x64
             glob: dist/Aether-Stockapp-*-win-x64.zip
     env:
@@ -53,9 +47,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Run build script
-        shell: ${{ matrix.shell }}
-        run: ${{ matrix.script }}
+      # shell 字段不支持 matrix 上下文（GitHub 校验器只认字面量），故按 OS 分三步、各用字面 shell。
+      - name: Run build script (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/build-stockapp-macos.sh
+
+      - name: Run build script (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/build-stockapp-linux.sh
+
+      - name: Run build script (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: "& ./scripts/build-stockapp-windows.ps1"
 
       - name: Zip macOS .app bundle (Release 需单文件)
         if: runner.os == 'macOS'
