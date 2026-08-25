@@ -612,8 +612,10 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             {
                 foreach (var msg in response)
                 {
-                    // 历史不残留进度心跳（Progress 是实时过程态，回看无意义）。
+                    // 历史不残留进度心跳与审批决策（均为过程态控制消息，回看无意义）。
                     if (string.Equals(msg.MessageType, "Progress", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (string.Equals(msg.MessageType, "ApprovalDecision", StringComparison.OrdinalIgnoreCase))
                         continue;
                     if (_displayedMessageIds.Add(msg.Id))
                         Messages.Add(FixMessage(msg));
@@ -836,7 +838,14 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
         System.Diagnostics.Debug.WriteLine($"[ChatDetail] 发送审批决策: convId={_currentConversationId}, approved={approved}");
         try
         {
-            await Task.Run(() => _chatService.SendMessageAsync(_currentConversationId, json, "ApprovalDecision"));
+            // 接住返回消息：注册 Id 防止后续 REST 拉取（重连补漏/刷新）把审批决策原始 JSON 当可见气泡重复泄漏；
+            // 推进时间游标（只前进不回退，避免服务端时间乱序时漏掉后续摘要 Text）。
+            var sent = await Task.Run(() => _chatService.SendMessageAsync(_currentConversationId, json, "ApprovalDecision"));
+            if (sent != null)
+            {
+                _displayedMessageIds.Add(sent.Id);
+                if (sent.CreationTime > _lastMessageTime) _lastMessageTime = sent.CreationTime;
+            }
         }
         catch (Exception ex)
         {
@@ -874,7 +883,8 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             if (response == null) return;
 
             var missed = response.Where(m => m.CreationTime > _lastMessageTime
-                && !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase)).ToList();
+                && !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(m.MessageType, "ApprovalDecision", StringComparison.OrdinalIgnoreCase)).ToList();
             if (!missed.Any()) return;
 
             foreach (var msg in missed)
