@@ -159,7 +159,42 @@ internal static class CodeEditorSetup
     private static IHighlightingDefinition? _yamlLight, _yamlDark;
 
     private static IHighlightingDefinition LoadYaml(bool dark)
-        => dark ? (_yamlDark ??= BuildYaml(dark)) : (_yamlLight ??= BuildYaml(dark));
+    {
+        // .xshd 解析一次缓存（结构不变），但配色每次调用原地刷新——与内置语言 ApplyVscodeColors 同构，
+        // 避免 YAML 缓存实例颜色冻结在首次构建时的 Palette。启动竞态根因：App.axaml 硬编码
+        // RequestedThemeVariant="Light"→编辑器 Loaded 时 IsDark=false 且 Palette=null，BuildYaml 用浅色
+        // 兜底构建 _yamlLight 后缓存；窗口 OnOpened 首次 ThemeLoader.Apply 写入深色 Palette，但此时
+        // ApplyThemeVariant 尚未跑→IsDark 仍 false→LoadYaml(false) 命中 _yamlLight 缓存不重建→YAML 停在
+        // 浅色（内置语言因 ApplyVscodeColors 每次原地改色无此问题，故「同一编辑器」YAML 与文档表现不一）。
+        // 现 ApplyYamlColors 每次刷新，YAML 与内置语言表现一致——IsDark 与 Palette 谁先就绪都不冻结。
+        var def = dark ? (_yamlDark ??= BuildYaml(dark)) : (_yamlLight ??= BuildYaml(dark));
+        ApplyYamlColors(def, dark);
+        return def;
+    }
+
+    /// <summary>把当前皮肤 JSON editor 段的 YAML 配色原地刷到定义的命名色上（与 <see cref="ApplyVscodeColors"/>
+    /// 同构）。每次 <see cref="LoadYaml"/> 调用都执行——.xshd 缓存实例的颜色随主题实时改，不冻结在首次构建。
+    /// 名→槽映射与 <see cref="BuildYaml"/> 一致：Comment/DocMarker→comment、String→string、Number→number、
+    /// Keyword→keyword、Key→attribute。</summary>
+    private static void ApplyYamlColors(IHighlightingDefinition def, bool dark)
+    {
+        var p = Palette;
+        foreach (var c in def.NamedHighlightingColors)
+        {
+            var n = (c.Name ?? "").ToUpperInvariant();
+            string? hex = n switch
+            {
+                "COMMENT" or "DOCMARKER" => p?.Comment ?? (dark ? "#8b949e" : "#6e7781"),
+                "STRING" => p?.String ?? (dark ? "#a5d6ff" : "#0a3069"),
+                "NUMBER" => p?.Number ?? (dark ? "#79c0ff" : "#0550ae"),
+                "KEYWORD" => p?.Keyword ?? (dark ? "#ff7b72" : "#cf222e"),
+                "KEY" => p?.Attribute ?? (dark ? "#79c0ff" : "#0550ae"),
+                _ => null,
+            };
+            if (hex is not null)
+                c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));
+        }
+    }
 
     private static IHighlightingDefinition BuildYaml(bool dark)
     {
