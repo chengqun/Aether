@@ -2,6 +2,9 @@
 ## macOS
 .DS_Store
 
+## AI assistant — 含项目内幕/服务器IP/证书密码等 prose，不入仓
+CLAUDE.md
+
 
 bin/
 obj/
