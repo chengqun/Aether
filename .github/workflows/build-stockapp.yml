@@ -1,0 +1,90 @@
+name: Build & Release Stockapp
+
+# 推 v* tag → 三平台构建 + 创建 GitHub Release 挂载产物；workflow_dispatch 手动触发（产物仅进 Actions artifacts，不发版）。
+# 复用 scripts/build-stockapp-*.sh/.ps1（已处理 Lean 子模块 init、CTP 原生 wrapper 现场 cmake 编译/回退入库产物、rpath、打包）。
+# 桌面端无 baked-in 密钥（server URL 运行时经登录窗口配）→ 不依赖任何 GitHub Secret 即可跑通。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # release job 创建 Release + 上传 assets 需要
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            shell: bash
+            script: bash scripts/build-stockapp-macos.sh
+            artifact: stockapp-macos-x64
+            glob: dist/Aether-Stockapp-*-macos-x64.zip
+          - os: ubuntu-latest
+            shell: bash
+            script: bash scripts/build-stockapp-linux.sh
+            artifact: stockapp-linux-x64
+            glob: dist/Aether-Stockapp-*-linux-x64.tar.gz
+          - os: windows-latest
+            shell: pwsh
+            script: "& ./scripts/build-stockapp-windows.ps1"
+            artifact: stockapp-win-x64
+            glob: dist/Aether-Stockapp-*-win-x64.zip
+    env:
+      # 脚本用此命名产物（mac 的 Info.plist 版本、linux tar.gz、win zip 文件名）。tag 名如 v0.1.0；非 tag 为分支名（debug 可接受）。
+      APP_VERSION_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        # 不带 submodules: true —— MAF 是 full-history 巨型子模块且构建不需要（NuGet 包），FlaUI-MCP 同理。
+
+      - name: Shallow-init Lean submodule
+        shell: bash
+        # 脚本 ensure_lean 检测到 Lean 已在即 no-op；这里显式浅克隆比脚本全量 init 快。Lean 是 Stockapp→Trading.Runtime.Lean→externals/Lean 唯一链路。
+        run: git submodule update --init --depth 1 externals/Lean
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run build script
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.script }}
+
+      - name: Zip macOS .app bundle (Release 需单文件)
+        if: runner.os == 'macOS'
+        shell: bash
+        # ditto 保 bundle 结构/符号链接，优于 zip。脚本只产 .app 目录，这里补打包成 zip。
+        run: ditto -c -k --keepParent "dist/Aether-Stockapp.app" "dist/Aether-Stockapp-${APP_VERSION_NAME}-macos-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.glob }}
+          if-no-files-found: error   # 产物缺失即失败，不静默
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')   # 仅 tag 触发；workflow_dispatch 不发版
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true   # 三平台产物平铺进 assets/，保留原文件名
+
+      - name: Create Release & attach assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true   # 自动从上次 release 到本 tag 的 commits 生成 changelog
