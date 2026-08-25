@@ -2,15 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Aether.AI.Core.Agents;
 using Acme.ChatSocial.Domain;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
+using Acme.Mobile.Mvvm.Models;
 using Acme.Mobile.Mvvm.Services;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -414,7 +417,8 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
         }
 
         var newMessages = response
-            .Where(m => !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase)) // 历史不残留进度心跳
+            .Where(m => !string.Equals(m.MessageType, "Progress", StringComparison.OrdinalIgnoreCase))      // 历史不残留进度心跳
+            .Where(m => !string.Equals(m.MessageType, "ApprovalDecision", StringComparison.OrdinalIgnoreCase)) // 历史不残留审批决策（控制消息）
             .Where(m => _displayedMessageIds.Add(m.Id))
             .Select(FixMessage)
             .OrderBy(m => m.CreationTime)
@@ -518,8 +522,8 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
 
         System.Diagnostics.Debug.WriteLine($"[ChatDetail] HandleMessage: 显示消息 Id={message.Id}, SenderId={message.SenderId}, Content={message.Content?.Substring(0, Math.Min(message.Content?.Length ?? 0, 30))}");
 
-        // Progress 心跳：覆盖更新同 sender 的进度槽位（不堆积、不缓存、不标已读）。
-        // ChatMessage 是 POCO（非 ObservableObject），原地改 Content 不刷新 UI → 必须 Messages[idx]=updated（Replace）触发刷新。
+        // Progress 心跳：富进度——解析 RunProgress JSON → ProgressChatMessage 按 kind 富渲染（与桌宠同款）。
+        // 覆盖更新同 sender 的进度槽位（不堆积、不缓存、不标已读）。ChatMessage 是 POCO → 必须 Messages[idx]=pcm（Replace）触发刷新。
         var isProgress = string.Equals(message.MessageType, "Progress", StringComparison.OrdinalIgnoreCase);
         if (isProgress)
         {
@@ -531,12 +535,26 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
                     return;
                 }
                 var fixedMsg = FixMessage(message);
+                ProgressChatMessage.TryParse(fixedMsg.Content, out var pcm);
+                // 复制 base 字段（Id/会话/发送者/时间）；MessageType 必须设 "Progress"（否则选择器误路由 + 去重失效）。
+                pcm.Id = fixedMsg.Id;
+                pcm.ConversationId = fixedMsg.ConversationId;
+                pcm.SenderId = fixedMsg.SenderId;
+                pcm.SenderName = fixedMsg.SenderName;
+                pcm.MessageType = "Progress";
+                pcm.CreationTime = fixedMsg.CreationTime;
+                // 审批请求：注入批准/拒绝命令（老板手机端直接决策 → REST 发回 → 桌面恢复 run）。
+                if (pcm.IsApproval)
+                {
+                    pcm.ApproveCommand = new AsyncRelayCommand(() => SendApprovalDecisionAsync(true, pcm));
+                    pcm.RejectCommand = new AsyncRelayCommand(() => SendApprovalDecisionAsync(false, pcm));
+                }
                 var idx = -1;
                 for (int i = Messages.Count - 1; i >= 0; i--)
                     if (string.Equals(Messages[i].MessageType, "Progress", StringComparison.OrdinalIgnoreCase)
                         && Messages[i].SenderId == message.SenderId) { idx = i; break; }
-                if (idx >= 0) Messages[idx] = fixedMsg;
-                else Messages.Add(fixedMsg);
+                if (idx >= 0) Messages[idx] = pcm;
+                else Messages.Add(pcm);
             });
             // Progress 不进 _displayedMessageIds（避免同 Id 心跳被拒）、不缓存、不 MarkAsRead。
             return;
@@ -805,6 +823,43 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             ErrorMessage = $"发送失败: {ex.Message}";
             MessageInput = content;
         }
+    }
+
+    /// <summary>老板手机端审批决策：序列化 RemoteApprovalDecision → REST 以 "ApprovalDecision" type 发回桌面。
+    /// 桌面 HandleRemoteApprovalDecision 解 _remoteApprovals 的 pending TCS → run 协作循环带决策重入恢复。
+    /// 发完后把本卡替换为已决策态（POCO replace：✅已批准/❌已拒绝，按钮隐）。桌面解 TCS 后会发后续 Progress（RunDone）+ 摘要 Text 收束。</summary>
+    private async Task SendApprovalDecisionAsync(bool approved, ProgressChatMessage pcm)
+    {
+        if (_chatService == null || _currentConversationId == Guid.Empty) return;
+        var dto = new RemoteApprovalDecision(approved, approved ? "老板批准" : "老板拒绝");
+        var json = JsonSerializer.Serialize(dto);
+        System.Diagnostics.Debug.WriteLine($"[ChatDetail] 发送审批决策: convId={_currentConversationId}, approved={approved}");
+        try
+        {
+            await Task.Run(() => _chatService.SendMessageAsync(_currentConversationId, json, "ApprovalDecision"));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChatDetail] 发送审批决策失败: {ex.Message}");
+        }
+        // 替换本卡为已决策态（POCO replace：spinner 停、按钮隐、显 ✅已批准/❌已拒绝）。
+        _uiThreadDispatcher?.Post(() =>
+        {
+            var idx = Messages.IndexOf(pcm);
+            if (idx >= 0)
+            {
+                var resolved = new ProgressChatMessage
+                {
+                    Id = pcm.Id, ConversationId = pcm.ConversationId, SenderId = pcm.SenderId,
+                    SenderName = pcm.SenderName, MessageType = "Progress", CreationTime = pcm.CreationTime,
+                    Content = pcm.Content, Progress = pcm.Progress,
+                    Icon = approved ? "✅" : "❌",
+                    DisplayLabel = approved ? "已批准" : "已拒绝",
+                    IsInProgress = false, IsApproval = false,
+                };
+                Messages[idx] = resolved;
+            }
+        });
     }
 
     private async Task SyncMissedMessagesAsync()

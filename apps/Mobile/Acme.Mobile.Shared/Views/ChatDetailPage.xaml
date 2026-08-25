@@ -7,6 +7,7 @@
     xmlns:domain="clr-namespace:Acme.ChatSocial.Domain;assembly=Acme.ChatSocial.Domain"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters;assembly=Acme.Mobile.Shared"
     xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
+    xmlns:models="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     Title="聊天">
 
     <ContentPage.Resources>
@@ -35,16 +36,27 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 进度心跳：远程 agent 控制时的 todos 快照，覆盖更新不堆积。muted 浅气泡 + 活动指示器 + Markdown。 -->
-        <DataTemplate x:Key="ProgressTemplate" x:DataType="domain:ChatMessage">
+        <!-- 进度心跳：RunProgress JSON 富渲染（与桌宠同款）——结构化头（图标/spinner/标签）+ 计划 markdown（逐条 ✅/⏳）+
+             审批按钮（ApprovalRequested）。覆盖更新不堆积（POCO Replace）。降级（旧桌面文本）显原文一行。 -->
+        <DataTemplate x:Key="ProgressTemplate" x:DataType="models:ProgressChatMessage">
             <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0" Opacity="0.7"
                         Padding="12,8" MaximumWidthRequest="300">
-                    <HorizontalStackLayout Spacing="8">
-                        <ActivityIndicator IsRunning="True" WidthRequest="16" HeightRequest="16" VerticalOptions="Center" />
-                        <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
-                    </HorizontalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <HorizontalStackLayout Spacing="8">
+                            <ActivityIndicator IsRunning="{Binding IsInProgress}" IsVisible="{Binding IsInProgress}"
+                                               WidthRequest="16" HeightRequest="16" VerticalOptions="Center" />
+                            <Label Text="{Binding Icon}" VerticalOptions="Center" />
+                            <Label Text="{Binding DisplayLabel}" TextColor="{StaticResource TextPrimary}" FontSize="14" LineBreakMode="WordWrap" />
+                        </HorizontalStackLayout>
+                        <md:MarkdownView MarkdownText="{Binding PlanMarkdown}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True"
+                                         IsVisible="{Binding HasTodos}" />
+                        <HorizontalStackLayout IsVisible="{Binding IsApproval}" Spacing="8" Margin="0,4,0,0">
+                            <Button Text="批准" Command="{Binding ApproveCommand}" Style="{StaticResource GhostButton}" />
+                            <Button Text="拒绝" Command="{Binding RejectCommand}" Style="{StaticResource GhostButton}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
                 </Border>
             </HorizontalStackLayout>
         </DataTemplate>

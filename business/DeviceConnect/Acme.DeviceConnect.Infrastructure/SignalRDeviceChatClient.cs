@@ -41,6 +41,8 @@ public class SignalRDeviceChatClient : IDeviceChatClient
             var content = message.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "";
             var convId = message.TryGetProperty("conversationId", out var ci) ? ci.GetGuid() : Guid.Empty;
             var senderName = message.TryGetProperty("senderName", out var sn) ? sn.GetString() ?? "未知" : "未知";
+            // messageType 透传（服务端 ChatMessageDto 已含；旧消息无此字段 → 默认 "Text"）。
+            var messageType = message.TryGetProperty("messageType", out var mt) ? mt.GetString() ?? "Text" : "Text";
 
             if (convId == Guid.Empty) return;
 
@@ -52,7 +54,8 @@ public class SignalRDeviceChatClient : IDeviceChatClient
                 Id = msgId,
                 Content = content,
                 ConversationId = convId,
-                SenderName = senderName
+                SenderName = senderName,
+                MessageType = messageType
             };
 
             if (OnMessageReceived != null)
