@@ -20,6 +20,9 @@ public sealed class SqliteNoteCatalogSource : INoteCatalogSource
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
     }
 
+    /// <summary>SQLite 源无文件根（写入端不可用，仅为满足接口）。</summary>
+    public string? Root => null;
+
     public async Task<IReadOnlyList<CatalogNote>> EnumerateAsync(NoteNodeType? nodeType = null, CancellationToken ct = default)
     {
         var all = await _notes.GetAllAsync(ct);

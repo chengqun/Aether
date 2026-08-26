@@ -25,4 +25,28 @@ public sealed class LeanAlgorithmNoteSource : ILeanAlgorithmNoteSource
             .Select(n => new LeanAlgorithmNote(n.ExternalId, n.Name, n.Content))
             .ToList();
     }
+
+    public async Task<string> SaveAsync(string name, string content, CancellationToken cancellationToken = default)
+    {
+        var root = _source.Root;
+        if (string.IsNullOrWhiteSpace(root))
+            throw new InvalidOperationException("未打开 labs 目录");
+        var layout = CatalogNoteDirectory.For(NoteNodeType.LeanAlgorithm);
+        var fullDir = Path.Combine(root, layout.DirectoryName);
+        Directory.CreateDirectory(fullDir);
+        var safe = Sanitize(name);
+        var path = Path.Combine(fullDir, safe + layout.Extension);
+        await File.WriteAllTextAsync(path, content, cancellationToken);
+        return Path.GetRelativePath(root, path);
+    }
+
+    private static string Sanitize(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name.Trim())
+            sb.Append(invalid.Contains(c) ? '_' : c);
+        var t = sb.ToString();
+        return string.IsNullOrEmpty(t) ? "untitled" : t;
+    }
 }

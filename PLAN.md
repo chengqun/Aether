@@ -205,3 +205,41 @@
 - [x] **`KnowledgeObjectsViewModel.CreateNodeAsync(NoteNodeType, name)`**：落盘到 `CatalogNoteDirectory.For(type)` 目录 + 扩展名。form 类型（Agent/Rule/CodeRule/Workflow）经 **parser.Serialize（生成含 `id` 的完整格式）**——不能用 note 树 `DefaultContent`（缺 `id`，`DirectoryAgentCatalog` 按 id 定位会失败）；代码/知识类型（Knowledge/Strategy/CodeStrategy/LeanAlgorithm/Note）直接写 `NoteNodeTypeRegistry.DefaultContent` 模板。默认程序（Rule/CodeRule）从注册表模板提取（Serialize 内 `Deserialize<RuleProgramDoc>` 自动提取 steps，忽略元数据）。
 - [x] **`KoTreeView.axaml` 右键菜单**：「新建知识对象」→「新建」子菜单（9 类：Agent/Workflow/规则/代码规则/知识对象/策略/代码策略/Lean 算法/文本笔记），`Tag` 传类型字符串。
 - [x] **`KoTreeView.axaml.cs` `OnNewNodeClick`**：解析 `Tag`→`NoteNodeType` → 弹名字框 → `CreateNodeAsync` → `OpenKnowledgeByPathAsync` 打开新文件。
+
+---
+
+## 四期：移除 SQLite note 版（最终终态 = 全文档版）
+
+用户最终目标：**彻底移除 SQLite note（note 树 + `note_node` 表 + `INoteService`），全走 labs 文档版**。前提=功能都迁成文档版。已确认：删 note 树 UI、分阶段迁、本期不动手机端。
+
+### 现状：SQLite note 仍被依赖的东西（迁移缺口）
+
+读取端（`INoteCatalogSource` → `DirectoryNoteCatalogSource`）大多已切目录，但**写入端 + 变更通知仍绑 `INoteService`（SQLite）**，存在已断链的不一致：
+
+| 依赖方 | 现状 | 状态 |
+|---|---|---|
+| **note 树 UI**（`NotesViewModel`/`NotesTreeView`/`NotesEditorView`/`NoteNodeEditVmFactory` + 「笔记」nav tab） | 读 SQLite | 待删（最终态） |
+| **策略 AI 工具** `CreateStrategyTool`/`CreateYamlStrategyTool`/`CreateLeanAlgorithmTool` | 写 SQLite note 节点 | **已断链**（写 note、回测页读 labs） |
+| **CodeRuleHost** | 订阅 `INoteService.NotesChanged` 触发编译 | **已断链**（触发源 note、读端已切目录） |
+| **note 版 catalog** `CustomAgentCatalog`/`CustomWorkflowCatalog` 写路径 | 写 SQLite | 可回滚保留，最终删 |
+| **note 版 AI 工具** `NoteTool`/`KnowledgeTool` | 代码仍在（桌面已停用 `AddNotesTools`） | 停用，最终删 |
+| **存储层** `INoteRepository`/`SqliteNoteRepository`/`INoteService`/`SqliteNoteCatalogSource`/`note_node` 表 | — | 最终删 |
+
+### 分阶段计划
+
+**阶段 1：写入端迁移（消除断链）——本期核心**
+- ① 策略 AI 工具切 labs 文件：在 `IStrategyNoteSource`/`ILeanAlgorithmNoteSource`（`Trading.Runtime.Domain` 端口，已只读）加**写方法**（`SaveAsync(name, content)`/按名字在），host 实现（Stockapp `StrategyNoteSource`/`LeanAlgorithmNoteSource`）写到 `<labs>/codestrategies|strategies|leanalgorithms/<name><ext>`。3 个工具注入端口替代 `INoteService`。
+- ② `CodeRuleHost` 切目录变更源：订阅 `DirectoryNoteCatalogSource.Changed`（或 labs 目录 watcher）替代 `INoteService.NotesChanged`。
+
+**阶段 2：删 note 树 UI**
+- 删「笔记」nav tab（`PanelKeys.Notes` + 两租户 `Workspace` 的 `Panels`/`RegionIds`）+ `NotesViewModel`/`NotesTreeView`/`NotesEditorView`/`NoteNodeEditVmFactory`/`LeftTreePanelView` 的 notes 层。
+- **保留** `NoteNodeTypeRegistry`（labs 页 editor 用描述符）+ `NoteIcons`（labs 树图标）+ form 编辑 VM（`ExpertEditViewModel` 等，labs 页复用）。
+
+**阶段 3：删 note 版 catalog + AI 工具 + SQLite 存储层**
+- 删 `CustomAgentCatalog`/`CustomWorkflowCatalog`（note 版）+ `NoteTool`/`KnowledgeTool`（ai/Notes 写 note 部分）+ `SqliteNoteCatalogSource`。
+- 删 `INoteService`/`INoteRepository`/`SqliteNoteRepository` + `note_node` 表。
+- **保留** `ai/Notes` 适配器里的**文档版**工具（`DocumentKnowledgeTool`）+ `DocumentKnowledgeSourceParser` 等。
+
+### 待实施时确认的细节
+- `AutomationViewModel`/`IGitRepositoryNotifier`/`App.axaml.cs` 等 `INoteService` 引用逐个核实迁移或移除。
+- note 树删除后，`NoteNodeTypeRegistry` 里 `IsFormNode/HasAgentRunner/IsChatTarget` 旗标哪些还用于 labs 页（部分可能随 note 树退役）。

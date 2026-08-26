@@ -14,6 +14,9 @@ namespace Acme.Notes.Domain.Catalog;
 /// </summary>
 public interface INoteCatalogSource
 {
+    /// <summary>数据源根目录绝对路径（目录版=labs 根；SQLite 源无文件根→null）。写入端据此落盘。</summary>
+    string? Root { get; }
+
     /// <summary>枚举某类型的全部单元；<paramref name="nodeType"/> 为 null 时返回全部类型。</summary>
     Task<IReadOnlyList<CatalogNote>> EnumerateAsync(NoteNodeType? nodeType = null, CancellationToken ct = default);
 

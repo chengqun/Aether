@@ -8,6 +8,9 @@ namespace Acme.Trading.Runtime.Domain;
 public interface ILeanAlgorithmNoteSource
 {
     Task<IReadOnlyList<LeanAlgorithmNote>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>保存 Lean 算法文件（按 name 定位；同名覆盖）。返回 Id（labs 相对路径）。</summary>
+    Task<string> SaveAsync(string name, string content, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Lean 算法笔记桥接 DTO（Id/Title/Content）。host 预过滤节点类型；Content 为 QCAlgorithm 子类 C# 源码。</summary>

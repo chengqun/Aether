@@ -22,4 +22,29 @@ public sealed class StrategyNoteSource : IStrategyNoteSource
             .Concat(yaml.Select(n => new StrategyNote(n.ExternalId, n.Name, n.Content, StrategyKind.Yaml)))
             .ToList();
     }
+
+    public async Task<string> SaveAsync(string name, string content, StrategyKind kind, CancellationToken cancellationToken = default)
+    {
+        var root = _source.Root;
+        if (string.IsNullOrWhiteSpace(root))
+            throw new InvalidOperationException("未打开 labs 目录");
+        var type = kind == StrategyKind.Code ? NoteNodeType.CodeStrategy : NoteNodeType.Strategy;
+        var layout = CatalogNoteDirectory.For(type);
+        var fullDir = Path.Combine(root, layout.DirectoryName);
+        Directory.CreateDirectory(fullDir);
+        var safe = Sanitize(name);
+        var path = Path.Combine(fullDir, safe + layout.Extension);
+        await File.WriteAllTextAsync(path, content, cancellationToken);
+        return Path.GetRelativePath(root, path);
+    }
+
+    private static string Sanitize(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name.Trim())
+            sb.Append(invalid.Contains(c) ? '_' : c);
+        var t = sb.ToString();
+        return string.IsNullOrEmpty(t) ? "untitled" : t;
+    }
 }
