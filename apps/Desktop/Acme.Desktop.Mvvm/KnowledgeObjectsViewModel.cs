@@ -247,6 +247,12 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         try { content = await File.ReadAllTextAsync(filePath, ct); }
         catch (Exception ex) { StatusMessage = $"打开失败：{ex.Message}"; return; }
 
+        // 切换文件前退订旧知识对象表单（防其 SourceChanged 在新文件上下文误触发 _currentSource）。
+        // 调用方（OnSelectedNodeChanged 文件分支 / OpenFolderReadmeAsync knowledge 分支 / OpenKnowledgeByPathAsync）
+        // 可能未先退订，此处自包含兜底——非 DocumentKnowledgeViewModel 时 no-op。
+        if (ActiveEditVm is DocumentKnowledgeViewModel prevKvm)
+            prevKvm.SourceChanged -= OnKnowledgeSourceChanged;
+
         _activePath = filePath;
         var type = ResolveType(node);
         _activeType = type;
@@ -517,12 +523,32 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     // labs 各类型目录带 readme.md（说明该目录用途 + 文件格式）；点目录即显示。类型目录缺 readme 时懒生成
     //（内容=注册表说明文案），普通子目录（如 knowledge/ 下的自定义子目录）不生成、仅展开/收起。
 
-    /// <summary>点击目录：有 readme.md 则打开显示（纯 markdown）；类型目录缺 readme 则先生成再打开；否则仅展开/收起。</summary>
+    /// <summary>点击目录：有 readme.md 则打开；类型目录缺 readme 则先生成再打开；否则仅展开/收起。
+    /// knowledge 目录的 README 本身是 .md 知识对象 → 走知识对象分流（与同级 .md 文件同构：上表单+下源码），
+    /// 可在表单里给它声明 kind/links 让目录 README 成为链接到成员的一等知识对象；其它类型目录的 README 是
+    /// 纯目录说明文档 → 仍走 markdown 预览。</summary>
     public async Task OpenFolderReadmeAsync(string folderPath, CancellationToken ct = default)
     {
         var readme = TryFindReadme(folderPath) ?? await EnsureTypeReadmeAsync(folderPath, ct);
         if (readme is null) return;
+        if (IsKnowledgeSubtree(folderPath))
+        {
+            await OpenFileAsync(new FileNode(Path.GetFileName(readme), readme, false), ct);
+            return;
+        }
         await OpenReadmeAsync(readme, ct);
+    }
+
+    /// <summary>目录是否在 knowledge 类型子树下（相对根的首段目录名映射为 <see cref="NoteNodeType.Knowledge"/>）。
+    /// 与 <see cref="ResolveType"/> 同构（首段即类型），故 knowledge/ 下任意深度的 README 均判为知识对象。</summary>
+    private bool IsKnowledgeSubtree(string folderPath)
+    {
+        if (string.IsNullOrEmpty(RootPath)) return false;
+        string rel;
+        try { rel = Path.GetRelativePath(RootPath, folderPath); }
+        catch { return false; }
+        var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        return CatalogNoteDirectory.TypeForDirectory(seg) == NoteNodeType.Knowledge;
     }
 
     /// <summary>类型目录缺 readme.md 时生成说明文件（按 <see cref="CatalogNoteDirectory"/> 反查目录名 → 类型）。
@@ -548,8 +574,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         catch { return null; }
     }
 
-    /// <summary>打开 readme.md 为 markdown 上下两栏（上=markdown 预览、下=markdown 源码），不按目录名反查成 Agent/Rule 等。
-    /// README 无运行时身份/无表单，仅作目录说明展示；上栏预览、下栏可编辑源码。</summary>
+    /// <summary>打开 readme.md 为 markdown 上下两栏（上=markdown 预览、下=markdown 源码）。
+    /// 仅用于非 knowledge 类型目录的 README（agents/rules 等目录说明文档）——这些 README 是纯文档，
+    /// 无运行时身份/无表单。knowledge 目录的 README 走 <see cref="OpenFileAsync"/> 知识对象分流（见 <see cref="OpenFolderReadmeAsync"/>）。</summary>
     private async Task OpenReadmeAsync(string readmePath, CancellationToken ct)
     {
         if (string.Equals(readmePath, _activePath, StringComparison.OrdinalIgnoreCase)) return;
