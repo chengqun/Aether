@@ -60,7 +60,7 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
 
     /// <summary>
     /// 内部笔记链接导航命令。markdown 里的 <c>[文字](note:标题)</c> / <c>[文字](note-id:&lt;guid&gt;)</c>
-    /// 链接点击时，本控件把原始 url（含 scheme 前缀）作为参数传给此命令，由绑定方（NotesViewModel）解析并跳转。
+    /// 链接点击时，本控件把原始 url（含 scheme 前缀）作为参数传给此命令，由绑定方解析并跳转。
     /// 不绑定则内部链接点击无反应。控件本身不依赖任何 VM 类型——只做 scheme 分流 + 转发 + 浏览器回退。
     /// </summary>
     public static readonly StyledProperty<ICommand?> NoteNavigateCommandProperty =

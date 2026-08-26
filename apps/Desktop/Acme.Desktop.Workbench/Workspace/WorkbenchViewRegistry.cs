@@ -9,8 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Acme.Desktop.Workbench.Workspace;
 
 /// <summary>
-/// 工作台视图注册表：把 view-key 绑到共享视图（ChatView/NotesView/ExpertsView/AutomationView）+ VM 工厂。
-/// VM 工厂惰性从 <see cref="MainViewModelBase"/> 单例取（Chat/Notes/Experts/Automation 都在基类上，覆盖所有租户派生 VM）。
+/// 工作台视图注册表：把 view-key 绑到共享视图（ChatView/ExpertsView/AutomationView）+ VM 工厂。
+/// VM 工厂惰性从 <see cref="MainViewModelBase"/> 单例取（Chat/Experts/Automation 都在基类上，覆盖所有租户派生 VM）。
 /// 租户专属 panel（如 Stockapp 期货/回测/股票页）经 <see cref="IViewRegistryContributor"/> 注入——本库不依赖租户程序集。
 /// </summary>
 public sealed class WorkbenchViewRegistry : ViewRegistry
@@ -27,19 +27,13 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new ChatPageView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
 
-        // 笔记编辑器：共享 NotesEditorView（从原 NotesView col2 拆出——标题栏 + 上下分栏 + 6 种 form 节点视图）。
-        // 笔记树在 LeftTreePanelView（notes tab 时切显），两者共享同一 NotesViewModel 单例。
-        Register(PanelKeys.Notes,
-            () => new NotesEditorView(),
-            () => serviceProvider.GetRequiredService<MainViewModelBase>().Notes);
-
         // 打开文档编辑器：共享 DocumentsEditorView（多标签 AvaloniaEdit 编辑器，从原 DocumentsView col2 拆出）。
         Register(PanelKeys.Documents,
             () => new DocumentsEditorView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Documents);
 
-        // shell 级左栏切换层：LeftTreePanelView 叠放文件树 + 笔记树，按 tab 切显隐（documents→FileTreeView / notes→NotesTreeView）。
-        // DataContext = MainViewModelBase 本身（子 view 各绑 Documents/Notes 共享 VM 单例）。
+        // shell 级左栏切换层：LeftTreePanelView 叠放文件树 + SCM 面板 + .md 树，按 tab 切显隐（documents→FileTreeView / sourcecontrol→SCM / knowledge→KoTreeView）。
+        // DataContext = MainViewModelBase 本身（子 view 各绑 Documents/SourceControl/Knowledge 共享 VM 单例）。
         Register(PanelKeys.LeftTree,
             () => new LeftTreePanelView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>());
@@ -51,7 +45,7 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
 
         // 集成终端 + 浏览器网络：底部 BottomPanelView 复合视图（终端/网络 tab 内部切换，各自常驻不销毁；折叠复用终端 region toggle）。
         // agent run_in_terminal 工具经 ITerminalService（TerminalView 内）；browser_open/get_cookies 经 IBrowserService（BrowserView 内）。
-        // DataContext = TerminalViewModel（vmFactory 注入）；BrowserView 的 BrowserViewModel 经 DesktopApp.Services 定位器解析（同 NotesEditorView 范式）。
+        // DataContext = TerminalViewModel（vmFactory 注入）；BrowserView 的 BrowserViewModel 经 DesktopApp.Services 定位器解析（同 DocumentsEditorView 范式）。
         Register(PanelKeys.Terminal,
             () => new BottomPanelView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Terminal);

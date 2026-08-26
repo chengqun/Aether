@@ -4,7 +4,7 @@ using Acme.Desktop.Workbench.Abstractions;
 namespace Acme.Desktop.Workbench.Workspace;
 
 /// <summary>
-/// 默认工作台定义：左 = notes/experts tabbed，右 = chat region。
+/// 默认工作台定义：左 = experts tabbed，右 = chat region。
 /// 纯数据——后续插件/AI 生成只需产出另一个 WorkspaceDefinition。
 /// </summary>
 public static class DefaultWorkspace
@@ -14,7 +14,6 @@ public static class DefaultWorkspace
         Title: "默认工作台",
         Panels: new List<PanelDescriptor>
         {
-            new(PanelKeys.Notes, PanelKeys.Notes, "笔记", "notes"),
             new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
             new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
             new(PanelKeys.ChatPage, PanelKeys.ChatPage, "AI 聊天", "chat"),
@@ -23,7 +22,7 @@ public static class DefaultWorkspace
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Notes, PanelKeys.Experts }, SelectedIndex: 0),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Experts }, SelectedIndex: 0),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 默认（首次/重置布局时）。

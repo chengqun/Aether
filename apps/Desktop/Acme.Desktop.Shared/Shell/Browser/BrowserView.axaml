@@ -137,7 +137,7 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <!-- GridSplitter：可拖改变列表/详情比例（照 NotesEditorView SplitGrid 范式） -->
+        <!-- GridSplitter：可拖改变列表/详情比例（照 DocumentsEditorView SplitGrid 范式） -->
         <GridSplitter Grid.Row="4" ResizeDirection="Rows" Height="4"
                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>

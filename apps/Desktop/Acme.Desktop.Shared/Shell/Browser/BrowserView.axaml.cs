@@ -83,7 +83,7 @@ public partial class BrowserView : UserControl
         CodeEditorSetup.ApplyHighlighting(ResponseBodyEditor, req.IsBinary ? null : SyntaxForMime(req.MimeType));
     }
 
-    /// <summary>设 TextEditor.Text——TextArea 未就绪则 Post 重试（照 NotesEditorView SyncCodeEditor 范式）。</summary>
+    /// <summary>设 TextEditor.Text——TextArea 未就绪则 Post 重试（照 DocumentsEditorView SyncCodeEditor 范式）。</summary>
     private static void SyncEditor(TextEditor editor, string? text)
     {
         var t = text ?? string.Empty;

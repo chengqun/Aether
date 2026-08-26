@@ -22,7 +22,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
     <ProjectReference Include="..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
     <ProjectReference Include="..\..\src\Aether.AI.Harness\Aether.AI.Harness.csproj" />
   </ItemGroup>
 

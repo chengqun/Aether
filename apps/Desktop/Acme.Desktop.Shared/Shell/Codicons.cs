@@ -8,7 +8,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// VSCode codicon path data 集中访问点（填充型几何 glyph）。经 <c>PackIconDataFactory&lt;PackIconCodiconsKind&gt;.DataIndex</c>
 /// 懒加载 codicon 几何，供 XAML <c>{x:Static shell:Codicons.X}</c> 引用。codicon 是**填充型** glyph →
 /// <c>&lt;Path Fill=...&gt;</c> 渲染（非 Lucide 描边 Stroke）。失败兜底空串不崩（图标缺显，不影响功能）。
-/// 语言/品牌 logo（Python/JS 等）codicon 无对应，仍走 NavIcons 的 Simple Icons（见 NoteIcons/FileIcons）。
+/// 语言/品牌 logo（Python/JS 等）codicon 无对应，仍走 NavIcons 的 Simple Icons（见 FileIcons）。
 /// </summary>
 public static class Codicons
 {

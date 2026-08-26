@@ -48,14 +48,13 @@ public partial class WorkspaceView : UserControl
     private ITerminalService? _terminalService;
 
     // ── 侧栏 shell 级左栏条件可见（VSCode 式）：记 lefttree region 宿主 + 父 split Grid + 列位置，
-    //    叠放文件树+笔记树，documents/notes tab 可见并切对应树，其余 tab 隐藏列宽 0 ──
+    //    叠放文件树+SCM 面板+.md 树，documents/sourcecontrol/knowledge tab 可见并切对应树，其余 tab 隐藏列宽 0 ──
     private ContentControl? _leftTreeHost;           // lefttree region 的 ContentControl（BuildRegion 时记）
     private Grid? _leftTreeSplitGrid;                // 含 lefttree 的外层水平 split Grid
     private int _leftTreeCol = -1;                   // lefttree 在 grid 的 child col（= i*2）
     private int _leftTreeSplitterCol = -1;           // lefttree 前的 GridSplitter col（= i*2-1）
     private GridLength _leftTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后）
     private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
-    private int _notesTabIndex = -1;                 // notes 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显笔记树）
     private int _sourceControlTabIndex = -1;         // sourcecontrol 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 SCM 面板）
     private int _knowledgeTabIndex = -1;             // knowledge 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 .md 树）
     private int _knowledgeScmTabIndex = -1;          // knowledgescm 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显知识库 SCM 面板）
@@ -136,10 +135,9 @@ public partial class WorkspaceView : UserControl
             _chatService.ChatVisibilityChanged += OnChatVisibilityChanged;
         }
 
-        // 侧栏 shell 级左栏条件可见（VSCode 式）：documents tab→文件树 / notes tab→笔记树 / 其余 tab→列宽 0 隐藏。
+        // 侧栏 shell 级左栏条件可见（VSCode 式）：documents tab→文件树 / sourcecontrol tab→SCM / knowledge tab→.md 树 / 其余 tab→列宽 0 隐藏。
         var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
         _documentsTabIndex = -1;
-        _notesTabIndex = -1;
         _sourceControlTabIndex = -1;
         _knowledgeTabIndex = -1;
         _knowledgeScmTabIndex = -1;
@@ -148,7 +146,6 @@ public partial class WorkspaceView : UserControl
             for (int i = 0; i < tabbed.RegionIds.Count; i++)
             {
                 if (tabbed.RegionIds[i] == PanelKeys.Documents) _documentsTabIndex = i;
-                else if (tabbed.RegionIds[i] == PanelKeys.Notes) _notesTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.SourceControl) _sourceControlTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.Knowledge) _knowledgeTabIndex = i;
                 else if (tabbed.RegionIds[i] == PanelKeys.KnowledgeScm) _knowledgeScmTabIndex = i;
@@ -476,11 +473,10 @@ public partial class WorkspaceView : UserControl
         ApplyTerminalVisibility(_terminalService?.IsPanelVisible ?? true); // tab-coupled 终端：同上
     }
 
-    /// <summary>当前 tab → 侧栏活动树：documents→"documents" / notes→"notes" / sourcecontrol→"sourcecontrol" / knowledge→"knowledge" / knowledgescm→"knowledgescm" / 其它→null（隐藏左栏）。</summary>
+    /// <summary>当前 tab → 侧栏活动树：documents→"documents" / sourcecontrol→"sourcecontrol" / knowledge→"knowledge" / knowledgescm→"knowledgescm" / 其它→null（隐藏左栏）。</summary>
     private string? ResolveLeftTreeKind(int tabIndex)
     {
         if (tabIndex == _documentsTabIndex) return "documents";
-        if (tabIndex == _notesTabIndex) return "notes";
         if (tabIndex == _sourceControlTabIndex) return "sourcecontrol";
         if (tabIndex == _knowledgeTabIndex) return "knowledge";
         if (tabIndex == _knowledgeScmTabIndex) return "knowledgescm";
@@ -493,7 +489,7 @@ public partial class WorkspaceView : UserControl
     private void ApplyLeftTreeVisibility(string? kind)
     {
         if (_leftTreeSplitGrid is null || _leftTreeCol < 0) return;
-        // 无 documents 且无 notes tab（两者均 -1）→ ResolveLeftTreeKind 恒 null → 永不显示。
+        // 无 documents/sourcecontrol/knowledge tab（均 -1）→ ResolveLeftTreeKind 恒 null → 永不显示。
         var col = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol];
         if (kind is null)
         {

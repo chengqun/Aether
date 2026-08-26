@@ -3,10 +3,10 @@ using Avalonia.Controls;
 
 namespace Acme.Desktop.Shared.Shell;
 
-/// <summary>shell 级左栏切换层：叠放 FileTreeView（documents tab）+ NotesTreeView（notes tab）+
+/// <summary>shell 级左栏切换层：叠放 FileTreeView（documents tab）+
 /// SourceControlPanelView（sourcecontrol tab）+ KoTreeView（knowledge tab）+ SourceControlPanelView（knowledgescm tab，知识库 git），按当前 tab 切显隐。
 /// 由 WorkspaceView.ApplyLeftTreeVisibility 经 SetActiveTree 驱动（非这些 tab 时整个左栏列宽 0 隐藏）。
-/// DataContext = MainViewModelBase；子 view DataContext 绑 {Binding Documents}/{Binding Notes}/{Binding SourceControl}/{Binding Knowledge}/{Binding Knowledge.SourceControl} 共享 VM 单例。</summary>
+/// DataContext = MainViewModelBase；子 view DataContext 绑 {Binding Documents}/{Binding SourceControl}/{Binding Knowledge}/{Binding Knowledge.SourceControl} 共享 VM 单例。</summary>
 public partial class LeftTreePanelView : UserControl
 {
     public LeftTreePanelView()
@@ -14,13 +14,12 @@ public partial class LeftTreePanelView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>切换活动树：documents→文件树 / notes→笔记树 / sourcecontrol→项目 SCM 面板 / knowledge→.md 树 / knowledgescm→知识库 SCM 面板 / null→都隐（左栏列宽 0 由 WorkspaceView 控制）。
+    /// <summary>切换活动树：documents→文件树 / sourcecontrol→项目 SCM 面板 / knowledge→.md 树 / knowledgescm→知识库 SCM 面板 / null→都隐（左栏列宽 0 由 WorkspaceView 控制）。
     /// public 因跨程序集：LeftTreePanelView 在 Shared，WorkspaceView 在 Workbench。</summary>
     public void SetActiveTree(string? kind)
     {
-        if (FileTreePanel is null || NotesTreePanel is null || ScmTreePanel is null || KoTreePanel is null || KoScmPanel is null) return;
+        if (FileTreePanel is null || ScmTreePanel is null || KoTreePanel is null || KoScmPanel is null) return;
         FileTreePanel.IsVisible = kind == "documents";
-        NotesTreePanel.IsVisible = kind == "notes";
         ScmTreePanel.IsVisible = kind == "sourcecontrol";
         KoTreePanel.IsVisible = kind == "knowledge";
         KoScmPanel.IsVisible = kind == "knowledgescm";

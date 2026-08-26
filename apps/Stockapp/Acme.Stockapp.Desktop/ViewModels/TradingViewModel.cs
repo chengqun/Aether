@@ -40,7 +40,7 @@ public partial class TradingViewModel : ObservableObject
 
         _live.StatusChanged += OnLiveStatusChanged;
         _live.LogReceived += OnLiveLogReceived;
-        // 策略脚本加载完成（启动 + NotesChanged 重加载后）→ 刷新策略选择器 + 重新加载参数
+        // 策略脚本加载完成（启动 + labs 文件变更重加载后）→ 刷新策略选择器 + 重新加载参数
         _scripting.StrategiesLoaded += () => Dispatcher.UIThread.Post(() =>
         {
             OnPropertyChanged(nameof(StrategyOptions));

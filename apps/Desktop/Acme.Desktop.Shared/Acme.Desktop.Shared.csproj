@@ -50,7 +50,6 @@
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
-    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Infrastructure\Acme.Automation.Infrastructure.csproj" />
@@ -62,7 +61,6 @@
     <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Infrastructure\Acme.DeviceManagement.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
-    <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
     <!-- UI 无关 shell VM 库（聊天/专家/笔记 VM，Avalonia/MAUI/WPF 共用） -->
     <ProjectReference Include="..\Acme.Desktop.Mvvm\Acme.Desktop.Mvvm.csproj" />

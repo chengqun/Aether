@@ -10,7 +10,7 @@ namespace Acme.Desktop.Mvvm;
 /// <summary>
 /// YAML 声明式策略的结构化编辑 VM（笔记页右栏表单）。
 /// 持 <see cref="StrategyFormModel"/> 行的可观测视图（params/indicators/rules 列表），编辑后 <see cref="Build"/>
-/// 回模型并触发保存。照 <see cref="KnowledgeEditViewModel"/> 的内联构造 + Timer 防抖自动保存模式，
+/// 回模型并触发保存。照 note 版知识对象编辑器（已删）的内联构造 + Timer 防抖自动保存模式，
 /// + <see cref="RuleEditViewModel"/> 的 AutoSaveStatus 反馈。条件编辑用扁平子句 + 组合器（None/AND/OR），
 /// 不做递归树——exotic 条件（not/深层嵌套）走 <see cref="RuleRow.IsAdvanced"/> 只读回退。
 /// 行类型本身即数据载体（可观测 POCO）：codec 直接读写行实例，VM 复用 model 行 + 订阅变更。

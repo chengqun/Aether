@@ -20,7 +20,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// </summary>
 public static class FileTreeOps
 {
-    // —— 内联输入对话框（取名用。镜像 NotesTreeView 的简易内联构建，无额外 axaml）——
+    // —— 内联输入对话框（取名用。简易内联构建，无额外 axaml）——
 
     /// <summary>弹输入框取名（重命名/新建）。null=取消。回车=确定。</summary>
     public static async Task<string?> PromptNameAsync(Window parent, string title, string message, string fieldLabel, string initial = "")
@@ -61,7 +61,7 @@ public static class FileTreeOps
         return result;
     }
 
-    /// <summary>简易确认对话框（内联构建，镜像 NotesTreeView 的同名 helper）。返回 true=点了确认。</summary>
+    /// <summary>简易确认对话框（内联构建）。返回 true=点了确认。</summary>
     public static async Task<bool> ConfirmAsync(Window parent, string title, string message, string confirmText)
     {
         var result = false;

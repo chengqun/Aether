@@ -152,7 +152,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     partial void OnTitleBarHeightChanged(double value) => ThemeChanged?.Invoke(this, EventArgs.Empty);
 
     private DesktopOptions? _desktopOptions;
-    /// <summary>桌面路径选项（惰性从 DI 取，同 NotesViewModel 的 NotesEditorOptions 模式）。</summary>
+    /// <summary>桌面路径选项（惰性从 DI 取，同其他 options 的模式）。</summary>
     private DesktopOptions DesktopOptions
         => _desktopOptions ??= _serviceProvider.GetService<IOptions<DesktopOptions>>()?.Value ?? new();
 

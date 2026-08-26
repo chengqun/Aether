@@ -11,7 +11,7 @@ namespace Acme.Desktop.Shared.Hosting;
 /// <summary>
 /// labs 目录 watcher：监听 labs 根目录的文件变更，驱动 <see cref="INoteCatalogSource.Changed"/>（即
 /// <see cref="DirectoryNoteCatalogSource.NotifyChanged"/>），让代码规则/策略/Lean 算法的「文件变更 → 重编译/重加载」
-/// 链路脱离对 <see cref="INoteService.NotesChanged"/>（SQLite）的依赖。
+/// 链路脱离对原 note 版 SQLite 变更通知（INoteService.NotesChanged）的依赖。
 /// <para>职责边界：<see cref="DirectoryNoteCatalogSource"/> 自身不挂 watcher（见其注释「目录变化信号源在宿主层」）；
 /// 本类是那个宿主层信号源。它独立于 labs 页 VM（<c>KnowledgeObjectsViewModel</c> 继承 <c>FileTreeVmBase</c> 的 watcher
 /// 只在页面打开目录后才启动）——代码规则/策略的重编译不能依赖用户是否打开 labs 页，故必须有一个常驻的目录 watcher。</para>

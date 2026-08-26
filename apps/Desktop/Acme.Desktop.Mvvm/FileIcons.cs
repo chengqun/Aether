@@ -6,7 +6,7 @@ namespace Acme.Desktop.Mvvm;
 /// <summary>
 /// 文件树图标解析：按文件名/扩展名返回对应语言/类型图标（path data + 色 + 是否填充）。
 /// 对齐 VSCode——文件夹不显图标（只靠展开箭头），文件按后缀显语言/类型图标。
-/// 复用 <see cref="NavIcons"/> 的语言 logo path data（与 NoteIcons 同源，零重复美术资源）；
+/// 复用 <see cref="NavIcons"/> 的语言 logo path data（零重复美术资源）；
 /// NavIcons 没有的语言/类型用内联 Lucide stroke 图标（项目/解决方案/配置/媒体/密钥/代码文件等）配品牌色。
 /// 无匹配回退通用文件图标（描边灰）。UI-agnostic。
 /// </summary>

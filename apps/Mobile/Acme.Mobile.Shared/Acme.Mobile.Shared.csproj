@@ -52,14 +52,12 @@
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory.Sqlite\Aether.AI.Memory.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
-    <ProjectReference Include="..\..\..\ai\Notes\Acme.Notes.AI\Acme.Notes.AI.csproj" />
 
     <!-- 公共业务上下文（两租户共用；AddMobileCommon 注册 DI） -->
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Infrastructure\Acme.Llm.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Application\Acme.Automation.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Automation\Acme.Automation.Infrastructure\Acme.Automation.Infrastructure.csproj" />

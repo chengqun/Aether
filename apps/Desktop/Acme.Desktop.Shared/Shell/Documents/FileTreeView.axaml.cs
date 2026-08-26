@@ -97,7 +97,7 @@ public partial class FileTreeView : UserControl
     }
 
     // —— 右键菜单（对标 VSCode 资源管理器常用文件操作）——
-    // 右键时 TreeView 已选中该节点 → 节点经 VM.SelectedNode 取（与 NotesTreeView 同范式），
+    // 右键时 TreeView 已选中该节点 → 节点经 VM.SelectedNode 取（同文件树范式），
     // 不依赖菜单项 DataContext（ContextMenu 是独立 popup，DataContext 继承 TreeView=VM 而非 TreeViewItem）。
     // 共用动作（对话框/剪贴板/在文件管理器中显示/废纸篓删除）在 <see cref="FileTreeOps"/>。
 

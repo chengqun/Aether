@@ -7,7 +7,7 @@ namespace Acme.Desktop.Mvvm;
 /// 文件树节点（「打开文档」页打开项目目录后的左侧树）。文件夹/文件二态，递归 <see cref="Children"/>。
 /// 对齐 VSCode：文件夹不显文件类型图标（只靠 TreeViewItem 自带的展开/收起箭头）；
 /// 文件按扩展名经 <see cref="FileIcons"/> 解析语言 logo（path data + 色 + fill/stroke）。
-/// Icon/IconColor 是 path data / hex 色串（与 NoteNodeVM 同构），供 View 的 &lt;Path&gt; 渲染。
+/// Icon/IconColor 是 path data / hex 色串，供 View 的 &lt;Path&gt; 渲染。
 /// IsExpanded 双绑驱动展开/收起。UI-agnostic（零 Avalonia 引用）。
 /// </summary>
 public partial class FileNode : ObservableObject

@@ -133,7 +133,7 @@ public partial class ExpertsViewModel : ObservableObject
 
             await _dispatcher.InvokeAsync(() =>
             {
-                // 保留召唤状态：NotesChanged 等触发 reload 时按 Id 迁移 IsSummoned 到新实例。
+                // 保留召唤状态：catalog Changed 触发 reload 时按 Id 迁移 IsSummoned 到新实例。
                 var prevSummoned = Experts.Where(e => e.IsSummoned).Select(e => e.Id).ToHashSet();
                 Experts.Clear();
 

@@ -29,8 +29,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     private readonly IServiceProvider _serviceProvider;
     private readonly IUiDispatcher _dispatcher;
 
-    /// <summary>初始化期守卫：InitializeAsync 并行加载业务 VM 时，抑制 NotesChanged/WorkflowsChanged/RulesChanged
-    /// 的回流重复加载（初始化里已显式加载全部列表，回流是多余的，且并发改 ObservableCollection 不安全）。</summary>
+    /// <summary>初始化期守卫：InitializeAsync 并行加载业务 VM 时，抑制 catalog Changed 的回流重复加载
+    ///（初始化里已显式加载全部列表，回流是多余的，且并发改 ObservableCollection 不安全）。</summary>
     private volatile bool _initializing;
 
     protected MainViewModelBase(IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog, IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider, IDeviceChatClient deviceChatClient, ILlmConfigService llmService, string tenant)
@@ -48,7 +48,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         var agentRunner = serviceProvider.GetRequiredService<ICustomAgentRunner>();
         var workflowRunner = serviceProvider.GetRequiredService<ICustomWorkflowRunner>();
 
-        Notes = new NotesViewModel(serviceProvider, _dispatcher);
         Documents = new DocumentsViewModel(serviceProvider,
             serviceProvider.GetRequiredService<ICurrentProjectDirectoryProvider>());
         SourceControl = new SourceControlViewModel(serviceProvider,
@@ -66,26 +65,14 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             workflowRunner,
             _dispatcher);
-        Workflows.WorkflowsChanged += async () => { if (!_initializing) await Notes.LoadAsync(); };
         Rules = new RulesViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             agentRunner,
             _dispatcher,
             serviceProvider.GetRequiredService<McpViewModel>());
-        Rules.RulesChanged += async () => { if (!_initializing) await Notes.LoadAsync(); };
-        // Notes 的增删改会影响同源的 Experts（agent 笔记）、Workflows（workflow 笔记）与 Rules（规则笔记），需双向刷新。
-        // 初始化期跳过——InitializeAsync 已并行加载全部列表，回流会重复加载且与并行加载并发改集合不安全。
-        Notes.NotesChanged += async () =>
-        {
-            if (_initializing) return;
-            await Experts.LoadAsync();
-            await Workflows.LoadAsync();
-            await Rules.LoadAsync();
-        };
 
-        // labs 目录变更（目录版 catalog 的 Changed 信号，由 LabsDirectoryWatcher 驱动）也须刷新 Experts/Workflows/Rules——
-        // note 版已停用（写端切 labs 文件），Notes.NotesChanged 不再触发；这是目录版列表刷新的触发源。
-        // 目录源可能是 note 版（SqliteNoteCatalogSource，其 Changed 转发 NotesChanged）或目录版，两者语义一致。
+        // labs 目录变更（目录版 catalog 的 Changed 信号，由 LabsDirectoryWatcher 驱动）须刷新 Experts/Workflows/Rules——
+        // 这是 labs 目录权威存储下列表刷新的唯一触发源（写端切 labs 文件，watcher→DirectoryNoteCatalogSource.NotifyChanged）。
         var catalogSource = serviceProvider.GetService<Acme.Notes.Domain.Catalog.INoteCatalogSource>();
         if (catalogSource is not null)
         {
@@ -146,9 +133,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
 
     /// <summary>LLM 配置变更后刷新聊天页模型下拉（设置页新增/编辑/删除后经 DI 解析本类调用）。透传到 <see cref="Chat"/>。</summary>
     public Task RefreshLlmConfigsAsync() => Chat.RefreshLlmConfigsAsync();
-
-    /// <summary>笔记页 ViewModel</summary>
-    public NotesViewModel Notes { get; }
 
     /// <summary>打开文档页 ViewModel（多标签磁盘文件编辑器）</summary>
     public DocumentsViewModel Documents { get; }
@@ -219,13 +203,12 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         }
 
         // 业务 VM 加载（Chat 恢复召唤/选中态依赖 Experts/Workflows/Rules 列表已就绪）。
-        // 五个相互独立——并行加载缩短「窗口出现到可用」间隔（每个内部 I/O 并行、集合操作仍经 UI 线程序列化）。
-        // _initializing 守卫抑制此期间的 NotesChanged/WorkflowsChanged/RulesChanged 回流（避免与并行加载重复 + 并发改集合）。
+        // 四个相互独立——并行加载缩短「窗口出现到可用」间隔（每个内部 I/O 并行、集合操作仍经 UI 线程序列化）。
+        // _initializing 守卫抑制此期间的 catalog Changed 回流（避免与并行加载重复 + 并发改集合）。
         _initializing = true;
         try
         {
             await Task.WhenAll(
-                Notes.LoadAsync(),
                 Experts.LoadAsync(),
                 Automation.LoadAsync(),
                 Workflows.LoadAsync(),

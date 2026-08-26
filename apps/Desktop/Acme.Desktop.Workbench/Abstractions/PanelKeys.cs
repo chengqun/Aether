@@ -18,16 +18,13 @@ public static class PanelKeys
     /// 与 <see cref="Chat"/>（右栏紧凑 ChatView）共享同一 ChatViewModel，仅头部/输入布局不同（全屏居中 ChatGPT 式输入）。</summary>
     public const string ChatPage = "chatpage";
 
-    /// <summary>笔记面板（NotesView + AvaloniaEdit + form 节点两栏）。</summary>
-    public const string Notes = "notes";
-
     /// <summary>打开文档面板（DocumentsEditorView，多标签 AvaloniaEdit 编辑器，打开磁盘文件）。</summary>
     public const string Documents = "documents";
 
     /// <summary>shell 级左栏面板（LeftTreePanelView，VSCode 式目录栏占满高度——终端只压编辑器区不压树）。
-    /// 是 LayoutRegion 不进 LayoutTabbed → 不进 nav rail；叠放文件树 + 笔记树，按 SelectedTabIndex 切显隐：
-    /// documents tab→文件树 / notes tab→笔记树 / 其它 tab→列宽 0 隐藏（WorkspaceView.ApplyLeftTreeVisibility 驱动）。
-    /// DataContext = MainViewModelBase；子 view 各绑 Documents/Notes 共享 VM 单例。</summary>
+    /// 是 LayoutRegion 不进 LayoutTabbed → 不进 nav rail；叠放文件树 + SCM 面板 + .md 树，按 SelectedTabIndex 切显隐：
+    /// documents tab→文件树 / sourcecontrol tab→SCM 面板 / knowledge tab→.md 树 / 其它 tab→列宽 0 隐藏（WorkspaceView.ApplyLeftTreeVisibility 驱动）。
+    /// DataContext = MainViewModelBase；子 view 各绑 Documents/SourceControl/Knowledge 共享 VM 单例。</summary>
     public const string LeftTree = "lefttree";
 
     /// <summary>源代码管理面板（SourceControlView，git status/diff/stage/commit/discard）。</summary>
@@ -45,7 +42,7 @@ public static class PanelKeys
 
     /// <summary>知识对象面板（KnowledgeObjectsView，文档版 <c>.md</c> 知识对象：左 .md 树 + 右表单/源码两栏）。
     /// 根目录=独立知识库目录（<see cref="Acme.Desktop.Mvvm.IKnowledgeDirectoryProvider"/>，跨项目复用，与文档页项目目录解耦）。
-    /// note 版知识对象仍在笔记树（<see cref="Notes"/>），本面板只承载文档版。</summary>
+    /// 本面板是知识对象的唯一承载（labs 目录权威存储）。</summary>
     public const string Knowledge = "knowledge";
 
     /// <summary>知识对象源代码管理面板（独立 nav tab，与 <see cref="Knowledge"/> 编辑页并列——两 tab 各管各的，零状态串扰）。

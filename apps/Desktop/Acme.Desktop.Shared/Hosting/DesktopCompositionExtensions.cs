@@ -26,9 +26,7 @@ using Acme.DeviceManagement.Application.DependencyInjection;
 using Acme.DeviceManagement.Infrastructure.DependencyInjection;
 using Acme.Llm.Application.DependencyInjection;
 using Acme.Llm.Infrastructure.DependencyInjection;
-using Acme.Notes.AI;
 using Acme.Notes.Domain.Agents;
-using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;
 using Acme.SystemTools.AI;
@@ -76,9 +74,6 @@ public static class DesktopCompositionExtensions
         // 放配置文件即可启用，无需改代码。空目录 = 无 MCP。连接在 InitializeAsync 启动。
         aether.AddMcpServersFromDirectory(Path.Combine(tenantDir, "mcp-servers"));
 
-        // Notes 编辑器：粘贴图片保存根目录（markdown 引用相对文件名，预览通过 AssetPathRoot 解析）
-        services.Configure<NotesEditorOptions>(o => o.ImageRoot = Path.Combine(tenantDir, "notes-media"));
-
         // 主题：用户主题 JSON 目录（<tenantDir>/themes/*.json）。内置 light/dark 不依赖此目录。
         services.Configure<DesktopOptions>(o => o.ThemesDirectory = Path.Combine(tenantDir, "themes"));
 
@@ -99,8 +94,7 @@ public static class DesktopCompositionExtensions
         services.AddLlmInfrastructure(Path.Combine(tenantDir, "llm.db"));
         services.AddLlmApplication();
 
-        services.AddNotesInfrastructure(Path.Combine(tenantDir, "notes.db"));
-        services.AddNotesApplication();
+        services.AddNotesInfrastructure();
 
         // 代码规则脚本加载（CodeRule 笔记 → Roslyn 编译 → ICodeBrainRegistry）。两租户共用。
         // ICodeBrainRegistry 单例同时注入 AgentFactory（按笔记 Id 取代码大脑）与 IRuleScriptingService（编译注册）。
@@ -233,16 +227,8 @@ public static class DesktopCompositionExtensions
                 () => labs.CurrentDirectory ?? labs.DefaultRoot);
         });
         // labs 目录 watcher：监听 labs 根目录文件变更，驱动上面的 DirectoryNoteCatalogSource.NotifyChanged，
-        // 让代码规则/策略/Lean 算法的重编译脱离 INoteService.NotesChanged（SQLite）。启动 fire 由各租户 App 调 Start。
+        // 让代码规则/策略/Lean 算法的重编译脱离原 note 版 SQLite 变更通知。启动 fire 由各租户 App 调 Start。
         services.AddSingleton<LabsDirectoryWatcher>();
-        // 笔记表单编辑 VM 工厂（按 NoteNodeType 派发，替代 NotesView 的 if 链）。每个 form 类型一个。
-        services.AddSingleton<INoteNodeEditVmFactory, AgentEditVmFactory>();
-        services.AddSingleton<INoteNodeEditVmFactory, RuleEditVmFactory>();
-        services.AddSingleton<INoteNodeEditVmFactory, CodeRuleEditVmFactory>();
-        services.AddSingleton<INoteNodeEditVmFactory, WorkflowEditVmFactory>();
-        services.AddSingleton<INoteNodeEditVmFactory, KnowledgeEditVmFactory>();
-        // 策略表单工厂：NodeType=Strategy 派发。codec 由 Stockapp 注册（Qifu 不注册→工厂解析 null→无表单）。
-        services.AddSingleton<INoteNodeEditVmFactory, StrategyEditVmFactory>();
         // 桌面端模型源/客户端工厂（共享宿主胶水）：把专家的 ModelId(=LLM 配置 Id) 解析为对应 provider 客户端。
         // 桌面不包 ToolHistorySanitizingChatClient（clientWrapper=null）。
         services.AddSingleton<IModelSource, LlmConfigModelSource>();

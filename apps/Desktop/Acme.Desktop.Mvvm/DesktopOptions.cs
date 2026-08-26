@@ -2,7 +2,7 @@ namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 桌面运行时路径配置（由桌面组合根 <c>AddDesktopCommon</c> 设置）。非 AI 选项，故不放 AetherAIOptions。
-/// 同 <see cref="NotesEditorOptions"/> 模式：options 类在此，<c>services.Configure</c> 注册，消费方 <c>IOptions</c> 惰性取。
+/// options 类在此，<c>services.Configure</c> 注册，消费方 <c>IOptions</c> 惰性取。
 /// </summary>
 public sealed class DesktopOptions
 {

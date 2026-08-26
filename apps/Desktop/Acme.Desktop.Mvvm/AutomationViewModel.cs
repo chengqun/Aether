@@ -10,7 +10,7 @@ namespace Acme.Desktop.Mvvm;
 
 /// <summary>
 /// 自动化页 ViewModel：管理定时任务（创建/编辑/删除/启停/立即运行）。
-/// 镜像 <see cref="NotesViewModel"/> 的惰性服务 + UI 调度模式；订阅调度器完成事件刷新列表。
+/// 惰性服务 + UI 调度模式；订阅调度器完成事件刷新列表。
 /// 仅 App 打开时生效（调度器为进程内 1 分钟轮询定时器）。
 /// </summary>
 public partial class AutomationViewModel : ObservableObject

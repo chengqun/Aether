@@ -16,8 +16,6 @@ using Acme.Mobile.Shared.Services;
 using Acme.Mobile.Shared.Services.Caching;
 using Acme.Moments.Application.DependencyInjection;
 using Acme.Moments.Infrastructure.DependencyInjection;
-using Acme.Notes.AI;
-using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.Persistence;
 using Acme.Securities.Application.DependencyInjection;
@@ -91,8 +89,7 @@ public static class MobileCompositionExtensions
         services.AddLlmInfrastructure(Path.Combine(tenantDir, "llm.db"));
         services.AddLlmApplication();
 
-        services.AddNotesInfrastructure(Path.Combine(tenantDir, "notes.db"));
-        services.AddNotesApplication();
+        services.AddNotesInfrastructure();
 
         services.AddChatSocialInfrastructure();
         services.AddChatSocialApplication();
@@ -112,7 +109,6 @@ public static class MobileCompositionExtensions
         services.AddDeviceManagementInfrastructure(Path.Combine(tenantDir, "devicemgmt.db"));
 
         // —— 公共 AI 工具 ——
-        aether.AddNotesTools();
         aether.AddMemoryTools();
 
         // ask_user 交互工具：手机端真实现（DisplayActionSheet/Prompt，见 MobileAskUserTool）。
@@ -131,9 +127,26 @@ public static class MobileCompositionExtensions
         // skills（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(Path.Combine(tenantDir, "skills")));
 
-        // 自定义 Agent 目录 + 运行器（依赖 INoteService 与 ToolRegistry）
+        // 自定义 Agent 目录 + 运行器（依赖 ToolRegistry + 各 parser）
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
+        // —— labs 目录版 catalog（权威）：Agent/Workflow 读写 <tenantDir>/labs/* 文件，而非 note 节点。
+        // 后注册覆盖上面 note 版 ICustomAgentCatalog/ICustomWorkflowCatalog（MS DI 末位生效）。
+        // Mobile 无 IKnowledgeDirectoryProvider/LabsDirectoryWatcher（无回测/策略/CodeRule 重编译需求），
+        // labs 根直接绑 () => Path.Combine(tenantDir, "labs")（MAUI 沙盒固定路径，闭包捕获 tenantDir）。
+        services.AddSingleton<ICustomAgentCatalog>(sp =>
+            new DirectoryAgentCatalog(
+                () => Path.Combine(tenantDir, "labs"),
+                sp.GetRequiredService<ToolRegistry>(),
+                sp.GetRequiredService<IModelSource>(),
+                sp.GetRequiredService<IAgentSourceParser>(),
+                sp.GetRequiredService<IRuleSourceParser>(),
+                sp.GetRequiredService<ICodeSourceParser>(),
+                sp.GetRequiredService<RuleRegistry>()));
+        services.AddSingleton<ICustomWorkflowCatalog>(sp =>
+            new DirectoryWorkflowCatalog(
+                () => Path.Combine(tenantDir, "labs"),
+                sp.GetRequiredService<IWorkflowSourceParser>()));
 
         // 模型源/客户端工厂（共享宿主胶水 LlmConfigChatClientFactory/LlmConfigModelSource，UI 无关）。
         // 手机端包一层 ToolHistorySanitizingChatClient（修孤儿 tool 消息防 DeepSeek 等 OpenAI 兼容端点 400）。

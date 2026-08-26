@@ -15,7 +15,7 @@
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Workflows\Aether.AI.Workflows.csproj" />
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
-    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Application\Acme.Notes.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

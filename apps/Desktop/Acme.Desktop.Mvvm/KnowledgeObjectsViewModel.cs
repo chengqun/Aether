@@ -22,7 +22,7 @@ namespace Acme.Desktop.Mvvm;
 /// 文件树 + watcher + 持久化 + 打开/关闭目录模板继承自 <see cref="FileTreeVmBase"/>。
 /// form 类型的 edit VM 复用 <see cref="ExpertsViewModel"/>/<see cref="RulesViewModel"/>/
 /// <see cref="WorkflowsViewModel"/>（经 <see cref="IShellHost"/>，已走目录版 catalog）；Knowledge 走
-/// <see cref="DocumentKnowledgeViewModel"/>（路径 link 版，区别于 note 版 <see cref="KnowledgeEditViewModel"/>）。
+/// <see cref="DocumentKnowledgeViewModel"/>（路径 link 版，区别于原 note 版知识对象编辑器——已删）。
 /// </summary>
 public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 {

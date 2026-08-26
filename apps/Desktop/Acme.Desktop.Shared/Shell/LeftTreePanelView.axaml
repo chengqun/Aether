@@ -4,12 +4,11 @@
              x:Class="Acme.Desktop.Shared.Shell.LeftTreePanelView"
              Background="Transparent">
 
-  <!-- shell 级左栏切换层：叠放文件树 + 笔记树 + SCM 面板，按当前 tab 切显隐（WorkspaceView.SetActiveTree 驱动）。
-       DataContext = MainViewModelBase（经 ViewRegistry vmFactory）；子 view 各自绑 Documents/Notes/SourceControl 共享 VM 单例。
-       SCM 面板提升至此（col0 独占全高）→ 终端只在 diff 区下方，与文档/笔记页「左栏独占全高」布局一致。 -->
+  <!-- shell 级左栏切换层：叠放文件树 + SCM 面板 + .md 树，按当前 tab 切显隐（WorkspaceView.SetActiveTree 驱动）。
+       DataContext = MainViewModelBase（经 ViewRegistry vmFactory）；子 view 各自绑 Documents/SourceControl/Knowledge 共享 VM 单例。
+       SCM 面板提升至此（col0 独占全高）→ 终端只在 diff 区下方，与文档/知识对象页「左栏独占全高」布局一致。 -->
   <Grid>
     <shell:FileTreeView x:Name="FileTreePanel" DataContext="{Binding Documents}" IsVisible="True"/>
-    <shell:NotesTreeView x:Name="NotesTreePanel" DataContext="{Binding Notes}" IsVisible="False"/>
     <shell:SourceControlPanelView x:Name="ScmTreePanel" DataContext="{Binding SourceControl}" IsVisible="False"/>
     <shell:KoTreeView x:Name="KoTreePanel" DataContext="{Binding Knowledge}" IsVisible="False"/>
     <!-- 知识对象 SCM tab：左栏 = 知识库目录的 git 变更列表（复用项目 SCM 面板，DataContext 绑 Knowledge.SourceControl） -->

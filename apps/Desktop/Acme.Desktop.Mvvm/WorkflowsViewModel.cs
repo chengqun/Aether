@@ -41,7 +41,7 @@ public partial class WorkflowsViewModel : ObservableObject
             var list = await _catalog.ListAsync();
             await _dispatcher.InvokeAsync(() =>
             {
-                // 保留召唤状态：NotesChanged 等触发 reload 时按 Id 迁移 IsSummoned 到新实例。
+                // 保留召唤状态：catalog Changed 触发 reload 时按 Id 迁移 IsSummoned 到新实例。
                 var prevSummoned = Workflows.Where(w => w.IsSummoned).Select(w => w.Id).ToHashSet();
                 Workflows.Clear();
                 foreach (var d in list)

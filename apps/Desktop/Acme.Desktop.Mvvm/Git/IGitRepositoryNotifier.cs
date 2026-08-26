@@ -3,7 +3,7 @@ namespace Acme.Desktop.Mvvm.Git;
 /// <summary>
 /// git 仓库变更通知（跨组件）。AI 工具（<c>GitTool</c> 的 git_commit/git_push/git_pull）在后台线程
 /// 提交/同步后，经此通知 <see cref="SourceControlViewModel"/> 刷新——否则 SCM 页面不知道仓库已被改，
-/// 变更列表/远程状态停留在旧值。平行于 <c>INoteService.NotesChanged</c>（AI 改笔记后刷新笔记树）。
+/// 变更列表/远程状态停留在旧值。平行于 catalog 变更通知（catalog Changed 驱动列表刷新）。
 /// </summary>
 public interface IGitRepositoryNotifier
 {
