@@ -69,9 +69,17 @@
           <!-- 绑定 VM.SelectedNode（右键时已选中该节点），菜单项 DataContext 继承 TreeView=VM 非 TreeViewItem——
                IsEnabled 绑 VM.SelectedNode + FileNodeIsFolderConverter 判 IsFolder。镜像 FileTreeView。 -->
           <ContextMenu>
-            <MenuItem Header="新建知识对象" Click="OnNewFileClick"
-                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">
+            <MenuItem Header="新建">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.NewFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
+              <MenuItem Header="Agent" Tag="Agent" Click="OnNewNodeClick"/>
+              <MenuItem Header="Workflow（专家团）" Tag="Workflow" Click="OnNewNodeClick"/>
+              <MenuItem Header="规则" Tag="Rule" Click="OnNewNodeClick"/>
+              <MenuItem Header="代码规则" Tag="CodeRule" Click="OnNewNodeClick"/>
+              <MenuItem Header="知识对象" Tag="Knowledge" Click="OnNewNodeClick"/>
+              <MenuItem Header="策略（YAML）" Tag="Strategy" Click="OnNewNodeClick"/>
+              <MenuItem Header="代码策略" Tag="CodeStrategy" Click="OnNewNodeClick"/>
+              <MenuItem Header="Lean 算法" Tag="LeanAlgorithm" Click="OnNewNodeClick"/>
+              <MenuItem Header="文本笔记" Tag="Note" Click="OnNewNodeClick"/>
             </MenuItem>
             <MenuItem Header="新建文件夹" Click="OnNewFolderClick"
                       IsEnabled="{Binding SelectedNode, Converter={x:Static shell:FileNodeIsFolderConverter.Instance}}">

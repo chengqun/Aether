@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Acme.Desktop.Mvvm;
+using Acme.Notes.Domain;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -52,34 +53,20 @@ public partial class KoTreeView : UserControl
     // 节点经 VM.SelectedNode 取（右键时已选中），不依赖菜单项 DataContext（ContextMenu 是 popup，DataContext=VM）。
     // 「新建知识对象」写带 front-matter 的 .md 模板；「打开」复用 VM.OnSelectedNodeChanged 的 OpenKnowledgeAsync。
 
-    /// <summary>新知识对象默认内容（与 NoteNodeTypeRegistry.KnowledgeTemplate 同构：kind+links front-matter + body）。</summary>
-    private const string OkTemplate = "---\nkind: Entity\nlinks: []\n---\n（在此写知识说明 / 粘贴结构化数据 / 任何 markdown）\n";
-
-    private async void OnNewFileClick(object? sender, RoutedEventArgs e)
+    /// <summary>按类型新建文件（「新建」子菜单 9 类）：弹名字框 → VM 落盘到对应类型目录 → 打开新文件。</summary>
+    private async void OnNewNodeClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm?.SelectedNode is not { IsFolder: true } node) return;
+        if (_vm is null || sender is not MenuItem mi || mi.Tag is not string tag) return;
+        if (!Enum.TryParse<NoteNodeType>(tag, out var type)) return;
         var parent = TopLevel.GetTopLevel(this) as Window;
         if (parent is null) return;
-        var name = await FileTreeOps.PromptNameAsync(parent, "新建知识对象", $"在「{node.Name}」中新建知识对象", "文件名（不含 .md）");
+        var desc = NoteNodeTypeRegistry.Get(type).Display;
+        var name = await FileTreeOps.PromptNameAsync(parent, $"新建{desc}", $"新建{desc}", "名称");
         if (string.IsNullOrWhiteSpace(name)) return;
-        var trimmed = name.Trim();
-        var target = Path.Combine(node.Path, trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
-            ? trimmed : trimmed + ".md");
-        if (File.Exists(target) || Directory.Exists(target))
-        {
-            _vm.StatusMessage = $"已存在同名项：{Path.GetFileName(target)}";
-            return;
-        }
-        try
-        {
-            await File.WriteAllTextAsync(target, OkTemplate);
-            // 直接打开新对象（watcher 去抖刷树会补齐树节点；此处不依赖刷树即开）
-            await _vm.OpenKnowledgeByPathAsync(target);
-        }
-        catch (Exception ex)
-        {
-            _vm.StatusMessage = $"新建知识对象失败：{ex.Message}";
-        }
+        var path = await _vm.CreateNodeAsync(type, name.Trim());
+        if (path is null) return;
+        // 直接打开新文件（watcher 去抖刷树会补齐树节点；此处不依赖刷树即开）
+        await _vm.OpenKnowledgeByPathAsync(path);
     }
 
     private async void OnNewFolderClick(object? sender, RoutedEventArgs e)

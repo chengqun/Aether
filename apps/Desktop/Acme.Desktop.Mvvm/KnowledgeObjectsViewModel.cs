@@ -465,6 +465,97 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public Task OpenKnowledgeByPathAsync(string filePath, CancellationToken ct = default)
         => OpenFileAsync(new FileNode(Path.GetFileName(filePath), filePath, false), ct);
 
+    // —— 按类型新建文件（右键菜单）——
+
+    /// <summary>按类型新建文件，落盘到对应类型目录（<c>CatalogNoteDirectory</c> 权威映射），返回新文件完整路径。
+    /// form 类型（Agent/Rule/CodeRule/Workflow）经 parser.Serialize 生成含 <c>id</c> 的完整格式；代码/知识类型用注册表模板。</summary>
+    public async Task<string?> CreateNodeAsync(NoteNodeType type, string name)
+    {
+        var root = RootPath ?? _knowledgeDirProvider.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root)) { StatusMessage = "未打开 labs 目录"; return null; }
+        var layout = CatalogNoteDirectory.For(type);
+        var fullDir = Path.Combine(root, layout.DirectoryName);
+        Directory.CreateDirectory(fullDir);
+        var safe = SanitizeFileName(name);
+        var path = Path.Combine(fullDir, safe + layout.Extension);
+        if (File.Exists(path)) { StatusMessage = $"已存在同名项：{safe}"; return null; }
+        try
+        {
+            await File.WriteAllTextAsync(path, BuildNewContent(type, name));
+            StatusMessage = string.Empty;
+            return path;
+        }
+        catch (Exception ex) { StatusMessage = $"新建失败：{ex.Message}"; return null; }
+    }
+
+    /// <summary>新建文件的完整正确内容：form 类型经 parser.Serialize（含 id）；代码/知识类型直接用注册表模板。</summary>
+    private string BuildNewContent(NoteNodeType type, string name)
+    {
+        switch (type)
+        {
+            case NoteNodeType.Agent: return SerializeAgent(name);
+            case NoteNodeType.Rule: return SerializeRule(name);
+            case NoteNodeType.CodeRule: return SerializeCodeRule(name);
+            case NoteNodeType.Workflow: return SerializeWorkflow(name);
+            default: return NoteNodeTypeRegistry.Get(type).DefaultContent; // Knowledge/Strategy/CodeStrategy/LeanAlgorithm/Note
+        }
+    }
+
+    private string SerializeAgent(string name)
+    {
+        var p = ServiceProvider.GetService<IAgentSourceParser>();
+        if (p is null) return $"# {name}\n\n";
+        return p.Serialize(new CustomAgentDefinition { Id = Guid.NewGuid(), Name = name, Category = "普通对话" });
+    }
+
+    private string SerializeRule(string name)
+    {
+        var p = ServiceProvider.GetService<IRuleSourceParser>();
+        if (p is null) return $"name: {name}\n";
+        // 默认程序用规则注册表模板（Serialize 内 Deserialize<RuleProgramDoc> 自动提取 steps/noMatchReply 等，忽略元数据）。
+        var defaultProgram = NoteNodeTypeRegistry.Get(NoteNodeType.Rule).DefaultContent;
+        return p.Serialize(new CustomAgentDefinition
+        {
+            Id = Guid.NewGuid(), Name = name, Category = "规则", NodeType = NoteNodeType.Rule,
+            Engine = "Rule", Memory = AgentMemoryMode.Off, MaxHistory = 20,
+            SystemPrompt = defaultProgram,
+        });
+    }
+
+    private string SerializeCodeRule(string name)
+    {
+        var p = ServiceProvider.GetService<ICodeSourceParser>();
+        if (p is null) return $"---\nname: {name}\n---\n";
+        // 默认 C# body 从 CodeRule 注册表模板提取（去 front-matter）。
+        var tmpl = NoteNodeTypeRegistry.Get(NoteNodeType.CodeRule).DefaultContent;
+        string body = tmpl;
+        if (p.TryParse(tmpl, out var tdef, out _) && tdef is not null && !string.IsNullOrWhiteSpace(tdef.SystemPrompt))
+            body = tdef.SystemPrompt;
+        return p.Serialize(new CustomAgentDefinition
+        {
+            Id = Guid.NewGuid(), Name = name, Category = "代码规则", NodeType = NoteNodeType.CodeRule,
+            Engine = "Rule", Memory = AgentMemoryMode.Off, MaxHistory = 20,
+            SystemPrompt = body,
+        });
+    }
+
+    private string SerializeWorkflow(string name)
+    {
+        var p = ServiceProvider.GetService<IWorkflowSourceParser>();
+        if (p is null) return "{\"name\":\"" + name + "\"}";
+        return p.Serialize(new CustomWorkflowDefinition { Id = Guid.NewGuid(), Name = name, Category = "工作流" });
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var c in name.Trim())
+            sb.Append(invalid.Contains(c) ? '_' : c);
+        var t = sb.ToString();
+        return string.IsNullOrEmpty(t) ? "untitled" : t;
+    }
+
     /// <summary>在目录顶层找 README（stem==readme 大小写不敏感，扩展名 .md）。</summary>
     private static string? TryFindReadme(string folderPath)
     {

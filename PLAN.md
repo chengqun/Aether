@@ -196,5 +196,12 @@
 **构建/测试**：全解决方案 0 错误；`Agents.AI.Tests` 29 绿 + `Notes.Infrastructure.Tests` 6 绿。
 
 **未做（后续）**：
-- 右键「新建」仍是知识对象专属（`KoTreeView.OnNewFileClick` 写 `.md` 知识对象模板），未扩展成「按类型目录新建 9 类文件」。
 - Knowledge 文件格式确认：labs knowledge 用 `.md`（`DocumentKnowledgeSourceParser` 路径 link），保留文档版编辑器（已确认，非 note 版）。
+
+### 三期·按类型新建（已完成）
+
+用户需求：labs 树右键能按类型新建（规则/代码规则/9 类），落到对应类型目录。
+
+- [x] **`KnowledgeObjectsViewModel.CreateNodeAsync(NoteNodeType, name)`**：落盘到 `CatalogNoteDirectory.For(type)` 目录 + 扩展名。form 类型（Agent/Rule/CodeRule/Workflow）经 **parser.Serialize（生成含 `id` 的完整格式）**——不能用 note 树 `DefaultContent`（缺 `id`，`DirectoryAgentCatalog` 按 id 定位会失败）；代码/知识类型（Knowledge/Strategy/CodeStrategy/LeanAlgorithm/Note）直接写 `NoteNodeTypeRegistry.DefaultContent` 模板。默认程序（Rule/CodeRule）从注册表模板提取（Serialize 内 `Deserialize<RuleProgramDoc>` 自动提取 steps，忽略元数据）。
+- [x] **`KoTreeView.axaml` 右键菜单**：「新建知识对象」→「新建」子菜单（9 类：Agent/Workflow/规则/代码规则/知识对象/策略/代码策略/Lean 算法/文本笔记），`Tag` 传类型字符串。
+- [x] **`KoTreeView.axaml.cs` `OnNewNodeClick`**：解析 `Tag`→`NoteNodeType` → 弹名字框 → `CreateNodeAsync` → `OpenKnowledgeByPathAsync` 打开新文件。
