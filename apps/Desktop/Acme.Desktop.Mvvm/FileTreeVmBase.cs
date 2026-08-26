@@ -12,7 +12,7 @@ namespace Acme.Desktop.Mvvm;
 /// <summary>
 /// 文件树页 VM 基类：收拢 <see cref="DocumentsViewModel"/> 与 <see cref="KnowledgeObjectsViewModel"/> 的共享逻辑
 ///（FileSystemWatcher 实时重载 + 树重建去抖 + 展开/选中保留 + 字体/路径持久化 + 打开/关闭目录模板）。
-/// 两者核心差异（多标签 vs 单对象、markdown 预览 vs .ok 表单、BuildNode 谓词、README 扩展名）由派生类提供。
+/// 两者核心差异（多标签 vs 单对象、markdown 预览 vs .md 表单、BuildNode 谓词、README 扩展名）由派生类提供。
 /// 不依赖 <see cref="ICurrentProjectDirectoryProvider"/> 或 <see cref="IKnowledgeDirectoryProvider"/>——目录写回经
 /// <see cref="WriteBackDirectory"/> 抽象委托，保持两个目录 provider 单例的刻意分离（SCM/终端/活动页绑项目目录，
 /// 文档知识工具绑知识库目录，互不覆盖）。文件树模型用共享 <see cref="FileNode"/>。
@@ -64,7 +64,7 @@ public abstract partial class FileTreeVmBase : ObservableObject
     /// <summary>RootPath 变化后通知派生类依赖 RootPath 的属性（ProjectName/HasProject 或 RootName/HasRoot）。</summary>
     protected virtual void RaiseRootDependentProperties() { }
 
-    /// <summary>选中节点变化钩子（知识对象页：文件→打开 .ok、目录→打开 README；文档页默认空——由 view 侧分发）。</summary>
+    /// <summary>选中节点变化钩子（知识对象页：文件→打开 .md、目录→打开 README；文档页默认空——由 view 侧分发）。</summary>
     protected virtual void OnSelectedNodeChanged(FileNode? value) { }
 
     // —— 共享属性 ——

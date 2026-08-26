@@ -17,7 +17,7 @@ public static class FileIcons
     /// <summary>通用文件图标（无匹配时回退）。描边灰，明暗两主题均可见。</summary>
     public static Icon Default { get; } = new(FileNode.FileIcon, "#7A8290", false);
 
-    /// <summary>知识对象图标（<c>.md</c>/<c>.ok</c> 知识对象文件——对标 note 节点 knowledge 图标：Lucide 知识 stroke + 青，非语言 logo）。</summary>
+    /// <summary>知识对象图标（<c>.md</c>/<c>.md</c> 知识对象文件——对标 note 节点 knowledge 图标：Lucide 知识 stroke + 青，非语言 logo）。</summary>
     public static Icon Knowledge { get; } = new(NavIcons.Knowledge, "#0891B2", false);
 
     // —— 内联 Lucide stroke 图标（IsFill=false）。品牌色配语义，明暗两主题均可见。 ——
@@ -101,8 +101,6 @@ public static class FileIcons
             ".sql"   => new(NavIcons.LangSqlite, "#00A4C2", true), // 亮蓝
             ".ps1" or ".sh" or ".bash" or ".zsh" => new(NavIcons.LangBash, "#4EAA25", true),
             ".yaml" or ".yml" => new(NavIcons.LangYaml, "#CB171E", true),
-            // 知识对象（.ok 文件）——对标 note 节点 knowledge 图标（Lucide 知识 stroke + 青），非语言 logo
-            ".ok" => new(NavIcons.Knowledge, "#0891B2", false),
             // 其余语言（无品牌 logo path）：代码文件形 + 品牌色
             ".go"   => new(FileCodeIcon, "#00ADD8", false),
             ".rs"   => new(FileCodeIcon, "#CE422B", false),

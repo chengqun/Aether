@@ -5,7 +5,7 @@
              x:Class="Acme.Desktop.Shared.Shell.DocumentKnowledgeView"
              Classes="form-fields">
 
-  <!-- 文档版知识对象表单（镜像 KnowledgeEditView，去 picker/跳转，link target 为文本；图=BuildGraphModel 读 .ok 闭包）。
+  <!-- 文档版知识对象表单（镜像 KnowledgeEditView，去 picker/跳转，link target 为文本；图=BuildGraphModel 读 .md 闭包）。
        DataContext = DocumentKnowledgeViewModel（由 DocumentsViewModel.ActiveKnowledgeVm 提供）。
        配置区（kind+links）折叠为单行「⚙ 配置 + 摘要」，点击展开细节——默认收起不占面积（镜像 Obsidian Properties）。 -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

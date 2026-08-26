@@ -43,7 +43,7 @@ public static class PanelKeys
     /// <summary>活动热力图面板（ActivityView，GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。</summary>
     public const string Activity = "activity";
 
-    /// <summary>知识对象面板（KnowledgeObjectsView，文档版 <c>.ok</c> 知识对象：左 .ok 树 + 右表单/源码两栏）。
+    /// <summary>知识对象面板（KnowledgeObjectsView，文档版 <c>.md</c> 知识对象：左 .md 树 + 右表单/源码两栏）。
     /// 根目录=独立知识库目录（<see cref="Acme.Desktop.Mvvm.IKnowledgeDirectoryProvider"/>，跨项目复用，与文档页项目目录解耦）。
     /// note 版知识对象仍在笔记树（<see cref="Notes"/>），本面板只承载文档版。</summary>
     public const string Knowledge = "knowledge";

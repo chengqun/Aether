@@ -13,13 +13,13 @@ using Acme.Notes.Domain.Knowledge;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 文档版知识对象（<c>.ok</c> 文件）AI 工具，镜像 note 版 <see cref="Acme.Notes.AI.Tools.KnowledgeTool"/> 的 4 工具
-/// （List/Read/Create/Update），操作对象从 note 节点换成磁盘 <c>.ok</c> 文件。note 版注入 <c>INoteService</c>
+/// 文档版知识对象（<c>.md</c> 文件）AI 工具，镜像 note 版 <see cref="Acme.Notes.AI.Tools.KnowledgeTool"/> 的 4 工具
+/// （List/Read/Create/Update），操作对象从 note 节点换成磁盘 <c>.md</c> 文件。note 版注入 <c>INoteService</c>
 /// （Application 契约）；文档版操作磁盘文件需知「知识库目录」—— <see cref="IKnowledgeDirectoryProvider"/> 在
 /// apps 层（<c>Acme.Desktop.Mvvm</c>），<c>ai/</c> 适配器不可引 apps/，故此工具住宿主层（同
 /// <see cref="GetCurrentProjectDirectoryTool"/>/<c>BuildTool</c>/<c>RunInTerminalTool</c>），在 <c>AddDesktopCommon</c>
 /// 内联注册。解析/序列化复用 <see cref="IDocumentKnowledgeSourceParser"/>（<c>AddNotesInfrastructure</c> 已注册 DI 单例）。
-/// .ok 文件路径解析（Read 的 link 目标展开 + 图闭包）经 <see cref="OkTargetResolver"/> 共享，与文档编辑器图解析同源。
+/// 知识对象文件路径解析（Read 的 link 目标展开 + 图闭包）经 <see cref="OkTargetResolver"/> 共享，与文档编辑器图解析同源。
 /// </summary>
 public sealed class DocumentKnowledgeTool
 {
@@ -36,7 +36,7 @@ public sealed class DocumentKnowledgeTool
 
     public sealed class DocumentKnowledgeSummary
     {
-        /// <summary>相对路径（不含 .ok，如 业务分析/退款会员日志分析）——用于 Read/Create/Update 的 name 入参。</summary>
+        /// <summary>相对路径（不含 .md，如 业务分析/退款会员日志分析）——用于 Read/Create/Update 的 name 入参。</summary>
         public string? Path { get; set; }
         /// <summary>文件名 stem（显示名，如 退款会员日志分析）。</summary>
         public string? Name { get; set; }
@@ -55,7 +55,7 @@ public sealed class DocumentKnowledgeTool
         public string? Path { get; set; }
         public string? Name { get; set; }
         public string? Kind { get; set; }
-        /// <summary>组装后的完整知识（kind + 正文 + 各 link 指向的子 .ok 文件原文）。</summary>
+        /// <summary>组装后的完整知识（kind + 正文 + 各 link 指向的子 .md 文件原文）。</summary>
         public string? Definition { get; set; }
         public string? Error { get; set; }
     }
@@ -127,8 +127,8 @@ public sealed class DocumentKnowledgeTool
             return await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // 解析目标 .ok 文件。root 相对优先；currentFileDir=知识库根（Read 的 name 语境是"知识库根相对路径"，
-                // 传根与不传等价，但保持与图视图同构——图打开 .ok 时传源文件目录，此处 name 语境即根，故传 root）。
+                // 解析目标 .md 文件。root 相对优先；currentFileDir=知识库根（Read 的 name 语境是"知识库根相对路径"，
+                // 传根与不传等价，但保持与图视图同构——图打开 .md 时传源文件目录，此处 name 语境即根，故传 root）。
                 var full = OkTargetResolver.CandidateOkPaths(name, root, root)
                     .FirstOrDefault(p => File.Exists(p));
                 if (full is null)
@@ -276,12 +276,12 @@ public sealed class DocumentKnowledgeTool
         return result;
     }
 
-    /// <summary>组装：path + kind + name + 正文 + 各 link 指向子 .ok 文件的原文（含 target 路径，2 格缩进，只展开一层）。
-    /// 镜像 note KnowledgeTool.FormatAsync——文档版"目标 Content"= 目标 .ok 文件全文（经 <see cref="OkTargetResolver.ResolveRaw"/>）。
-    /// <para><b>防上下文溢出</b>：link 可能指向含完整字段表/SQL/示例的大 .ok，多目标内联会撑爆 LLM 上下文窗口
+    /// <summary>组装：path + kind + name + 正文 + 各 link 指向子 .md 文件的原文（含 target 路径，2 格缩进，只展开一层）。
+    /// 镜像 note KnowledgeTool.FormatAsync——文档版"目标 Content"= 目标 .md 文件全文（经 <see cref="OkTargetResolver.ResolveRaw"/>）。
+    /// <para><b>防上下文溢出</b>：link 可能指向含完整字段表/SQL/示例的大 .md，多目标内联会撑爆 LLM 上下文窗口
     /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标内联有上限、累计有上限，
     /// 超出截断头部 + 标记总数并告知 agent 如何取完整内容——同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。</para></summary>
-    private const int MaxTargetInlineChars = 8000;       // 单个目标 .ok 原文内联上限
+    private const int MaxTargetInlineChars = 8000;       // 单个目标 .md 原文内联上限
     private const int MaxLinkedInlineTotalChars = 20000; // 所有 link 原文内联累计上限（防多 link 累积撑爆）
 
     private string Format(KnowledgeObjectDefinition def, string relPath, string root)
@@ -297,7 +297,7 @@ public sealed class DocumentKnowledgeTool
         {
             sb.AppendLine().AppendLine("links:");
             var linkedTotal = 0; // 已内联的目标原文累计字符
-            // link 解析语境：currentFileDir=被读文件自身目录（与图视图打开 .ok 时传 Path.GetDirectoryName(filePath) 同构）。
+            // link 解析语境：currentFileDir=被读文件自身目录（与图视图打开 .md 时传 Path.GetDirectoryName(filePath) 同构）。
             // 这使裸名（b）/同目录（./b）/上层目录（../xx/b）写法在 Read 展开时也能解析，与图口径统一；
             // 根相对（毓数平台项目/xxx）仍是第一优先级，兼容既有 42 条根相对 links。
             var currentFileDir = Path.GetDirectoryName(Path.Combine(root, relPath));
@@ -337,7 +337,7 @@ public sealed class DocumentKnowledgeTool
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>递归枚举知识对象文件（<c>.md</c> 现行 + <c>.ok</c> legacy 兼容，同 stem 只取一份；跳过构建产物/VCS/依赖目录 + 符号链接目录，上限 200）。</summary>
+    /// <summary>递归枚举知识对象文件（<c>.md</c>；跳过构建产物/VCS/依赖目录 + 符号链接目录，上限 200）。</summary>
     private void EnumerateOkFiles(string dir, string root, List<DocumentKnowledgeSummary> list, CancellationToken ct)
     {
         if (list.Count >= 200) return;
@@ -345,11 +345,7 @@ public sealed class DocumentKnowledgeTool
         string[]? files = null;
         try
         {
-            files = Directory.GetFiles(dir, "*.md")
-                .Concat(Directory.GetFiles(dir, "*.ok"))
-                .GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderBy(f => f, StringComparer.Ordinal).First()) // 同 stem 取 .md/.ok 一份（避免旧 .ok 与新 .md 双列）
-                .ToArray();
+            files = Directory.GetFiles(dir, "*.md");
             subdirs = Directory.GetDirectories(dir);
         }
         catch { /* 无权限/不存在 → 跳过该目录 */ }
@@ -392,12 +388,11 @@ public sealed class DocumentKnowledgeTool
         catch { return full; }
     }
 
-    /// <summary>去掉末尾的 <c>.md</c>/<c>.ok</c> 扩展名（知识对象相对路径规范=无扩展名）。</summary>
+    /// <summary>去掉末尾的 <c>.md</c> 扩展名（知识对象相对路径规范=无扩展名）。</summary>
     private static string StripOkExt(string path)
         => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) && path.Length > 3
             ? path.Substring(0, path.Length - 3)
-            : path.EndsWith(".ok", StringComparison.OrdinalIgnoreCase) && path.Length > 3
-                ? path.Substring(0, path.Length - 3) : path;
+            : path;
 
     private static readonly HashSet<string> _ignoredDirs = new(StringComparer.OrdinalIgnoreCase)
     {

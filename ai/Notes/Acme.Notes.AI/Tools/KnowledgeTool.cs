@@ -257,7 +257,7 @@ public class KnowledgeTool
     /// <para><b>防上下文溢出</b>：link 目标笔记可能含完整字段表/SQL/示例，多目标内联会撑爆 LLM 上下文窗口
     /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标内联有上限、累计有上限，
     /// 超出截断头部 + 标记总数并告知 agent 如何取完整内容——同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。
-    /// 与文档版 <c>DocumentKnowledgeTool.Format</c> 同构（数据源=笔记内存 Content vs .ok 文件原文）。</para></summary>
+    /// 与文档版 <c>DocumentKnowledgeTool.Format</c> 同构（数据源=笔记内存 Content vs .md 文件原文）。</para></summary>
     private const int MaxTargetInlineChars = 8000;       // 单个目标笔记内容内联上限
     private const int MaxLinkedInlineTotalChars = 20000; // 所有 link 内容内联累计上限（防多 link 累积撑爆）
 

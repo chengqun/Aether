@@ -4,8 +4,8 @@ using Acme.Notes.Infrastructure.Knowledge;
 namespace Acme.Notes.Infrastructure.Tests;
 
 /// <summary>
-/// 文档版（.ok 文件）知识对象解析器测试。核心：文档版 link 的 targetId 是**相对路径字符串**
-/// （指向项目内另一个 .ok 文件，如 Hive表/fin_dw.dwd_xxx），而 note 版 KnowledgeLink.TargetId 是 Guid?。
+/// 文档版（.md 文件）知识对象解析器测试。核心：文档版 link 的 targetId 是**相对路径字符串**
+/// （指向项目内另一个 .md 文件，如 Hive表/fin_dw.dwd_xxx），而 note 版 KnowledgeLink.TargetId 是 Guid?。
 /// note 版解析器把路径字符串塞进 Guid? 会抛异常 → 整个 front-matter 解析失败；文档版独立解析器把
 /// targetId 当字符串读、存进 KnowledgeLink.Target，round-trip 稳定。
 /// </summary>
@@ -13,7 +13,7 @@ public class DocumentKnowledgeSourceParserTests
 {
     private readonly DocumentKnowledgeSourceParser _parser = new();
 
-    /// <summary>用户真实 .ok 文件样例：kind=数据源，links 用 targetId 存相对路径（Hive表/文件stem）。</summary>
+    /// <summary>用户真实 .md 文件样例：kind=数据源，links 用 targetId 存相对路径（Hive表/文件stem）。</summary>
     private const string UserSample = """
         ---
         kind: 数据源

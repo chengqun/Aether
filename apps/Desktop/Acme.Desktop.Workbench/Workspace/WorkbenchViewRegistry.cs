@@ -61,7 +61,7 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new ActivityView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Activity);
 
-        // 知识对象（文档版 .ok 知识对象独立 nav 页）：左 .ok 树 + 右上下两栏（表单/源码）。
+        // 知识对象（文档版 .md 知识对象独立 nav 页）：左 .md 树 + 右上下两栏（表单/源码）。
         // 根目录=独立知识库目录（IKnowledgeDirectoryProvider，与文档页项目目录解耦，跨项目复用）。
         Register(PanelKeys.Knowledge,
             () => new KnowledgeObjectsView(),

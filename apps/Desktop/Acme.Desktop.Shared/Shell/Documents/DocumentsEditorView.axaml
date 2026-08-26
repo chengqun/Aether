@@ -140,7 +140,7 @@
       </Border>
 
       <!-- 上下分栏（镜像 NotesView SplitGrid）：md 文件=上预览/下源码，眼睛切仅预览；非 md=编辑器跨满。
-           .ok 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏（知识对象有专门的「知识对象」nav 页打开表单）。 -->
+           .md 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏（知识对象有专门的「知识对象」nav 页打开表单）。 -->
       <Grid Grid.Row="1" x:Name="EditorGrid">
         <Grid.RowDefinitions>
           <RowDefinition Height="*"/>

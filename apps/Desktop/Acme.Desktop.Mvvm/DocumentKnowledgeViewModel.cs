@@ -25,20 +25,20 @@ public partial class DocumentKnowledgeLinkRow : ObservableObject
 }
 
 /// <summary>
-/// 文档（<c>.ok</c> 文件）知识对象表单 VM（UI-agnostic，零 Avalonia）。
+/// 文档（<c>.md</c> 文件）知识对象表单 VM（UI-agnostic，零 Avalonia）。
 /// 镜像 <see cref="KnowledgeEditViewModel"/> 的 kind/links/body + 双向同步 + 图，去掉 note 耦合：
 /// 无 note-target 解析/选择器/自动存库——表单变更经 <see cref="IDocumentKnowledgeSourceParser.Serialize"/>
 /// 生成源码（<see cref="SourceChanged"/>），由 <see cref="DocumentsViewModel"/> 回写 tab.Content（既有 Ctrl+S 落盘）。
-/// link target 为相对路径文本（指向项目内另一个 .ok 文件）；body 为只读 markdown 预览（源码驱动，
+/// link target 为相对路径文本（指向项目内另一个 .md 文件）；body 为只读 markdown 预览（源码驱动，
 /// <see cref="SyncFromSource"/> 刷新），不接 serialize。<b>图</b>：经 <see cref="BuildGraphModel"/> 构建出边闭包子图
-/// （焦点=当前对象高亮，沿 targetId 路径读 .ok 文件递归跟出边——同 note 版 <see cref="KnowledgeGraphBuilder.BuildClosure"/>），
-/// 由宿主 <see cref="DocumentsViewModel"/> 注入 <c>resolveTargetDef</c>（读 .ok 文件解析定义）；UI-agnostic，
+/// （焦点=当前对象高亮，沿 targetId 路径读 .md 文件递归跟出边——同 note 版 <see cref="KnowledgeGraphBuilder.BuildClosure"/>），
+/// 由宿主 <see cref="DocumentsViewModel"/> 注入 <c>resolveTargetDef</c>（读 .md 文件解析定义）；UI-agnostic，
 /// 不引 Avalonia 窗口（窗口由 view code-behind 弹 <see cref="WorkflowGraphWindow"/>）。
 /// </summary>
 public sealed partial class DocumentKnowledgeViewModel : ObservableObject
 {
     private readonly IDocumentKnowledgeSourceParser _parser;
-    /// <summary>link target→(名称, 定义) 解析器（宿主注入，读 .ok 文件供闭包跟出边）；null=不建图（图按钮静默无效）。</summary>
+    /// <summary>link target→(名称, 定义) 解析器（宿主注入，读 .md 文件供闭包跟出边）；null=不建图（图按钮静默无效）。</summary>
     private readonly Func<string?, (string Title, KnowledgeObjectDefinition? Def)?>? _resolveTargetDef;
     private bool _loading = true; // 构造期 + Load 期守卫，防初始填充触发 SourceChanged
     private bool _syncing;        // 源码→表单同步期守卫，防回环
@@ -54,7 +54,7 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
         Links.CollectionChanged += OnLinksCollectionChanged;
     }
 
-    /// <summary>焦点知识对象名称（= .ok 文件名 stem，非表单可编辑字段；供图构建 focal 节点标题）。</summary>
+    /// <summary>焦点知识对象名称（= .md 文件名 stem，非表单可编辑字段；供图构建 focal 节点标题）。</summary>
     public string Name { get; }
 
     [ObservableProperty] private string _kind = string.Empty;
@@ -158,7 +158,7 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
         return $"{dir}/{name}";
     }
 
-    /// <summary>从当前知识对象出发构建出边闭包子图（焦点高亮，沿 targetId 路径读 .ok 文件递归跟出边）。
+    /// <summary>从当前知识对象出发构建出边闭包子图（焦点高亮，沿 targetId 路径读 .md 文件递归跟出边）。
     /// 与 note 版 <see cref="KnowledgeEditViewModel.BuildGraphModel"/> 同构——Build() 重建完整路径存 KnowledgeLink.Target，
     /// <see cref="KnowledgeGraphBuilder.BuildClosure"/> 读 l.Target（路径）→传给 _resolveTargetDef 解析成 (名称,定义)。
     /// 无解析器→空图（图按钮静默无效，view 早返不弹窗）。</summary>

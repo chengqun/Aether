@@ -69,7 +69,7 @@ public partial class DocumentsViewModel : FileTreeVmBase
     [ObservableProperty] private bool _isPreviewOnly;
 
     // —— markdown 上下分栏布局派生属性（镜像 NotesView 的 EditorRow/EditorRowSpan/SplitterVisible 体系）——
-    // md 双栏：上=预览，下=源码；非 md 编辑器跨满。.ok 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏。
+    // md 双栏：上=预览，下=源码；非 md 编辑器跨满。.md 的 SyntaxKey 也映射 markdown，故与 .md 同走预览/源码两栏。
 
     /// <summary>活动 tab 是否 markdown（驱动上下分栏 vs 编辑器跨满）。</summary>
     public bool IsMarkdownMode => ActiveTab?.IsMarkdown ?? false;
@@ -203,7 +203,7 @@ public partial class DocumentsViewModel : FileTreeVmBase
     }
 
     // —— 目录 README 自动解析：点击文件树目录时，自动打开该目录下的 README ——
-    // 按 README 候选扩展名优先级取首个（.md > .markdown）。.ok 知识对象有专门的「知识对象」nav 页，
+    // 按 README 候选扩展名优先级取首个（.md > .markdown）。.md 知识对象有专门的「知识对象」nav 页，
     // 文档页只解析常规 markdown README。
 
     /// <summary>README 候选扩展名（索引即优先级：.md > .markdown）。</summary>

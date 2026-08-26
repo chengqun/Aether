@@ -57,7 +57,7 @@ public partial class WorkspaceView : UserControl
     private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
     private int _notesTabIndex = -1;                 // notes 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显笔记树）
     private int _sourceControlTabIndex = -1;         // sourcecontrol 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 SCM 面板）
-    private int _knowledgeTabIndex = -1;             // knowledge 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 .ok 树）
+    private int _knowledgeTabIndex = -1;             // knowledge 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 .md 树）
     private int _knowledgeScmTabIndex = -1;          // knowledgescm 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显知识库 SCM 面板）
     private INotifyPropertyChanged? _workspaceNpc;   // 订阅 SelectedTabIndex 变化切侧栏显隐（重建时解订阅旧 workspace）
 

@@ -87,7 +87,7 @@ public partial class FileTreeView : UserControl
         if (node.IsFolder)
         {
             // 点击目录：展开/收起仍由 TreeViewItem 默认处理；额外自动打开该目录 README
-            // （.md→markdown 预览；.ok→知识对象表单；无 README 则不动编辑器）。
+            // （.md→markdown 预览；.md→知识对象表单；无 README 则不动编辑器）。
             await _vm.OpenFolderReadmeAsync(node.Path);
             return;
         }

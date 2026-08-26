@@ -8,12 +8,12 @@ using Avalonia.Platform.Storage;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 知识对象页 <c>.ok</c> 树视图（shell 级独立左栏，镜像 <see cref="FileTreeView"/>）。
+/// 知识对象页 <c>.md</c> 树视图（shell 级独立左栏，镜像 <see cref="FileTreeView"/>）。
 /// 占满高度——宽度由外层 <c>LayoutSplit</c> 控制（终端只压右栏编辑器区，不压本树）。
 /// 仅含树头「知识对象 ▾」（打开知识库目录/关闭知识库）+ <see cref="TreeView"/> + 未开知识库空态。
 /// 与 <see cref="KnowledgeObjectsView"/>（右栏表单/源码）共享同一 <see cref="KnowledgeObjectsViewModel"/> 单例——
-/// 树点 <c>.ok</c> 文件/目录 → VM.<c>SelectedNode</c> 双绑变 → VM.<c>OnSelectedNodeChanged</c> 自动
-/// <c>OpenKnowledgeAsync</c>（文件）/ <c>OpenFolderReadmeAsync</c>（目录→该目录 <c>readme.ok</c>）→ 右栏表单/源码刷新
+/// 树点 <c>.md</c> 文件/目录 → VM.<c>SelectedNode</c> 双绑变 → VM.<c>OnSelectedNodeChanged</c> 自动
+/// <c>OpenKnowledgeAsync</c>（文件）/ <c>OpenFolderReadmeAsync</c>（目录→该目录 <c>readme.md</c>）→ 右栏表单/源码刷新
 ///（README 亦在 VM 处理，无需 view 侧 SelectionChanged，区别 FileTreeView 在 view 侧分发）。
 /// </summary>
 public partial class KoTreeView : UserControl
@@ -31,7 +31,7 @@ public partial class KoTreeView : UserControl
         _vm = DataContext as KnowledgeObjectsViewModel;
     }
 
-    // —— 打开知识库目录（文件夹选择器 → VM 扫描 .ok 树）——
+    // —— 打开知识库目录（文件夹选择器 → VM 扫描 .md 树）——
 
     private async void OnOpenFolderClick(object? sender, RoutedEventArgs e)
     {
@@ -48,9 +48,9 @@ public partial class KoTreeView : UserControl
     }
 
     // —— 右键菜单（镜像 FileTreeView，对标 VSCode 资源管理器常用文件操作）——
-    // .ok 树节点是 FileNode（IsFolder 区分文件/文件夹）。共用动作在 FileTreeOps。
+    // .md 树节点是 FileNode（IsFolder 区分文件/文件夹）。共用动作在 FileTreeOps。
     // 节点经 VM.SelectedNode 取（右键时已选中），不依赖菜单项 DataContext（ContextMenu 是 popup，DataContext=VM）。
-    // 「新建知识对象」写带 front-matter 的 .ok 模板；「打开」复用 VM.OnSelectedNodeChanged 的 OpenKnowledgeAsync。
+    // 「新建知识对象」写带 front-matter 的 .md 模板；「打开」复用 VM.OnSelectedNodeChanged 的 OpenKnowledgeAsync。
 
     /// <summary>新知识对象默认内容（与 NoteNodeTypeRegistry.KnowledgeTemplate 同构：kind+links front-matter + body）。</summary>
     private const string OkTemplate = "---\nkind: Entity\nlinks: []\n---\n（在此写知识说明 / 粘贴结构化数据 / 任何 markdown）\n";
@@ -63,7 +63,7 @@ public partial class KoTreeView : UserControl
         var name = await FileTreeOps.PromptNameAsync(parent, "新建知识对象", $"在「{node.Name}」中新建知识对象", "文件名（不含 .md）");
         if (string.IsNullOrWhiteSpace(name)) return;
         var trimmed = name.Trim();
-        var target = Path.Combine(node.Path, trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || trimmed.EndsWith(".ok", StringComparison.OrdinalIgnoreCase)
+        var target = Path.Combine(node.Path, trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
             ? trimmed : trimmed + ".md");
         if (File.Exists(target) || Directory.Exists(target))
         {
@@ -105,7 +105,7 @@ public partial class KoTreeView : UserControl
     private void OnOpenNodeClick(object? sender, RoutedEventArgs e)
     {
         if (_vm?.SelectedNode is not { } node) return;
-        // 复用选中→打开语义：重设 SelectedNode 触发 VM.OnSelectedNodeChanged（.ok→OpenKnowledgeAsync；目录→README）
+        // 复用选中→打开语义：重设 SelectedNode 触发 VM.OnSelectedNodeChanged（.md→OpenKnowledgeAsync；目录→README）
         _vm.SelectedNode = node;
     }
 

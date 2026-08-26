@@ -3,6 +3,7 @@ using Acme.ApkParser.AI;
 using Acme.Agents.AI;
 using Acme.Desktop.Mvvm;
 using Aether.AI.Harness.Agents;
+using Aether.AI.Harness.Tools;
 using Aether.AI.Harness.Scripting;
 using Aether.AI.Core.Agents;
 using Aether.AI.Hosting;
@@ -31,7 +32,6 @@ using Acme.Notes.Application.DependencyInjection;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;
 using Acme.SystemTools.AI;
-using Aether.AI.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 
@@ -127,7 +127,9 @@ public static class DesktopCompositionExtensions
         services.AddDeviceManagementApplication();
 
         // —— 公共 AI 工具（两租户共用）——
-        aether.AddSystemTools().AddApkParserTools().AddNotesTools();
+        // 注：不再 AddNotesTools()——note 节点降级为其侧边栏纯文本功能，AI 不直接读写 note；
+        // 知识对象 AI 读写在 labs 文件版（AddDocumentKnowledgeTool，见下）。
+        aether.AddSystemTools().AddApkParserTools();
         // 长期记忆工具（recall_memory/save_memory）：把 IMemoryStore 暴露为显式工具。代码规则大脑经此获取
         // 跨会话记忆（其不接 MemoryContextProvider 注入式 NL）；LLM agent 亦可显式存/查，与自动注入互补。
         aether.AddMemoryTools();
@@ -145,12 +147,16 @@ public static class DesktopCompositionExtensions
         // ICurrentProjectDirectoryProvider（DocumentsViewModel.RootPath 变化时回写）取真实目录。标 Safe（只读）。
         services.AddSingleton<ICurrentProjectDirectoryProvider, CurrentProjectDirectoryProvider>();
         // 知识库目录持有者（独立单例，与项目目录 provider 解耦）：知识对象页打开知识库目录时写入，
-        // DocumentKnowledgeTool 读取找 .ok。独立单例避免知识库目录覆盖项目目录（SCM/终端/活动页订阅）。
-        services.AddSingleton<IKnowledgeDirectoryProvider, KnowledgeDirectoryProvider>();
+        // DocumentKnowledgeTool 读取找 .md。独立单例避免知识库目录覆盖项目目录（SCM/终端/活动页订阅）。
+        // 知识库目录 = labs 根（默认 <tenantDir>/labs）。DefaultRoot 供页面/目录源在「无已持久化目录」时回退打开。
+        services.AddSingleton<IKnowledgeDirectoryProvider>(sp => new KnowledgeDirectoryProvider
+        {
+            DefaultRoot = Path.Combine(tenantDir, "labs"),
+        });
         services.AddSingleton<Acme.Desktop.Mvvm.Git.IGitService, Acme.Desktop.Mvvm.Git.GitService>();
         aether.AddCurrentDirectoryTool();
 
-        // 文档版知识对象工具（.ok 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .ok 文件
+        // 文档版知识对象工具（.md 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .md 文件
         // （note 版操作 note 节点）。需知识库目录（独立于项目目录）→ 宿主层注册（ai/ 不可引 apps 层）。
         aether.AddDocumentKnowledgeTool();
 
@@ -199,6 +205,33 @@ public static class DesktopCompositionExtensions
         // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
+        // —— labs 目录版 catalog（权威）：Agent/Workflow 读写 <tenantDir>/labs/* 文件，而非 note 节点。
+        // 后注册覆盖上面 note 版 ICustomAgentCatalog/ICustomWorkflowCatalog（MS DI 末位生效）。note 版保留不删
+        // （可回滚：删掉这几行即回到 note 版），但桌面端默认切到目录版。运行器/页面经接口解析无感知。
+        // labs 根经 Func<string?> 注入（DirectoryAgentCatalog 在 ai/Agents，不能引 apps 层）。
+        services.AddSingleton<ICustomAgentCatalog>(sp =>
+            new DirectoryAgentCatalog(
+                () => sp.GetRequiredService<IKnowledgeDirectoryProvider>().CurrentDirectory
+                      ?? sp.GetRequiredService<IKnowledgeDirectoryProvider>().DefaultRoot,
+                sp.GetRequiredService<ToolRegistry>(),
+                sp.GetRequiredService<IModelSource>(),
+                sp.GetRequiredService<IAgentSourceParser>(),
+                sp.GetRequiredService<IRuleSourceParser>(),
+                sp.GetRequiredService<ICodeSourceParser>(),
+                sp.GetRequiredService<RuleRegistry>()));
+        services.AddSingleton<ICustomWorkflowCatalog>(sp =>
+            new DirectoryWorkflowCatalog(
+                () => sp.GetRequiredService<IKnowledgeDirectoryProvider>().CurrentDirectory
+                      ?? sp.GetRequiredService<IKnowledgeDirectoryProvider>().DefaultRoot,
+                sp.GetRequiredService<IWorkflowSourceParser>()));
+        // —— 策略/代码规则/Lean 算法读源也切 labs 目录（INoteCatalogSource 换注册为目录版，绑 labs 根）。
+        // StrategyNoteSource/CodeNoteSource/LeanAlgorithmNoteSource 依赖 INoteCatalogSource，换注册即自动从 labs 文件读。
+        services.AddSingleton<Acme.Notes.Domain.Catalog.INoteCatalogSource>(sp =>
+        {
+            var labs = sp.GetRequiredService<IKnowledgeDirectoryProvider>();
+            return new Acme.Notes.Infrastructure.Catalog.DirectoryNoteCatalogSource(
+                () => labs.CurrentDirectory ?? labs.DefaultRoot);
+        });
         // 笔记表单编辑 VM 工厂（按 NoteNodeType 派发，替代 NotesView 的 if 链）。每个 form 类型一个。
         services.AddSingleton<INoteNodeEditVmFactory, AgentEditVmFactory>();
         services.AddSingleton<INoteNodeEditVmFactory, RuleEditVmFactory>();

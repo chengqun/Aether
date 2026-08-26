@@ -18,8 +18,8 @@ public partial class DocumentTab : ObservableObject
     /// <summary>语法 key（csharp/python/json/yaml…），null=纯文本。驱动 AvaloniaEdit 高亮。</summary>
     public string? SyntaxKey { get; }
 
-    /// <summary>是否 markdown 文件（驱动预览切换按钮可见性）。.ok 的 SyntaxKey 也映射到 markdown，
-    /// 故 .ok 在文档页与 .md 一样走上下两栏 markdown 预览/源码（知识对象有专门的「知识对象」nav 页打开表单）。</summary>
+    /// <summary>是否 markdown 文件（驱动预览切换按钮可见性）。.md 的 SyntaxKey 也映射到 markdown，
+    /// 故 .md 在文档页与 .md 一样走上下两栏 markdown 预览/源码（知识对象有专门的「知识对象」nav 页打开表单）。</summary>
     public bool IsMarkdown => string.Equals(SyntaxKey, "markdown", StringComparison.OrdinalIgnoreCase);
 
     [ObservableProperty] private string _content;

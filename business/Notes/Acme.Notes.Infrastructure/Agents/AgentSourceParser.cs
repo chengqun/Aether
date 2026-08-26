@@ -86,6 +86,9 @@ public sealed class AgentSourceParser : IAgentSourceParser
 
             switch (key)
             {
+                case "id":
+                    if (Guid.TryParse(value, out var gid)) result.Id = gid;
+                    break;
                 case "name":
                     result.Name = value;
                     break;
@@ -235,6 +238,7 @@ public sealed class AgentSourceParser : IAgentSourceParser
             : "auto_approval_rules: [" + string.Join(",", autoRulesList.Select(n => $"\"{n}\"")) + "]";
 
         return $@"---
+id: {f.Id}
 name: {f.Name}
 description: {f.Description}
 category: {f.Category}

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
@@ -15,13 +16,13 @@ using AvaloniaEdit.Folding;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 「知识对象」页视图（文档版 <c>.ok</c> 知识对象 nav 页）。左 <c>.ok</c> 树 + 右上下两栏
+/// 「知识对象」页视图（文档版 <c>.md</c> 知识对象 nav 页）。左 <c>.md</c> 树 + 右上下两栏
 ///（上=<see cref="DocumentKnowledgeView"/> 表单，下=<see cref="AvaloniaEdit.TextEditor"/> YAML/markdown 源码）。
-/// 表单↔源码双向同步照 <see cref="DocumentsEditorView"/> 的 <c>.ok</c> 同步范式：
+/// 表单↔源码双向同步照 <see cref="DocumentsEditorView"/> 的 <c>.md</c> 同步范式：
 /// View 持 <c>_syncing</c> 守卫——表单→源码（<see cref="KnowledgeObjectsViewModel.KnowledgeSourceUpdated"/>）设
 /// <c>CodeEditor.Text</c> 时早返 <c>OnCodeEditorTextChanged</c>；源码→表单（<c>OnCodeEditorTextChanged</c>）调
-/// <see cref="KnowledgeObjectsViewModel.SyncKnowledgeFromSource"/>，VM 内 <c>_syncing</c> 不回环。
-/// <c>.ok</c> 语法=markdown（经 <see cref="SyntaxMap"/>），编辑器配置/高亮/折叠/双配色委托 <see cref="CodeEditorSetup"/>。
+/// <see cref="KnowledgeObjectsViewModel.SyncFromSource"/>，VM 内 <c>_syncing</c> 不回环。
+/// <c>.md</c> 语法=markdown（经 <see cref="SyntaxMap"/>），编辑器配置/高亮/折叠/双配色委托 <see cref="CodeEditorSetup"/>。
 /// </summary>
 public partial class KnowledgeObjectsView : UserControl
 {
@@ -30,8 +31,12 @@ public partial class KnowledgeObjectsView : UserControl
     private bool _layoutPersistWired;
     private FoldingManager? _foldingManager;
 
-    /// <summary>.ok 文件语法 key（经 SyntaxMap → markdown，供 AvaloniaEdit 高亮/折叠）。</summary>
-    private static readonly string OkSyntax = SyntaxMap.SyntaxForExtension(".ok");
+    /// <summary>当前活动文件的语法 key（按扩展名经 SyntaxMap，供 AvaloniaEdit 高亮/折叠）。</summary>
+    private string CurrentSyntax()
+    {
+        var ext = Path.GetExtension(_vm?.SelectedNode?.Path ?? "");
+        return SyntaxMap.SyntaxForExtension(ext) ?? "markdown";
+    }
 
     public KnowledgeObjectsView()
     {
@@ -46,11 +51,11 @@ public partial class KnowledgeObjectsView : UserControl
             CodeEditorSetup.ConfigureAppearance(CodeEditor);
             SyncEditor();
         };
-        // 主题明暗切换 + 主题 JSON 换肤时重染编辑器（.ok=markdown 高亮随两信号重设）。
+        // 主题明暗切换 + 主题 JSON 换肤时重染编辑器（.md=markdown 高亮随两信号重设）。
         CodeEditorSetup.WireThemeReapply(CodeEditor, () =>
         {
             CodeEditorSetup.ApplyTheme(CodeEditor);
-            CodeEditorSetup.ApplyHighlighting(CodeEditor, OkSyntax);
+            CodeEditorSetup.ApplyHighlighting(CodeEditor, CurrentSyntax());
         });
         this.Loaded += (_, _) =>
         {
@@ -137,30 +142,30 @@ public partial class KnowledgeObjectsView : UserControl
         _syncing = true;
         try { CodeEditor.Text = newSource; }
         finally { _syncing = false; }
-        CodeEditorSetup.ApplyHighlighting(CodeEditor, OkSyntax);
-        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, OkSyntax);
+        CodeEditorSetup.ApplyHighlighting(CodeEditor, CurrentSyntax());
+        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, CurrentSyntax());
     }
 
-    /// <summary>外部（agent/外部编辑器）写盘后当前 .ok 透明重载：刷新编辑器 + 重解析表单。
+    /// <summary>外部（agent/外部编辑器）写盘后当前 .md 透明重载：刷新编辑器 + 重解析表单。
     /// SyncEditor 走 _syncing 不触发表单同步路径，须显式补 SyncFromSource。</summary>
     private void OnKnowledgeExternallyReloaded()
     {
         if (_syncing) return;
         SyncEditor();
-        _vm?.SyncKnowledgeFromSource(_vm.CurrentSource);
+        _vm?.SyncFromSource(_vm.CurrentSource);
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(KnowledgeObjectsViewModel.ActiveKnowledgeVm))
+        if (e.PropertyName == nameof(KnowledgeObjectsViewModel.ActiveEditVm))
             SyncEditor();
     }
 
-    /// <summary>把活动 .ok 源码载入编辑器并按 markdown 语法设高亮 + 折叠。</summary>
+    /// <summary>把活动 .md 源码载入编辑器并按 markdown 语法设高亮 + 折叠。</summary>
     private void SyncEditor()
     {
         var vm = _vm;
-        var hasActive = vm?.HasActiveKnowledge ?? false;
+        var hasActive = vm?.HasActiveEdit ?? false;
         if (CodeEditor is not null)
             CodeEditor.IsVisible = hasActive;
         if (!hasActive) return;
@@ -173,16 +178,16 @@ public partial class KnowledgeObjectsView : UserControl
         _syncing = true;
         try { CodeEditor.Text = vm?.CurrentSource ?? ""; }
         finally { _syncing = false; }
-        CodeEditorSetup.ApplyHighlighting(CodeEditor, OkSyntax);
-        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, OkSyntax);
+        CodeEditorSetup.ApplyHighlighting(CodeEditor, CurrentSyntax());
+        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, CurrentSyntax());
     }
 
     private void OnCodeEditorTextChanged(object? sender, EventArgs e)
     {
         if (_syncing || _vm is null) return;
         // 源码→表单：用户在下栏编辑源码→更新 VM CurrentSource + 置 dirty + 重解析回填表单（VM _syncing 守卫不回环）
-        _vm.SyncKnowledgeFromSource(CodeEditor.Text ?? "");
-        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, OkSyntax);
+        _vm.SyncFromSource(CodeEditor.Text ?? "");
+        CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, CurrentSyntax());
     }
 
     /// <summary>Ctrl+滚轮缩放编辑器字体（VSCode 风，8~48，持久化 ko.editorFontSize）。</summary>

@@ -19,9 +19,6 @@
           <Button Classes="top-tab" Content="连接器" Command="{Binding ShowConnectorTabCommand}"
                   IsEnabled="{Binding !IsConnectorTab}" Padding="12,4" FontSize="13"
                   IsVisible="{Binding HasConnector}" />
-          <Button Classes="top-tab" Content="市场" Command="{Binding ShowMarketTabCommand}"
-                  IsEnabled="{Binding !IsMarketTab}" Padding="12,4" FontSize="13"
-                  IsVisible="{Binding CanShowMarket}" />
           <Button Classes="top-tab" Content="MCP工具" Command="{Binding ShowMcpTabCommand}"
                   IsEnabled="{Binding !IsMcpTab}" Padding="12,4" FontSize="13" />
           <Button Classes="top-tab" Content="技能" Command="{Binding ShowSkillTabCommand}"
@@ -182,91 +179,6 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-      </ScrollViewer>
-    </Panel>
-
-    <!-- ===== 市场面板 ===== -->
-    <Panel IsVisible="{Binding IsMarketTab}">
-      <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel>
-          <!-- 加载/状态 -->
-          <TextBlock Text="{Binding MarketStatus}" FontSize="12"
-                     Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"
-                     IsVisible="{Binding MarketStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-
-          <!-- 空状态 -->
-          <Border Classes="empty-state" IsVisible="{Binding !MarketplaceAgents.Count}" Margin="0,40">
-            <StackPanel Spacing="8">
-              <Path Data="{x:Static shell:Codicons.Megaphone}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-              <TextBlock Text="市场暂无 agent" FontSize="15" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
-              <TextBlock Text="服务端未就绪时无法拉取列表" FontSize="12"
-                         Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-            </StackPanel>
-          </Border>
-
-          <!-- 市场卡片 -->
-          <ItemsControl ItemsSource="{Binding MarketplaceAgents}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Border Classes="card" Width="300">
-                  <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Path Data="{x:Static shell:Codicons.Hubot}" Stretch="Uniform" Width="18" Height="18" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                      <TextBlock Text="{Binding AgentName}" FontSize="15" FontWeight="SemiBold"
-                                 Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" />
-                      <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource SuccessBgBrush}" VerticalAlignment="Center"
-                              IsVisible="{Binding IsSummoned}">
-                        <TextBlock Text="已召唤" FontSize="9" Foreground="{DynamicResource SuccessBrush}" />
-                      </Border>
-                      <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource DangerBgBrush}" VerticalAlignment="Center"
-                              IsVisible="{Binding HasUpdate}">
-                        <TextBlock Text="有更新" FontSize="9" Foreground="{DynamicResource DangerBrush}" />
-                      </Border>
-                    </StackPanel>
-                    <TextBlock Text="{Binding Description}" FontSize="12"
-                               Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Border CornerRadius="4" Padding="6,1" Background="{DynamicResource AccentTintBgBrush}">
-                        <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
-                      </Border>
-                      <TextBlock Text="{Binding CreatorUserName}" FontSize="10"
-                                 Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
-                      <Button Content="召唤" Classes="primary"
-                              Command="{Binding DataContext.SummonFromMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              CommandParameter="{Binding}"
-                              Padding="12,4" FontSize="12"
-                              IsVisible="{Binding !IsSummoned}" />
-                      <Button Content="重新召唤"
-                              Command="{Binding DataContext.SummonFromMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              CommandParameter="{Binding}"
-                              Padding="12,4" FontSize="12"
-                              IsVisible="{Binding IsSummoned}" />
-                      <Button Content="检查更新"
-                              Command="{Binding DataContext.CheckUpdateMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              CommandParameter="{Binding}"
-                              Padding="12,4" FontSize="12"
-                              IsVisible="{Binding IsSummoned}" />
-                      <Button Content="移除"
-                              Command="{Binding DataContext.RemoveMarketplaceAgentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              CommandParameter="{Binding}"
-                              Padding="12,4" FontSize="12"
-                              IsVisible="{Binding IsSummoned}" />
-                    </StackPanel>
-                  </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
       </ScrollViewer>
     </Panel>
 

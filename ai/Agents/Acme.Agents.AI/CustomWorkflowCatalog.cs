@@ -1,33 +1,36 @@
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
+using Acme.Notes.Domain.Catalog;
 
 namespace Acme.Agents.AI;
 
 /// <summary>
-/// <see cref="ICustomWorkflowCatalog"/> 默认实现：用 <see cref="INoteService"/> 持久化、
-/// <see cref="IWorkflowSourceParser"/> JSON 序列化。
+/// <see cref="ICustomWorkflowCatalog"/> 默认实现：用 <see cref="INoteService"/> 持久化（写路径）、
+/// 经 <see cref="INoteCatalogSource"/> 读取（可切目录源）、<see cref="IWorkflowSourceParser"/> JSON 序列化。
 /// </summary>
 public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
 {
     private readonly INoteService _notes;
+    private readonly INoteCatalogSource _source;
     private readonly IWorkflowSourceParser _workflowParser;
 
-    public CustomWorkflowCatalog(INoteService notes, IWorkflowSourceParser workflowParser)
+    public CustomWorkflowCatalog(INoteService notes, INoteCatalogSource source, IWorkflowSourceParser workflowParser)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
+        _source = source ?? throw new ArgumentNullException(nameof(source));
         _workflowParser = workflowParser ?? throw new ArgumentNullException(nameof(workflowParser));
     }
 
     public async Task<IReadOnlyList<CustomWorkflowDefinition>> ListAsync(CancellationToken ct = default)
     {
-        var all = await _notes.GetAllAsync(ct);
+        var all = await _source.EnumerateAsync(NoteNodeType.Workflow, ct);
         var result = new List<CustomWorkflowDefinition>();
-        foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Workflow))
+        foreach (var note in all)
         {
             if (_workflowParser.TryParse(note.Content, out var def, out _) && def is not null)
             {
-                def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
+                def.Id = Guid.TryParse(note.ExternalId, out var gid) ? gid : Guid.NewGuid();
                 result.Add(def);
             }
         }
@@ -36,7 +39,7 @@ public sealed class CustomWorkflowCatalog : ICustomWorkflowCatalog
 
     public async Task<CustomWorkflowDefinition?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        var note = await _notes.GetAsync(id.ToString(), ct);
+        var note = await _source.FindByExternalIdAsync(id.ToString(), ct);
         if (note is null || note.NodeType != NoteNodeType.Workflow) return null;
         if (!_workflowParser.TryParse(note.Content, out var def, out _) || def is null) return null;
         def.Id = id;

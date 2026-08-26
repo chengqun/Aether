@@ -58,7 +58,7 @@ public sealed class ActivityReportService : IActivityReportService
                 commits = history.Select(n => n.Info).Where(c => c.When >= fromDto && c.When < toDto).ToList();
             }
 
-            // 知识对象变更：知识库目录（.ok 文件所在，独立于项目目录）的 git 提交历史。同路径防双计。
+            // 知识对象变更：知识库目录（.md 文件所在，独立于项目目录）的 git 提交历史。同路径防双计。
             var knowledgeCommits = new List<CommitInfo>();
             if (git is not null && !string.IsNullOrEmpty(knowledgeDir)
                 && !string.Equals(knowledgeDir, projectDir, StringComparison.OrdinalIgnoreCase)
@@ -146,7 +146,7 @@ public sealed class ActivityReportService : IActivityReportService
 
     private const string ReportSystemPrompt =
         """"
-        你是日报/周报撰写助手。用户会给你一段时间内的 Agent 执行记录、Git 提交记录与知识对象变更记录（机器汇总的活动数据，其中「知识对象变更」是知识库目录的 git 提交，反映对 .ok 知识对象的增改）。
+        你是日报/周报撰写助手。用户会给你一段时间内的 Agent 执行记录、Git 提交记录与知识对象变更记录（机器汇总的活动数据，其中「知识对象变更」是知识库目录的 git 提交，反映对 .md 知识对象的增改）。
         请基于这些数据生成一份结构化中文报告：
 
         ## 今日完成（或本周完成）

@@ -50,7 +50,7 @@ public static class DesktopToolRegistrations
     }
 
     /// <summary>
-    /// 文档版知识对象工具（.ok 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .ok 文件
+    /// 文档版知识对象工具（.md 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .md 文件
     /// （note 版操作 note 节点）。宿主层注册（ai/ 不可引 apps 层 IKnowledgeDirectoryProvider）。
     /// List/Read 只读标 Safe；Create/Update 写盘标 Confirm（对齐 note 版）。解析/序列化复用 IDocumentKnowledgeSourceParser。
     /// </summary>
@@ -59,25 +59,25 @@ public static class DesktopToolRegistrations
         aether.Services.AddTransient<DocumentKnowledgeTool>();
         aether.ConfigureToolRegistry(reg =>
         {
-            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.ok 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在知识对象页打开知识库目录。", "文档知识",
+            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在知识对象页打开知识库目录。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ListDocumentKnowledgeObjects))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ListDocumentKnowledgeObjects"),
                 ToolApprovalLevel.Safe);
-            reg.Register("ReadDocumentKnowledgeObject", "按相对路径读取一个文档知识对象（.ok）的完整定义：kind+正文+links 指向的子 .ok 文件内容（只展开一层）。name=相对路径不含 .ok（如 业务分析/退款会员日志分析）。先调此工具获取知识再执行。", "文档知识",
+            reg.Register("ReadDocumentKnowledgeObject", "按相对路径读取一个文档知识对象（.md）的完整定义：kind+正文+links 指向的子 .md 文件内容（只展开一层）。name=相对路径不含 .md（如 业务分析/退款会员日志分析）。先调此工具获取知识再执行。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ReadDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ReadDocumentKnowledgeObject"),
                 ToolApprovalLevel.Safe);
-            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.ok 文件）。name=相对路径不含扩展名，将创建 <知识库目录>/<name>.ok。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
+            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.md 文件）。name=相对路径不含扩展名，将创建 <知识库目录>/<name>.md。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.CreateDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "CreateDocumentKnowledgeObject"),
                 ToolApprovalLevel.Confirm);
-            reg.Register("UpdateDocumentKnowledgeObject", "更新一个文档知识对象（.ok 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。links 全量替换。", "文档知识",
+            reg.Register("UpdateDocumentKnowledgeObject", "更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。links 全量替换。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.UpdateDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),

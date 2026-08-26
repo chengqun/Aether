@@ -5,12 +5,12 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace Acme.Notes.Infrastructure.Knowledge;
 
 /// <summary>
-/// <see cref="IDocumentKnowledgeSourceParser"/> 实现：文档版（<c>.ok</c> 文件）知识对象源码解析。
+/// <see cref="IDocumentKnowledgeSourceParser"/> 实现：文档版（<c>.md</c> 文件）知识对象源码解析。
 /// 镜像 <see cref="KnowledgeSourceParser"/> 的 front-matter 拆分逻辑，但 links DTO 把 <c>targetId</c>/<c>target</c>
-/// 都当**字符串**读——文档版 <c>targetId</c> 是指向项目内另一个 <c>.ok</c> 文件的**相对路径**
+/// 都当**字符串**读——文档版 <c>targetId</c> 是指向项目内另一个 <c>.md</c> 文件的**相对路径**
 /// （如 <c>Hive表/fin_dw.dwd_xxx</c>），不是 note 节点 Guid。复用 <see cref="KnowledgeObjectDefinition"/>
 /// 作为内存模型：相对路径存入 <see cref="KnowledgeLink.Target"/>，<see cref="KnowledgeLink.TargetId"/> 留 <c>null</c>。
-/// 序列化把路径写回 <c>targetId</c> 字段，保持用户既有 <c>.ok</c> 文件格式（round-trip 稳定）。
+/// 序列化把路径写回 <c>targetId</c> 字段，保持用户既有 <c>.md</c> 文件格式（round-trip 稳定）。
 /// </summary>
 public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourceParser
 {
@@ -101,7 +101,7 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
               : string.Empty,
     };
 
-    /// <summary>Domain→DTO：路径写回 targetId 字段（保持用户既有 .ok 格式；target 字段留空避免冗余）。</summary>
+    /// <summary>Domain→DTO：路径写回 targetId 字段（保持用户既有 .md 格式；target 字段留空避免冗余）。</summary>
     private static DocumentKnowledgeLinkDto ToDtoLink(KnowledgeLink l) => new()
     {
         Role = l.Role ?? string.Empty,

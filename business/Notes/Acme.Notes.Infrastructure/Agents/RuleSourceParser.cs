@@ -66,6 +66,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
 
         definition = new CustomAgentDefinition
         {
+            Id = doc.Id ?? Guid.Empty,
             Name = doc.Name!,
             Description = doc.Description ?? string.Empty,
             Category = string.IsNullOrWhiteSpace(doc.Category) ? "规则" : doc.Category!,
@@ -88,6 +89,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
 
         var doc = new RuleDoc
         {
+            Id = def.Id == Guid.Empty ? null : def.Id,
             Name = def.Name,
             Description = def.Description,
             Category = def.Category,
@@ -126,6 +128,7 @@ public sealed class RuleSourceParser : IRuleSourceParser
 
     private sealed class RuleDoc
     {
+        public Guid? Id { get; set; }
         public string? Name { get; set; }
         public string? Description { get; set; }
         public string? Category { get; set; }

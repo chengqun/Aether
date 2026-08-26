@@ -19,8 +19,8 @@
     </Style>
   </UserControl.Styles>
 
-  <!-- 知识对象右栏（左 .ok 树在 LeftTree 切换层 KoTreeView，按 knowledge tab 切显隐，镜像文档页 FileTreeView+DocumentsEditorView）。
-       状态条 + 上下两栏（上=表单，下=源码）。 -->
+  <!-- labs 右栏（左树在 LeftTree 切换层 KoTreeView，按 labs tab 切显隐）。
+       状态条 + 上下两栏（上=按类型切换的表单，下=源码）。 -->
   <Grid RowDefinitions="Auto,*">
     <!-- 状态条：dirty 指示 + 名称 + 状态消息 + 保存 -->
     <Border Grid.Row="0" Background="{DynamicResource SidebarBgBrush}"
@@ -38,16 +38,16 @@
         <Path DockPanel.Dock="Left" Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform"
               Width="8" Height="8" Margin="0,0,6,0" Fill="{DynamicResource AccentBrush}"
               IsVisible="{Binding IsDirty}" VerticalAlignment="Center"/>
-        <TextBlock Text="{Binding ActiveKnowledgeVm.Name}" TextTrimming="CharacterEllipsis"
+        <TextBlock Text="{Binding SelectedNode.Name}" TextTrimming="CharacterEllipsis"
                    VerticalAlignment="Center" FontWeight="SemiBold"
-                   IsVisible="{Binding HasActiveKnowledge}"/>
-        <TextBlock Text="选择左侧 .md 文件查看知识对象" VerticalAlignment="Center"
+                   IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}"/>
+        <TextBlock Text="选择左侧文件打开对应编辑器" VerticalAlignment="Center"
                    Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                   IsVisible="{Binding !HasActiveKnowledge}"/>
+                   IsVisible="{Binding !EditorVisible}"/>
       </DockPanel>
     </Border>
 
-    <!-- 上下两栏：上=表单，下=源码（镜像 DocumentsEditorView .ok 双栏） -->
+    <!-- form 类型：上下两栏（上=表单，下=源码）；代码类型：全宽源码 -->
     <Grid Grid.Row="1" x:Name="EditorGrid">
       <Grid.RowDefinitions>
         <RowDefinition Height="*"/>
@@ -55,13 +55,30 @@
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
 
-      <!-- 上栏：知识对象表单（复用 DocumentKnowledgeView，零改） -->
-      <shell:DocumentKnowledgeView Grid.Row="0"
-                                   DataContext="{Binding ActiveKnowledgeVm}"
-                                   IsVisible="{Binding HasActiveKnowledge}"/>
+      <!-- 上栏：按类型切换的表单（镜像 NotesEditorView 的按类型 Border 切换） -->
+      <Grid Grid.Row="0" IsVisible="{Binding RightPaneVisible}">
+        <Border IsVisible="{Binding IsAgentNode}">
+          <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <Border IsVisible="{Binding IsRuleNode}">
+          <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <Border IsVisible="{Binding IsCodeRuleNode}">
+          <shell:RuleEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <Border IsVisible="{Binding IsWorkflowNode}">
+          <shell:WorkflowEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <Border IsVisible="{Binding IsStrategyNode}">
+          <shell:StrategyEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <Border IsVisible="{Binding IsKnowledgeNode}">
+          <shell:DocumentKnowledgeView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+      </Grid>
 
-      <!-- 中：上下分隔条 -->
-      <GridSplitter Grid.Row="1" IsVisible="{Binding HasActiveKnowledge}"
+      <!-- 中：上下分隔条（仅 form 类型） -->
+      <GridSplitter Grid.Row="1" IsVisible="{Binding SplitterVisible}"
                     Height="4" HorizontalAlignment="Stretch"
                     Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
 
@@ -73,15 +90,15 @@
                          FontSize="{Binding EditorFontSize}"
                          Background="Transparent" Margin="8,6"
                          IsReadOnly="False"
-                         IsVisible="{Binding HasActiveKnowledge}"/>
-        <Border Background="{DynamicResource CardBgBrush}" IsVisible="{Binding !HasActiveKnowledge}">
+                         IsVisible="{Binding EditorVisible}"/>
+        <Border Background="{DynamicResource CardBgBrush}" IsVisible="{Binding !EditorVisible}">
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                       Spacing="10" Opacity="0.6">
             <Path Data="{x:Static shell:Codicons.Collection}" Stretch="Uniform" Width="36" Height="36"
                   HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock Text="知识对象（.md 文件）" FontSize="14"
+            <TextBlock Text="labs（九类节点）" FontSize="14"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock Text="跨项目复用的知识资产；左树点 .md → 上栏表单 + 下栏 YAML 源码" FontSize="12"
+            <TextBlock Text="左树按目录分组；点文件 → 对应编辑器（表单/源码）" FontSize="12"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
           </StackPanel>
         </Border>

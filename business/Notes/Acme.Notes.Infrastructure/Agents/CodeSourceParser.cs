@@ -88,6 +88,9 @@ public sealed class CodeSourceParser : ICodeSourceParser
 
             switch (key)
             {
+                case "id":
+                    if (Guid.TryParse(value, out var gid)) result.Id = gid;
+                    break;
                 case "name":
                     result.Name = value;
                     break;
@@ -171,6 +174,7 @@ public sealed class CodeSourceParser : ICodeSourceParser
             : "tool_approvals: " + System.Text.Json.JsonSerializer.Serialize(f.ToolApprovals);
 
         return $@"---
+id: {f.Id}
 name: {f.Name}
 description: {f.Description}
 category: {f.Category}

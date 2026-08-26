@@ -5,7 +5,7 @@
              Background="{DynamicResource CardBgBrush}">
 
   <UserControl.Resources>
-    <!-- .ok 树节点模板（镜像 FileTreeView/FileNodeTemplate，纯 .ok 知识对象树）。 -->
+    <!-- .md 树节点模板（镜像 FileTreeView/FileNodeTemplate，纯 .md 知识对象树）。 -->
     <TreeDataTemplate x:Key="FileNodeTemplate" ItemsSource="{Binding Children}">
       <Grid ColumnDefinitions="Auto,*" Background="Transparent">
         <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
@@ -42,17 +42,17 @@
 
   <!-- shell 级独立左栏（占满高度，宽度由外层 LayoutSplit 控制——终端只压右栏编辑器区不压本树，同 FileTreeView）。
        树头「知识对象 ▾」打开/关闭知识库目录。与 KnowledgeObjectsView（右栏）共享同一 KnowledgeObjectsViewModel 单例——
-       树点 .ok → VM.SelectedNode 变 → VM.OnSelectedNodeChanged 自动 OpenKnowledgeAsync → 右栏表单/源码刷新。 -->
+       树点 .md → VM.SelectedNode 变 → VM.OnSelectedNodeChanged 自动 OpenKnowledgeAsync → 右栏表单/源码刷新。 -->
   <Border Background="{DynamicResource CardBgBrush}"
           BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
     <Grid RowDefinitions="Auto,*">
       <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
         <Menu Classes="ko-menu">
-          <MenuItem Header="知识对象" Classes="ko-menu-item">
-            <MenuItem Header="打开知识库目录" Click="OnOpenFolderClick">
+          <MenuItem Header="labs" Classes="ko-menu-item">
+            <MenuItem Header="打开 labs 目录" Click="OnOpenFolderClick">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="关闭知识库" Command="{Binding CloseProjectCommand}"
+            <MenuItem Header="关闭 labs" Command="{Binding CloseProjectCommand}"
                       IsEnabled="{Binding HasRoot}">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
@@ -63,7 +63,7 @@
                 ItemsSource="{Binding Roots}"
                 SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                 ItemTemplate="{StaticResource FileNodeTemplate}">
-        <!-- 右键菜单（镜像 FileTreeView，对标 VSCode 常用文件操作）。.ok 树「新建文件」= 新知识对象。
+        <!-- 右键菜单（镜像 FileTreeView，对标 VSCode 常用文件操作）。.md 树「新建文件」= 新知识对象。
              文件夹才有「新建」，文件才有「打开」；菜单 DataContext 继承当前节点的 FileNode。 -->
         <TreeView.ContextMenu>
           <!-- 绑定 VM.SelectedNode（右键时已选中该节点），菜单项 DataContext 继承 TreeView=VM 非 TreeViewItem——
@@ -110,9 +110,9 @@
                   IsVisible="{Binding !HasRoot}" Spacing="8">
         <Path Data="{x:Static shell:Codicons.Collection}" Stretch="Uniform" Width="36" Height="36"
               HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}" Opacity="0.5"/>
-        <TextBlock Text="未打开知识库目录" FontSize="13" HorizontalAlignment="Center"
+        <TextBlock Text="未打开 labs 目录" FontSize="13" HorizontalAlignment="Center"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-        <TextBlock Text="「知识对象 ▾ 打开知识库目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
+        <TextBlock Text="「labs ▾ 打开 labs 目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>
       </StackPanel>
     </Grid>

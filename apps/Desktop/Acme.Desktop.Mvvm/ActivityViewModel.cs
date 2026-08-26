@@ -112,7 +112,7 @@ public partial class ActivityViewModel : ObservableObject
                 commits = history.Select(n => n.Info).Where(c => c.When >= fromDto).ToList();
             }
 
-            // 知识对象变更维度：知识库目录（.ok 文件所在，独立于项目目录）的 git 提交历史。
+            // 知识对象变更维度：知识库目录（.md 文件所在，独立于项目目录）的 git 提交历史。
             // 同路径防双计——用户可能把知识库目录指向项目目录，commits 已计入项目维度。
             var knowledgeCommits = new List<CommitInfo>();
             if (git is not null && !string.IsNullOrEmpty(_knowledgeDir)

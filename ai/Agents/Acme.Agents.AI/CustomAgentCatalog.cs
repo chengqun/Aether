@@ -1,6 +1,7 @@
 using Acme.Notes.Application;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
+using Acme.Notes.Domain.Catalog;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Tools;
 
@@ -14,7 +15,8 @@ namespace Acme.Agents.AI;
 /// </summary>
 public sealed class CustomAgentCatalog : ICustomAgentCatalog
 {
-    private readonly INoteService _notes;
+    private readonly INoteService _notes;        // 写路径（Save/Delete/Create）仍走 SQLite
+    private readonly INoteCatalogSource _source; // 读路径（List/Get）走抽象，可切换目录源
     private readonly ToolRegistry _toolRegistry;
     private readonly IModelSource _modelSource;
     private readonly IAgentSourceParser _agentParser;
@@ -22,9 +24,10 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
     private readonly ICodeSourceParser _codeParser;
     private readonly RuleRegistry _ruleRegistry;
 
-    public CustomAgentCatalog(INoteService notes, ToolRegistry toolRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, ICodeSourceParser codeParser, RuleRegistry ruleRegistry)
+    public CustomAgentCatalog(INoteService notes, INoteCatalogSource source, ToolRegistry toolRegistry, IModelSource modelSource, IAgentSourceParser agentParser, IRuleSourceParser ruleParser, ICodeSourceParser codeParser, RuleRegistry ruleRegistry)
     {
         _notes = notes ?? throw new ArgumentNullException(nameof(notes));
+        _source = source ?? throw new ArgumentNullException(nameof(source));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _modelSource = modelSource ?? throw new ArgumentNullException(nameof(modelSource));
         _agentParser = agentParser ?? throw new ArgumentNullException(nameof(agentParser));
@@ -41,13 +44,17 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 
     public async Task<IReadOnlyList<CustomAgentDefinition>> ListAsync(CancellationToken ct = default)
     {
-        var all = await _notes.GetAllAsync(ct);
+        // 读三种 agent 家族类型；目录源下 Agent/Rule/CodeRule 从 labs/agents|rules|coderules 枚举。
+        var byType = new List<CatalogNote>();
+        foreach (var type in new[] { NoteNodeType.Agent, NoteNodeType.Rule, NoteNodeType.CodeRule })
+            byType.AddRange(await _source.EnumerateAsync(type, ct));
+
         var result = new List<CustomAgentDefinition>();
-        foreach (var note in all.Where(n => n.NodeType == NoteNodeType.Agent || n.NodeType == NoteNodeType.Rule || n.NodeType == NoteNodeType.CodeRule))
+        foreach (var note in byType)
         {
             if (TryParseNote(note.NodeType, note.Content, out var def, out _) && def is not null)
             {
-                def.Id = Guid.TryParse(note.Id, out var gid) ? gid : Guid.NewGuid();
+                def.Id = Guid.TryParse(note.ExternalId, out var gid) ? gid : Guid.NewGuid();
                 def.NodeType = note.NodeType;
                 // 规则 agent 的程序同时注册进 RuleRegistry，供 LLM agent 经 run_rule(name) 调用。
                 // 幂等覆盖写（Register），ListAsync 每次重注册安全；解析失败静默跳过（不阻塞列表）。
@@ -66,7 +73,7 @@ public sealed class CustomAgentCatalog : ICustomAgentCatalog
 
     public async Task<CustomAgentDefinition?> GetAsync(Guid id, CancellationToken ct = default)
     {
-        var note = await _notes.GetAsync(id.ToString(), ct);
+        var note = await _source.FindByExternalIdAsync(id.ToString(), ct);
         if (note is null || (note.NodeType != NoteNodeType.Agent && note.NodeType != NoteNodeType.Rule && note.NodeType != NoteNodeType.CodeRule)) return null;
         if (!TryParseNote(note.NodeType, note.Content, out var def, out _) || def is null) return null;
         def.Id = id;
