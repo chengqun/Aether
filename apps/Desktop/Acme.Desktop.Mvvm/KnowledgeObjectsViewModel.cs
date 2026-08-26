@@ -34,6 +34,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private string? _activePath;
     private NoteNodeType? _activeType;
     private string _currentSource = string.Empty;
+    /// <summary>当前活动文件是否为目录 README（markdown 两栏：上预览 + 下源码）。普通文件 false。</summary>
+    private bool _isReadme;
+    /// <summary>README 的 markdown 文案（上栏预览绑定源；ObservableProperty 驱动 SelectableMarkdownViewer 重渲染）。</summary>
+    [ObservableProperty] private string _readmeMarkdown = string.Empty;
 
     /// <summary>目录树扫描时跳过的子目录（与 <c>DocumentKnowledgeTool._ignoredDirs</c> 同集，保证树=AI 工具所见）。</summary>
     private static readonly HashSet<string> IgnoredDirs = new(StringComparer.OrdinalIgnoreCase)
@@ -73,6 +77,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>当前活动文件源码（下栏编辑器显示的内容）。View 经事件 + <see cref="SyncEditor"/> 读用
     ///（<c>TextEditor.Text</c> 非绑定属性，故不绑定；View 直接读此值）。</summary>
     public string CurrentSource => _currentSource;
+
+    /// <summary>当前活动文件完整路径（null=无活动文件）。供 View 按扩展名算语法高亮（不依赖 SelectedNode，
+    /// 新建后直接打开/README 打开时 SelectedNode 与活动文件不一致）。</summary>
+    public string? ActivePath => _activePath;
 
     /// <summary>活动文件有未存改动（Ctrl+S 落盘后清）。</summary>
     [ObservableProperty] private bool _isDirty;
@@ -143,22 +151,25 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public bool IsFormNode => ActiveNodeType is not null
         && NoteNodeTypeRegistry.Get(ActiveNodeType.Value).IsFormNode;
 
-    /// <summary>右栏是否显示「上表单 + 下源码」两栏（form 类型）；代码类型仅下栏。</summary>
-    public bool HasRightPane => IsFormNode;
+    /// <summary>当前活动文件是否为目录 README（markdown 上预览 + 下源码两栏）。</summary>
+    public bool IsReadme => _isReadme;
+
+    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏。</summary>
+    public bool HasRightPane => IsFormNode || IsReadme;
 
     /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。</summary>
     public bool EditorVisible => _activePath is not null;
 
-    /// <summary>上下分隔条可见（仅 form 类型）。</summary>
+    /// <summary>上下分隔条可见（form 类型或 README）。</summary>
     public bool SplitterVisible => HasRightPane;
 
-    /// <summary>上栏（表单）可见。</summary>
+    /// <summary>上栏（表单/预览）可见。</summary>
     public bool RightPaneVisible => HasRightPane;
 
-    /// <summary>源码编辑器所在 Grid 行：form 类型=2（下栏，上栏表单占 0 行）；代码类型=0（占满全宽）。</summary>
+    /// <summary>源码编辑器所在 Grid 行：有右栏=2（下栏，上栏表单/预览占 0 行）；代码类型=0（占满全宽）。</summary>
     public int EditorRow => HasRightPane ? 2 : 0;
 
-    /// <summary>源码编辑器跨行数：form 类型=1（只占下栏）；代码类型=3（占满 EditorGrid 三行）。</summary>
+    /// <summary>源码编辑器跨行数：有右栏=1（只占下栏）；代码类型=3（占满 EditorGrid 三行）。</summary>
     public int EditorRowSpan => HasRightPane ? 1 : 3;
 
     private void RaiseLayout()
@@ -172,12 +183,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsStrategyNode));
         OnPropertyChanged(nameof(IsCodeOnlyNode));
         OnPropertyChanged(nameof(IsFormNode));
+        OnPropertyChanged(nameof(IsReadme));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
         OnPropertyChanged(nameof(RightPaneVisible));
         OnPropertyChanged(nameof(EditorRow));
         OnPropertyChanged(nameof(EditorRowSpan));
+        OnPropertyChanged(nameof(ActivePath));
     }
 
     /// <summary>由文件路径反查类型：取路径相对 labs 根的第一段目录名 → <see cref="CatalogNoteDirectory.TypeForDirectory"/>。
@@ -237,19 +250,30 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _activePath = filePath;
         var type = ResolveType(node);
         _activeType = type;
+        _isReadme = false;
+        ReadmeMarkdown = string.Empty;
         _currentSource = content;
         IsDirty = false;
         StatusMessage = string.Empty;
         RaiseLayout();
-
-        // form 类型先刷新对应列表（新建/外部新增文件时列表可能 stale，防 item 找不到 → 表单不显示）。
-        await RefreshListForTypeAsync(type);
-        // 建 edit VM（form 类型）或清空（代码类型全宽）。
-        var editVm = await BuildEditVmAsync(type, filePath, content, NameSansExtension(filePath));
-        ActiveEditVm = editVm;
-        // 代码类型（ActiveEditVm=null）无 OnActiveEditVmChanged 触发 View 刷新，且「新建后直接打开」路径
-        // 不设 SelectedNode —— 此处主动发源码刷新，确保下栏编辑器装载 _currentSource（否则看不到源码）。
+        // 先无条件刷新下栏源码（任何情况下新文件的源码都要显示——否则切换文件时编辑器停留在上一个文件内容）。
         KnowledgeSourceUpdated?.Invoke(_currentSource);
+
+        // 再建上栏表单（可能失败：列表 stale 找不到 item / codec 缺失 / parser 抛异常）。
+        // 表单构建失败只影响上栏，不影响已刷新的源码。try/catch 防 RefreshList/LoadAsync 抛异常阻断源码刷新。
+        object? editVm = null;
+        try
+        {
+            // form 类型先刷新对应列表（新建/外部新增文件时列表可能 stale，防 item 找不到 → 表单不显示）。
+            await RefreshListForTypeAsync(type);
+            // 建 edit VM（form 类型）或清空（代码类型全宽）。
+            editVm = await BuildEditVmAsync(type, filePath, content, NameSansExtension(filePath));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"表单加载失败：{ex.Message}";
+        }
+        ActiveEditVm = editVm;
     }
 
     /// <summary>显示名去复合扩展名（如 <c>foo.agent.md</c> → <c>foo</c>）。</summary>
@@ -490,14 +514,98 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     }
 
     // —— 目录 README 自动解析 ——
-    // labs 页 README 候选=*.md（知识对象本身可作目录概览）。
+    // labs 各类型目录带 readme.md（说明该目录用途 + 文件格式）；点目录即显示。类型目录缺 readme 时懒生成
+    //（内容=注册表说明文案），普通子目录（如 knowledge/ 下的自定义子目录）不生成、仅展开/收起。
 
-    /// <summary>点击目录时打开该目录下的 README（无则不打开，仅展开/收起由 TreeViewItem 默认处理）。</summary>
+    /// <summary>点击目录：有 readme.md 则打开显示（纯 markdown）；类型目录缺 readme 则先生成再打开；否则仅展开/收起。</summary>
     public async Task OpenFolderReadmeAsync(string folderPath, CancellationToken ct = default)
     {
-        var readme = TryFindReadme(folderPath);
+        var readme = TryFindReadme(folderPath) ?? await EnsureTypeReadmeAsync(folderPath, ct);
         if (readme is null) return;
-        await OpenFileAsync(new FileNode(Path.GetFileName(readme), readme, false), ct);
+        await OpenReadmeAsync(readme, ct);
+    }
+
+    /// <summary>类型目录缺 readme.md 时生成说明文件（按 <see cref="CatalogNoteDirectory"/> 反查目录名 → 类型）。
+    /// 非类型目录（普通子目录）返回 null。生成内容= <see cref="TypeDirectoryReadme"/> 文案。</summary>
+    private async Task<string?> EnsureTypeReadmeAsync(string folderPath, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(RootPath)) return null;
+        string rel;
+        try { rel = Path.GetRelativePath(RootPath, folderPath); }
+        catch { return null; }
+        var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        var type = CatalogNoteDirectory.TypeForDirectory(seg);
+        if (type is null) return null; // 非类型目录（如根下自定义目录）→ 不生成
+        if (!IsVisibleTypeDir(seg)) return null; // 非本租户可见类型（Qifu 策略族）→ 不生成
+
+        var readmePath = Path.Combine(folderPath, "readme.md");
+        if (File.Exists(readmePath)) return readmePath;
+        try
+        {
+            await File.WriteAllTextAsync(readmePath, TypeDirectoryReadme(type.Value), ct);
+            return readmePath;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>打开 readme.md 为 markdown 上下两栏（上=markdown 预览、下=markdown 源码），不按目录名反查成 Agent/Rule 等。
+    /// README 无运行时身份/无表单，仅作目录说明展示；上栏预览、下栏可编辑源码。</summary>
+    private async Task OpenReadmeAsync(string readmePath, CancellationToken ct)
+    {
+        if (string.Equals(readmePath, _activePath, StringComparison.OrdinalIgnoreCase)) return;
+        string content;
+        try { content = await File.ReadAllTextAsync(readmePath, ct); }
+        catch (Exception ex) { StatusMessage = $"打开失败：{ex.Message}"; return; }
+
+        if (ActiveEditVm is DocumentKnowledgeViewModel kvm)
+            kvm.SourceChanged -= OnKnowledgeSourceChanged;
+        ActiveEditVm = null;
+        _activePath = readmePath;
+        _activeType = NoteNodeType.Note;
+        _isReadme = true; // markdown 上预览 + 下源码两栏
+        ReadmeMarkdown = content;
+        _currentSource = content;
+        IsDirty = false;
+        StatusMessage = string.Empty;
+        RaiseLayout();
+        KnowledgeSourceUpdated?.Invoke(content);
+    }
+
+    /// <summary>各类型目录的 README 说明文案（目录用途 + 文件格式）。名字由 <see cref="CatalogNoteDirectory.For"/> 提供。</summary>
+    private static string TypeDirectoryReadme(NoteNodeType type)
+    {
+        var (dir, ext) = CatalogNoteDirectory.For(type);
+        var head = $"# {dir}/\n\n";
+        return type switch
+        {
+            NoteNodeType.Agent => head + $"存放 **Agent（智能体）** 定义，文件扩展名 `{ext}`。\n\n" +
+                "每个文件 = YAML front-matter（含 `id:` 稳定身份、name/description/category/tools/skills/model 等）+ Markdown 正文（系统提示词）。\n\n" +
+                "在 labs 页点击文件即打开「上表单 + 下源码」两栏编辑；右键「新建 → Agent」创建。",
+            NoteNodeType.Workflow => head + $"存放 **Workflow（专家团）** 定义，文件扩展名 `{ext}`（JSON）。\n\n" +
+                "JSON 含 `id`、name/description/category、entryAgent + participants（相对路径）与 handoffs 边。\n\n" +
+                "在 labs 页点击文件打开两栏编辑；右键「新建 → Workflow」创建。",
+            NoteNodeType.Rule => head + $"存放 **规则 agent** 定义，文件扩展名 `{ext}`（单 YAML 文档）。\n\n" +
+                "无 LLM 的确定性规则大脑：name/description/tools + steps（match→action）程序。\n\n" +
+                "在 labs 页点击文件打开两栏编辑；右键「新建 → 规则」创建。",
+            NoteNodeType.CodeRule => head + $"存放 **代码规则** 定义，文件扩展名 `{ext}`。\n\n" +
+                "YAML front-matter + C# 正文（`CodeRuleBrain` 子类，Roslyn 编译成确定性大脑）。\n\n" +
+                "在 labs 页点击文件打开两栏编辑；右键「新建 → 代码规则」创建。",
+            NoteNodeType.Knowledge => head + $"存放 **知识对象** 定义，文件扩展名 `{ext}`。\n\n" +
+                "YAML front-matter（kind + links 图边）+ Markdown 正文。typed links 指向其它知识对象文件（相对路径）。\n\n" +
+                "在 labs 页点击文件打开两栏编辑；右键「新建 → 知识对象」创建。",
+            NoteNodeType.Strategy => head + $"存放 **声明式 YAML 策略**，文件扩展名 `{ext}`。\n\n" +
+                "纯 YAML 配方：params + indicators + rules（top-down 首匹配）+ default。解析注册进策略选择器供回测。\n\n" +
+                "仅 Stockapp 租户（回测/实盘）。右键「新建 → 策略（YAML）」创建。",
+            NoteNodeType.CodeStrategy => head + $"存放 **C# 代码策略**，文件扩展名 `{ext}`（纯 C# 无 front-matter）。\n\n" +
+                "一个 `IStrategy` 实现类，Roslyn 编译注册进策略选择器供回测。\n\n" +
+                "仅 Stockapp 租户。右键「新建 → 代码策略」创建。",
+            NoteNodeType.LeanAlgorithm => head + $"存放 **Lean 算法策略**，文件扩展名 `{ext}`（纯 C# 无 front-matter）。\n\n" +
+                "一个 `LeanAlgorithmBase`（= QCAlgorithm）子类，复用 Lean 全部能力，编译注册进 Lean 引擎选择器。\n\n" +
+                "仅 Stockapp 租户。右键「新建 → Lean 算法」创建。",
+            NoteNodeType.Note => head + $"存放 **文本笔记**，文件扩展名 `{ext}`（Markdown）。\n\n" +
+                "纯文本/文档，无表单无运行时身份。在 labs 页点击文件全宽编辑。",
+            _ => head + "（未知类型目录）\n",
+        };
     }
 
     /// <summary>按路径打开文件（右键「打开」/新建后打开用）。薄包装 <see cref="OpenFileAsync"/>。</summary>
@@ -602,12 +710,19 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         {
             foreach (var file in Directory.EnumerateFiles(folderPath, "*.md"))
             {
-                if (string.Equals(Path.GetFileNameWithoutExtension(file), "readme", StringComparison.OrdinalIgnoreCase))
+                if (IsReadmeFile(Path.GetFileName(file)))
                     return file;
             }
         }
         catch { /* 目录无权限/不存在 → 不打开 README */ }
         return null;
+    }
+
+    /// <summary>是否目录 README 文件（stem==readme，扩展名 .md/.ok/.markdown 大小写不敏感）。</summary>
+    private static bool IsReadmeFile(string fileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        return string.Equals(stem, "readme", StringComparison.OrdinalIgnoreCase);
     }
 
     // —— 知识对象表单 ↔ 源码 双向同步（Knowledge 类型专属；form 类型走 AutoSave 刷新）——
@@ -637,6 +752,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         ActiveEditVm = null;
         _activePath = null;
         _activeType = null;
+        _isReadme = false;
+        ReadmeMarkdown = string.Empty;
         _currentSource = string.Empty;
         IsDirty = false;
         RaiseLayout();
@@ -697,7 +814,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             foreach (var file in Directory.EnumerateFiles(fullPath, "*" + ext)
                          .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
             {
-                var stem = Path.GetFileName(file);
+                var fileName = Path.GetFileName(file);
+                // 排除目录 README（readme.md / readme.ok）——它是目录说明，点目录时经 OpenFolderReadmeAsync 显示，不进树。
+                if (IsReadmeFile(fileName)) continue;
+                var stem = fileName;
                 var display = StripCompound(stem, ext);
                 node.Children.Add(new FileNode(display, stem, file, isFolder: false, iconOverride: TypeIcon(t)));
             }

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:edit="using:AvaloniaEdit"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.KnowledgeObjectsView"
              Background="{DynamicResource CardBgBrush}">
@@ -74,6 +75,10 @@
         </Border>
         <Border IsVisible="{Binding IsKnowledgeNode}">
           <shell:DocumentKnowledgeView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
+        <!-- README：markdown 上栏预览（下栏=可编辑源码，见下 Grid.Row=2） -->
+        <Border IsVisible="{Binding IsReadme}">
+          <ctl:SelectableMarkdownViewer Markdown="{Binding ReadmeMarkdown}" Margin="8,6"/>
         </Border>
       </Grid>
 

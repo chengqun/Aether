@@ -31,10 +31,12 @@ public partial class KnowledgeObjectsView : UserControl
     private bool _layoutPersistWired;
     private FoldingManager? _foldingManager;
 
-    /// <summary>当前活动文件的语法 key（按扩展名经 SyntaxMap，供 AvaloniaEdit 高亮/折叠）。</summary>
+    /// <summary>当前活动文件的语法 key（按活动文件扩展名经 SyntaxMap，供 AvaloniaEdit 高亮/折叠）。
+    /// 用 <see cref="KnowledgeObjectsViewModel.ActivePath"/>（活动文件真实路径）而非 SelectedNode——
+    /// 新建后直接打开/README 打开时 SelectedNode 与活动文件不一致（如 .lean.cs 按 .cs → csharp，而非目录路径 → markdown）。</summary>
     private string CurrentSyntax()
     {
-        var ext = Path.GetExtension(_vm?.SelectedNode?.Path ?? "");
+        var ext = Path.GetExtension(_vm?.ActivePath ?? "");
         return SyntaxMap.SyntaxForExtension(ext) ?? "markdown";
     }
 
