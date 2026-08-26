@@ -138,5 +138,7 @@ default: Hold
         public FakeStrategySource(IReadOnlyList<StrategyNote> notes) => _notes = notes;
         public Task<IReadOnlyList<StrategyNote>> GetAllAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(_notes);
+        public Task<string> SaveAsync(string name, string content, StrategyKind kind, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }
