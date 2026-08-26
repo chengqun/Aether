@@ -6,11 +6,9 @@ using System.Threading.Tasks;
 namespace Acme.Notes.Domain.Catalog;
 
 /// <summary>
-/// 笔记单元来源端口：note 节点（SQLite，<c>SqliteNoteCatalogSource</c>）与 labs 文件（磁盘，
-/// <c>DirectoryNoteCatalogSource</c>）的统一出口。消费方依赖此端口而非具体实现，
-/// 实现双源兼容——DI 里切注册即回滚，不触碰批量消费逻辑。
-/// 镜像 <see cref="IKnowledgeSourceParser"/>/<see cref="IDocumentKnowledgeSourceParser"/> 的「note 版/文档版并列」
-/// 范式，但把差异从「两套不兼容解析器」收敛到「同一端口、两个来源」。
+/// 笔记单元来源端口：labs 文件（磁盘，<c>DirectoryNoteCatalogSource</c>）的统一出口。
+/// 消费方（策略源/代码规则源/Lean 算法源）依赖此端口而非具体实现——DI 切注册即换来源，
+/// 不触碰批量消费逻辑。SQLite note 版来源已删，目录版为唯一实现。
 /// </summary>
 public interface INoteCatalogSource
 {

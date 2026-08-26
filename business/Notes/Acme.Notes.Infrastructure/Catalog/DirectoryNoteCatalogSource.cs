@@ -6,8 +6,7 @@ namespace Acme.Notes.Infrastructure.Catalog;
 /// <summary>
 /// <see cref="INoteCatalogSource"/> 的目录实现：扫描 labs 根目录（<c>&lt;root&gt;/&lt;目录名&gt;/*.&lt;扩展&gt;</c>），
 /// 按 <see cref="CatalogNoteDirectory"/> 把子目录名映射成 <see cref="NoteNodeType"/>，读文件原文产出
-/// <see cref="CatalogNote"/>（<c>ExternalId</c> = labs 相对路径）。这是文档版来源，与
-/// <see cref="SqliteNoteCatalogSource"/> 并列、互不相干。
+/// <see cref="CatalogNote"/>（<c>ExternalId</c> = labs 相对路径）。这是权威来源（SQLite note 版已删）。
 /// <para>层化：根目录经 <c>Func&lt;string?&gt;</c> 惰性获取（宿主注入 <c>IKnowledgeDirectoryProvider.CurrentDirectory</c>），
 /// Infrastructure 不引用 apps/Mvvm。<c>Changed</c> 由宿主的目录 watcher 经 <see cref="NotifyChanged"/> 驱动
 ///（本实现不自行挂 watcher——目录变化信号源在宿主层）。</para>
