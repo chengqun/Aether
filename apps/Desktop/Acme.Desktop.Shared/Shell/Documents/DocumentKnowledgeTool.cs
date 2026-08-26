@@ -8,6 +8,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
+using Acme.Notes.Domain;
+using Acme.Notes.Domain.Catalog;
 using Acme.Notes.Domain.Knowledge;
 
 namespace Acme.Desktop.Shared.Shell;
@@ -20,6 +22,11 @@ namespace Acme.Desktop.Shared.Shell;
 /// <see cref="GetCurrentProjectDirectoryTool"/>/<c>BuildTool</c>/<c>RunInTerminalTool</c>），在 <c>AddDesktopCommon</c>
 /// 内联注册。解析/序列化复用 <see cref="IDocumentKnowledgeSourceParser"/>（<c>AddNotesInfrastructure</c> 已注册 DI 单例）。
 /// 知识对象文件路径解析（Read 的 link 目标展开 + 图闭包）经 <see cref="OkTargetResolver"/> 共享，与文档编辑器图解析同源。
+/// <para><b>作用域</b>：仅操作 labs 的 <c>knowledge/</c> 子树（<c>NoteNodeType.Knowledge</c> 对应目录）——
+/// List 只枚举 <c>knowledge/</c>、Create 始终落 <c>knowledge/</c>、Read/Update 越界（指向 <c>agents/</c>、
+/// <c>rules/</c> 等非知识对象 .md）则拒绝。防 AI 把 agent <c>.agent.md</c> / 各目录 README 误当知识对象读写。
+/// 自定义知识库目录（无 <c>knowledge/</c> 子目录）回退为整目录操作（向后兼容）。link 解析仍根植 labs 根，
+/// 与知识对象页表单编辑器（<c>DocumentKnowledgeViewModel</c>）同源，两者 link 路径写法一致。</para>
 /// </summary>
 public sealed class DocumentKnowledgeTool
 {
@@ -79,16 +86,26 @@ public sealed class DocumentKnowledgeTool
     // —— 工具方法 ——
 
     [Description("列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
-                 "可选 folder 只列指定子目录（相对路径，如 业务分析）；不传列整个知识库目录。需先在知识对象页打开知识库目录。")]
+                 "仅枚举 labs 知识对象目录（knowledge/ 子树）；自定义知识库目录（无 knowledge/ 子目录）则枚举整个目录。" +
+                 "可选 folder 只列指定子目录（知识对象目录内的相对路径，如 业务分析；可带 knowledge/ 前缀）；不传列整个知识对象目录。需先在知识对象页打开知识库目录。")]
     public async Task<ListDocumentKnowledgeOutput> ListDocumentKnowledgeObjects(
-        [Description("子目录相对路径（可选，只列该子目录下；不传列整个知识库目录）")] string? folder = null,
+        [Description("知识对象目录内的子目录相对路径（可选；如 业务分析 或 knowledge/业务分析）")] string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var root = _knowledgeDir.CurrentDirectory;
         if (string.IsNullOrWhiteSpace(root))
             return new ListDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
 
-        var baseDir = string.IsNullOrWhiteSpace(folder) ? root : Path.Combine(root, folder);
+        var (knowledgeRoot, isLabs) = ResolveScope(root);
+        string baseDir;
+        if (string.IsNullOrWhiteSpace(folder))
+            baseDir = knowledgeRoot;
+        else
+        {
+            // labs 模式下剥 knowledge/ 前缀（让 folder 带不带前缀等价）；自定义目录原样拼接。
+            var folderNorm = isLabs ? StripKnowledgePrefix(folder) : folder;
+            baseDir = Path.Combine(knowledgeRoot, folderNorm);
+        }
         if (!Directory.Exists(baseDir))
             return new ListDocumentKnowledgeOutput { Error = $"目录不存在: {folder}" };
 
@@ -109,10 +126,11 @@ public sealed class DocumentKnowledgeTool
     }
 
     [Description("按相对路径读取一个文档知识对象（.md 文件）的完整定义：kind + 正文 + links 指向的子 .md 文件内容（只展开一层）。" +
-                 "name=相对路径（不含 .md，如 业务分析/退款会员日志分析）。先调此工具获取知识再执行任务。" +
+                 "仅可读取 labs knowledge/ 子树内的知识对象（路径越界指向 agents/ 等 → 拒绝，防误读非知识对象 .md）。" +
+                 "name=相对路径（不含 .md；如 knowledge/业务分析/退款会员日志分析 或 业务分析/退款会员日志分析，两种写法均可解析）。先调此工具获取知识再执行任务。" +
                  "link 解析支持三种 targetId 写法：知识库根相对（权威）/ 相对源文件目录（./b、../xx/b）/ 裸名（全局 basename 匹配）。")]
     public async Task<ReadDocumentKnowledgeOutput> ReadDocumentKnowledgeObject(
-        [Description("相对路径（不含 .md，如 业务分析/退款会员日志分析）；也可带 .md 后缀")] string name,
+        [Description("相对路径（不含 .md；如 knowledge/业务分析/退款 或 业务分析/退款；也可带 .md 后缀）")] string name,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -127,12 +145,15 @@ public sealed class DocumentKnowledgeTool
             return await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // 解析目标 .md 文件。root 相对优先；currentFileDir=知识库根（Read 的 name 语境是"知识库根相对路径"，
-                // 传根与不传等价，但保持与图视图同构——图打开 .md 时传源文件目录，此处 name 语境即根，故传 root）。
-                var full = OkTargetResolver.CandidateOkPaths(name, root, root)
-                    .FirstOrDefault(p => File.Exists(p));
+                var (knowledgeRoot, isLabs) = ResolveScope(root);
+                // 候选：知识库根（labs）相对 + 知识对象目录（knowledge/）相对。后者让裸路径（业务分析/退款）也能解析。
+                var candidates = OkTargetResolver.CandidateOkPaths(name, root, root).ToList();
+                if (isLabs)
+                    candidates.AddRange(OkTargetResolver.CandidateOkPaths(StripKnowledgePrefix(name), knowledgeRoot, knowledgeRoot));
+                // 越界守卫：只接受 knowledge/ 子树内的文件（防误读 agent/规则/README 等非知识对象 .md）。
+                var full = candidates.FirstOrDefault(p => File.Exists(p) && IsUnder(p, knowledgeRoot));
                 if (full is null)
-                    return new ReadDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
+                    return new ReadDocumentKnowledgeOutput { Error = $"找不到知识对象文件（或不在 knowledge/ 子树内）: {name}" };
 
                 string raw;
                 try { raw = File.ReadAllText(full); }
@@ -147,6 +168,7 @@ public sealed class DocumentKnowledgeTool
                     Path = relPath,
                     Name = OkTargetResolver.StemOf(name),
                     Kind = def.Kind,
+                    // link 解析仍根植 labs（与文档编辑器图解析同源，保持 page↔tool 一致）。
                     Definition = Format(def, relPath, root),
                 };
             }, cancellationToken);
@@ -157,13 +179,14 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("创建一个文档知识对象（.md 文件）。name=相对路径（不含扩展名），将创建 <知识库目录>/<name>.md。" +
-                 "kind 分类自由字符串（流程/数据源/规则/Entity 等）。links 可选 JSON 数组：" +
+    [Description("创建一个文档知识对象（.md 文件）。name=相对路径（不含扩展名）；labs 模式下始终创建在 knowledge/ 子树内" +
+                 "（自动补 knowledge/ 前缀，name 带不带 knowledge/ 均可）。kind 分类自由字符串（流程/数据源/规则/Entity 等）。" +
+                 "links 可选 JSON 数组：" +
                  "{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}（targetId 三种写法：知识库根相对=权威；" +
                  "相对源文件目录 ./b 或 ../xx/b；裸名 b 全局匹配——推荐目录内互链用裸名/相对路径，目录迁移不断链）。" +
                  "已存在则失败。")]
     public async Task<CreateDocumentKnowledgeOutput> CreateDocumentKnowledgeObject(
-        [Description("相对路径（不含 .md 扩展名，如 业务分析/测试KO）")] string name,
+        [Description("相对路径（不含 .md 扩展名；如 业务分析/测试KO 或 knowledge/业务分析/测试KO）")] string name,
         [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
         [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
         [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]")] string? linksJson = null,
@@ -178,8 +201,12 @@ public sealed class DocumentKnowledgeTool
 
         try
         {
-            var nameNoExt = StripOkExt(name);
-            var full = Path.Combine(root, nameNoExt + ".md");
+            var (knowledgeRoot, _) = ResolveScope(root);
+            // labs 模式：始终落 knowledge/ 子树（name 带 knowledge/ 前缀先剥再补，幂等）。
+            var nameNoExt = StripKnowledgePrefix(StripOkExt(name));
+            if (string.IsNullOrWhiteSpace(nameNoExt))
+                return new CreateDocumentKnowledgeOutput { Error = "名称不能为空" };
+            var full = Path.Combine(knowledgeRoot, nameNoExt + ".md");
             if (File.Exists(full))
                 return new CreateDocumentKnowledgeOutput { Error = $"已存在: {nameNoExt}" };
 
@@ -193,7 +220,8 @@ public sealed class DocumentKnowledgeTool
             var source = _parser.Serialize(def);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             await File.WriteAllTextAsync(full, source, cancellationToken);
-            return new CreateDocumentKnowledgeOutput { Success = true, Path = nameNoExt, Name = OkTargetResolver.StemOf(nameNoExt) };
+            var relPath = ToRelativePath(root, full);
+            return new CreateDocumentKnowledgeOutput { Success = true, Path = relPath, Name = OkTargetResolver.StemOf(nameNoExt) };
         }
         catch (Exception ex)
         {
@@ -201,10 +229,10 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。" +
-                 "links 全量替换。name=相对路径（不含 .md）。")]
+    [Description("更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位（仅可更新 labs knowledge/ 子树内的知识对象，" +
+                 "路径越界拒绝）；传哪个参数更新哪个，不传保留原值。links 全量替换。name=相对路径（不含 .md）。")]
     public async Task<UpdateDocumentKnowledgeOutput> UpdateDocumentKnowledgeObject(
-        [Description("相对路径（不含 .md，如 业务分析/退款会员日志分析）")] string name,
+        [Description("相对路径（不含 .md；如 knowledge/业务分析/退款 或 业务分析/退款）")] string name,
         [Description("新 kind（可选，不传保留原值）")] string? kind = null,
         [Description("新 markdown 正文（可选，不传保留原值）")] string? body = null,
         [Description("新 links（可选，JSON 数组，全量替换；不传保留原 links）。targetId=相对路径权威 或 target=名称")] string? linksJson = null,
@@ -219,10 +247,14 @@ public sealed class DocumentKnowledgeTool
 
         try
         {
-            var full = OkTargetResolver.CandidateOkPaths(name, root, root)
-                .FirstOrDefault(p => File.Exists(p));
+            var (knowledgeRoot, isLabs) = ResolveScope(root);
+            var candidates = OkTargetResolver.CandidateOkPaths(name, root, root).ToList();
+            if (isLabs)
+                candidates.AddRange(OkTargetResolver.CandidateOkPaths(StripKnowledgePrefix(name), knowledgeRoot, knowledgeRoot));
+            // 越界守卫：只接受 knowledge/ 子树内的文件（防误改 agent/规则/README 等非知识对象 .md）。
+            var full = candidates.FirstOrDefault(p => File.Exists(p) && IsUnder(p, knowledgeRoot));
             if (full is null)
-                return new UpdateDocumentKnowledgeOutput { Error = $"找不到知识对象文件: {name}" };
+                return new UpdateDocumentKnowledgeOutput { Error = $"找不到知识对象文件（或不在 knowledge/ 子树内）: {name}" };
 
             var raw = await File.ReadAllTextAsync(full, cancellationToken);
             if (!_parser.TryParse(raw, out var def, out var err) || def is null)
@@ -416,5 +448,48 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrEmpty(text)) return prefix;
         var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
         return string.Join('\n', lines.Select(l => prefix + l));
+    }
+
+    // —— 知识对象目录作用域助手（labs knowledge/ 子树约束） ——
+
+    /// <summary>labs 中知识对象子目录名（<c>knowledge/</c>），取自 <see cref="CatalogNoteDirectory"/>（单一来源）。</summary>
+    private static readonly string KnowledgeSubdirName =
+        CatalogNoteDirectory.For(NoteNodeType.Knowledge).DirectoryName; // "knowledge"
+
+    /// <summary>解析工具的作用域：labs 模式（根含 <c>knowledge/</c> 子目录）→ 返回该子目录 + isLabs=true；
+    /// 自定义知识库目录（无 <c>knowledge/</c> 子目录）→ 返回根本身 + isLabs=false（整目录即知识对象库，向后兼容）。</summary>
+    private static (string KnowledgeRoot, bool IsLabs) ResolveScope(string root)
+    {
+        var knowledgeSubdir = Path.Combine(root, KnowledgeSubdirName);
+        if (Directory.Exists(knowledgeSubdir))
+            return (Path.GetFullPath(knowledgeSubdir), true);
+        return (Path.GetFullPath(root), false);
+    }
+
+    /// <summary>剥去路径开头的 <c>knowledge/</c> 段（labs 模式下让裸路径 <c>业务分析/退款</c> 与带前缀
+    /// <c>knowledge/业务分析/退款</c> 等价，两种写法解析到同一文件）。无 <c>knowledge/</c> 前缀原样返回。</summary>
+    private static string StripKnowledgePrefix(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        var norm = path.Replace('\\', '/');
+        if (norm.Length > KnowledgeSubdirName.Length + 1
+            && string.Equals(norm[..KnowledgeSubdirName.Length], KnowledgeSubdirName, StringComparison.OrdinalIgnoreCase)
+            && norm[KnowledgeSubdirName.Length] == '/')
+            return path[(KnowledgeSubdirName.Length + 1)..];
+        return path;
+    }
+
+    /// <summary>路径是否在 <paramref name="baseDir"/> 子树内（越界守卫：防误读/误改 <c>agents/</c>、<c>rules/</c>
+    /// 等非知识对象 .md）。比较规范化全路径（忽略大小写 + 目录分隔符）。</summary>
+    private static bool IsUnder(string full, string baseDir)
+    {
+        try
+        {
+            var fullNorm = Path.GetFullPath(full);
+            var baseNorm = Path.GetFullPath(baseDir);
+            return string.Equals(fullNorm, baseNorm, StringComparison.OrdinalIgnoreCase)
+                   || fullNorm.StartsWith(baseNorm + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 }
