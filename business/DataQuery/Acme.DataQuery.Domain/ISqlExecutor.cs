@@ -2,7 +2,7 @@ namespace Acme.DataQuery.Domain;
 
 /// <summary>
 /// SQL 执行端口（驱动无关）。实现放 Infrastructure（持有 MySQL 驱动），Application 服务经此端口调用。
-/// 镜像 Notes 的 <c>INoteRepository</c> 分层：端口在 Domain，驱动隔离在 Infrastructure。
+/// 镜像 Notes 的分层模式：端口在 Domain，驱动隔离在 Infrastructure。
 /// </summary>
 public interface ISqlExecutor
 {

@@ -15,7 +15,7 @@ public static class HostGlueAetherAIBuilderExtensions
     /// <summary>
     /// 注册规则程序注册表 + <c>run_rule</c> 工具。规则 agent（Engine=Rule）的程序同时可被 LLM agent 经
     /// <c>run_rule(name,input)</c> 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。
-    /// <see cref="RuleRegistry"/> 由 <c>CustomAgentCatalog</c> 在 ListAsync 时把每个 Engine=="Rule" 的 agent
+    /// <see cref="RuleRegistry"/> 由 <c>DirectoryAgentCatalog</c> 在 ListAsync 时把每个 Engine=="Rule" 的 agent
     /// 按名注册其规则程序；run_rule 按名查表。标 Safe（规则是作者显式写的确定性流程）。
     /// 合并自原桌面与手机的 run_rule 注册块（逐字相同）。
     /// </summary>

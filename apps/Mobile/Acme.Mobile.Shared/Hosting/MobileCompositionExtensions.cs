@@ -131,7 +131,7 @@ public static class MobileCompositionExtensions
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
         // —— labs 目录版 catalog（权威）：Agent/Workflow 读写 <tenantDir>/labs/* 文件，而非 note 节点。
-        // 后注册覆盖上面 note 版 ICustomAgentCatalog/ICustomWorkflowCatalog（MS DI 末位生效）。
+        // AddCustomAgents/AddCustomWorkflows 仅注册运行器，catalog 由宿主在此显式绑定为唯一实现。
         // Mobile 无 IKnowledgeDirectoryProvider/LabsDirectoryWatcher（无回测/策略/CodeRule 重编译需求），
         // labs 根直接绑 () => Path.Combine(tenantDir, "labs")（MAUI 沙盒固定路径，闭包捕获 tenantDir）。
         services.AddSingleton<ICustomAgentCatalog>(sp =>

@@ -200,9 +200,8 @@ public static class DesktopCompositionExtensions
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
         // —— labs 目录版 catalog（权威）：Agent/Workflow 读写 <tenantDir>/labs/* 文件，而非 note 节点。
-        // 后注册覆盖上面 note 版 ICustomAgentCatalog/ICustomWorkflowCatalog（MS DI 末位生效）。note 版保留不删
-        // （可回滚：删掉这几行即回到 note 版），但桌面端默认切到目录版。运行器/页面经接口解析无感知。
-        // labs 根经 Func<string?> 注入（DirectoryAgentCatalog 在 ai/Agents，不能引 apps 层）。
+        // AddCustomAgents/AddCustomWorkflows 仅注册运行器，catalog 由宿主在此显式绑定为唯一实现。
+        // 运行器/页面经接口解析无感知。labs 根经 Func<string?> 注入（DirectoryAgentCatalog 在 ai/Agents，不能引 apps 层）。
         services.AddSingleton<ICustomAgentCatalog>(sp =>
             new DirectoryAgentCatalog(
                 () => sp.GetRequiredService<IKnowledgeDirectoryProvider>().CurrentDirectory

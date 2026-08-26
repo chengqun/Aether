@@ -50,7 +50,7 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         (NoteNodeType.CodeRule, "coderules", ".coderule.cs"),
     };
 
-    /// <summary>按节点类型选解析器（镜像 note 版 CustomAgentCatalog.TryParseNote）。</summary>
+    /// <summary>按节点类型选解析器（Agent→AgentSourceParser / Rule→RuleSourceParser / CodeRule→CodeSourceParser）。</summary>
     private bool TryParseNote(NoteNodeType nodeType, string content, out CustomAgentDefinition? def, out string error)
         => nodeType == NoteNodeType.Rule ? _ruleParser.TryParse(content, out def, out error)
          : nodeType == NoteNodeType.CodeRule ? _codeParser.TryParse(content, out def, out error)
