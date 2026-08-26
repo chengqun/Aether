@@ -120,7 +120,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         // this 作 IShellHost 供 form 类型编辑器复用 Experts/Rules/Workflows 同级 VM（惰性访问，此时已构造完成）。
         Knowledge = new KnowledgeObjectsViewModel(serviceProvider,
             serviceProvider.GetRequiredService<IKnowledgeDirectoryProvider>(),
-            this);
+            this,
+            Tenant);
 
         // 聊天引擎组合：须在 Experts/Workflows/Rules 建好后构造——它订阅三者的 SummonChanged 事件
         //（召唤入池/出池 → 刷新统一下拉池 + 持久化），并在 InitializeAsync 里读这三类列表恢复召唤/选中态。

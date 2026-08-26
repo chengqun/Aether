@@ -82,8 +82,8 @@
                     Height="4" HorizontalAlignment="Stretch"
                     Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
 
-      <!-- 下栏：源码编辑器 + 空态 -->
-      <Grid Grid.Row="2">
+      <!-- 下栏：源码编辑器 + 空态（代码类型跨满 EditorGrid 三行＝全宽，form 类型仅 Row 2） -->
+      <Grid Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}">
         <edit:TextEditor x:Name="CodeEditor"
                          ShowLineNumbers="False" WordWrap="True"
                          FontFamily="Menlo,Monaco,Consolas,monospace"

@@ -28,9 +28,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 {
     private readonly IKnowledgeDirectoryProvider _knowledgeDirProvider;
     private readonly IShellHost _shell;
+    private readonly string _tenant;
 
     // —— 活动文件状态（所有类型共用：下栏源码 + 落盘路径）——
     private string? _activePath;
+    private NoteNodeType? _activeType;
     private string _currentSource = string.Empty;
 
     /// <summary>目录树扫描时跳过的子目录（与 <c>DocumentKnowledgeTool._ignoredDirs</c> 同集，保证树=AI 工具所见）。</summary>
@@ -83,15 +85,21 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 
     public KnowledgeObjectsViewModel(IServiceProvider serviceProvider,
         IKnowledgeDirectoryProvider knowledgeDirProvider,
-        IShellHost shell)
+        IShellHost shell,
+        string tenant)
         : base(serviceProvider)
     {
         _knowledgeDirProvider = knowledgeDirProvider;
         _shell = shell;
+        _tenant = tenant ?? string.Empty;
         SourceControl = new KnowledgeSourceControlViewModel(serviceProvider, knowledgeDirProvider);
         // 恢复上次打开的知识库目录；无持久化目录则回退打开默认 labs 根（provider 字段已就绪，无虚方法调用坑）
         LoadLastRootWithDefaultAsync().SafeFireAndForget();
     }
+
+    /// <summary>是否展示 Trading 三类型（Strategy/CodeStrategy/LeanAlgorithm）——仅 Stockapp 租户
+    /// （回测/实盘页用）；Qifu 不依赖 Trading，隐藏这三种类型（树不扫其目录、右键菜单不列）。</summary>
+    public bool HasTradingTypes => string.Equals(_tenant, "stockapp", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>先恢复上次持久化的知识库目录；无则回退打开 <see cref="IKnowledgeDirectoryProvider.DefaultRoot"/>
     /// （默认 <c>&lt;tenantDir&gt;/labs</c>，若不存在则创建）。这样 labs 页启动即有默认目录，用户仍可改目录/关闭。</summary>
@@ -118,8 +126,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 
     // —— 类型派生属性（驱动右栏上栏按类型切换；由 ActiveNodeType 单点派生）——
 
-    /// <summary>当前选中文件的 <see cref="NoteNodeType"/>（由文件路径首段目录名反查 <see cref="CatalogNoteDirectory"/>）。null=未选中文件。</summary>
-    public NoteNodeType? ActiveNodeType => ResolveType(SelectedNode);
+    /// <summary>当前活动文件的 <see cref="NoteNodeType"/>（由打开文件时解析的类型，见 <see cref="_activeType"/>）。null=无活动文件。
+    /// 不依赖 <see cref="SelectedNode"/>——「新建后直接打开」路径不设 SelectedNode，须以实际打开的文件为准。</summary>
+    public NoteNodeType? ActiveNodeType => _activeType;
 
     public bool IsAgentNode => ActiveNodeType == NoteNodeType.Agent;
     public bool IsWorkflowNode => ActiveNodeType == NoteNodeType.Workflow;
@@ -137,14 +146,20 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>右栏是否显示「上表单 + 下源码」两栏（form 类型）；代码类型仅下栏。</summary>
     public bool HasRightPane => IsFormNode;
 
-    /// <summary>源码编辑器可见（选中文件即有）。</summary>
-    public bool EditorVisible => SelectedNode is not null;
+    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。</summary>
+    public bool EditorVisible => _activePath is not null;
 
     /// <summary>上下分隔条可见（仅 form 类型）。</summary>
     public bool SplitterVisible => HasRightPane;
 
     /// <summary>上栏（表单）可见。</summary>
     public bool RightPaneVisible => HasRightPane;
+
+    /// <summary>源码编辑器所在 Grid 行：form 类型=2（下栏，上栏表单占 0 行）；代码类型=0（占满全宽）。</summary>
+    public int EditorRow => HasRightPane ? 2 : 0;
+
+    /// <summary>源码编辑器跨行数：form 类型=1（只占下栏）；代码类型=3（占满 EditorGrid 三行）。</summary>
+    public int EditorRowSpan => HasRightPane ? 1 : 3;
 
     private void RaiseLayout()
     {
@@ -161,6 +176,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
         OnPropertyChanged(nameof(RightPaneVisible));
+        OnPropertyChanged(nameof(EditorRow));
+        OnPropertyChanged(nameof(EditorRowSpan));
     }
 
     /// <summary>由文件路径反查类型：取路径相对 labs 根的第一段目录名 → <see cref="CatalogNoteDirectory.TypeForDirectory"/>。
@@ -218,16 +235,21 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         catch (Exception ex) { StatusMessage = $"打开失败：{ex.Message}"; return; }
 
         _activePath = filePath;
+        var type = ResolveType(node);
+        _activeType = type;
         _currentSource = content;
         IsDirty = false;
         StatusMessage = string.Empty;
+        RaiseLayout();
 
-        var type = ResolveType(node);
         // form 类型先刷新对应列表（新建/外部新增文件时列表可能 stale，防 item 找不到 → 表单不显示）。
         await RefreshListForTypeAsync(type);
         // 建 edit VM（form 类型）或清空（代码类型全宽）。
         var editVm = await BuildEditVmAsync(type, filePath, content, NameSansExtension(filePath));
         ActiveEditVm = editVm;
+        // 代码类型（ActiveEditVm=null）无 OnActiveEditVmChanged 触发 View 刷新，且「新建后直接打开」路径
+        // 不设 SelectedNode —— 此处主动发源码刷新，确保下栏编辑器装载 _currentSource（否则看不到源码）。
+        KnowledgeSourceUpdated?.Invoke(_currentSource);
     }
 
     /// <summary>显示名去复合扩展名（如 <c>foo.agent.md</c> → <c>foo</c>）。</summary>
@@ -614,6 +636,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             kvm.SourceChanged -= OnKnowledgeSourceChanged;
         ActiveEditVm = null;
         _activePath = null;
+        _activeType = null;
         _currentSource = string.Empty;
         IsDirty = false;
         RaiseLayout();
@@ -655,9 +678,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         var node = new FileNode(name, fullPath, isFolder: true);
 
         // 子目录：先目录后文件排序。类型目录内的子目录继承类型（knowledge/子目录 仍收 .md）。
+        // 根层按租户过滤：非 stockapp 跳过策略三目录（strategies/codestrategies/leanalgorithms，Qifu 不依赖 Trading）。
         var subtreeType = isRoot ? (NoteNodeType?)null : ResolveDirType(fullPath);
         foreach (var dir in Directory.EnumerateDirectories(fullPath)
                      .Where(d => !IsIgnoredDir(Path.GetFileName(d)) && !IsSymlinkDir(d))
+                     .Where(d => isRoot ? IsVisibleTypeDir(Path.GetFileName(d)) : true)
                      .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase))
         {
             try { node.Children.Add(BuildNode(dir, isRoot: false)); }
@@ -689,6 +714,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         catch { return null; }
         var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
         return CatalogNoteDirectory.TypeForDirectory(seg);
+    }
+
+    /// <summary>根层目录是否可见（按租户过滤策略三类型）。目录名 → 类型；Trading 三类型仅 stockapp 显示。</summary>
+    private bool IsVisibleTypeDir(string dirName)
+    {
+        if (HasTradingTypes) return true;
+        var type = CatalogNoteDirectory.TypeForDirectory(dirName);
+        return type is not (NoteNodeType.Strategy or NoteNodeType.CodeStrategy or NoteNodeType.LeanAlgorithm);
     }
 
     /// <summary>类型图标（描边 Lucide，复用 <see cref="NoteNodeTypeRegistry"/> 的 path + 色）。</summary>

@@ -206,6 +206,8 @@
 - [x] **`KoTreeView.axaml` 右键菜单**：「新建知识对象」→「新建」子菜单（9 类：Agent/Workflow/规则/代码规则/知识对象/策略/代码策略/Lean 算法/文本笔记），`Tag` 传类型字符串。
 - [x] **`KoTreeView.axaml.cs` `OnNewNodeClick`**：解析 `Tag`→`NoteNodeType` → 弹名字框 → `CreateNodeAsync` → `OpenKnowledgeByPathAsync` 打开新文件。
 
+**新建后「看不到源码」bug 修复（2026-08-26）**：三个策略族（CodeStrategy/Strategy/LeanAlgorithm）新建后源码编辑器空白/隐藏。根因是「新建后直接打开」路径（`OnNewNodeClick` → `OpenKnowledgeByPathAsync`）**不设 `SelectedNode`**，而 `ActiveNodeType` 与 `EditorVisible` 都错误地从 `SelectedNode` 派生——`EditorVisible => SelectedNode is not null` = false → XAML 里 `CodeEditor.IsVisible` 绑定 `EditorVisible` 整体隐藏；`ActiveNodeType => ResolveType(SelectedNode)` 反查的是旧选中项而非刚打开的文件 → 布局派生属性全错。修复：① `KnowledgeObjectsViewModel` 加 `_activeType` 状态（`OpenFileAsync` 设、`CloseActiveFile` 清），`ActiveNodeType`/`EditorVisible`/`IsCodeOnlyNode` 等改由 `_activePath`/`_activeType` 派生（不再依赖 `SelectedNode`）；② `OpenFileAsync` 末尾主动发 `KnowledgeSourceUpdated` + `RaiseLayout`（code 类型 `ActiveEditVm=null` 无 `OnActiveEditVmChanged` 触发 View 刷新）；③ `KnowledgeObjectsView.SyncEditor` 不再用 `HasActiveEdit` 门控 `CodeEditor.IsVisible`（旧语义「仅 form 有源码」已废，code 类型也须显示源码）。
+
 ---
 
 ## 四期：移除 SQLite note 版（最终终态 = 全文档版）

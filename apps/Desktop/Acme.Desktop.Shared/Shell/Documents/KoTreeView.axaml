@@ -76,9 +76,9 @@
               <MenuItem Header="规则" Tag="Rule" Click="OnNewNodeClick"/>
               <MenuItem Header="代码规则" Tag="CodeRule" Click="OnNewNodeClick"/>
               <MenuItem Header="知识对象" Tag="Knowledge" Click="OnNewNodeClick"/>
-              <MenuItem Header="策略（YAML）" Tag="Strategy" Click="OnNewNodeClick"/>
-              <MenuItem Header="代码策略" Tag="CodeStrategy" Click="OnNewNodeClick"/>
-              <MenuItem Header="Lean 算法" Tag="LeanAlgorithm" Click="OnNewNodeClick"/>
+              <MenuItem Header="策略（YAML）" Tag="Strategy" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
+              <MenuItem Header="代码策略" Tag="CodeStrategy" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
+              <MenuItem Header="Lean 算法" Tag="LeanAlgorithm" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
               <MenuItem Header="文本笔记" Tag="Note" Click="OnNewNodeClick"/>
             </MenuItem>
             <MenuItem Header="新建文件夹" Click="OnNewFolderClick"
