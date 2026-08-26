@@ -12,7 +12,7 @@ namespace Acme.Trading.Runtime.Lean.DependencyInjection;
 /// </summary>
 /// <remarks>
 /// <b>Consumes</b>（不注册）：<c>IAnalysisManager</c>（Quotes，runner 预取 K 线）、<c>ILeanAlgorithmNoteSource</c>
-/// （host 注册，桥接 Notes）。须在 <c>AddQuotesApplication</c> + <c>AddDesktopCommon</c>（注册 INoteService）之后调用。
+/// （host 注册，桥接 Notes）。须在 <c>AddQuotesApplication</c> + <c>AddDesktopCommon</c> 之后调用。
 /// </remarks>
 public static class LeanAlgorithmExtensions
 {

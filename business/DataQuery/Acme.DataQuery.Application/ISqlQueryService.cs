@@ -2,7 +2,7 @@ namespace Acme.DataQuery.Application;
 
 /// <summary>
 /// SQL 查询服务契约（驱动无关）。AI 工具适配器注入此契约，不依赖 Infrastructure/驱动。
-/// 镜像 Notes 的 <c>INoteService</c>：契约在 Application，驱动实现在 Infrastructure。
+/// 镜像 Notes 的分层模式：端口在 Domain，驱动实现在 Infrastructure。
 /// </summary>
 public interface ISqlQueryService
 {

@@ -13,9 +13,9 @@ using Acme.Notes.Domain.Knowledge;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 文档版知识对象（<c>.md</c> 文件）AI 工具，镜像 note 版 <see cref="Acme.Notes.AI.Tools.KnowledgeTool"/> 的 4 工具
-/// （List/Read/Create/Update），操作对象从 note 节点换成磁盘 <c>.md</c> 文件。note 版注入 <c>INoteService</c>
-/// （Application 契约）；文档版操作磁盘文件需知「知识库目录」—— <see cref="IKnowledgeDirectoryProvider"/> 在
+/// 文档版知识对象（<c>.md</c> 文件）AI 工具，提供 4 工具
+/// （List/Read/Create/Update），操作对象为磁盘 <c>.md</c> 文件。操作磁盘文件需知「知识库目录」——
+/// <see cref="IKnowledgeDirectoryProvider"/> 在
 /// apps 层（<c>Acme.Desktop.Mvvm</c>），<c>ai/</c> 适配器不可引 apps/，故此工具住宿主层（同
 /// <see cref="GetCurrentProjectDirectoryTool"/>/<c>BuildTool</c>/<c>RunInTerminalTool</c>），在 <c>AddDesktopCommon</c>
 /// 内联注册。解析/序列化复用 <see cref="IDocumentKnowledgeSourceParser"/>（<c>AddNotesInfrastructure</c> 已注册 DI 单例）。

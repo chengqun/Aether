@@ -4,7 +4,7 @@ namespace Acme.Agents.AI;
 
 /// <summary>
 /// <see cref="ICustomWorkflowCatalog"/> 的 labs 目录版实现：读写 <c>&lt;labsRoot&gt;/workflows/*.workflow.json</c> 文件。
-/// 与 note 版 <see cref="CustomWorkflowCatalog"/> 同契约、互不相干。workflow 的 <c>Id</c> 是 <see cref="Guid"/>
+/// 与原 note 版 catalog 同契约、互不相干。workflow 的 <c>Id</c> 是 <see cref="Guid"/>
 /// （<c>CustomWorkflowDefinition.Id</c>），<c>IWorkflowSourceParser</c> 的 JSON 序列化已含 <c>Id</c> 字段，故 labs 文件天然带 id。
 /// 参与者/转交边引用仍是 Guid（目标 agent 文件 front-matter 的 <c>id:</c>），复用 note 版模型零改动。
 /// labs 根经 <c>Func&lt;string?&gt;</c> 注入（宿主绑 <c>IKnowledgeDirectoryProvider</c>），本适配器不引 apps 层。

@@ -8,7 +8,7 @@ namespace Acme.Agents.AI;
 /// <summary>
 /// <see cref="ICustomAgentCatalog"/> 的 labs 目录版实现：读写 <c>&lt;labsRoot&gt;/agents|rules|coderules/*</c> 文件
 /// （而非 note 节点）。身份沿用 <see cref="CustomAgentDefinition.Id"/>（Guid），**存于文件 front-matter 的 <c>id:</c> 字段**
-/// ——文件重命名不断链（id 在内容不在路径）。与 note 版 <see cref="CustomAgentCatalog"/> 同契约、互不相干；
+/// ——文件重命名不断链（id 在内容不在路径）。labs 目录版 catalog 同契约；
 /// 桌面端 DI 默认换注册到本实现（note 版保留但不作为权威）。
 /// labs 根经 <c>Func&lt;string?&gt;</c> 注入（宿主绑 <c>IKnowledgeDirectoryProvider</c>），本适配器不引 apps 层。
 /// 规则 agent（NodeType==Rule）经 <see cref="IRuleSourceParser"/>（单 YAML + id 字段）、代码规则（CodeRule）

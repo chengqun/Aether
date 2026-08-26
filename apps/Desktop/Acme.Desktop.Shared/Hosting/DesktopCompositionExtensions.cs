@@ -196,7 +196,7 @@ public static class DesktopCompositionExtensions
         var skillsDir = Path.Combine(tenantDir, "skills");
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));
 
-        // 自定义 Agent 目录 + 运行器（依赖上面的 INoteService 与 ToolRegistry）
+        // 自定义 Agent 目录 + 运行器（依赖 ToolRegistry + 各 parser）
         aether.AddCustomAgents();
         aether.AddCustomWorkflows();
         // —— labs 目录版 catalog（权威）：Agent/Workflow 读写 <tenantDir>/labs/* 文件，而非 note 节点。

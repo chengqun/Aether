@@ -1,9 +1,9 @@
 namespace Acme.Notes.Domain.Catalog;
 
 /// <summary>
-/// 中性「笔记单元」——去 Guid 化、去载体化。note 节点（SQLite）与 labs 文件（磁盘）两种来源
+/// 中性「笔记单元」——去 Guid 化、去载体化。labs 目录文件（磁盘）来源
 /// 统一压成此 record，消费方（ICustomAgentCatalog / 策略源 / 代码规则源等）只依赖它而不依赖
-/// <see cref="INoteService"/> 或文件 IO，从而双源兼容、DI 切注册即可回滚。
+/// 文件 IO，从而消费方与存储解耦。
 /// </summary>
 /// <param name="ExternalId">中性引用：SQLite 源 = 节点 <see cref="Guid"/> 字符串；目录源 = labs 相对路径。</param>
 /// <param name="Name">标题（note 版的 Title；文件版 = 文件名 stem）。</param>
