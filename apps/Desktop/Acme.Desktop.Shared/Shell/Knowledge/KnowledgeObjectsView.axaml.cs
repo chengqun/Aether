@@ -161,14 +161,14 @@ public partial class KnowledgeObjectsView : UserControl
             SyncEditor();
     }
 
-    /// <summary>把活动 .md 源码载入编辑器并按 markdown 语法设高亮 + 折叠。</summary>
+    /// <summary>把活动文件源码载入编辑器并按扩展名语法设高亮 + 折叠。
+    /// 源码编辑器显隐由 XAML 的 <c>EditorVisible</c>（= 选中文件即显，含代码类型）门控，此处不再动 <c>IsVisible</c>
+    ///（旧语义「仅 form 类型有源码」已废——代码类型 Note/CodeStrategy/LeanAlgorithm 也须能打开源码）。
+    /// 代码类型无上栏表单（<c>ActiveEditVm=null</c>），仍需填 <c>CurrentSource</c>。</summary>
     private void SyncEditor()
     {
         var vm = _vm;
-        var hasActive = vm?.HasActiveEdit ?? false;
-        if (CodeEditor is not null)
-            CodeEditor.IsVisible = hasActive;
-        if (!hasActive) return;
+        if (vm is null) return;
         // Document 在控件模板应用（首次显示）后才创建；未就绪时延迟到下一帧再试。
         if (CodeEditor.Document is null)
         {
@@ -176,7 +176,7 @@ public partial class KnowledgeObjectsView : UserControl
             return;
         }
         _syncing = true;
-        try { CodeEditor.Text = vm?.CurrentSource ?? ""; }
+        try { CodeEditor.Text = vm.CurrentSource; }
         finally { _syncing = false; }
         CodeEditorSetup.ApplyHighlighting(CodeEditor, CurrentSyntax());
         CodeEditorSetup.UpdateFoldings(_foldingManager, CodeEditor.Document.Text, CurrentSyntax());

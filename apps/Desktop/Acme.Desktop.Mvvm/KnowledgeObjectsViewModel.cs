@@ -223,6 +223,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         StatusMessage = string.Empty;
 
         var type = ResolveType(node);
+        // form 类型先刷新对应列表（新建/外部新增文件时列表可能 stale，防 item 找不到 → 表单不显示）。
+        await RefreshListForTypeAsync(type);
         // 建 edit VM（form 类型）或清空（代码类型全宽）。
         var editVm = await BuildEditVmAsync(type, filePath, content, NameSansExtension(filePath));
         ActiveEditVm = editVm;
@@ -252,6 +254,21 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             case NoteNodeType.Strategy: return BuildStrategyVm(filePath, content, name);
             case NoteNodeType.Knowledge: return BuildKnowledgeVm(filePath, content, name);
             default: return null; // Note/CodeStrategy/LeanAlgorithm/未知 → 全宽源码
+        }
+    }
+
+    /// <summary>form 类型（Agent/Rule/CodeRule/Workflow）打开前刷新对应列表，使文件里的 <c>id:</c> 能被
+    /// <see cref="BuildAgentVm"/> 等的 <c>FirstOrDefault(e.Id == id)</c> 命中共级 VM 的 item。
+    /// 新建文件/外部新增文件时列表可能 stale（列表刷新由目录 watcher 防抖触发，有延时），此处同步补一次。
+    /// Strategy/Knowledge 不走列表（codec/parser 直读文件），无需刷新。</summary>
+    private async Task RefreshListForTypeAsync(NoteNodeType? type)
+    {
+        switch (type)
+        {
+            case NoteNodeType.Agent: await _shell.Experts.LoadAsync(); break;
+            case NoteNodeType.Rule:
+            case NoteNodeType.CodeRule: await _shell.Rules.LoadAsync(); break;
+            case NoteNodeType.Workflow: await _shell.Workflows.LoadAsync(); break;
         }
     }
 

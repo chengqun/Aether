@@ -83,6 +83,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             await Rules.LoadAsync();
         };
 
+        // labs 目录变更（目录版 catalog 的 Changed 信号，由 LabsDirectoryWatcher 驱动）也须刷新 Experts/Workflows/Rules——
+        // note 版已停用（写端切 labs 文件），Notes.NotesChanged 不再触发；这是目录版列表刷新的触发源。
+        // 目录源可能是 note 版（SqliteNoteCatalogSource，其 Changed 转发 NotesChanged）或目录版，两者语义一致。
+        var catalogSource = serviceProvider.GetService<Acme.Notes.Domain.Catalog.INoteCatalogSource>();
+        if (catalogSource is not null)
+        {
+            catalogSource.Changed += async () =>
+            {
+                if (_initializing) return;
+                await Experts.LoadAsync();
+                await Workflows.LoadAsync();
+                await Rules.LoadAsync();
+            };
+        }
+
         Experts = new ExpertsViewModel(
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             agentRunner,

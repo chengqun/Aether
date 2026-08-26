@@ -228,8 +228,8 @@
 ### 分阶段计划
 
 **阶段 1：写入端迁移（消除断链）——本期核心**
-- ① 策略 AI 工具切 labs 文件：在 `IStrategyNoteSource`/`ILeanAlgorithmNoteSource`（`Trading.Runtime.Domain` 端口，已只读）加**写方法**（`SaveAsync(name, content)`/按名字在），host 实现（Stockapp `StrategyNoteSource`/`LeanAlgorithmNoteSource`）写到 `<labs>/codestrategies|strategies|leanalgorithms/<name><ext>`。3 个工具注入端口替代 `INoteService`。
-- ② `CodeRuleHost` 切目录变更源：订阅 `DirectoryNoteCatalogSource.Changed`（或 labs 目录 watcher）替代 `INoteService.NotesChanged`。
+- [x] ① 策略 AI 工具切 labs 文件：在 `IStrategyNoteSource`/`ILeanAlgorithmNoteSource`（`Trading.Runtime.Domain` 端口，已只读）加**写方法**（`SaveAsync(name, content)`/按名字在），host 实现（Stockapp `StrategyNoteSource`/`LeanAlgorithmNoteSource`）写到 `<labs>/codestrategies|strategies|leanalgorithms/<name><ext>`。3 个工具注入端口替代 `INoteService`。
+- [x] ② `CodeRuleHost` + 策略/Lean 重编译触发器切目录变更源：新增宿主层 `LabsDirectoryWatcher`（监听 labs 根目录 `FileSystemWatcher`，变更/增删/改名 → 防抖 400ms → `DirectoryNoteCatalogSource.NotifyChanged()`）；`CodeRuleHost.Start` + Stockapp `App.axaml.cs` 的两处 `notes.NotesChanged += ...Reload()` 改订阅 `INoteCatalogSource.Changed`。三处重编译触发（代码规则/策略/Lean）全部脱离 `INoteService.NotesChanged`（写端已不写 SQLite，原订阅棱永不再触发）。
 
 **阶段 2：删 note 树 UI**
 - 删「笔记」nav tab（`PanelKeys.Notes` + 两租户 `Workspace` 的 `Panels`/`RegionIds`）+ `NotesViewModel`/`NotesTreeView`/`NotesEditorView`/`NoteNodeEditVmFactory`/`LeftTreePanelView` 的 notes 层。

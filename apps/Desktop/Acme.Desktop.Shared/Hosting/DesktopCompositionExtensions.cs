@@ -232,6 +232,9 @@ public static class DesktopCompositionExtensions
             return new Acme.Notes.Infrastructure.Catalog.DirectoryNoteCatalogSource(
                 () => labs.CurrentDirectory ?? labs.DefaultRoot);
         });
+        // labs 目录 watcher：监听 labs 根目录文件变更，驱动上面的 DirectoryNoteCatalogSource.NotifyChanged，
+        // 让代码规则/策略/Lean 算法的重编译脱离 INoteService.NotesChanged（SQLite）。启动 fire 由各租户 App 调 Start。
+        services.AddSingleton<LabsDirectoryWatcher>();
         // 笔记表单编辑 VM 工厂（按 NoteNodeType 派发，替代 NotesView 的 if 链）。每个 form 类型一个。
         services.AddSingleton<INoteNodeEditVmFactory, AgentEditVmFactory>();
         services.AddSingleton<INoteNodeEditVmFactory, RuleEditVmFactory>();
