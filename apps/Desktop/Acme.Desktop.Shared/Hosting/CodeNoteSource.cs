@@ -25,17 +25,27 @@ public sealed class CodeNoteSource : ICodeNoteSource
     public async Task<IReadOnlyList<CodeNote>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var all = await _source.EnumerateAsync(NoteNodeType.CodeRule, cancellationToken);
-        return all
-            .Select(n => new CodeNote(n.ExternalId, n.Name, ExtractBody(n.Content ?? string.Empty)))
-            .ToList();
+        return all.Select(ToCodeNote).ToList();
     }
 
-    /// <summary>从 front-matter + C# 源文本中取出 C# 正文。解析失败（如编辑中 front-matter 不完整）回退原文本，
-    /// 让编译器报真实错误而非误导性的「YAML 当 C#」错误。</summary>
-    private string ExtractBody(string content)
+    /// <summary>把目录笔记转成 CodeNote。
+    /// <para><see cref="CodeNote.Id"/> 须用 front-matter 的 <c>id:</c> Guid——它须与
+    /// <see cref="Aether.AI.Core.Agents.AgentDefinition.Id"/> 一致，<see cref="Aether.AI.Harness.Agents.AgentFactory"/>
+    /// 的规则 agent 构建才能经此键从 <c>ICodeBrainRegistry</c> 查到编译产物（否则一直 miss →「尚未编译」）。
+    /// 解析失败或遗留文件无 <c>id:</c>（<see cref="Guid.Empty"/>）回退 <see cref="CatalogNote.ExternalId"/>（路径），
+    /// 避免所有此类文件撞同一个空 Guid 键。</para>
+    /// <para>正文取 front-matter 后的 C# 源文本；解析失败（如编辑中 front-matter 不完整）回退原文本，
+    /// 让编译器报真实错误而非误导性的「YAML 当 C#」错误。</para></summary>
+    private CodeNote ToCodeNote(CatalogNote n)
     {
+        var content = n.Content ?? string.Empty;
+        var id = n.ExternalId;
         if (_parser.TryParse(content, out var def, out _) && def is not null)
-            return def.SystemPrompt ?? string.Empty;
-        return content;
+        {
+            if (def.Id != Guid.Empty)
+                id = def.Id.ToString();
+            return new CodeNote(id, n.Name, def.SystemPrompt ?? string.Empty);
+        }
+        return new CodeNote(id, n.Name, content);
     }
 }
