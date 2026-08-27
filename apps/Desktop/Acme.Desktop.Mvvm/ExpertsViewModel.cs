@@ -81,6 +81,7 @@ public partial class ExpertsViewModel : ObservableObject
         try
         {
             var all = await _catalog.ListAsync();
+            Console.Error.WriteLine($"[DIAG] Experts.LoadAsync: ListAsync returned {all.Count} defs");
             var modelNames = _catalog.GetAvailableModels().ToDictionary(m => m.Id, m => m.Name);
 
             await _dispatcher.InvokeAsync(() =>
@@ -125,6 +126,7 @@ public partial class ExpertsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine($"[DIAG] Experts.LoadAsync THREW: {ex}");
             StatusMessage = $"加载失败：{ex.Message}";
         }
 

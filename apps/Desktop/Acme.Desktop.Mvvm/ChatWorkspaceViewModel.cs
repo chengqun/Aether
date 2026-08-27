@@ -1252,29 +1252,39 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     savedSel = new ChatTargetSelected { Kind = "Agent", Id = legacySelected };
             }
 
-            // 同步填充下拉（列全部 agent/规则/工作流；此时已在 UI 线程，不依赖后续的 RefreshChatTargetItems）
-            ChatTargetItems.Clear();
-            foreach (var e in _experts.Experts) ChatTargetItems.Add(e);
-            foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
-            foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
-
-            // 选中：已保存的 → 回退到池中首项
-            object? saved = null;
-            if (savedSel is { } sel && Guid.TryParse(sel.Id, out var sid))
-            {
-                saved = sel.Kind switch
-                {
-                    "Rule" => _rules.Rules.FirstOrDefault(r => r.Id == sid),
-                    "Agent" => _experts.Experts.FirstOrDefault(e => e.Id == sid),
-                    "Workflow" => (object?)_workflows.Workflows.FirstOrDefault(w => w.Id == sid),
-                    _ => null,
-                };
-            }
-            SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
-
-            // 恢复最近会话展开状态
+            // 读最近会话展开态（UI 无关，可与上面偏好一起在后台读）。
             var expanded = await _preferences.GetAsync("recentExpanded");
-            if (expanded == "0") IsRecentExpanded = false;
+
+            Console.Error.WriteLine($"[DIAG] RestoreSelectedTarget: experts={_experts.Experts.Count} rules={_rules.Rules.Count} workflows={_workflows.Workflows.Count} thread={System.Environment.CurrentManagedThreadId}");
+
+            // ★ 下拉池 + 选中须在 UI 线程改：InitializeAsync 链经 ListAsync(ConfigureAwait(false)) 后续在 threadpool，
+            // ObservableCollection 跨线程修改 Avalonia ComboBox 不会反映（首轮下拉「明明有数据却为空」的根因）。
+            // 镜像 RefreshChatTargetItems 的 dispatcher 范式。InvokeAsync 返回 Task 可 await（Post 不可，会与后续
+            // RefreshConversationsAsync 乱序）。
+            await _dispatcher.InvokeAsync(() =>
+            {
+                // 同步填充下拉（列全部 agent/规则/工作流；此时已在 UI 线程，不依赖后续的 RefreshChatTargetItems）
+                ChatTargetItems.Clear();
+                foreach (var e in _experts.Experts) ChatTargetItems.Add(e);
+                foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
+                foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
+
+                // 选中：已保存的 → 回退到池中首项
+                object? saved = null;
+                if (savedSel is { } sel && Guid.TryParse(sel.Id, out var sid))
+                {
+                    saved = sel.Kind switch
+                    {
+                        "Rule" => _rules.Rules.FirstOrDefault(r => r.Id == sid),
+                        "Agent" => _experts.Experts.FirstOrDefault(e => e.Id == sid),
+                        "Workflow" => (object?)_workflows.Workflows.FirstOrDefault(w => w.Id == sid),
+                        _ => null,
+                    };
+                }
+                SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
+                if (expanded == "0") IsRecentExpanded = false;
+                Console.Error.WriteLine($"[DIAG] RestoreSelectedTarget: ChatTargetItems={ChatTargetItems.Count} (UI thread) thread={System.Environment.CurrentManagedThreadId}");
+            });
         }
         catch { /* 偏好恢复失败不阻塞 */ }
     }

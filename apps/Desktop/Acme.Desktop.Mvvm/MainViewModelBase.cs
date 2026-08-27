@@ -216,6 +216,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         }
         finally { _initializing = false; }
 
+        Console.Error.WriteLine($"[DIAG] After WhenAll: Experts={Experts.Experts.Count} Workflows={Workflows.Workflows.Count} Rules={Rules.Rules.Count}");
+
         // 聊天引擎初始化：LLM 配置 + 选中目标恢复 + 最近会话 + 连接态 + 自动连接（自管 _isInitializing）
         await Chat.InitializeAsync();
 
