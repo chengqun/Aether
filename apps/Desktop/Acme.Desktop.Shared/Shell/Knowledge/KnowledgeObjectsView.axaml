@@ -112,6 +112,13 @@
           </StackPanel>
         </Border>
       </Grid>
+
+      <!-- skills 根目录：技能卡片网格（镜像专家页技能 tab 的 SkillView），跨满 EditorGrid 覆盖空态。
+           点树内 SKILL.md 走两栏表单，点兄弟 .py 走全宽代码编辑器——此卡片网格仅 skills/ 根目录选中时显示。 -->
+      <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsSkillsRoot}"
+              Background="{DynamicResource CardBgBrush}">
+        <shell:SkillView DataContext="{Binding SkillVm}"/>
+      </Border>
     </Grid>
   </Grid>
 </UserControl>

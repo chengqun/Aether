@@ -41,6 +41,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private string _currentSource = string.Empty;
     /// <summary>当前活动文件是否为目录 README（markdown 两栏：上预览 + 下源码）。普通文件 false。</summary>
     private bool _isReadme;
+    /// <summary>当前选中是否为 skills 根目录（右栏内嵌技能卡片网格，镜像专家页技能 tab）。</summary>
+    private bool _isSkillsRoot;
     /// <summary>README 的 markdown 文案（上栏预览绑定源；ObservableProperty 驱动 SelectableMarkdownViewer 重渲染）。</summary>
     [ObservableProperty] private string _readmeMarkdown = string.Empty;
 
@@ -161,11 +163,19 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>当前活动文件是否为目录 README（markdown 上预览 + 下源码两栏）。</summary>
     public bool IsReadme => _isReadme;
 
-    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏。</summary>
-    public bool HasRightPane => IsFormNode || IsReadme;
+    /// <summary>当前选中是否为 skills 根目录——右栏内嵌 SkillView 卡片网格（镜像专家页技能 tab）。
+    /// 点树内 SKILL.md 走两栏表单，点兄弟 .py 走全宽代码编辑器。</summary>
+    public bool IsSkillsRoot => _isSkillsRoot;
 
-    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。</summary>
-    public bool EditorVisible => _activePath is not null;
+    private SkillViewModel? _skillVm;
+    /// <summary>技能 tab VM（DI 单例，懒解析）。skills 根目录选中时 labs 右栏内嵌其卡片网格 + 触发 LoadAsync 刷新。</summary>
+    public SkillViewModel? SkillVm => _skillVm ??= ServiceProvider.GetService<SkillViewModel>();
+
+    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏；skills 根目录走卡片网格。</summary>
+    public bool HasRightPane => (IsFormNode || IsReadme) && !IsSkillsRoot;
+
+    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills 根目录走卡片网格，隐藏编辑器。</summary>
+    public bool EditorVisible => _activePath is not null && !IsSkillsRoot;
 
     /// <summary>上下分隔条可见（form 类型或 README）。</summary>
     public bool SplitterVisible => HasRightPane;
@@ -192,6 +202,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsCodeOnlyNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(IsReadme));
+        OnPropertyChanged(nameof(IsSkillsRoot));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
@@ -225,10 +236,22 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>树节点选中：文件→按类型分流打开；文件夹→打开该目录 README（<c>readme.md</c>，无则仅展开/收起由 TreeViewItem 默认处理）。</summary>
     protected override void OnSelectedNodeChanged(FileNode? value)
     {
+        _isSkillsRoot = value is { IsFolder: true } && IsSkillsRootFolder(value);
         RaiseLayout();
         if (value is null) return;
         if (value.IsFolder)
         {
+            if (_isSkillsRoot)
+            {
+                // skills 根目录 → 右栏内嵌技能卡片网格（SkillView，镜像专家页技能 tab），点树内 SKILL.md 走表单。
+                // 清旧活动文件态（防旧源码/表单残留）；SkillVm.LoadAsync 后台重扫盘刷新卡片。
+                _isReadme = false;
+                ReadmeMarkdown = string.Empty;
+                _activePath = null;
+                ActiveEditVm = null;
+                SkillVm?.LoadAsync().SafeFireAndForget();
+                return;
+            }
             OpenFolderReadmeAsync(value.Path).SafeFireAndForget();
             return;
         }
@@ -274,6 +297,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _activePath = filePath;
         var type = ResolveType(node);
         _activeType = type;
+        _isSkillsRoot = false;
         _isReadme = false;
         ReadmeMarkdown = string.Empty;
         _currentSource = content;
@@ -577,6 +601,20 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             return;
         }
         await OpenReadmeAsync(readme, ct);
+    }
+
+    /// <summary>是否为 skills 根目录（labs 根的直接子目录 <c>skills/</c>，不含 <c>skills/&lt;name&gt;/</c> 子目录）。
+    /// skills 根目录选中时右栏内嵌卡片网格；技能子目录仍走 README/默认。</summary>
+    private bool IsSkillsRootFolder(FileNode node)
+    {
+        if (!node.IsFolder || string.IsNullOrEmpty(RootPath)) return false;
+        if (ResolveDirType(node.Path) != NoteNodeType.Skill) return false;
+        try
+        {
+            var rel = Path.GetRelativePath(RootPath, node.Path);
+            return rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length == 1;
+        }
+        catch { return false; }
     }
 
     /// <summary>目录是否在 knowledge 类型子树下（相对根的首段目录名映射为 <see cref="NoteNodeType.Knowledge"/>）。
