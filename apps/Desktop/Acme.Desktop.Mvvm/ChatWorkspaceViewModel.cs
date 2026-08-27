@@ -799,7 +799,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"[RemoteApproval] 反序列化失败（conv {msg.ConversationId}）: {ex.Message}");
+            Console.Error.WriteLine($"[RemoteApproval] 反序列化失败（conv {msg.ConversationId}）: {ex.Message}");
         }
         if (dto is null) return;
 
@@ -1421,7 +1421,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     }
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
-    /// <summary>刷新聊天头统一下拉池（已召唤的 agent/规则/工作流），保留当前选中。
+    /// <summary>刷新聊天头统一下拉池（全部 agent/规则/工作流），保留当前选中。
     /// 按 (Id,Kind) 匹配而非引用：reload 后实例被替换，引用匹配会丢选中并误切目标。</summary>
     private void RefreshChatTargetItems()
     {
