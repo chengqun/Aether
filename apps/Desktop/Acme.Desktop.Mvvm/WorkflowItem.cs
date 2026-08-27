@@ -14,7 +14,6 @@ public sealed partial class WorkflowItem : ObservableObject
     [ObservableProperty] private List<Guid> _participants = new();
     [ObservableProperty] private List<WorkflowHandoffField> _handoffs = new();
     [ObservableProperty] private string? _handoffInstructions;
-    [ObservableProperty] private bool _isSummoned;
 
     public string DisplayIcon => "🔗";
     public string ParticipantSummary => Participants.Count + " 个参与者";

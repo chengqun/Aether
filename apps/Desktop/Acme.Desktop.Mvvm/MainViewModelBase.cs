@@ -82,6 +82,11 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
                 await Experts.LoadAsync();
                 await Workflows.LoadAsync();
                 await Rules.LoadAsync();
+                // 通知聊天下拉框刷新新增项——使外部编辑/git pull/AI 工具创建的 agent/rule/workflow
+                // 无需任何额外操作即可在聊天下拉直接选用。
+                Experts.NotifyTargetsChanged();
+                Workflows.NotifyTargetsChanged();
+                Rules.NotifyTargetsChanged();
             };
         }
 
@@ -89,11 +94,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             serviceProvider.GetRequiredService<ICustomAgentCatalog>(),
             agentRunner,
             _dispatcher,
-            serviceProvider.GetRequiredService<IAgentMarketplaceService>(),
-            _auth,
-            Workflows,
-            Rules,
-            serviceProvider.GetRequiredService<IAgentSourceParser>(),
             serviceProvider.GetRequiredService<McpViewModel>(),
             serviceProvider.GetRequiredService<SkillViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
@@ -110,8 +110,8 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             this,
             Tenant);
 
-        // 聊天引擎组合：须在 Experts/Workflows/Rules 建好后构造——它订阅三者的 SummonChanged 事件
-        //（召唤入池/出池 → 刷新统一下拉池 + 持久化），并在 InitializeAsync 里读这三类列表恢复召唤/选中态。
+        // 聊天引擎组合：须在 Experts/Workflows/Rules 建好后构造——它订阅三者的 TargetsChanged 事件
+        //（可选目标集合变更 → 刷新统一下拉池），并在 InitializeAsync 里读这三类列表恢复选中态。
         Chat = new ChatWorkspaceViewModel(serviceProvider, deviceChatClient, llmService, settingsDialog, Experts, Workflows, Rules);
 
         // 定时任务执行完成（成功/失败）后刷新「最近会话」——因为 executor 把运行落库进了会话存储。
@@ -179,7 +179,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         : "?";
 
     /// <summary>启动期初始化：登录态 + 业务 VM 加载 + 聊天引擎初始化 + 调度器/MCP 启动。
-    /// 业务 VM 须先于 <see cref="Chat"/> 初始化（Chat.RestoreSummonedAndSelectedAsync 读这三类列表）。</summary>
+    /// 业务 VM 须先于 <see cref="Chat"/> 初始化（Chat 恢复选中目标读这三类列表）。</summary>
     public virtual async Task InitializeAsync()
     {
         try
@@ -202,7 +202,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             UserName = "未登录";
         }
 
-        // 业务 VM 加载（Chat 恢复召唤/选中态依赖 Experts/Workflows/Rules 列表已就绪）。
+        // 业务 VM 加载（Chat 恢复选中目标依赖 Experts/Workflows/Rules 列表已就绪）。
         // 四个相互独立——并行加载缩短「窗口出现到可用」间隔（每个内部 I/O 并行、集合操作仍经 UI 线程序列化）。
         // _initializing 守卫抑制此期间的 catalog Changed 回流（避免与并行加载重复 + 并发改集合）。
         _initializing = true;
@@ -216,7 +216,7 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
         }
         finally { _initializing = false; }
 
-        // 聊天引擎初始化：LLM 配置 + 召唤/选中恢复 + 最近会话 + 连接态 + 自动连接（自管 _isInitializing）
+        // 聊天引擎初始化：LLM 配置 + 选中目标恢复 + 最近会话 + 连接态 + 自动连接（自管 _isInitializing）
         await Chat.InitializeAsync();
 
         // 启动自动化调度器（进程内定时触发；仅 App 打开时生效）。双启动守卫已在调度器内。

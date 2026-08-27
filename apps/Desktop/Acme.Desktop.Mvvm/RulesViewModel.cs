@@ -11,10 +11,10 @@ using CommunityToolkit.Mvvm.Input;
 namespace Acme.Desktop.Mvvm;
 
 /// <summary>
-/// 规则 tab ViewModel：规则 agent 列表（召唤/编辑/删除）。规则 agent 是 agent 的一种
-///（<see cref="NoteNodeType.Rule"/> + <c>Engine=Rule</c>），复用 <see cref="ICustomAgentCatalog"/>/
-/// <see cref="ICustomAgentRunner"/>/<see cref="ExpertItem"/>，但用独立的 <see cref="RuleEditViewModel"/>
-/// 编辑器（规则笔记是单个 YAML 文档，非 agent 的 front-matter+body）。按 <see cref="CustomAgentDefinition.NodeType"/>==<see cref="NoteNodeType.Rule"/> 过滤。
+/// 规则 agent 列表 VM：规则 agent 是 agent 的一种（<see cref="NoteNodeType.Rule"/> + <c>Engine=Rule</c>），
+/// 复用 <see cref="ICustomAgentCatalog"/>/<see cref="ICustomAgentRunner"/>/<see cref="ExpertItem"/>，
+/// 按 <see cref="CustomAgentDefinition.NodeType"/>==<see cref="NoteNodeType.Rule"/>/<see cref="NoteNodeType.CodeRule"/> 过滤。
+/// labs 知识对象页承接创建+编辑；本 VM 供聊天下拉 + labs 编辑保存用。
 /// </summary>
 public partial class RulesViewModel : ObservableObject
 {
@@ -37,13 +37,16 @@ public partial class RulesViewModel : ObservableObject
 
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    /// <summary>召唤规则到聊天（聊天页订阅）。</summary>
-    public event Action? SummonChanged;
+    /// <summary>可选目标集合变更（新建/删除/catalog reload）时触发。ChatWorkspaceViewModel 订阅刷新统一下拉池。</summary>
+    public event Action? TargetsChanged;
 
-    /// <summary>规则列表增删改后触发（笔记页订阅，刷新树）。</summary>
+    /// <summary>外部触发目标集合变更通知（catalog Changed reload 后调用，让聊天下拉框刷新新增项）。</summary>
+    internal void NotifyTargetsChanged() => TargetsChanged?.Invoke();
+
+    /// <summary>规则列表增删改后触发（labs 知识对象页订阅，刷新树）。</summary>
     public event Action? RulesChanged;
 
-    /// <summary>从目录加载所有规则 agent（NodeType==Rule）。</summary>
+    /// <summary>从目录加载所有规则 agent（NodeType==Rule/CodeRule）。</summary>
     public async Task LoadAsync()
     {
         try
@@ -51,9 +54,6 @@ public partial class RulesViewModel : ObservableObject
             var all = await _catalog.ListAsync();
             await _dispatcher.InvokeAsync(() =>
             {
-                // 保留召唤状态：切 tab/catalog Changed 触发 reload 时按 Id 把 IsSummoned 迁移到新实例，
-                // 否则卡片显示成未召唤（聊天下拉框持有旧实例仍能用，但卡片与 GetSummonedRules 不一致）。
-                var prevSummoned = Rules.Where(r => r.IsSummoned).Select(r => r.Id).ToHashSet();
                 Rules.Clear();
                 foreach (var def in all)
                 {
@@ -76,7 +76,6 @@ public partial class RulesViewModel : ObservableObject
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
-                    if (prevSummoned.Contains(item.Id)) item.IsSummoned = true;
                     Rules.Add(item);
                 }
             });
@@ -87,25 +86,7 @@ public partial class RulesViewModel : ObservableObject
         }
     }
 
-    /// <summary>创建新规则（仅在用户点保存后才落库）。</summary>
-    public ExpertItem CreateNew()
-    {
-        return new ExpertItem
-        {
-            Id = Guid.NewGuid(),
-            Name = string.Empty,
-            Description = string.Empty,
-            Category = "规则",
-            Engine = "Rule",
-            NodeType = NoteNodeType.Rule,
-            SystemPrompt = NoteNodeTypeRegistry.Get(NoteNodeType.Rule).DefaultContent,
-            Tools = new List<string>(),
-            Memory = AgentMemoryMode.Off, // 规则是确定性大脑，无会话内记忆必要
-            MaxHistory = 20,
-        };
-    }
-
-    /// <summary>保存规则（新增或更新）。</summary>
+    /// <summary>保存规则（新增或更新）。labs 知识对象页规则/代码规则表单编辑器保存经此落库。</summary>
     public async Task<(bool Success, string Error)> SaveAsync(ExpertItem item)
     {
         if (item == null || string.IsNullOrWhiteSpace(item.Name))
@@ -155,7 +136,7 @@ public partial class RulesViewModel : ObservableObject
             }
 
             StatusMessage = existing == null ? $"已创建：{item.Name}" : "已保存";
-            SummonChanged?.Invoke();
+            TargetsChanged?.Invoke();
             RulesChanged?.Invoke();
             return (true, string.Empty);
         }
@@ -165,46 +146,14 @@ public partial class RulesViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task DeleteExpertAsync(ExpertItem item)
-    {
-        if (item == null) return;
-        try
-        {
-            await _catalog.DeleteAsync(item.Id);
-            _runner.Invalidate(item.Id);
-            await LoadAsync();
-            StatusMessage = $"已删除：{item.Name}";
-            SummonChanged?.Invoke();
-            RulesChanged?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"删除失败：{ex.Message}";
-        }
-    }
-
-    /// <summary>召唤/取消召唤（多选入池，与 agent/工作流同模型）。召唤只入池，下拉选中才激活。</summary>
-    [RelayCommand]
-    private void ToggleSummon(ExpertItem item)
-    {
-        if (item == null) return;
-        item.IsSummoned = !item.IsSummoned;
-        StatusMessage = item.IsSummoned ? $"已召唤：{item.Name}" : $"已取消召唤：{item.Name}";
-        SummonChanged?.Invoke();
-    }
-
-    /// <summary>获取已召唤的规则列表。</summary>
-    public List<ExpertItem> GetSummonedRules() => Rules.Where(r => r.IsSummoned).ToList();
-
-    /// <summary>创建规则编辑弹窗 ViewModel（独立 RuleEditViewModel；调用方应在打开前 await Mcp.EnsureLoadedAsync()）。</summary>
+    /// <summary>创建规则编辑 ViewModel（labs 知识对象页规则表单用；调用方应在打开前 await Mcp.EnsureLoadedAsync()）。</summary>
     public RuleEditViewModel CreateEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
         return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList());
     }
 
-    /// <summary>创建代码规则编辑 ViewModel（笔记页两栏用；NodeType=CodeRule，默认类别「代码规则」、默认 C# 模板）。</summary>
+    /// <summary>创建代码规则编辑 ViewModel（labs 知识对象页两栏用；NodeType=CodeRule，默认类别「代码规则」、默认 C# 模板）。</summary>
     public RuleEditViewModel CreateCodeRuleEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();

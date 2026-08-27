@@ -96,11 +96,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _workflows = workflows;
         _rules = rules;
 
-        // 三类目标的召唤状态变化（toggle 入池/出池）：刷新统一下拉池 + 持久化召唤列表。
-        // 召唤只入池，不自动激活——激活是下拉选择的独立动作（与 agent 模型一致）。
-        _experts.SummonChanged += OnChatTargetsChanged;
-        _workflows.SummonChanged += OnChatTargetsChanged;
-        _rules.SummonChanged += OnChatTargetsChanged;
+        // 三类目标的可选集合变更（新建/删除/catalog reload）：刷新统一下拉池。选中是下拉选择的独立动作。
+        _experts.TargetsChanged += OnChatTargetsChanged;
+        _workflows.TargetsChanged += OnChatTargetsChanged;
+        _rules.TargetsChanged += OnChatTargetsChanged;
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
@@ -145,7 +144,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     }
 
     /// <summary>聊天引擎启动期初始化：LLM 配置加载 + 召唤/选中目标恢复 + 最近会话加载 + 连接态 + 自动连接。
-    /// 须在 shell 已加载 Experts/Workflows/Rules 之后调用（RestoreSummonedAndSelectedAsync 读这三类列表）。</summary>
+    /// 须在 shell 已加载 Experts/Workflows/Rules 之后调用（RestoreSelectedTargetAsync 读这三类列表）。</summary>
     public async Task InitializeAsync()
     {
         IsConnected = _deviceChatClient.IsConnected;
@@ -155,7 +154,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         try
         {
             await LoadLlmConfigsAsync();
-            await RestoreSummonedAndSelectedAsync();
+            await RestoreSelectedTargetAsync();
             await RefreshConversationsAsync();
         }
         finally { _isInitializing = false; }
@@ -1069,17 +1068,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             _isInitializing = true;
             // 恢复时按绑定 id 在三类列表里找目标（规则/agent 都是 ExpertItem，按所在列表区分）。
-            // 会话目标可能已取消召唤 → 自动入池，保证下拉可见且选中（抑制 OnSelectedChatTargetChanged 重置副作用）。
+            // 下拉池列全部目标（无需召唤），目标必在池中 → 直接选中（抑制 OnSelectedChatTargetChanged 重置副作用）。
             if (Guid.TryParse(item.AgentId, out var aid))
             {
                 ExpertItem? ei = _rules.Rules.FirstOrDefault(r => r.Id == aid)
                               ?? _experts.Experts.FirstOrDefault(e => e.Id == aid);
                 WorkflowItem? wi = ei is null ? _workflows.Workflows.FirstOrDefault(w => w.Id == aid) : null;
-                object? target = (object?)ei ?? wi;
-                if (target is ExpertItem e2 && !e2.IsSummoned) e2.IsSummoned = true;
-                else if (target is WorkflowItem w2 && !w2.IsSummoned) w2.IsSummoned = true;
-                if (target is not null && !ChatTargetItems.Contains(target)) ChatTargetItems.Add(target);
-                SelectedChatTarget = target;
+                SelectedChatTarget = (object?)ei ?? wi;
             }
             _isInitializing = false;
 
@@ -1237,64 +1232,35 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
 
-    /// <summary>从偏好恢复三类目标的召唤状态与选中目标（跨重启保留），并保证启动时有一个默认选中。</summary>
-    private async Task RestoreSummonedAndSelectedAsync()
+    /// <summary>从偏好恢复选中目标（跨重启保留），并保证启动时有一个默认选中。下拉池列全部目标，无召唤态。</summary>
+    private async Task RestoreSelectedTargetAsync()
     {
         try
         {
-            // 读结构化偏好 chatTargets；缺失时迁移旧键（仅 agent）
+            // 读结构化偏好 chatTargets（仅 Selected 字段；旧 Summoned 字段被忽略）；缺失时迁移旧键（仅 selectedAgentId）
+            ChatTargetSelected? savedSel = null;
             var json = await _preferences.GetAsync("chatTargets");
-            ChatTargetPrefs? prefs = null;
             if (!string.IsNullOrWhiteSpace(json))
             {
-                prefs = System.Text.Json.JsonSerializer.Deserialize<ChatTargetPrefs>(json, _prefsJson);
+                var prefs = System.Text.Json.JsonSerializer.Deserialize<ChatTargetPrefs>(json, _prefsJson);
+                savedSel = prefs?.Selected;
             }
             else
             {
-                var legacySummoned = await _preferences.GetAsync("summonedAgentIds");
                 var legacySelected = await _preferences.GetAsync("selectedAgentId");
-                if (!string.IsNullOrWhiteSpace(legacySummoned))
-                {
-                    var ids = System.Text.Json.JsonSerializer.Deserialize<string[]>(legacySummoned) ?? Array.Empty<string>();
-                    prefs = new ChatTargetPrefs
-                    {
-                        Summoned = new() { Agent = ids.ToList() },
-                        Selected = !string.IsNullOrWhiteSpace(legacySelected)
-                            ? new ChatTargetSelected { Kind = "Agent", Id = legacySelected } : null,
-                    };
-                }
+                if (!string.IsNullOrWhiteSpace(legacySelected))
+                    savedSel = new ChatTargetSelected { Kind = "Agent", Id = legacySelected };
             }
 
-            // 按已保存 id 集合恢复三类 IsSummoned
-            if (prefs is not null)
-            {
-                var ag = prefs.Summoned?.Agent is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Agent) : null;
-                var rg = prefs.Summoned?.Rule is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Rule) : null;
-                var wg = prefs.Summoned?.Workflow is { Count: > 0 } ? new HashSet<string>(prefs.Summoned.Workflow) : null;
-                foreach (var e in _experts.Experts) e.IsSummoned = ag?.Contains(e.Id.ToString()) ?? false;
-                foreach (var r in _rules.Rules) r.IsSummoned = rg?.Contains(r.Id.ToString()) ?? false;
-                foreach (var w in _workflows.Workflows) w.IsSummoned = wg?.Contains(w.Id.ToString()) ?? false;
-            }
-
-            // 三类全空时自动召唤首个 agent，保证下拉非空、有默认目标
-            if (_experts.GetSummonedExperts().Count == 0
-                && _rules.GetSummonedRules().Count == 0
-                && _workflows.GetSummonedWorkflows().Count == 0
-                && _experts.Experts.Count > 0)
-            {
-                _experts.Experts[0].IsSummoned = true;
-                await PersistSummonedTargetsAsync();
-            }
-
-            // 同步填充下拉（此时已在 UI 线程；不依赖后续的 RefreshChatTargetItems）
+            // 同步填充下拉（列全部 agent/规则/工作流；此时已在 UI 线程，不依赖后续的 RefreshChatTargetItems）
             ChatTargetItems.Clear();
-            foreach (var e in _experts.GetSummonedExperts()) ChatTargetItems.Add(e);
-            foreach (var r in _rules.GetSummonedRules()) ChatTargetItems.Add(r);
-            foreach (var w in _workflows.GetSummonedWorkflows()) ChatTargetItems.Add(w);
+            foreach (var e in _experts.Experts) ChatTargetItems.Add(e);
+            foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
+            foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
 
             // 选中：已保存的 → 回退到池中首项
             object? saved = null;
-            if (prefs?.Selected is { } sel && Guid.TryParse(sel.Id, out var sid))
+            if (savedSel is { } sel && Guid.TryParse(sel.Id, out var sid))
             {
                 saved = sel.Kind switch
                 {
@@ -1303,9 +1269,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     "Workflow" => (object?)_workflows.Workflows.FirstOrDefault(w => w.Id == sid),
                     _ => null,
                 };
-                // 保存的目标可能已取消召唤 → 自动入池，保证下拉可见且选中
-                if (saved is ExpertItem e2 && !e2.IsSummoned) { e2.IsSummoned = true; ChatTargetItems.Add(e2); }
-                else if (saved is WorkflowItem w2 && !w2.IsSummoned) { w2.IsSummoned = true; ChatTargetItems.Add(w2); }
             }
             SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
 
@@ -1316,36 +1279,12 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         catch { /* 偏好恢复失败不阻塞 */ }
     }
 
-    /// <summary>持久化三类目标的召唤列表（toggle 入池/出池时调）。</summary>
-    private async Task PersistSummonedTargetsAsync()
-    {
-        try
-        {
-            var prefs = new ChatTargetPrefs
-            {
-                Summoned = new()
-                {
-                    Agent = _experts.GetSummonedExperts().Select(e => e.Id.ToString()).ToList(),
-                    Rule = _rules.GetSummonedRules().Select(r => r.Id.ToString()).ToList(),
-                    Workflow = _workflows.GetSummonedWorkflows().Select(w => w.Id.ToString()).ToList(),
-                },
-                Selected = CurrentSelectedPrefs(),
-            };
-            await _preferences.SetAsync("chatTargets", System.Text.Json.JsonSerializer.Serialize(prefs, _prefsJson));
-        }
-        catch { /* 偏好持久化失败不阻塞 */ }
-    }
-
-    /// <summary>持久化当前选中目标（下拉切换时调）：读现有 prefs 只更 Selected 再写回。</summary>
+    /// <summary>持久化当前选中目标（下拉切换时调）：写 Selected 字段（无召唤态）。</summary>
     private async Task PersistSelectedTargetAsync()
     {
         try
         {
-            var json = await _preferences.GetAsync("chatTargets");
-            var prefs = string.IsNullOrWhiteSpace(json)
-                ? new ChatTargetPrefs()
-                : (System.Text.Json.JsonSerializer.Deserialize<ChatTargetPrefs>(json, _prefsJson) ?? new ChatTargetPrefs());
-            prefs.Selected = CurrentSelectedPrefs();
+            var prefs = new ChatTargetPrefs { Selected = CurrentSelectedPrefs() };
             await _preferences.SetAsync("chatTargets", System.Text.Json.JsonSerializer.Serialize(prefs, _prefsJson));
         }
         catch { /* 偏好持久化失败不阻塞 */ }
@@ -1422,18 +1361,17 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             if (_serviceProvider.GetService<Aether.AI.Harness.SelectedLlmHolder>() is { } holder)
             {
                 holder.LlmConfigId = value.Id.ToString();
-                foreach (var expert in _experts.GetSummonedExperts())
+                foreach (var expert in _experts.Experts)
                     _agentRunner.Invalidate(expert.Id);
             }
         }
     }
 
-    /// <summary>三类目标的召唤状态变化（toggle 入池/出池）：刷新统一下拉池 + 持久化召唤列表。
-    /// 召唤只入池，不自动激活——激活是下拉选择的独立动作（与 agent 模型一致）。</summary>
-    private async void OnChatTargetsChanged()
+    /// <summary>三类目标的可选集合变化（新建/删除/catalog reload）：刷新统一下拉池（列全部目标，按 Id+Kind 保留选中）。
+    /// 选中是下拉选择的独立动作（与 agent 模型一致）；此处只刷新池，不自动激活、不持久化召唤态。</summary>
+    private void OnChatTargetsChanged()
     {
         RefreshChatTargetItems();
-        await PersistSummonedTargetsAsync();
     }
 
     /// <summary>下拉选中目标变化：更新模式支持；非启动期统一开新会话（三类一致）+ 持久化选中。</summary>
@@ -1492,9 +1430,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var current = SelectedChatTarget;
             var curKey = TargetKey(current, KindOf(current));
             ChatTargetItems.Clear();
-            foreach (var e in _experts.GetSummonedExperts()) ChatTargetItems.Add(e);
-            foreach (var r in _rules.GetSummonedRules()) ChatTargetItems.Add(r);
-            foreach (var w in _workflows.GetSummonedWorkflows()) ChatTargetItems.Add(w);
+            // 列全部 agent/规则/工作流——无召唤门控，创建即可在下拉选用。
+            foreach (var e in _experts.Experts) ChatTargetItems.Add(e);
+            foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
+            foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
 
             // 同一逻辑目标仍在池中 → 选中其新实例；否则回退第一个（避免清空导致选中丢失）
             object? next = null;
@@ -1868,18 +1807,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     }
 }
 
-/// <summary>聊天目标偏好（chatTargets 键）：三类召唤 id 集合 + 当前选中目标。camelCase JSON 持久化。</summary>
+/// <summary>聊天目标偏好（chatTargets 键）：当前选中目标。camelCase JSON 持久化（旧 Summoned 字段被忽略）。</summary>
 sealed record ChatTargetPrefs
 {
-    public ChatTargetSummoned? Summoned { get; set; }
     public ChatTargetSelected? Selected { get; set; }
-}
-
-sealed record ChatTargetSummoned
-{
-    public List<string> Agent { get; set; } = new();
-    public List<string> Rule { get; set; } = new();
-    public List<string> Workflow { get; set; } = new();
 }
 
 sealed record ChatTargetSelected

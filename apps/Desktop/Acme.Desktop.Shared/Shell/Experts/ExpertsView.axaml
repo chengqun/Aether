@@ -6,16 +6,10 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <DockPanel>
-    <!-- 顶部标题栏 + tab -->
+    <!-- 顶部标题栏 + tab（labs 知识对象页承接 agent/rule/workflow 创建+编辑后，专家页仅留 连接器/MCP/技能 三 tab） -->
     <Border DockPanel.Dock="Top" Classes="page-header">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="top-tab" Content="专家" Command="{Binding ShowAgentTabCommand}"
-                  IsEnabled="{Binding !IsAgentTab}" Padding="12,4" FontSize="13" />
-          <Button Classes="top-tab" Content="规则" Command="{Binding ShowRuleTabCommand}"
-                  IsEnabled="{Binding !IsRuleTab}" Padding="12,4" FontSize="13" />
-          <Button Classes="top-tab" Content="专家团" Command="{Binding ShowWorkflowTabCommand}"
-                  IsEnabled="{Binding !IsWorkflowTab}" Padding="12,4" FontSize="13" />
           <Button Classes="top-tab" Content="连接器" Command="{Binding ShowConnectorTabCommand}"
                   IsEnabled="{Binding !IsConnectorTab}" Padding="12,4" FontSize="13"
                   IsVisible="{Binding HasConnector}" />
@@ -24,103 +18,11 @@
           <Button Classes="top-tab" Content="技能" Command="{Binding ShowSkillTabCommand}"
                   IsEnabled="{Binding !IsSkillTab}" Padding="12,4" FontSize="13" />
         </StackPanel>
-        <Button Grid.Column="2" Content="+ 添加专家" Classes="primary" Click="OnAddExpertClick"
-                Padding="14,6" IsVisible="{Binding IsAgentTab}" />
       </Grid>
     </Border>
 
     <!-- ===== tab 内容（填充剩余空间；三面板叠加，IsVisible 切换） ===== -->
     <Grid>
-    <!-- ===== Rule（规则）面板 ===== -->
-    <Panel IsVisible="{Binding IsRuleTab}">
-      <shell:RulesView DataContext="{Binding Rules}" />
-    </Panel>
-
-    <!-- ===== Workflow（专家团）面板 ===== -->
-    <Panel IsVisible="{Binding IsWorkflowTab}">
-      <shell:WorkflowsView DataContext="{Binding Workflows}" />
-    </Panel>
-
-    <!-- ===== Agent 面板 ===== -->
-    <Panel IsVisible="{Binding IsAgentTab}">
-      <DockPanel>
-        <!-- 专家卡片列表 -->
-        <ScrollViewer Padding="20,16">
-          <StackPanel>
-            <!-- 空状态 -->
-            <Border Classes="empty-state" IsVisible="{Binding !VisibleExperts.Count}" Margin="0,40">
-              <StackPanel Spacing="8">
-                <Path Data="{x:Static shell:Codicons.Extensions}" Stretch="Uniform" Width="40" Height="40" Fill="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                <TextBlock Text="还没有自定义专家" FontSize="15" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}" HorizontalAlignment="Center" />
-                <TextBlock Text="点击右上角「+ 添加专家」创建 Agent" FontSize="12"
-                           Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" />
-              </StackPanel>
-            </Border>
-
-            <!-- 卡片网格 -->
-            <ItemsControl ItemsSource="{Binding VisibleExperts}">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel Orientation="Horizontal" ItemSpacing="12" LineSpacing="12" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Classes="card" Width="300">
-                    <StackPanel Spacing="6">
-                      <!-- 标题行 -->
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{Binding DisplayIcon}" FontSize="18" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
-                        <Border CornerRadius="4" Padding="5,1" Background="{DynamicResource WarningBgBrush}" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding SourceBadge}" FontSize="9" Foreground="{DynamicResource WarningBrush}" />
-                        </Border>
-                      </StackPanel>
-                      <!-- 描述 -->
-                      <TextBlock Text="{Binding Description}" FontSize="12"
-                                 Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" MaxLines="2" />
-                      <!-- 类别 -->
-                      <Border CornerRadius="4" Padding="6,1" Background="{DynamicResource AccentTintBgBrush}" HorizontalAlignment="Left" Margin="0,2,0,0">
-                        <TextBlock Text="{Binding Category}" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
-                      </Border>
-                      <!-- 记忆模式 + 工具数 -->
-                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                        <TextBlock Text="{Binding MemoryLabel}" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
-                        <TextBlock Text="·" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
-                        <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
-                                   Text="{Binding Tools.Count, StringFormat='工具 {0}'}" />
-                      </StackPanel>
-                      <!-- 操作按钮 -->
-                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
-                        <Button Content="召唤" Classes="primary" Click="OnToggleSummonClick" Tag="{Binding}"
-                                Padding="12,4" FontSize="12"
-                                IsVisible="{Binding !IsSummoned}" />
-                        <Button Content="取消召唤" Click="OnToggleSummonClick" Tag="{Binding}"
-                                Padding="12,4" FontSize="12"
-                                IsVisible="{Binding IsSummoned}" />
-                        <Button Content="编辑" Click="OnEditClick" Tag="{Binding}"
-                                Padding="12,4" FontSize="12" />
-                        <Button Content="删除" Classes="danger" Click="OnDeleteClick" Tag="{Binding}"
-                                Padding="12,4" FontSize="12" />
-                        <Button Content="发布到市场"
-                                Command="{Binding DataContext.PublishToMarketplaceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                CommandParameter="{Binding}"
-                                Padding="12,4" FontSize="12"
-                                IsVisible="{Binding !IsMarketplace}" />
-                      </StackPanel>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </ScrollViewer>
-      </DockPanel>
-    </Panel>
-
     <!-- ===== 连接器面板（数据驱动：ItemsControl + WrapPanel，共享卡片模板） =====
          各租户只提供 IConnectorViewModel.Cards，加卡 = 加项，零 XAML 改动，自动换行。 -->
     <Panel IsVisible="{Binding IsConnectorTab}">
