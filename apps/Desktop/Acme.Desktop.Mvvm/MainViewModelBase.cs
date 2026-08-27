@@ -98,7 +98,6 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             agentRunner,
             _dispatcher,
             serviceProvider.GetRequiredService<McpViewModel>(),
-            serviceProvider.GetRequiredService<SkillViewModel>(),
             serviceProvider.GetService<IConnectorViewModel>());
 
         Activity = new ActivityViewModel(serviceProvider,

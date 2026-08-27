@@ -10,10 +10,9 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Desktop.Mvvm;
 
-/// <summary>专家页 tab（labs 知识对象页承接 agent/rule/workflow 创建+编辑后，专家页仅留 连接器/MCP/技能 三 tab）。</summary>
-public enum ExpertsTab { Connector, Mcp, Skill }
-
-/// <summary>专家页面 ViewModel：专家卡片列表（供聊天下拉 + labs 编辑保存用）。UI 无关。</summary>
+/// <summary>专家页面 ViewModel：专家卡片列表（供聊天下拉 + labs 编辑保存用）+ 连接器面板。
+/// labs 知识对象页承接 agent/rule/workflow/MCP/技能 的创建+编辑后，专家页仅留连接器面板
+/// （MCP/技能管理在资料库 mcp-servers / skills 根目录）。UI 无关。</summary>
 public partial class ExpertsViewModel : ObservableObject
 {
     private readonly ICustomAgentCatalog _catalog;
@@ -21,13 +20,12 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly IUiDispatcher _dispatcher;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        McpViewModel mcp, SkillViewModel skills, IConnectorViewModel? connector = null)
+        McpViewModel mcp, IConnectorViewModel? connector = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
-        Skills = skills ?? throw new ArgumentNullException(nameof(skills));
         Connector = connector;
     }
 
@@ -35,39 +33,13 @@ public partial class ExpertsViewModel : ObservableObject
 
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    /// <summary>当前 tab。</summary>
-    [ObservableProperty] private ExpertsTab _currentTab = ExpertsTab.Connector;
-
-    /// <summary>宿主注入的连接器 VM（null 则无连接器 tab）。</summary>
+    /// <summary>宿主注入的连接器 VM（null 则无连接器面板）。</summary>
     public IConnectorViewModel? Connector { get; }
 
-    /// <summary>MCP 工具服务器 VM（MCP tab）。</summary>
-    public McpViewModel Mcp { get; }
-
-    /// <summary>技能 VM（技能 tab，只读展示已加载 skill：name/category/description + 正文预览）。</summary>
-    public SkillViewModel Skills { get; }
-
-    public bool IsConnectorTab => CurrentTab == ExpertsTab.Connector;
-    public bool IsMcpTab => CurrentTab == ExpertsTab.Mcp;
-    public bool IsSkillTab => CurrentTab == ExpertsTab.Skill;
     public bool HasConnector => Connector is not null;
 
-    partial void OnCurrentTabChanged(ExpertsTab value)
-    {
-        OnPropertyChanged(nameof(IsConnectorTab));
-        OnPropertyChanged(nameof(IsMcpTab));
-        OnPropertyChanged(nameof(IsSkillTab));
-        if (value == ExpertsTab.Connector && Connector is not null)
-            Connector.RefreshAsync().SafeFireAndForget();
-        if (value == ExpertsTab.Mcp)
-            Mcp.LoadAsync().SafeFireAndForget();
-        if (value == ExpertsTab.Skill)
-            Skills.LoadAsync().SafeFireAndForget();
-    }
-
-    [RelayCommand] private void ShowConnectorTab() { if (HasConnector) CurrentTab = ExpertsTab.Connector; }
-    [RelayCommand] private void ShowMcpTab() => CurrentTab = ExpertsTab.Mcp;
-    [RelayCommand] private void ShowSkillTab() => CurrentTab = ExpertsTab.Skill;
+    /// <summary>MCP 工具服务器 VM（agent 编辑器 MCP 区用——列 server 供勾选；MCP 管理面板在资料库 mcp-servers 根目录）。</summary>
+    public McpViewModel Mcp { get; }
 
     /// <summary>可选目标集合变更（新建/删除/catalog reload）时触发。ChatWorkspaceViewModel 订阅刷新统一下拉池。</summary>
     public event Action? TargetsChanged;
@@ -75,7 +47,7 @@ public partial class ExpertsViewModel : ObservableObject
     /// <summary>外部触发目标集合变更通知（catalog Changed reload 后调用，让聊天下拉框刷新新增项）。</summary>
     internal void NotifyTargetsChanged() => TargetsChanged?.Invoke();
 
-    /// <summary>从目录加载所有自定义 Agent。</summary>
+    /// <summary>从目录加载所有自定义 Agent + 刷新连接器状态。</summary>
     public async Task LoadAsync()
     {
         try
@@ -130,6 +102,10 @@ public partial class ExpertsViewModel : ObservableObject
 
         // 加载 MCP server 列表（编辑器 MCP 区用；MCP 连接是异步的，此处取当前快照）。
         try { await Mcp.LoadAsync(); } catch { }
+
+        // 刷新连接器卡状态（原 tab 切换刷新——tab 去除后改在 LoadAsync 即启动/catalog 变更时刷新；
+        // 运行时连接状态由各卡 LogReceived 事件订阅实时更新）。
+        Connector?.RefreshAsync().SafeFireAndForget();
     }
 
     /// <summary>保存专家（新增或更新）。labs 知识对象页编辑器保存经此落库。</summary>

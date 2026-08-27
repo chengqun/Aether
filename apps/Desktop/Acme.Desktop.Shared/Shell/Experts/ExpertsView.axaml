@@ -6,26 +6,14 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <DockPanel>
-    <!-- 顶部标题栏 + tab（labs 知识对象页承接 agent/rule/workflow 创建+编辑后，专家页仅留 连接器/MCP/技能 三 tab） -->
+    <!-- 顶部标题栏（labs 知识对象页承接 agent/rule/workflow/MCP/技能 创建+编辑后，专家页仅留连接器面板） -->
     <Border DockPanel.Dock="Top" Classes="page-header">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="top-tab" Content="连接器" Command="{Binding ShowConnectorTabCommand}"
-                  IsEnabled="{Binding !IsConnectorTab}" Padding="12,4" FontSize="13"
-                  IsVisible="{Binding HasConnector}" />
-          <Button Classes="top-tab" Content="MCP工具" Command="{Binding ShowMcpTabCommand}"
-                  IsEnabled="{Binding !IsMcpTab}" Padding="12,4" FontSize="13" />
-          <Button Classes="top-tab" Content="技能" Command="{Binding ShowSkillTabCommand}"
-                  IsEnabled="{Binding !IsSkillTab}" Padding="12,4" FontSize="13" />
-        </StackPanel>
-      </Grid>
+      <TextBlock Text="连接器" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
     </Border>
 
-    <!-- ===== tab 内容（填充剩余空间；三面板叠加，IsVisible 切换） ===== -->
-    <Grid>
     <!-- ===== 连接器面板（数据驱动：ItemsControl + WrapPanel，共享卡片模板） =====
          各租户只提供 IConnectorViewModel.Cards，加卡 = 加项，零 XAML 改动，自动换行。 -->
-    <Panel IsVisible="{Binding IsConnectorTab}">
+    <Panel IsVisible="{Binding HasConnector}">
       <ScrollViewer Padding="20,16" HorizontalScrollBarVisibility="Disabled">
         <ItemsControl ItemsSource="{Binding Connector.Cards}">
           <ItemsControl.ItemsPanel>
@@ -83,16 +71,5 @@
         </ItemsControl>
       </ScrollViewer>
     </Panel>
-
-    <!-- ===== MCP 工具服务器面板 ===== -->
-    <Panel IsVisible="{Binding IsMcpTab}">
-      <shell:McpView DataContext="{Binding Mcp}" />
-    </Panel>
-
-    <!-- ===== 技能面板（只读展示已加载 skill：卡片列表 + 正文 Markdown 预览 + 打开 skills 目录） ===== -->
-    <Panel IsVisible="{Binding IsSkillTab}">
-      <shell:SkillView DataContext="{Binding Skills}" />
-    </Panel>
-    </Grid>
   </DockPanel>
 </UserControl>
