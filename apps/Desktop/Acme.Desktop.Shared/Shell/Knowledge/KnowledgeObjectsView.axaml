@@ -76,6 +76,10 @@
         <Border IsVisible="{Binding IsKnowledgeNode}">
           <shell:DocumentKnowledgeView DataContext="{Binding ActiveEditVm}"/>
         </Border>
+        <!-- 技能（SKILL.md）：上栏 form（name/description/category + body 预览），下栏源码；镜像知识对象，无 links/图 -->
+        <Border IsVisible="{Binding IsSkillNode}">
+          <shell:SkillEditView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
         <!-- README：markdown 上栏预览（下栏=可编辑源码，见下 Grid.Row=2） -->
         <Border IsVisible="{Binding IsReadme}">
           <ctl:SelectableMarkdownViewer Markdown="{Binding ReadmeMarkdown}" Margin="8,6"/>

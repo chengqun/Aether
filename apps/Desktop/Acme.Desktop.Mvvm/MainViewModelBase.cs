@@ -82,6 +82,9 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
                 await Experts.LoadAsync();
                 await Workflows.LoadAsync();
                 await Rules.LoadAsync();
+                // 技能也在 labs/skills/——catalog Changed（labs watcher 驱动）时刷新 SkillRegistry 索引 +
+                // 技能 tab 卡片（SkillViewModel.LoadAsync 内部 ReloadFromDirectory，_reloading 守卫防自递归）。
+                serviceProvider.GetService<SkillViewModel>()?.LoadAsync().SafeFireAndForget();
                 // 通知聊天下拉框刷新新增项——使外部编辑/git pull/AI 工具创建的 agent/rule/workflow
                 // 无需任何额外操作即可在聊天下拉直接选用。
                 Experts.NotifyTargetsChanged();

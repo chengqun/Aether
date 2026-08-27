@@ -61,8 +61,17 @@ public static class DesktopCompositionExtensions
             o.OpenAI.Endpoint = llm.Endpoint;
             // HarnessAgent 文件记忆 provider 的可写根目录（.app 启动 CWD=/ 只读，必须显式指定）。
             o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
-            // skills 目录：MAF AgentFileSkillsSource 从此加载 SKILL.md（+ 脚本/资源）。
-            o.SkillsDirectory = Path.Combine(tenantDir, "skills");
+            // 迁移：skills/ → labs/skills/（技能迁入 labs 统一创作面）。幂等——labs/skills 已在则跳。
+            var oldSkillsDir = Path.Combine(tenantDir, "skills");
+            var newSkillsDir = Path.Combine(tenantDir, "labs", "skills");
+            if (Directory.Exists(oldSkillsDir) && !Directory.Exists(newSkillsDir))
+            {
+                Directory.CreateDirectory(Path.Combine(tenantDir, "labs"));
+                try { Directory.Move(oldSkillsDir, newSkillsDir); }
+                catch (IOException) { /* 并发/权限——下次启动重试，不阻断启动 */ }
+            }
+            // skills 目录：labs 统一创作面（labs/skills/<name>/SKILL.md）；MAF AgentFileSkillsSource 从此加载 SKILL.md（+ 脚本/资源）。
+            o.SkillsDirectory = newSkillsDir;
             // Playwright 浏览器持久 profile：browser_open 工具 + 网络面板共用，登录一次后续复用（不碰日常浏览器）。
             o.BrowserProfileDir = Path.Combine(tenantDir, "browser-profile");
         });
@@ -192,8 +201,8 @@ public static class DesktopCompositionExtensions
         // 规则程序注册表 + run_rule 工具（共享宿主胶水）：规则 agent（Engine=Rule）的程序同时可被 LLM agent
         // 经 run_rule(name,input) 调用（省 token：executor 内部跑工具，原始结果对 LLM 不可见）。标 Safe。
         aether.AddRunRuleTool();
-        // —— 公共 AI skill（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）——
-        var skillsDir = Path.Combine(tenantDir, "skills");
+        // —— 公共 AI skill（提示词级能力，从 labs/skills/ 加载 SKILL.md）——
+        var skillsDir = Path.Combine(tenantDir, "labs", "skills");
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(skillsDir));
 
         // 自定义 Agent 目录 + 运行器（依赖 ToolRegistry + 各 parser）

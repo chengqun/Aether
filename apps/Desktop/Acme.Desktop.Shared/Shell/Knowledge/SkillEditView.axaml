@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:Acme.Desktop.Shared.Shell.Controls"
+             x:Class="Acme.Desktop.Shared.Shell.SkillEditView"
+             Classes="form-fields">
+
+  <!-- 技能表单（镜像 DocumentKnowledgeView，去 links/图）。
+       DataContext = SkillEditViewModel（由 KnowledgeObjectsViewModel.ActiveEditVm 提供）。
+       配置区（name/description/category）折叠为单行「⚙ 配置 + 摘要」——技能默认展开（3 字段是技能身份，新建时须填）。 -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="2" Margin="10,6">
+
+      <Expander IsExpanded="True">
+        <Expander.Header>
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Grid.Column="0" Text="⚙ 配置" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="{Binding ConfigSummary}" FontSize="11" Margin="10,0,0,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"/>
+          </Grid>
+        </Expander.Header>
+        <StackPanel Spacing="6">
+          <StackPanel Spacing="2">
+            <TextBlock Text="name（显示名）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Name}" PlaceholderText="技能显示名（供 agent 索引；空时用文件夹名）"
+                     ToolTip.Tip="front-matter name 字段。agent skill_list/load_skill 用此名；空时回退到文件夹名(slug)"/>
+          </StackPanel>
+
+          <StackPanel Spacing="2">
+            <TextBlock Text="description（一句话描述）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Description}" PlaceholderText="供 agent 判断是否 load_skill"
+                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44"/>
+          </StackPanel>
+
+          <StackPanel Spacing="2">
+            <TextBlock Text="category（分类）" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <TextBox Text="{Binding Category}" PlaceholderText="如 通用/分析/工具"/>
+          </StackPanel>
+        </StackPanel>
+      </Expander>
+
+      <!-- body 只读 markdown 预览（源码驱动，下栏编辑→SyncFromSource→Body 刷新） -->
+      <ctl:SelectableMarkdownViewer Markdown="{Binding Body}" MinHeight="200" Margin="0,2"/>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

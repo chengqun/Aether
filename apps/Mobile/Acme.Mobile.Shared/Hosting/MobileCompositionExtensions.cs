@@ -67,7 +67,16 @@ public static class MobileCompositionExtensions
             o.OpenAI.ModelId = llm.ModelName;
             o.OpenAI.Endpoint = llm.Endpoint;
             o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
-            o.SkillsDirectory = Path.Combine(tenantDir, "skills");
+            // 迁移：skills/ → labs/skills/（技能迁入 labs 统一创作面；与桌面端路径一致）。幂等——labs/skills 已在则跳。
+            var oldSkillsDir = Path.Combine(tenantDir, "skills");
+            var newSkillsDir = Path.Combine(tenantDir, "labs", "skills");
+            if (Directory.Exists(oldSkillsDir) && !Directory.Exists(newSkillsDir))
+            {
+                Directory.CreateDirectory(Path.Combine(tenantDir, "labs"));
+                try { Directory.Move(oldSkillsDir, newSkillsDir); }
+                catch (IOException) { /* 并发/权限——下次启动重试，不阻断启动 */ }
+            }
+            o.SkillsDirectory = newSkillsDir;
         });
 
         services.AddAetherTelemetry(o => o.ConsoleEnabled = true);
@@ -124,8 +133,8 @@ public static class MobileCompositionExtensions
         // 规则程序注册表 + run_rule 工具（共享宿主胶水；YAML 规则。CodeRule 需 Roslyn，手机跳过）。
         aether.AddRunRuleTool();
 
-        // skills（提示词级能力，从租户数据目录的 skills/ 加载 SKILL.md）
-        aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(Path.Combine(tenantDir, "skills")));
+        // skills（提示词级能力，从 labs/skills/ 加载 SKILL.md）
+        aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(Path.Combine(tenantDir, "labs", "skills")));
 
         // 自定义 Agent 目录 + 运行器（依赖 ToolRegistry + 各 parser）
         aether.AddCustomAgents();

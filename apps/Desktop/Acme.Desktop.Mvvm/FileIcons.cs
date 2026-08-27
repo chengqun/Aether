@@ -20,6 +20,9 @@ public static class FileIcons
     /// <summary>知识对象图标（<c>.md</c>/<c>.md</c> 知识对象文件——对标 note 节点 knowledge 图标：Lucide 知识 stroke + 青，非语言 logo）。</summary>
     public static Icon Knowledge { get; } = new(NavIcons.Knowledge, "#0891B2", false);
 
+    /// <summary>技能图标（<c>SKILL.md</c>——Lucide sparkles stroke + 紫，非语言 logo；供 labs 树技能节点）。</summary>
+    public static Icon Skill { get; } = new(NavIcons.Sparkles, "#7C3AED", false);
+
     // —— 内联 Lucide stroke 图标（IsFill=false）。品牌色配语义，明暗两主题均可见。 ——
     // 项目文件（.csproj 等）——立方体/包。
     private const string ProjectIcon =

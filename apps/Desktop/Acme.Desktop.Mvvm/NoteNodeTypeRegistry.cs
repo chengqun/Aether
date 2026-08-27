@@ -28,6 +28,9 @@ public static class NoteNodeTypeRegistry
             new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate,       false, false, false),
             new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           true,  false, false),
             new(NoteNodeType.LeanAlgorithm, "Lean 算法", NavIcons.Cpu,    "#0EA5E9", "cpu",       "csharp", "新 Lean 算法", LeanAlgorithmTemplate,       false, false, false),
+            // 技能是文件夹节点 skills/<name>/SKILL.md（+ 可选兄弟脚本）。镜像知识对象两栏 form（无 links）。
+            // HasAgentRunner=false——技能无运行时缓存需失效；IsChatTarget=false——技能非聊天目标，是跨 agent 按需 load_skill 引用的提示词能力。
+            new(NoteNodeType.Skill,     "技能",      NavIcons.Sparkles,  "#7C3AED", "sparkles",  "markdown", "新技能",   SkillTemplate,                  true,  false, false),
         };
     }
 
@@ -234,5 +237,19 @@ steps:
       minToolCalls: 1
     action:
       replyText: '{result}'
+";
+
+    /// <summary>
+    /// 技能默认模板：YAML front-matter（name/description/category）+ markdown 正文，与 <c>SkillSourceParser</c> 往返一致。
+    /// 技能是跨 agent 按需 <c>load_skill</c> 引用的提示词能力——agent 跑时 <c>AgentFileSkillsSource</c> 直读
+    /// <c>skills/&lt;name&gt;/SKILL.md</c>。name 同时是文件夹名(slug)与 front-matter 字段。
+    /// 文件夹布局（SKILL.md + 可选兄弟脚本 .py/.sh/.js）由运行时强制，不可扁平化。
+    /// </summary>
+    private const string SkillTemplate = @"---
+name: 新技能
+description: 一句话描述技能用途（供 agent 索引判断是否 load）
+category: 通用
+---
+（在此写技能指令 / 脚本调用说明 / 任何 markdown）
 ";
 }

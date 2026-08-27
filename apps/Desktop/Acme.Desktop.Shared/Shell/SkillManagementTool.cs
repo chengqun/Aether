@@ -51,6 +51,12 @@ public sealed class SkillManagementTool
     [Description("列出当前已加载的 skill（名称/描述/分类）。只读，无副作用。添加/删除 skill 前先调此确认现有 skill，避免重名。")]
     public Task<ListOutput> ListSkillsAsync(CancellationToken cancellationToken = default)
     {
+        // 先 reload 再列——保证 agent 调 skill_list 拿新鲜索引（labs 编辑/新建 SKILL.md 后即时反映）。
+        if (!string.IsNullOrWhiteSpace(_skillsDirectory))
+        {
+            try { _registry.ReloadFromDirectory(_skillsDirectory); }
+            catch { /* 目录不存在/IO 异常——返回当前已加载索引，不阻断 */ }
+        }
         var metas = _registry.GetAllMetas();
         return Task.FromResult(new ListOutput
         {

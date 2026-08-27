@@ -70,6 +70,10 @@ public static class NavIcons
     public const string Star =
         "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z";
 
+    /// <summary>技能（sparkles，提示词能力）</summary>
+    public const string Sparkles =
+        "M9.937 15.539A2 2 0 0 0 8.5 14.063l-6.135-1.583a.5.5 0 0 1 0-.96L8.5 9.938A2 2 0 0 0 9.938 8.5l1.582-6.135a.5.5 0 0 1 .961 0L14.062 8.5a2 2 0 0 0 1.437 1.438l6.136 1.581a.5.5 0 0 1 0 .961L15.5 14.063a2 2 0 0 0-1.438 1.437l-1.583 6.135a.5.5 0 0 1-.96 0z M20 3v4 M22 5h-4 M4 17v2 M5 18H3";
+
     /// <summary>书签</summary>
     public const string Bookmark =
         "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z";

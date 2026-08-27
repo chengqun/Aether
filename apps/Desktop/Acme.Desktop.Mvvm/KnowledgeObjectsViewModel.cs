@@ -8,6 +8,7 @@ using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Acme.Notes.Domain.Catalog;
 using Acme.Notes.Domain.Knowledge;
+using Acme.Notes.Domain.Skills;
 // 仅引两个运行器接口的别名（非整命名空间）——Aether.AI.Core.Agents 与 Acme.Notes.Domain.Agents 各有一个
 // AgentMemoryMode 平行枚举，整命名空间 using 会致 CS0104 歧义。
 using ICustomAgentRunner = Aether.AI.Core.Agents.ICustomAgentRunner;
@@ -148,6 +149,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public bool IsRuleNode => ActiveNodeType == NoteNodeType.Rule;
     public bool IsCodeRuleNode => ActiveNodeType == NoteNodeType.CodeRule;
     public bool IsStrategyNode => ActiveNodeType == NoteNodeType.Strategy;
+    /// <summary>技能节点（SKILL.md）——上栏 SkillEditView 两栏 form（镜像知识对象，无 links/图）。</summary>
+    public bool IsSkillNode => ActiveNodeType == NoteNodeType.Skill;
     /// <summary>纯代码/纯文本类型（Note/CodeStrategy/LeanAlgorithm）——无上栏表单，全宽源码编辑器。</summary>
     public bool IsCodeOnlyNode => ActiveNodeType is NoteNodeType.Note or NoteNodeType.CodeStrategy or NoteNodeType.LeanAlgorithm;
 
@@ -185,6 +188,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsRuleNode));
         OnPropertyChanged(nameof(IsCodeRuleNode));
         OnPropertyChanged(nameof(IsStrategyNode));
+        OnPropertyChanged(nameof(IsSkillNode));
         OnPropertyChanged(nameof(IsCodeOnlyNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(IsReadme));
@@ -207,7 +211,15 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         try { rel = Path.GetRelativePath(RootPath, node.Path); }
         catch { return null; }
         var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
-        return CatalogNoteDirectory.TypeForDirectory(seg);
+        var type = CatalogNoteDirectory.TypeForDirectory(seg);
+        // 技能是文件夹节点：skills/<name>/SKILL.md。仅 SKILL.md（不区分大小写）属 Skill 类型→走两栏 form；
+        // 兄弟脚本（.py/.sh/.js）返 null→全宽代码编辑器（按扩展名经 SyntaxMap 高亮）。
+        if (type == NoteNodeType.Skill
+            && !string.Equals(Path.GetFileName(node.Path), "SKILL.md", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        return type;
     }
 
     /// <summary>树节点选中：文件→按类型分流打开；文件夹→打开该目录 README（<c>readme.md</c>，无则仅展开/收起由 TreeViewItem 默认处理）。</summary>
@@ -251,11 +263,13 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         try { content = await File.ReadAllTextAsync(filePath, ct); }
         catch (Exception ex) { StatusMessage = $"打开失败：{ex.Message}"; return; }
 
-        // 切换文件前退订旧知识对象表单（防其 SourceChanged 在新文件上下文误触发 _currentSource）。
+        // 切换文件前退订旧 form 表单（防其 SourceChanged 在新文件上下文误触发 _currentSource）。
         // 调用方（OnSelectedNodeChanged 文件分支 / OpenFolderReadmeAsync knowledge 分支 / OpenKnowledgeByPathAsync）
-        // 可能未先退订，此处自包含兜底——非 DocumentKnowledgeViewModel 时 no-op。
+        // 可能未先退订，此处自包含兜底——非 DocumentKnowledgeViewModel/SkillEditViewModel 时 no-op。
         if (ActiveEditVm is DocumentKnowledgeViewModel prevKvm)
             prevKvm.SourceChanged -= OnKnowledgeSourceChanged;
+        if (ActiveEditVm is SkillEditViewModel prevSkill)
+            prevSkill.SourceChanged -= OnKnowledgeSourceChanged;
 
         _activePath = filePath;
         var type = ResolveType(node);
@@ -277,7 +291,12 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             // form 类型先刷新对应列表（新建/外部新增文件时列表可能 stale，防 item 找不到 → 表单不显示）。
             await RefreshListForTypeAsync(type);
             // 建 edit VM（form 类型）或清空（代码类型全宽）。
-            editVm = await BuildEditVmAsync(type, filePath, content, NameSansExtension(filePath));
+            // 技能显示名取父文件夹名（技能 slug）——SKILL.md 经 NameSansExtension 得 "SKILL" 无意义；
+            // BuildSkillVm 用此名作 SkillEditViewModel.FolderName（ConfigSummary 「name: {slug} · {category}」）。
+            var name = type == NoteNodeType.Skill
+                ? Path.GetFileName(Path.GetDirectoryName(filePath)) ?? NameSansExtension(filePath)
+                : NameSansExtension(filePath);
+            editVm = await BuildEditVmAsync(type, filePath, content, name);
         }
         catch (Exception ex)
         {
@@ -309,6 +328,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             case NoteNodeType.Workflow: return await BuildWorkflowVmAsync(content);
             case NoteNodeType.Strategy: return BuildStrategyVm(filePath, content, name);
             case NoteNodeType.Knowledge: return BuildKnowledgeVm(filePath, content, name);
+            case NoteNodeType.Skill: return BuildSkillVm(filePath, content, name);
             default: return null; // Note/CodeStrategy/LeanAlgorithm/未知 → 全宽源码
         }
     }
@@ -496,6 +516,16 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         return vm;
     }
 
+    /// <summary>技能 edit VM（镜像 <see cref="BuildKnowledgeVm"/>，去 links/图）。name=技能 slug（父文件夹名）。</summary>
+    private object? BuildSkillVm(string filePath, string content, string name)
+    {
+        var parser = ServiceProvider.GetRequiredService<ISkillSourceParser>();
+        var vm = new SkillEditViewModel(parser, name);
+        vm.SourceChanged += OnKnowledgeSourceChanged;
+        vm.Load(content);
+        return vm;
+    }
+
     /// <summary>策略文件无 front-matter id：用相对路径求稳定 Guid（策略走 <c>StrategyNoteSource</c>，身份=路径）。</summary>
     private static Guid DeterministicGuid(string path)
     {
@@ -657,6 +687,24 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     {
         var root = RootPath ?? _knowledgeDirProvider.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root)) { StatusMessage = "未打开 labs 目录"; return null; }
+
+        // 技能是文件夹节点：skills/<name>/SKILL.md（+ 可选兄弟脚本）。不建扁平 skills/<name>.md——
+        // 运行时 SkillRegistry/AgentFileSkillsSource 扫子目录找 SKILL.md，扁平化则加载不到。
+        if (type == NoteNodeType.Skill)
+        {
+            var skillDir = Path.Combine(root, CatalogNoteDirectory.For(type).DirectoryName, SanitizeFileName(name));
+            Directory.CreateDirectory(skillDir);
+            var skillFile = Path.Combine(skillDir, "SKILL.md");
+            if (File.Exists(skillFile)) { StatusMessage = $"已存在同名技能：{name}"; return null; }
+            try
+            {
+                await File.WriteAllTextAsync(skillFile, BuildNewContent(type, name));
+                StatusMessage = string.Empty;
+                return skillFile;
+            }
+            catch (Exception ex) { StatusMessage = $"新建失败：{ex.Message}"; return null; }
+        }
+
         var layout = CatalogNoteDirectory.For(type);
         var fullDir = Path.Combine(root, layout.DirectoryName);
         Directory.CreateDirectory(fullDir);
@@ -868,16 +916,34 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         // 文件：仅当该目录属于某个类型（subtreeType 非 null）时，收该类型扩展名的文件。
         if (subtreeType is { } t)
         {
-            var ext = CatalogNoteDirectory.For(t).Extension;
-            foreach (var file in Directory.EnumerateFiles(fullPath, "*" + ext)
-                         .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+            // 技能是文件夹节点：skills/<name>/ 含 SKILL.md + 可选兄弟脚本（.py/.sh/.js）。列全部文件（无 .md
+            // filter）——否则脚本被隐藏。SKILL.md 走技能图标（sparkles），脚本走扩展名图标（Python/Bash/JS，
+            // null=FileIcons.ForFile 经 iconFileName 解析）。显示名=文件名（SKILL.md / foo.py，清晰直白）。
+            if (t == NoteNodeType.Skill)
             {
-                var fileName = Path.GetFileName(file);
-                // 排除目录 README（readme.md / readme.ok）——它是目录说明，点目录时经 OpenFolderReadmeAsync 显示，不进树。
-                if (IsReadmeFile(fileName)) continue;
-                var stem = fileName;
-                var display = StripCompound(stem, ext);
-                node.Children.Add(new FileNode(display, stem, file, isFolder: false, iconOverride: TypeIcon(t)));
+                foreach (var file in Directory.EnumerateFiles(fullPath)
+                             .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (IsReadmeFile(fileName)) continue;
+                    var isSkillFile = string.Equals(fileName, "SKILL.md", StringComparison.OrdinalIgnoreCase);
+                    node.Children.Add(new FileNode(fileName, fileName, file, isFolder: false,
+                        iconOverride: isSkillFile ? TypeIcon(t) : null));
+                }
+            }
+            else
+            {
+                var ext = CatalogNoteDirectory.For(t).Extension;
+                foreach (var file in Directory.EnumerateFiles(fullPath, "*" + ext)
+                             .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+                {
+                    var fileName = Path.GetFileName(file);
+                    // 排除目录 README（readme.md / readme.ok）——它是目录说明，点目录时经 OpenFolderReadmeAsync 显示，不进树。
+                    if (IsReadmeFile(fileName)) continue;
+                    var stem = fileName;
+                    var display = StripCompound(stem, ext);
+                    node.Children.Add(new FileNode(display, stem, file, isFolder: false, iconOverride: TypeIcon(t)));
+                }
             }
         }
         return node;

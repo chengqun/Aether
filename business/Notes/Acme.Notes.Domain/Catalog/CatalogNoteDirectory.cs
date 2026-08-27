@@ -24,6 +24,9 @@ public static class CatalogNoteDirectory
             [NoteNodeType.CodeStrategy] = new("codestrategies", ".cs"),
             [NoteNodeType.Strategy] = new("strategies", ".strategy.yaml"),
             [NoteNodeType.LeanAlgorithm] = new("leanalgorithms", ".lean.cs"),
+            // 技能是文件夹节点：skills/<name>/SKILL.md（+ 可选兄弟脚本 .py/.sh/.js）。
+            // 扩展名 .md 仅 catalog source glob 用；labs 树对 Skill 子树列全部文件（见 KnowledgeObjectsViewModel.BuildNode）。
+            [NoteNodeType.Skill] = new("skills", ".md"),
         };
 
     /// <summary>取某类型的目录名与扩展名（未知类型回退 <see cref="NoteNodeType.Note"/>）。</summary>
