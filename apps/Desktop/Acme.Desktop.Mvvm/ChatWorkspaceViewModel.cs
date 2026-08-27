@@ -1228,6 +1228,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _ => (Guid.Empty, ChatTargetKind.None),
     };
     private (Guid Id, ChatTargetKind Kind) _selectedTargetKey = (Guid.Empty, ChatTargetKind.None);
+    /// <summary>下拉池刷新时静默重定向选中实例（同一逻辑目标的新实例）标志——此时只同步引用/key，
+    /// 不重置当前会话。与用户主动在下拉切目标（会开新会话）严格区分：二者共享 OnSelectedChatTargetChanged。</summary>
+    private bool _isReloadingTarget;
 
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
@@ -1398,16 +1401,18 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         if (_isInitializing) return;
 
-        // 运行中的流式不能被程序化重载（git 命令改写 labs → catalog reload → RefreshChatTargetItems
-        // 重定向 SelectedChatTarget）中断/清空：切目标本就是用户主动动作，运行中不可能有合法切换。
-        // 无守卫时，重载瞬时窗口 ChatTargetItems 缺当前目标 → SelectedChatTarget 降为 null/首项 →
-        // key 变化 → Messages.Clear()，会话还在跑（IsAgentRunning 仍 true）但流式被清空。
+        // 程序化下拉池刷新（catalog reload → RefreshChatTargetItems）重定向的是「同一逻辑目标的实例」，
+        // 仅是展示/引用同步，不该重置会话。labs 目录任意文件变更（含与聊天无关的知识对象/技能）都会
+        // 触发这条 reload——若在此「切目标→清空会话」，改个知识对象就把正在进行的对话清掉了（逻辑错误）。
+        if (_isReloadingTarget) return;
+
+        // 运行中的流式不能被程序化重载中断/清空（兜底：切目标本就是用户主动动作，运行中不可能合法切换）。
         if (IsAgentRunning) return;
 
         // 同一逻辑目标（同 Id+Kind；实例可能因 reload 被替换）→ 非用户切换，不重置会话。
         if (newKey == prevKey) return;
 
-        // 统一行为变更：切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
+        // 统一行为变更：用户主动切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
         ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
@@ -1448,13 +1453,19 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
             foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
 
-            // 同一逻辑目标仍在池中 → 选中其新实例；找不到则保持原选中（重载瞬时窗口集合可能为空/缺项，
-            // 摘掉目标会触发 key 变化 → OnSelectedChatTargetChanged 清空聊天——运行中尤其致命，见其 IsAgentRunning 守卫）。
-            // 仅在目标确实仍可定位时重定向实例；退失踪（真删除/改名）由用户下次切目标或恢复流程处理。
+            // 同一逻辑目标仍在池中 → 静默把 SelectedChatTarget 重定向到其新实例（仅同步引用/key，
+            // 供 ComboBox 显示正确项 + 后续 KindOf 取值正确）。此重定向**不得**走「切目标 → 重置会话」语义：
+            // 用 _isReloadingTarget 标志让 OnSelectedChatTargetChanged 跳过会话重置（否则 labs 任何文件变更——
+            // 包括与聊天无关的知识对象——触发的 reload 都会在目标瞬时缺位/换实例时清空当前会话）。
             if (curKey.Kind != ChatTargetKind.None)
             {
                 var next = ChatTargetItems.FirstOrDefault(t => TargetKey(t, KindOf(t)) == curKey);
-                if (next is not null) SelectedChatTarget = next;
+                if (next is not null && !ReferenceEquals(next, SelectedChatTarget))
+                {
+                    _isReloadingTarget = true;
+                    try { SelectedChatTarget = next; }
+                    finally { _isReloadingTarget = false; }
+                }
             }
         });
     }
