@@ -609,6 +609,16 @@ public sealed class HarnessRuntime
         // SessionConversationMap 是 ConditionalWeakTable 弱键，session 回收后自动清，无需显式删。
     }
 
+    /// <summary>
+    /// 重建某会话的 frameworkSession（丢弃绑旧 agent 实例/旧 tools 的 MAF session），但**保留** SessionManager 里的
+    /// AetherSession（sessionId 继续有效）。下次 <see cref="RunStreamingAsync(Guid,string,StreamHandlers?,ToolApprovalDecision?,string?,CancellationToken)"/>
+    /// 调 <see cref="GetOrCreateFrameworkSessionAsync"/> 时因 <c>_frameworkSessions</c> 已无该 sessionId 而重建——
+    /// <see cref="RestoringChatHistoryProvider"/> 会按 conversationId 从 DB（<see cref="IConversationStore"/>）恢复历史，
+    /// 故重建不丢多轮记忆。用途：编辑 agent（改 tools/systemPrompt 等）后让新定义下次对话生效，但不重置会话。
+    /// </summary>
+    public void RebuildSessionFramework(Guid sessionId)
+        => _frameworkSessions.TryRemove(sessionId, out _);
+
     private static IEnumerable<string> ExtractToolCalls(AgentResponse response)
     {
         var names = new List<string>();

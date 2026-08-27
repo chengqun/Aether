@@ -40,9 +40,11 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
 
         var id = agentId.ToString();
 
-        // 按需注册（首次或 Invalidate 后）
+        // 按需注册（首次或 Invalidate 后）。诊断日志：编辑 agent 后 Invalidate 会让 HasAgent=false → 走此分支重新 GetAsync（新 tools），
+        // 而 sessionId 复用（映射未删）→ 历史由 RestoringChatHistoryProvider 从 DB 恢复。三信号可验证「新 tools 生效 + 不丢记忆」。
         if (!_runtime.HasAgent(id))
         {
+            System.Diagnostics.Trace.WriteLine($"[AgentRebuild] re-register agent {id} (HasAgent=false → GetAsync 新定义)");
             var def = await _catalog.GetAsync(agentId, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"找不到自定义 Agent：{agentId}");
             _runtime.RegisterAgent(ToAgentDefinition(id, def));
@@ -69,9 +71,14 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
 
     public void Invalidate(Guid agentId)
     {
-        // 清掉该 agent 的所有会话（编辑配置后丢弃旧记忆）
-        foreach (var kv in _sessionsByConversation.Where(x => x.Value.agentId == agentId).ToList())
-            _sessionsByConversation.TryRemove(kv.Key, out _);
+        // 编辑配置后让新定义（tools/systemPrompt/model 等）下次对话生效，但**不重置会话、不丢多轮记忆**：
+        // ① _runtime.Invalidate 清 definition + agent 实例缓存 → 下次 run HasAgent=false → 重新 GetAsync + RegisterAgent（新定义）。
+        // ② 仅清各会话的 frameworkSession（绑旧 agent 实例/旧 tools），**保留** _sessionsByConversation 的
+        //    conversationId→sessionId 映射 + SessionManager 里的 AetherSession → 下次 run 复用同一 sessionId，
+        //    frameworkSession 重建后由 RestoringChatHistoryProvider 按 conversationId 从 DB 恢复历史。
+        //    旧实现误删映射 → 下次 run StartSession 开全新 session，丢记忆 + 泄漏旧 session。
+        foreach (var kv in _sessionsByConversation.Where(x => x.Value.agentId == agentId))
+            _runtime.RebuildSessionFramework(kv.Value.sessionId);
         _runtime.Invalidate(agentId.ToString());
     }
 
