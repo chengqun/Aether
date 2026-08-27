@@ -59,8 +59,19 @@ public static class DesktopCompositionExtensions
             o.OpenAI.ApiKey = llm.ApiKey;
             o.OpenAI.ModelId = llm.ModelName;
             o.OpenAI.Endpoint = llm.Endpoint;
+            // 迁移：agent-file-memory/ → labs/agent-memory/（文件记忆迁入 labs 统一资料面，资料库树可见）。
+            // 幂等——labs/agent-memory 已在则跳。
+            var oldMemDir = Path.Combine(tenantDir, "agent-file-memory");
+            var newMemDir = Path.Combine(tenantDir, "labs", "agent-memory");
+            if (Directory.Exists(oldMemDir) && !Directory.Exists(newMemDir))
+            {
+                Directory.CreateDirectory(Path.Combine(tenantDir, "labs"));
+                try { Directory.Move(oldMemDir, newMemDir); }
+                catch (IOException) { /* 并发/权限——下次启动重试，不阻断启动 */ }
+            }
             // HarnessAgent 文件记忆 provider 的可写根目录（.app 启动 CWD=/ 只读，必须显式指定）。
-            o.FileMemoryRoot = Path.Combine(tenantDir, "agent-file-memory");
+            // 迁入 labs/agent-memory/——agent 经记忆工具写的 .md 文件，资料库树可见可读（MAF 运行时输出，非用户创作）。
+            o.FileMemoryRoot = newMemDir;
             // 迁移：skills/ → labs/skills/（技能迁入 labs 统一创作面）。幂等——labs/skills 已在则跳。
             var oldSkillsDir = Path.Combine(tenantDir, "skills");
             var newSkillsDir = Path.Combine(tenantDir, "labs", "skills");

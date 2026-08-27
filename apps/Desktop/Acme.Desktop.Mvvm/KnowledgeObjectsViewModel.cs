@@ -1028,7 +1028,32 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 }
             }
         }
+        else if (IsAgentMemorySubtree(fullPath))
+        {
+            // agent-memory 是 MAF 运行时输出（agent 经 save_memory 等工具写的 .md 记忆文件 + memories.md 索引 +
+            // _description.md 伴生），非用户创作类型——不注册进 CatalogNoteDirectory，故 subtreeType 为 null。
+            // 此处兜底枚举全部文件（无扩展名 filter），让用户在资料库树看到 agent 的记忆原文；点开走全宽 markdown 编辑器。
+            foreach (var file in Directory.EnumerateFiles(fullPath)
+                         .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+            {
+                var fileName = Path.GetFileName(file);
+                if (IsReadmeFile(fileName)) continue;
+                node.Children.Add(new FileNode(fileName, fileName, file, isFolder: false));
+            }
+        }
         return node;
+    }
+
+    /// <summary>目录是否在 agent-memory 子树下（MAF 文件记忆，labs/agent-memory/&lt;agentId&gt;/*.md）。
+    /// 用于 BuildNode 兜底枚举——agent-memory 非注册类型，subtreeType 为 null，标准枚举不收文件。</summary>
+    private bool IsAgentMemorySubtree(string fullPath)
+    {
+        if (string.IsNullOrEmpty(RootPath)) return false;
+        string rel;
+        try { rel = Path.GetRelativePath(RootPath, fullPath); }
+        catch { return false; }
+        var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        return string.Equals(seg, "agent-memory", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>由目录绝对路径反查类型（取相对 labs 根首段目录名）。根/未知返回 null。</summary>
