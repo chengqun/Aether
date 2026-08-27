@@ -30,7 +30,7 @@ public sealed class LeanAlgorithmNoteSource : ILeanAlgorithmNoteSource
     {
         var root = _source.Root;
         if (string.IsNullOrWhiteSpace(root))
-            throw new InvalidOperationException("未打开 labs 目录");
+            throw new InvalidOperationException("未打开资料库目录");
         var layout = CatalogNoteDirectory.For(NoteNodeType.LeanAlgorithm);
         var fullDir = Path.Combine(root, layout.DirectoryName);
         Directory.CreateDirectory(fullDir);

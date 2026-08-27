@@ -48,11 +48,11 @@
     <Grid RowDefinitions="Auto,*">
       <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
         <Menu Classes="ko-menu">
-          <MenuItem Header="labs" Classes="ko-menu-item">
-            <MenuItem Header="打开 labs 目录" Click="OnOpenFolderClick">
+          <MenuItem Header="资料库" Classes="ko-menu-item">
+            <MenuItem Header="打开资料库目录" Click="OnOpenFolderClick">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="关闭 labs" Command="{Binding CloseProjectCommand}"
+            <MenuItem Header="关闭资料库" Command="{Binding CloseProjectCommand}"
                       IsEnabled="{Binding HasRoot}">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
@@ -77,6 +77,7 @@
               <MenuItem Header="代码规则" Tag="CodeRule" Click="OnNewNodeClick"/>
               <MenuItem Header="知识对象" Tag="Knowledge" Click="OnNewNodeClick"/>
               <MenuItem Header="技能" Tag="Skill" Click="OnNewNodeClick"/>
+              <MenuItem Header="MCP" Tag="McpServer" Click="OnNewNodeClick"/>
               <MenuItem Header="策略（YAML）" Tag="Strategy" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
               <MenuItem Header="代码策略" Tag="CodeStrategy" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
               <MenuItem Header="Lean 算法" Tag="LeanAlgorithm" Click="OnNewNodeClick" IsVisible="{Binding HasTradingTypes}"/>
@@ -119,9 +120,9 @@
                   IsVisible="{Binding !HasRoot}" Spacing="8">
         <Path Data="{x:Static shell:Codicons.Collection}" Stretch="Uniform" Width="36" Height="36"
               HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}" Opacity="0.5"/>
-        <TextBlock Text="未打开 labs 目录" FontSize="13" HorizontalAlignment="Center"
+        <TextBlock Text="未打开资料库目录" FontSize="13" HorizontalAlignment="Center"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-        <TextBlock Text="「labs ▾ 打开 labs 目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
+        <TextBlock Text="「资料库 ▾ 打开资料库目录」" FontSize="11" HorizontalAlignment="Center" Opacity="0.7"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>
       </StackPanel>
     </Grid>

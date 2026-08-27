@@ -43,6 +43,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private bool _isReadme;
     /// <summary>当前选中是否为 skills 根目录（右栏内嵌技能卡片网格，镜像专家页技能 tab）。</summary>
     private bool _isSkillsRoot;
+    /// <summary>当前选中是否为 mcp-servers 根目录（右栏内嵌 MCP 管理面板，镜像专家页 MCP tab）。</summary>
+    private bool _isMcpRoot;
     /// <summary>README 的 markdown 文案（上栏预览绑定源；ObservableProperty 驱动 SelectableMarkdownViewer 重渲染）。</summary>
     [ObservableProperty] private string _readmeMarkdown = string.Empty;
 
@@ -171,11 +173,19 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>技能 tab VM（DI 单例，懒解析）。skills 根目录选中时 labs 右栏内嵌其卡片网格 + 触发 LoadAsync 刷新。</summary>
     public SkillViewModel? SkillVm => _skillVm ??= ServiceProvider.GetService<SkillViewModel>();
 
-    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏；skills 根目录走卡片网格。</summary>
-    public bool HasRightPane => (IsFormNode || IsReadme) && !IsSkillsRoot;
+    /// <summary>当前选中是否为 mcp-servers 根目录——右栏内嵌 McpView 管理面板（镜像专家页 MCP tab）。
+    /// 点树内 .json 走全宽代码编辑器（纯 JSON 配置文件，无 form）。</summary>
+    public bool IsMcpRoot => _isMcpRoot;
 
-    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills 根目录走卡片网格，隐藏编辑器。</summary>
-    public bool EditorVisible => _activePath is not null && !IsSkillsRoot;
+    private McpViewModel? _mcpVm;
+    /// <summary>MCP 工具 tab VM（DI 单例，懒解析）。mcp-servers 根目录选中时 labs 右栏内嵌其管理面板 + 触发 EnsureLoadedAsync 刷新。</summary>
+    public McpViewModel? McpVm => _mcpVm ??= ServiceProvider.GetService<McpViewModel>();
+
+    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏；skills/mcp 根目录走卡片/面板。</summary>
+    public bool HasRightPane => (IsFormNode || IsReadme) && !IsSkillsRoot && !IsMcpRoot;
+
+    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills/mcp 根目录走卡片/面板，隐藏编辑器。</summary>
+    public bool EditorVisible => _activePath is not null && !IsSkillsRoot && !IsMcpRoot;
 
     /// <summary>上下分隔条可见（form 类型或 README）。</summary>
     public bool SplitterVisible => HasRightPane;
@@ -203,6 +213,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(IsReadme));
         OnPropertyChanged(nameof(IsSkillsRoot));
+        OnPropertyChanged(nameof(IsMcpRoot));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
@@ -237,6 +248,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     protected override void OnSelectedNodeChanged(FileNode? value)
     {
         _isSkillsRoot = value is { IsFolder: true } && IsSkillsRootFolder(value);
+        _isMcpRoot = value is { IsFolder: true } && IsMcpRootFolder(value);
         RaiseLayout();
         if (value is null) return;
         if (value.IsFolder)
@@ -250,6 +262,17 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 _activePath = null;
                 ActiveEditVm = null;
                 SkillVm?.LoadAsync().SafeFireAndForget();
+                return;
+            }
+            if (_isMcpRoot)
+            {
+                // mcp-servers 根目录 → 右栏内嵌 MCP 管理面板（McpView，镜像专家页 MCP tab），点树内 .json 走全宽编辑器。
+                // 清旧活动文件态（防旧源码/表单残留）；McpVm.EnsureLoadedAsync 后台重连+刷新工具列表。
+                _isReadme = false;
+                ReadmeMarkdown = string.Empty;
+                _activePath = null;
+                ActiveEditVm = null;
+                McpVm?.EnsureLoadedAsync().SafeFireAndForget();
                 return;
             }
             OpenFolderReadmeAsync(value.Path).SafeFireAndForget();
@@ -298,6 +321,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         var type = ResolveType(node);
         _activeType = type;
         _isSkillsRoot = false;
+        _isMcpRoot = false;
         _isReadme = false;
         ReadmeMarkdown = string.Empty;
         _currentSource = content;
@@ -617,6 +641,20 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         catch { return false; }
     }
 
+    /// <summary>是否为 mcp-servers 根目录（labs 根的直接子目录 <c>mcp-servers/</c>）。
+    /// mcp-servers 根目录选中时右栏内嵌 MCP 管理面板；点树内 .json 走全宽编辑器。</summary>
+    private bool IsMcpRootFolder(FileNode node)
+    {
+        if (!node.IsFolder || string.IsNullOrEmpty(RootPath)) return false;
+        if (ResolveDirType(node.Path) != NoteNodeType.McpServer) return false;
+        try
+        {
+            var rel = Path.GetRelativePath(RootPath, node.Path);
+            return rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length == 1;
+        }
+        catch { return false; }
+    }
+
     /// <summary>目录是否在 knowledge 类型子树下（相对根的首段目录名映射为 <see cref="NoteNodeType.Knowledge"/>）。
     /// 与 <see cref="ResolveType"/> 同构（首段即类型），故 knowledge/ 下任意深度的 README 均判为知识对象。</summary>
     private bool IsKnowledgeSubtree(string folderPath)
@@ -685,19 +723,19 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         {
             NoteNodeType.Agent => head + $"存放 **Agent（智能体）** 定义，文件扩展名 `{ext}`。\n\n" +
                 "每个文件 = YAML front-matter（含 `id:` 稳定身份、name/description/category/tools/skills/model 等）+ Markdown 正文（系统提示词）。\n\n" +
-                "在 labs 页点击文件即打开「上表单 + 下源码」两栏编辑；右键「新建 → Agent」创建。",
+                "在资料库页点击文件即打开「上表单 + 下源码」两栏编辑；右键「新建 → Agent」创建。",
             NoteNodeType.Workflow => head + $"存放 **Workflow（专家团）** 定义，文件扩展名 `{ext}`（JSON）。\n\n" +
                 "JSON 含 `id`、name/description/category、entryAgent + participants（相对路径）与 handoffs 边。\n\n" +
-                "在 labs 页点击文件打开两栏编辑；右键「新建 → Workflow」创建。",
+                "在资料库页点击文件打开两栏编辑；右键「新建 → Workflow」创建。",
             NoteNodeType.Rule => head + $"存放 **规则 agent** 定义，文件扩展名 `{ext}`（单 YAML 文档）。\n\n" +
                 "无 LLM 的确定性规则大脑：name/description/tools + steps（match→action）程序。\n\n" +
-                "在 labs 页点击文件打开两栏编辑；右键「新建 → 规则」创建。",
+                "在资料库页点击文件打开两栏编辑；右键「新建 → 规则」创建。",
             NoteNodeType.CodeRule => head + $"存放 **代码规则** 定义，文件扩展名 `{ext}`。\n\n" +
                 "YAML front-matter + C# 正文（`CodeRuleBrain` 子类，Roslyn 编译成确定性大脑）。\n\n" +
-                "在 labs 页点击文件打开两栏编辑；右键「新建 → 代码规则」创建。",
+                "在资料库页点击文件打开两栏编辑；右键「新建 → 代码规则」创建。",
             NoteNodeType.Knowledge => head + $"存放 **知识对象** 定义，文件扩展名 `{ext}`。\n\n" +
                 "YAML front-matter（kind + links 图边）+ Markdown 正文。typed links 指向其它知识对象文件（相对路径）。\n\n" +
-                "在 labs 页点击文件打开两栏编辑；右键「新建 → 知识对象」创建。",
+                "在资料库页点击文件打开两栏编辑；右键「新建 → 知识对象」创建。",
             NoteNodeType.Strategy => head + $"存放 **声明式 YAML 策略**，文件扩展名 `{ext}`。\n\n" +
                 "纯 YAML 配方：params + indicators + rules（top-down 首匹配）+ default。解析注册进策略选择器供回测。\n\n" +
                 "仅 Stockapp 租户（回测/实盘）。右键「新建 → 策略（YAML）」创建。",
@@ -707,8 +745,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             NoteNodeType.LeanAlgorithm => head + $"存放 **Lean 算法策略**，文件扩展名 `{ext}`（纯 C# 无 front-matter）。\n\n" +
                 "一个 `LeanAlgorithmBase`（= QCAlgorithm）子类，复用 Lean 全部能力，编译注册进 Lean 引擎选择器。\n\n" +
                 "仅 Stockapp 租户。右键「新建 → Lean 算法」创建。",
+            NoteNodeType.Skill => head + $"存放 **技能** 定义（文件夹节点：{dir}/<name>/SKILL.md + 可选兄弟脚本）。\n\n" +
+                "YAML front-matter（name/description/category）+ Markdown 正文，跨 agent 按需 load_skill 引用的提示词能力。\n\n" +
+                "在资料库页点击 skills 根目录显示技能卡片网格；点击 SKILL.md 走两栏编辑；兄弟 .py 走全宽编辑器。",
+            NoteNodeType.McpServer => head + $"存放 **MCP server 配置**，文件扩展名 `{ext}`（mcpServers 映射，兼容 Claude Code/Cursor）。\n\n" +
+                "每个文件 = 一个 MCP server 配置（command/args/env），经 McpServerConfigLoader 扫描自动注册。\n\n" +
+                "在资料库页点击 mcp-servers 根目录显示 MCP 管理面板；点击 .json 走全宽编辑器；右键「新建 → MCP」创建。",
             NoteNodeType.Note => head + $"存放 **文本笔记**，文件扩展名 `{ext}`（Markdown）。\n\n" +
-                "纯文本/文档，无表单无运行时身份。在 labs 页点击文件全宽编辑。",
+                "纯文本/文档，无表单无运行时身份。在资料库页点击文件全宽编辑。",
             _ => head + "（未知类型目录）\n",
         };
     }
@@ -724,7 +768,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public async Task<string?> CreateNodeAsync(NoteNodeType type, string name)
     {
         var root = RootPath ?? _knowledgeDirProvider.DefaultRoot;
-        if (string.IsNullOrWhiteSpace(root)) { StatusMessage = "未打开 labs 目录"; return null; }
+        if (string.IsNullOrWhiteSpace(root)) { StatusMessage = "未打开资料库目录"; return null; }
 
         // 技能是文件夹节点：skills/<name>/SKILL.md（+ 可选兄弟脚本）。不建扁平 skills/<name>.md——
         // 运行时 SkillRegistry/AgentFileSkillsSource 扫子目录找 SKILL.md，扁平化则加载不到。

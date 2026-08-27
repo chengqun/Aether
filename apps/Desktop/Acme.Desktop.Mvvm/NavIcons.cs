@@ -98,6 +98,10 @@ public static class NavIcons
     public const string FolderTree =
         "M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1z M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1z M3 5a2 2 0 0 0 2 2h3 M3 3v13a2 2 0 0 0 2 2h3";
 
+    /// <summary>插头/连接（MCP server 配置，外部工具连接）</summary>
+    public const string Plug =
+        "M12 22v-5 M9 8V2 M15 8V2 M18 8v5a4 4 0 0 0-4 4h-4a4 4 0 0 0-4-4V8";
+
     /// <summary>链接</summary>
     public const string Link =
         "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71";

@@ -79,9 +79,18 @@ public static class DesktopCompositionExtensions
         // OTel：控制台导出（dev 调试；专家需开 EnableOpenTelemetry 才发 Activity）。OTLP 端点按需配。
         services.AddAetherTelemetry(o => o.ConsoleEnabled = true);
 
-        // MCP server 配置目录：扫描 <tenantDir>/mcp-servers/*.json 自动注册 MCP server（stdio/SSE）。
+        // 迁移：mcp-servers/ → labs/mcp-servers/（MCP 迁入 labs 统一创作面）。幂等——labs/mcp-servers 已在则跳。
+        var oldMcpDir = Path.Combine(tenantDir, "mcp-servers");
+        var newMcpDir = Path.Combine(tenantDir, "labs", "mcp-servers");
+        if (Directory.Exists(oldMcpDir) && !Directory.Exists(newMcpDir))
+        {
+            Directory.CreateDirectory(Path.Combine(tenantDir, "labs"));
+            try { Directory.Move(oldMcpDir, newMcpDir); }
+            catch (IOException) { /* 并发/权限——下次启动重试，不阻断启动 */ }
+        }
+        // MCP server 配置目录：扫描 <tenantDir>/labs/mcp-servers/*.json 自动注册 MCP server（stdio/SSE）。
         // 放配置文件即可启用，无需改代码。空目录 = 无 MCP。连接在 InitializeAsync 启动。
-        aether.AddMcpServersFromDirectory(Path.Combine(tenantDir, "mcp-servers"));
+        aether.AddMcpServersFromDirectory(newMcpDir);
 
         // 主题：用户主题 JSON 目录（<tenantDir>/themes/*.json）。内置 light/dark 不依赖此目录。
         services.Configure<DesktopOptions>(o => o.ThemesDirectory = Path.Combine(tenantDir, "themes"));

@@ -105,7 +105,7 @@
                       Spacing="10" Opacity="0.6">
             <Path Data="{x:Static shell:Codicons.Collection}" Stretch="Uniform" Width="36" Height="36"
                   HorizontalAlignment="Center" Fill="{DynamicResource TextSecondaryBrush}"/>
-            <TextBlock Text="labs（九类节点）" FontSize="14"
+            <TextBlock Text="资料库（十一类节点）" FontSize="14"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
             <TextBlock Text="左树按目录分组；点文件 → 对应编辑器（表单/源码）" FontSize="12"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -118,6 +118,13 @@
       <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsSkillsRoot}"
               Background="{DynamicResource CardBgBrush}">
         <shell:SkillView DataContext="{Binding SkillVm}"/>
+      </Border>
+
+      <!-- mcp-servers 根目录：MCP 管理面板（镜像专家页 MCP tab 的 McpView），跨满 EditorGrid 覆盖空态。
+           点树内 .json 走全宽代码编辑器——此面板仅 mcp-servers/ 根目录选中时显示。 -->
+      <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsMcpRoot}"
+              Background="{DynamicResource CardBgBrush}">
+        <shell:McpView DataContext="{Binding McpVm}"/>
       </Border>
     </Grid>
   </Grid>

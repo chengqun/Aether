@@ -27,7 +27,7 @@ public sealed class StrategyNoteSource : IStrategyNoteSource
     {
         var root = _source.Root;
         if (string.IsNullOrWhiteSpace(root))
-            throw new InvalidOperationException("未打开 labs 目录");
+            throw new InvalidOperationException("未打开资料库目录");
         var type = kind == StrategyKind.Code ? NoteNodeType.CodeStrategy : NoteNodeType.Strategy;
         var layout = CatalogNoteDirectory.For(type);
         var fullDir = Path.Combine(root, layout.DirectoryName);

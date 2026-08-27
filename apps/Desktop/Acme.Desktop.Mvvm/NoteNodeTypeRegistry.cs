@@ -31,6 +31,9 @@ public static class NoteNodeTypeRegistry
             // 技能是文件夹节点 skills/<name>/SKILL.md（+ 可选兄弟脚本）。镜像知识对象两栏 form（无 links）。
             // HasAgentRunner=false——技能无运行时缓存需失效；IsChatTarget=false——技能非聊天目标，是跨 agent 按需 load_skill 引用的提示词能力。
             new(NoteNodeType.Skill,     "技能",      NavIcons.Sparkles,  "#7C3AED", "sparkles",  "markdown", "新技能",   SkillTemplate,                  true,  false, false),
+            // MCP server 配置：扁平 mcp-servers/<name>.json（mcpServers 映射格式，兼容 Claude Code/Cursor）。
+            // 纯代码节点（全宽 JSON 编辑器，无 form）；点击 mcp-servers 根目录内嵌 MCP 管理面板（镜像专家页 MCP tab）。
+            new(NoteNodeType.McpServer, "MCP",      NavIcons.Plug,      "#6366F1", "plug",      "json",     "新 MCP 配置", McpTemplate,                  false, false, false),
         };
     }
 
@@ -251,5 +254,19 @@ description: 一句话描述技能用途（供 agent 索引判断是否 load）
 category: 通用
 ---
 （在此写技能指令 / 脚本调用说明 / 任何 markdown）
+";
+
+    /// <summary>
+    /// MCP server 配置默认模板：mcpServers 映射格式（兼容 Claude Code/Cursor .mcp.json）。
+    /// 每个文件 = 一个 MCP server 配置，经 <c>McpServerConfigLoader</c> 扫描注册。name = 文件名 stem。
+    /// </summary>
+    private const string McpTemplate = @"{
+  ""mcpServers"": {
+    ""my-server"": {
+      ""command"": ""npx"",
+      ""args"": [""-y"", ""@modelcontextprotocol/server-filesystem"", ""/path/to/dir""]
+    }
+  }
+}
 ";
 }
