@@ -1398,6 +1398,12 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         if (_isInitializing) return;
 
+        // 运行中的流式不能被程序化重载（git 命令改写 labs → catalog reload → RefreshChatTargetItems
+        // 重定向 SelectedChatTarget）中断/清空：切目标本就是用户主动动作，运行中不可能有合法切换。
+        // 无守卫时，重载瞬时窗口 ChatTargetItems 缺当前目标 → SelectedChatTarget 降为 null/首项 →
+        // key 变化 → Messages.Clear()，会话还在跑（IsAgentRunning 仍 true）但流式被清空。
+        if (IsAgentRunning) return;
+
         // 同一逻辑目标（同 Id+Kind；实例可能因 reload 被替换）→ 非用户切换，不重置会话。
         if (newKey == prevKey) return;
 
@@ -1442,11 +1448,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
             foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
 
-            // 同一逻辑目标仍在池中 → 选中其新实例；否则回退第一个（避免清空导致选中丢失）
-            object? next = null;
+            // 同一逻辑目标仍在池中 → 选中其新实例；找不到则保持原选中（重载瞬时窗口集合可能为空/缺项，
+            // 摘掉目标会触发 key 变化 → OnSelectedChatTargetChanged 清空聊天——运行中尤其致命，见其 IsAgentRunning 守卫）。
+            // 仅在目标确实仍可定位时重定向实例；退失踪（真删除/改名）由用户下次切目标或恢复流程处理。
             if (curKey.Kind != ChatTargetKind.None)
-                next = ChatTargetItems.FirstOrDefault(t => TargetKey(t, KindOf(t)) == curKey);
-            SelectedChatTarget = next ?? ChatTargetItems.FirstOrDefault();
+            {
+                var next = ChatTargetItems.FirstOrDefault(t => TargetKey(t, KindOf(t)) == curKey);
+                if (next is not null) SelectedChatTarget = next;
+            }
         });
     }
 
