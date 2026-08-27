@@ -1407,6 +1407,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         if (newKey == prevKey) return;
 
         // 用户主动切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
+        // 诊断日志：此清空点应是清空会话的**唯一**路径（程序赋值走 SetSelectedTargetSilently 已从机制上杜绝）。
+        // 若运行时观察到「会话被清空但用户并未主动切目标」，Trace 里的 prevKey/newKey/kind 可立即锁定触发源。
+        System.Diagnostics.Trace.WriteLine(
+            $"[ChatTargetSwitch] Messages cleared: prevKey=({prevKey.Id},{prevKey.Kind}) → newKey=({newKey.Id},{newKey.Kind}) kind={kind} IsAgentRunning={IsAgentRunning} IsInitializing={_isInitializing} thread={Environment.CurrentManagedThreadId}");
+
         _currentConversationId = Guid.Empty;
         Messages.Clear();
         ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
