@@ -1255,12 +1255,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             // 读最近会话展开态（UI 无关，可与上面偏好一起在后台读）。
             var expanded = await _preferences.GetAsync("recentExpanded");
 
-            Console.Error.WriteLine($"[DIAG] RestoreSelectedTarget: experts={_experts.Experts.Count} rules={_rules.Rules.Count} workflows={_workflows.Workflows.Count} thread={System.Environment.CurrentManagedThreadId}");
-
-            // ★ 下拉池 + 选中须在 UI 线程改：InitializeAsync 链经 ListAsync(ConfigureAwait(false)) 后续在 threadpool，
-            // ObservableCollection 跨线程修改 Avalonia ComboBox 不会反映（首轮下拉「明明有数据却为空」的根因）。
+            // ★ 下拉池 + 选中须在 UI 线程改：InitializeAsync 链经 ListAsync(ConfigureAwait(false)) 后续可能落在 threadpool，
+            // ObservableCollection 跨线程修改 Avalonia ComboBox 不会反映（首轮下拉「明明有数据却为空」的隐患）。
             // 镜像 RefreshChatTargetItems 的 dispatcher 范式。InvokeAsync 返回 Task 可 await（Post 不可，会与后续
-            // RefreshConversationsAsync 乱序）。
+            // RefreshConversationsAsync 乱序）。当前虽实测在 UI 线程（thread=1），包 dispatcher 是防御 + 与既有范式一致。
             await _dispatcher.InvokeAsync(() =>
             {
                 // 同步填充下拉（列全部 agent/规则/工作流；此时已在 UI 线程，不依赖后续的 RefreshChatTargetItems）
@@ -1283,7 +1281,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 }
                 SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
                 if (expanded == "0") IsRecentExpanded = false;
-                Console.Error.WriteLine($"[DIAG] RestoreSelectedTarget: ChatTargetItems={ChatTargetItems.Count} (UI thread) thread={System.Environment.CurrentManagedThreadId}");
             });
         }
         catch { /* 偏好恢复失败不阻塞 */ }
