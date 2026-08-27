@@ -57,11 +57,12 @@ public sealed class LabsDirectoryWatcher : IDisposable
                               | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
                 InternalBufferSize = 16 * 1024,
             };
-            _watcher.Changed += (_, _) => ScheduleNotify();
-            _watcher.Created += (_, _) => ScheduleNotify();
-            _watcher.Deleted += (_, _) => ScheduleNotify();
-            _watcher.Renamed += (_, _) => ScheduleNotify();
-            _watcher.Error += (_, _) => ScheduleNotify(); // 缓冲溢出 → 尽力刷一次
+            _watcher.Changed += (_, e) => ScheduleNotify(e.FullPath);
+            _watcher.Created += (_, e) => ScheduleNotify(e.FullPath);
+            _watcher.Deleted += (_, e) => ScheduleNotify(e.FullPath);
+            _watcher.Renamed += (_, e) => ScheduleNotify(e.FullPath);
+            // 缓冲溢出：FullPath 不可得 → 传 null（消费方按「未知」处理，退化为全量重载但不会误清聊天——见 MainViewModelBase 过滤）。
+            _watcher.Error += (_, _) => ScheduleNotify(null);
             _watcher.EnableRaisingEvents = true;
         }
         catch { /* 无权限/路径无效 → 静默，无自动重载 */ }
@@ -79,9 +80,35 @@ public sealed class LabsDirectoryWatcher : IDisposable
         _reloadCts = null;
     }
 
-    /// <summary>去抖 400ms 后广播源变更（批量写盘只刷一次）。FSW 后台线程已脱离 UI，无需 marshal。</summary>
-    private void ScheduleNotify()
+    /// <summary>去抖 400ms 后广播源变更（批量写盘只刷一次）。期间累计变更路径的首段目录名，
+    /// 让消费方能按「涉及的目录」判断是否需要重载（改 knowledge/ 不该重载聊天目标表）。FSW 后台线程已脱离 UI，无需 marshal。</summary>
+    private readonly HashSet<string> _pendingDirs = new();
+
+    private void ScheduleNotify(string? fullPath)
     {
+        // 累计变更项的首段目录（相对 labs 根的顶层目录名）；null/扁平文件 → 记为 null 触发「未知」全量。
+        string? top = null;
+        if (fullPath is not null)
+        {
+            var root = _directory.CurrentDirectory ?? _directory.DefaultRoot;
+            if (!string.IsNullOrWhiteSpace(root))
+            {
+                try
+                {
+                    var rel = Path.GetRelativePath(root, fullPath);
+                    if (!rel.StartsWith("..", StringComparison.Ordinal))
+                        top = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+                }
+                catch { /* 路径不可靠 → null */ }
+            }
+        }
+
+        lock (_pendingDirs)
+        {
+            if (top is null) _pendingDirs.Add("\0"); // 哨兵：表示「有未知路径」，广播时传 null
+            else _pendingDirs.Add(top);
+        }
+
         _reloadCts?.Cancel();
         var cts = new CancellationTokenSource();
         _reloadCts = cts;
@@ -90,7 +117,17 @@ public sealed class LabsDirectoryWatcher : IDisposable
             try { await Task.Delay(400, cts.Token); }
             catch (TaskCanceledException) { return; }
             if (cts.IsCancellationRequested || _disposed) return;
-            if (_catalog is DirectoryNoteCatalogSource dir) dir.NotifyChanged();
+            if (_catalog is not DirectoryNoteCatalogSource dir) return;
+
+            HashSet<string> dirs;
+            lock (_pendingDirs)
+            {
+                dirs = new HashSet<string>(_pendingDirs, StringComparer.OrdinalIgnoreCase);
+                _pendingDirs.Clear();
+            }
+            // 含未知路径哨兵 → 传 null（消费方退化为「未知」全量，但不误清聊天）。否则传首段目录（消费方据此过滤）。
+            string? path = dirs.Contains("\0") ? null : (dirs.Count == 1 ? dirs.First() : string.Join('|', dirs));
+            dir.NotifyChanged(path);
         });
     }
 

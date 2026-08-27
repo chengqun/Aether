@@ -21,6 +21,8 @@ public interface INoteCatalogSource
     /// <summary>按 <see cref="CatalogNote.ExternalId"/> 取单个单元；不存在返回 null。目录版按相对路径。</summary>
     Task<CatalogNote?> FindByExternalIdAsync(string externalId, CancellationToken ct = default);
 
-    /// <summary>源变更时触发（目录源由宿主 <c>LabsDirectoryWatcher</c> 驱动）。</summary>
-    event Action? Changed;
+    /// <summary>源变更时触发（目录源由宿主 <c>LabsDirectoryWatcher</c> 驱动）。
+    /// 参数为变更项相对源根的路径（目录源=labs 相对路径；可能为 null——旧信号源或路径不可得）。
+    /// 消费方可据此判「是否涉及自己关心的目录」而跳过无关变更（如改 knowledge/ 不必重载聊天目标表）。</summary>
+    event Action<string?>? Changed;
 }

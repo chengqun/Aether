@@ -94,10 +94,12 @@ public sealed class DirectoryNoteCatalogSource : INoteCatalogSource
             new CatalogNote(rel, StripCompoundExtension(System.IO.Path.GetFileNameWithoutExtension(full), layout.Extension), content, type.Value));
     }
 
-    public event System.Action? Changed;
+    public event System.Action<string?>? Changed;
 
-    /// <summary>宿主在目录 watcher 触发时调用，广播源变更（消费方据此重载）。</summary>
-    public void NotifyChanged() => Changed?.Invoke();
+    /// <summary>宿主在目录 watcher 触发时调用，广播源变更（消费方据此重载）。
+    /// <paramref name="changedRelativePath"/> 为变更项相对根目录的相对路径（labs 相对路径）；null 表示未知。
+    /// 消费方可据此按「首段目录名」判是否涉及自己关心的类型（见 <see cref="CatalogNoteDirectory.TypeForDirectory"/>）。</summary>
+    public void NotifyChanged(string? changedRelativePath = null) => Changed?.Invoke(changedRelativePath);
 
     /// <summary>复合扩展名去尾段（如 <c>foo.agent</c> 去掉 <c>.agent</c> 得 <c>foo</c>）；无复合段则原样。</summary>
     private static string StripCompoundExtension(string stem, string extension)

@@ -18,7 +18,7 @@ public static class CodeRuleHost
             var scripting = services.GetService<IRuleScriptingService>();
             if (scripting is null) return;
             var catalog = services.GetRequiredService<INoteCatalogSource>();
-            catalog.Changed += () => scripting.Reload(); // labs 目录变更 → 防抖重编译注册代码大脑
+            catalog.Changed += _ => scripting.Reload(); // labs 目录变更 → 防抖重编译注册代码大脑
             scripting.LoadAsync().SafeFireAndForget();
         }
         catch

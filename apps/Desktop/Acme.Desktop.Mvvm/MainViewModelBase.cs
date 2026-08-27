@@ -71,25 +71,36 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
             _dispatcher,
             serviceProvider.GetRequiredService<McpViewModel>());
 
-        // labs 目录变更（目录版 catalog 的 Changed 信号，由 LabsDirectoryWatcher 驱动）须刷新 Experts/Workflows/Rules——
-        // 这是 labs 目录权威存储下列表刷新的唯一触发源（写端切 labs 文件，watcher→DirectoryNoteCatalogSource.NotifyChanged）。
+        // labs 目录变更（目录版 catalog 的 Changed 信号，由 LabsDirectoryWatcher 驱动）按「涉及的目录」定向刷新——
+        // 不再无条件重载聊天目标表。改 knowledge/（知识对象）/strategies/（策略）等与聊天目标无关的文件，
+        // 不该触发 Experts/Rules/Workflows 重载、更不该刷新聊天下拉（那会重定向 SelectedChatTarget，
+        // 历史上曾导致「改个知识对象就把正在进行的聊天会话清空」）。
         var catalogSource = serviceProvider.GetService<Acme.Notes.Domain.Catalog.INoteCatalogSource>();
         if (catalogSource is not null)
         {
-            catalogSource.Changed += async () =>
+            catalogSource.Changed += async (changedRelativePath) =>
             {
                 if (_initializing) return;
-                await Experts.LoadAsync();
-                await Workflows.LoadAsync();
-                await Rules.LoadAsync();
-                // 技能也在 labs/skills/——catalog Changed（labs watcher 驱动）时刷新 SkillRegistry 索引 +
-                // 技能 tab 卡片（SkillViewModel.LoadAsync 内部 ReloadFromDirectory，_reloading 守卫防自递归）。
-                serviceProvider.GetService<SkillViewModel>()?.LoadAsync().SafeFireAndForget();
-                // 通知聊天下拉框刷新新增项——使外部编辑/git pull/AI 工具创建的 agent/rule/workflow
-                // 无需任何额外操作即可在聊天下拉直接选用。
-                Experts.NotifyTargetsChanged();
-                Workflows.NotifyTargetsChanged();
-                Rules.NotifyTargetsChanged();
+
+                // 解析变更涉及的首段目录名集合；null（未知/缓冲溢出）→ 视为「全部涉及」，退化到全量重载（但不误清聊天，见 ChatWorkspaceViewModel）。
+                var changedDirs = ParseChangedDirs(changedRelativePath);
+                bool AllOr(string dir) => changedDirs is null || changedDirs.Contains(dir);
+
+                if (AllOr("agents")) await Experts.LoadAsync();
+                if (AllOr("workflows")) await Workflows.LoadAsync();
+                if (AllOr("rules") || AllOr("coderules")) await Rules.LoadAsync();
+                // 技能在 labs/skills/——仅在技能目录变更时刷新 SkillRegistry 索引 + 技能 tab 卡片。
+                if (AllOr("skills"))
+                    serviceProvider.GetService<SkillViewModel>()?.LoadAsync().SafeFireAndForget();
+
+                // 仅当涉及聊天目标目录（agents/rules/coderules/workflows）时才通知聊天下拉刷新新增项；
+                // 知识对象/技能/策略/MCP 等无关变更绝不触及聊天选中态。
+                if (AllOr("agents") || AllOr("workflows") || AllOr("rules") || AllOr("coderules"))
+                {
+                    Experts.NotifyTargetsChanged();
+                    Workflows.NotifyTargetsChanged();
+                    Rules.NotifyTargetsChanged();
+                }
             };
         }
 
@@ -259,5 +270,17 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     private async Task ShowSettingsAsync()
     {
         await _settingsDialog.ShowSettingsAsync();
+    }
+
+    /// <summary>解析 <c>LabsDirectoryWatcher</c> 广播的变更路径为「涉及的首段目录名集合」。
+    /// <paramref name="changedRelativePath"/> 为 labs 相对路径（单目录名，或多个以 <c>|</c> 分隔）；
+    /// null 表示未知（缓冲溢出/路径不可得）→ 返回 null 触发全量。空串返回空集合。</summary>
+    private static HashSet<string>? ParseChangedDirs(string? changedRelativePath)
+    {
+        if (changedRelativePath is null) return null; // 未知 → 全量
+        var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var seg in changedRelativePath.Split('|', StringSplitOptions.RemoveEmptyEntries))
+            dirs.Add(seg);
+        return dirs;
     }
 }

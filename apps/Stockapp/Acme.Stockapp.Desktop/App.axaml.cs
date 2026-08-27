@@ -96,11 +96,11 @@ public partial class App : global::Avalonia.Application
             // 启动加载策略脚本文件 → 编译 → StrategyRegistry（labs 目录变更时自动重加载）
             var scripting = Services.GetRequiredService<IStrategyScriptingService>();
             var catalog = Services.GetRequiredService<INoteCatalogSource>();
-            catalog.Changed += () => scripting.Reload(); // labs 文件变更 → 防抖重编译注册策略
+            catalog.Changed += _ => scripting.Reload(); // labs 文件变更 → 防抖重编译注册策略
             scripting.LoadAsync().SafeFireAndForget();
             // 启动加载 Lean 算法脚本文件 → Roslyn 编译 → LeanAlgorithmRegistry（labs 目录变更时自动重加载）
             var leanScripting = Services.GetRequiredService<ILeanAlgorithmScriptingService>();
-            catalog.Changed += () => leanScripting.Reload();
+            catalog.Changed += _ => leanScripting.Reload();
             leanScripting.LoadAsync().SafeFireAndForget();
             // 启动加载代码规则脚本文件 → Roslyn 编译 → ICodeBrainRegistry（labs 目录变更时自动重加载）
             CodeRuleHost.Start(Services);
