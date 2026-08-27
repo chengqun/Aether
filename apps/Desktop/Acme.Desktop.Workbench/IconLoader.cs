@@ -19,7 +19,7 @@ public static class IconLoader
     private static readonly Dictionary<string, PackIconCodiconsKind> CodiconMap = new(StringComparer.Ordinal)
     {
         ["chat"] = PackIconCodiconsKind.CommentDiscussion,
-        ["experts"] = PackIconCodiconsKind.Hubot,
+        ["connector"] = PackIconCodiconsKind.Plug,
         ["notes"] = PackIconCodiconsKind.Book,
         ["documents"] = PackIconCodiconsKind.Files,
         ["sourcecontrol"] = PackIconCodiconsKind.SourceControl,

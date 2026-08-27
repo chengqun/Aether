@@ -14,7 +14,7 @@ public static class DefaultWorkspace
         Title: "默认工作台",
         Panels: new List<PanelDescriptor>
         {
-            new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
+            new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector"),
             new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
             new(PanelKeys.ChatPage, PanelKeys.ChatPage, "AI 聊天", "chat"),
         },

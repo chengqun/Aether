@@ -9,7 +9,7 @@ namespace Acme.Stockapp.Desktop;
 /// 叠放文件树 + SCM 面板 + .md 树，documents/sourcecontrol/knowledge tab 选中时可见并切对应树（WorkspaceView 按 SelectedTabIndex 切列宽 0/恢复 + SetActiveTree）。
 /// nav 项数据驱动自 LayoutTabbed——终端在底部 region 不进 nav（VSCode 式底部面板：agent run_in_terminal 时
 /// 终端与上方主面板同时可见，不用切 tab）。比 Qifu 多 CTP 期货 + 回测 + 股票（外部版股票期货场景）。
-/// icon 用 icons.json manifest key（experts/automation/futures/backtest/activity/chat）。
+/// icon 用 codicon key（connector/automation/futures/backtest/activity/chat）。
 /// </summary>
 public static class StockappWorkspace
 {
@@ -22,7 +22,7 @@ public static class StockappWorkspace
             new(PanelKeys.Documents, PanelKeys.Documents, "文档", "documents"),
             new(PanelKeys.SourceControl, PanelKeys.SourceControl, "源代码管理", "sourcecontrol"),
             new(PanelKeys.Terminal, PanelKeys.Terminal, "终端", "terminal"),
-            new(PanelKeys.Experts, PanelKeys.Experts, "专家", "experts"),
+            new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector"),
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation"),
             new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history"),
             new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge"),
