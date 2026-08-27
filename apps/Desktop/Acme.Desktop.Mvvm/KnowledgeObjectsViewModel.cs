@@ -8,6 +8,10 @@ using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Acme.Notes.Domain.Catalog;
 using Acme.Notes.Domain.Knowledge;
+// 仅引两个运行器接口的别名（非整命名空间）——Aether.AI.Core.Agents 与 Acme.Notes.Domain.Agents 各有一个
+// AgentMemoryMode 平行枚举，整命名空间 using 会致 CS0104 歧义。
+using ICustomAgentRunner = Aether.AI.Core.Agents.ICustomAgentRunner;
+using ICustomWorkflowRunner = Aether.AI.Core.Agents.ICustomWorkflowRunner;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -331,6 +335,12 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     {
         try
         {
+            // Workflow 走 JSON 解析器（CustomWorkflowDefinition），与 agent/rule 的 YAML+front-matter 解析器不同。
+            if (type == NoteNodeType.Workflow)
+            {
+                var wparser = ServiceProvider.GetRequiredService<IWorkflowSourceParser>();
+                return wparser.TryParse(content, out var wdef, out _) && wdef is not null ? wdef.Id : Guid.Empty;
+            }
             CustomAgentDefinition? def = null;
             if (type == NoteNodeType.Rule)
             {
@@ -788,7 +798,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 
     private bool CanSave => _activePath is not null;
 
-    /// <summary>保存当前文件源码回磁盘。Ctrl+S 绑此命令。</summary>
+    /// <summary>保存当前文件源码回磁盘。Ctrl+S / 顶部保存按钮绑此命令。</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
@@ -798,11 +808,32 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             await File.WriteAllTextAsync(path, _currentSource);
             IsDirty = false;
             StatusMessage = string.Empty;
+            // B 路径（本页顶部保存按钮 / Ctrl+S）直接写盘，绕过了表单 VM 的 SaveAsync（后者含 _runner.Invalidate）。
+            // agent 家族文件（Agent/Rule/CodeRule/Workflow）写盘后须补失效运行时缓存，否则「labs 改完保存 →
+            // 聊天下拉选用」会跑旧缓存版本。幂等——表单路径已失效过则此处无副作用；非 agent 家族（Knowledge/
+            // Strategy/Note）无运行时缓存，跳过。watcher 的 400ms 后续列表刷新不在此时序关键路径上。
+            InvalidateActiveRuntimeCache();
         }
         catch (Exception ex)
         {
             StatusMessage = $"保存失败：{ex.Message}";
         }
+    }
+
+    /// <summary>写盘后失效活动 agent/规则/CodeRule/工作流的运行时缓存（<c>HarnessRuntime.HasAgent</c>→false），
+    /// 使下次发消息按新 id 重读盘重建。id 解析自刚写盘的 <c>_currentSource</c>（同 BuildXxxVm 取 id 逻辑）。</summary>
+    private void InvalidateActiveRuntimeCache()
+    {
+        if (_activeType is not NoteNodeType type) return;
+        if (type != NoteNodeType.Agent && type != NoteNodeType.Rule
+            && type != NoteNodeType.CodeRule && type != NoteNodeType.Workflow)
+            return;
+        var id = ParseIdFromContent(type, _currentSource);
+        if (id == Guid.Empty) return;
+        if (type == NoteNodeType.Workflow)
+            ServiceProvider.GetService<ICustomWorkflowRunner>()?.Invalidate(id);
+        else
+            ServiceProvider.GetService<ICustomAgentRunner>()?.Invalidate(id);
     }
 
     /// <summary>关闭知识库（薄包装：<see cref="FileTreeVmBase.CloseDirectoryCore"/>）。</summary>
