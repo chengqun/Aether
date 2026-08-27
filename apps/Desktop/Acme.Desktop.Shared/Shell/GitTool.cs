@@ -52,11 +52,14 @@ public sealed class GitTool
         public string? Error { get; set; }
     }
 
-    [Description("查看当前项目（文档页打开的目录）的 git 工作区状态：已暂存 / 未暂存的变更文件列表。只读，无副作用。" +
-                 "提交前先用此工具确认有哪些变更。未打开 git 仓库时返回 IsRepository=false。")]
-    public Task<StatusOutput> GitStatus(CancellationToken cancellationToken = default)
+    [Description("查看 git 工作区状态：已暂存 / 未暂存的变更文件列表。只读，无副作用。" +
+                 "提交前先用此工具确认有哪些变更。未打开 git 仓库时返回 IsRepository=false。" +
+                 "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入，值用 GetCurrentKnowledgeDirectory 获取）；不传默认用文档页打开的项目目录。")]
+    public Task<StatusOutput> GitStatus(
+        [Description("可选：git 仓库目录绝对路径（对非项目目录的仓库操作时传入，如资料库目录路径，值用 GetCurrentKnowledgeDirectory 获取）。不传默认用文档页打开的项目目录。")] string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
     {
-        var dir = _projectDir.CurrentDirectory;
+        var dir = workingDirectory ?? _projectDir.CurrentDirectory;
         if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
             return Task.FromResult(new StatusOutput { IsRepository = false, Error = "当前未打开 git 项目目录。" });
 
@@ -77,13 +80,15 @@ public sealed class GitTool
         public string? Error { get; set; }
     }
 
-    [Description("将当前项目所有变更（含未跟踪文件）暂存并提交。message 为提交说明（首行，简明描述本次改动）。" +
-                 "此操作不可逆——会创建新提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。")]
+    [Description("将所有变更（含未跟踪文件）暂存并提交。message 为提交说明（首行，简明描述本次改动）。" +
+                 "此操作不可逆——会创建新提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。" +
+                 "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入）；不传默认用文档页打开的项目目录。")]
     public Task<CommitOutput> GitCommitAsync(
         [Description("提交说明（commit message）。简明描述本次改动，如「修复登录页空引用异常」。")] string message,
+        [Description("可选：git 仓库目录绝对路径（对非项目目录的仓库操作时传入，如资料库目录路径，值用 GetCurrentKnowledgeDirectory 获取）。不传默认用文档页打开的项目目录。")] string? workingDirectory = null,
         CancellationToken cancellationToken = default)
     {
-        var dir = _projectDir.CurrentDirectory;
+        var dir = workingDirectory ?? _projectDir.CurrentDirectory;
         if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
             return Task.FromResult(new CommitOutput { Success = false, Error = "当前未打开 git 项目目录。" });
         if (string.IsNullOrWhiteSpace(message))
@@ -109,10 +114,13 @@ public sealed class GitTool
     }
 
     [Description("推送当前分支的提交到远程仓库（如 GitHub）。不可逆——会公开本地提交到远程。" +
-                 "需要用户审批确认。凭证（GitHub 用户名 + PAT）需先在源代码管理页「远程设置」配置。")]
-    public Task<RemoteOpOutput> GitPushAsync(CancellationToken cancellationToken = default)
+                 "需要用户审批确认。凭证（GitHub 用户名 + PAT）需先在源代码管理页「远程设置」配置。" +
+                 "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入）；不传默认用文档页打开的项目目录。")]
+    public Task<RemoteOpOutput> GitPushAsync(
+        [Description("可选：git 仓库目录绝对路径（对非项目目录的仓库操作时传入，如资料库目录路径，值用 GetCurrentKnowledgeDirectory 获取）。不传默认用文档页打开的项目目录。")] string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
     {
-        var dir = _projectDir.CurrentDirectory;
+        var dir = workingDirectory ?? _projectDir.CurrentDirectory;
         if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
             return Task.FromResult(new RemoteOpOutput { Success = false, Error = "当前未打开 git 项目目录。" });
         var (ok, msg) = _git.Push(dir);
@@ -121,10 +129,13 @@ public sealed class GitTool
     }
 
     [Description("从远程仓库拉取并合并更新到当前分支。会修改本地工作区——若远程有更新则合并到本地。" +
-                 "可能产生合并冲突（返回 Message 含冲突文件列表）。需要用户审批确认。凭证需先在「远程设置」配置。")]
-    public Task<RemoteOpOutput> GitPullAsync(CancellationToken cancellationToken = default)
+                 "可能产生合并冲突（返回 Message 含冲突文件列表）。需要用户审批确认。凭证需先在「远程设置」配置。" +
+                 "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入）；不传默认用文档页打开的项目目录。")]
+    public Task<RemoteOpOutput> GitPullAsync(
+        [Description("可选：git 仓库目录绝对路径（对非项目目录的仓库操作时传入，如资料库目录路径，值用 GetCurrentKnowledgeDirectory 获取）。不传默认用文档页打开的项目目录。")] string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
     {
-        var dir = _projectDir.CurrentDirectory;
+        var dir = workingDirectory ?? _projectDir.CurrentDirectory;
         if (string.IsNullOrEmpty(dir) || !_git.IsRepository(dir))
             return Task.FromResult(new RemoteOpOutput { Success = false, Error = "当前未打开 git 项目目录。" });
         var (ok, msg) = _git.Pull(dir);

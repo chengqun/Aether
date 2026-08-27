@@ -87,14 +87,15 @@ public sealed class DocumentKnowledgeTool
 
     [Description("列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。" +
                  "仅枚举 labs 知识对象目录（knowledge/ 子树）；自定义知识库目录（无 knowledge/ 子目录）则枚举整个目录。" +
-                 "可选 folder 只列指定子目录（知识对象目录内的相对路径，如 业务分析；可带 knowledge/ 前缀）；不传列整个知识对象目录。需先在知识对象页打开知识库目录。")]
+                 "可选 folder 只列指定子目录（知识对象目录内的相对路径，如 业务分析；可带 knowledge/ 前缀）；不传列整个知识对象目录。" +
+                 "资料库目录取知识对象页打开的目录，未打开则回退默认 labs 根。")]
     public async Task<ListDocumentKnowledgeOutput> ListDocumentKnowledgeObjects(
         [Description("知识对象目录内的子目录相对路径（可选；如 业务分析 或 knowledge/业务分析）")] string? folder = null,
         CancellationToken cancellationToken = default)
     {
-        var root = _knowledgeDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root))
-            return new ListDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
+            return new ListDocumentKnowledgeOutput { Error = "未配置资料库目录。" };
 
         var (knowledgeRoot, isLabs) = ResolveScope(root);
         string baseDir;
@@ -136,9 +137,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new ReadDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _knowledgeDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root))
-            return new ReadDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
+            return new ReadDocumentKnowledgeOutput { Error = "未配置资料库目录。" };
 
         try
         {
@@ -195,9 +196,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new CreateDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _knowledgeDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root))
-            return new CreateDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
+            return new CreateDocumentKnowledgeOutput { Error = "未配置资料库目录。" };
 
         try
         {
@@ -241,9 +242,9 @@ public sealed class DocumentKnowledgeTool
         if (string.IsNullOrWhiteSpace(name))
             return new UpdateDocumentKnowledgeOutput { Error = "名称不能为空" };
 
-        var root = _knowledgeDir.CurrentDirectory;
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root))
-            return new UpdateDocumentKnowledgeOutput { Error = "当前未打开知识库目录。请在知识对象页打开知识库目录后再用文档知识对象工具。" };
+            return new UpdateDocumentKnowledgeOutput { Error = "未配置资料库目录。" };
 
         try
         {

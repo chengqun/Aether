@@ -50,6 +50,27 @@ public static class DesktopToolRegistrations
     }
 
     /// <summary>
+    /// GetCurrentKnowledgeDirectory：让 agent 查资料库（labs/知识对象）目录的绝对路径与顶层结构。
+    /// 与 GetCurrentProjectDirectory 平行——后者取文档页项目目录，此工具取资料库目录（IKnowledgeDirectoryProvider，
+    /// 独立单例）。用户在知识对象页打开过目录则用之，否则回退 DefaultRoot（&lt;tenantDir&gt;/labs，始终存在）。
+    /// agent 拿到路径后可配合 ReadFile/Grep/ExploreDirectory 读写资料库文件，或作为 git 工具的 workingDirectory 对资料库跑 git。
+    /// 标 Safe（只读）。
+    /// </summary>
+    public static AetherAIBuilder AddCurrentKnowledgeDirectoryTool(this AetherAIBuilder aether)
+    {
+        aether.Services.AddTransient<GetCurrentKnowledgeDirectoryTool>();
+        aether.ConfigureToolRegistry(reg => reg.Register(
+            "GetCurrentKnowledgeDirectory", "获取资料库（labs/知识对象）目录的绝对路径与顶层文件/目录结构。" +
+            "资料库存放 agent/rule/workflow/knowledge/skill/mcp-server 等创作资产。拿到路径后可用 ReadFile/Grep/ExploreDirectory 读写资料库文件，或作为 git 工具的 workingDirectory 参数对资料库跑 git。", "系统工具",
+            sp => AIFunctionFactory.Create(
+                typeof(GetCurrentKnowledgeDirectoryTool).GetMethod(nameof(GetCurrentKnowledgeDirectoryTool.GetCurrentKnowledgeDirectory))!,
+                sp.GetRequiredService<GetCurrentKnowledgeDirectoryTool>(),
+                "GetCurrentKnowledgeDirectory"),
+            ToolApprovalLevel.Safe));
+        return aether;
+    }
+
+    /// <summary>
     /// 文档版知识对象工具（.md 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .md 文件
     /// （note 版操作 note 节点）。宿主层注册（ai/ 不可引 apps 层 IKnowledgeDirectoryProvider）。
     /// List/Read 只读标 Safe；Create/Update 写盘标 Confirm（对齐 note 版）。解析/序列化复用 IDocumentKnowledgeSourceParser。
@@ -59,7 +80,7 @@ public static class DesktopToolRegistrations
         aether.Services.AddTransient<DocumentKnowledgeTool>();
         aether.ConfigureToolRegistry(reg =>
         {
-            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。需先在知识对象页打开知识库目录。", "文档知识",
+            reg.Register("ListDocumentKnowledgeObjects", "列出文档版知识对象（.md 文件，磁盘上的知识资产）。返回路径/名称/kind/正文预览。可选 folder 只列指定子目录。资料库目录取知识对象页打开的目录，未打开则回退默认 labs 根。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ListDocumentKnowledgeObjects))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
@@ -97,22 +118,26 @@ public static class DesktopToolRegistrations
         aether.Services.AddTransient<GitTool>();
         aether.ConfigureToolRegistry(reg =>
         {
-            reg.Register("git_status", "查看当前项目（文档页打开的目录）的 git 工作区状态：已暂存/未暂存的变更文件列表。只读。", "Git",
+            reg.Register("git_status", "查看 git 工作区状态：已暂存/未暂存的变更文件列表。只读。" +
+                "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入，值用 GetCurrentKnowledgeDirectory 获取）；不传默认用文档页打开的项目目录。", "Git",
                 sp => AIFunctionFactory.Create(
                     typeof(GitTool).GetMethod(nameof(GitTool.GitStatus))!, sp.GetRequiredService<GitTool>(),
                     "git_status"),
                 ToolApprovalLevel.Safe);
-            reg.Register("git_commit", "将当前项目所有变更（含未跟踪文件）暂存并提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。", "Git",
+            reg.Register("git_commit", "将所有变更（含未跟踪文件）暂存并提交。需要用户审批确认。提交前建议先调用 git_status 查看变更。" +
+                "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入，值用 GetCurrentKnowledgeDirectory 获取）；不传默认用文档页打开的项目目录。", "Git",
                 sp => AIFunctionFactory.Create(
                     typeof(GitTool).GetMethod(nameof(GitTool.GitCommitAsync))!, sp.GetRequiredService<GitTool>(),
                     "git_commit"),
                 ToolApprovalLevel.Dangerous);
-            reg.Register("git_push", "推送当前分支提交到远程仓库（如 GitHub）。不可逆——公开本地提交到远程。需用户审批确认。", "Git",
+            reg.Register("git_push", "推送当前分支提交到远程仓库（如 GitHub）。不可逆——公开本地提交到远程。需用户审批确认。" +
+                "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入，值用 GetCurrentKnowledgeDirectory 获取）；不传默认用文档页打开的项目目录。", "Git",
                 sp => AIFunctionFactory.Create(
                     typeof(GitTool).GetMethod(nameof(GitTool.GitPushAsync))!, sp.GetRequiredService<GitTool>(),
                     "git_push"),
                 ToolApprovalLevel.Dangerous);
-            reg.Register("git_pull", "从远程仓库拉取并合并更新到当前分支。会修改本地工作区，可能产生冲突。需用户审批确认。", "Git",
+            reg.Register("git_pull", "从远程仓库拉取并合并更新到当前分支。会修改本地工作区，可能产生冲突。需用户审批确认。" +
+                "可选 workingDirectory 指定仓库目录（对资料库等非项目目录跑 git 时传入，值用 GetCurrentKnowledgeDirectory 获取）；不传默认用文档页打开的项目目录。", "Git",
                 sp => AIFunctionFactory.Create(
                     typeof(GitTool).GetMethod(nameof(GitTool.GitPullAsync))!, sp.GetRequiredService<GitTool>(),
                     "git_pull"),

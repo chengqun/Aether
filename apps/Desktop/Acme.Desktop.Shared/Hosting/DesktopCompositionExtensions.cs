@@ -167,6 +167,9 @@ public static class DesktopCompositionExtensions
         });
         services.AddSingleton<Acme.Desktop.Mvvm.Git.IGitService, Acme.Desktop.Mvvm.Git.GitService>();
         aether.AddCurrentDirectoryTool();
+        // GetCurrentKnowledgeDirectory：让 agent 查资料库（labs/知识对象）目录的绝对路径与顶层结构。
+        // 与项目目录 provider 解耦的独立单例；未打开知识对象页时回退 DefaultRoot（<tenantDir>/labs）。标 Safe。
+        aether.AddCurrentKnowledgeDirectoryTool();
 
         // 文档版知识对象工具（.md 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .md 文件
         // （note 版操作 note 节点）。需知识库目录（独立于项目目录）→ 宿主层注册（ai/ 不可引 apps 层）。
