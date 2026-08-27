@@ -1068,13 +1068,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             _isInitializing = true;
             // 恢复时按绑定 id 在三类列表里找目标（规则/agent 都是 ExpertItem，按所在列表区分）。
-            // 下拉池列全部目标（无需召唤），目标必在池中 → 直接选中（抑制 OnSelectedChatTargetChanged 重置副作用）。
+            // 静默选中（预置 key 再赋值），不触发会话重置——恢复会话本就不该清空正在恢复的 transcript。
             if (Guid.TryParse(item.AgentId, out var aid))
             {
                 ExpertItem? ei = _rules.Rules.FirstOrDefault(r => r.Id == aid)
                               ?? _experts.Experts.FirstOrDefault(e => e.Id == aid);
                 WorkflowItem? wi = ei is null ? _workflows.Workflows.FirstOrDefault(w => w.Id == aid) : null;
-                SelectedChatTarget = (object?)ei ?? wi;
+                SetSelectedTargetSilently((object?)ei ?? wi);
             }
             _isInitializing = false;
 
@@ -1228,9 +1228,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _ => (Guid.Empty, ChatTargetKind.None),
     };
     private (Guid Id, ChatTargetKind Kind) _selectedTargetKey = (Guid.Empty, ChatTargetKind.None);
-    /// <summary>下拉池刷新时静默重定向选中实例（同一逻辑目标的新实例）标志——此时只同步引用/key，
-    /// 不重置当前会话。与用户主动在下拉切目标（会开新会话）严格区分：二者共享 OnSelectedChatTargetChanged。</summary>
-    private bool _isReloadingTarget;
 
     [ObservableProperty]
     private LlmConfigDto? _selectedLlmItem;
@@ -1282,7 +1279,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         _ => null,
                     };
                 }
-                SelectedChatTarget = saved ?? ChatTargetItems.FirstOrDefault();
+                SetSelectedTargetSilently(saved ?? ChatTargetItems.FirstOrDefault());
                 if (expanded == "0") IsRecentExpanded = false;
             });
         }
@@ -1401,18 +1398,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         if (_isInitializing) return;
 
-        // 程序化下拉池刷新（catalog reload → RefreshChatTargetItems）重定向的是「同一逻辑目标的实例」，
-        // 仅是展示/引用同步，不该重置会话。labs 目录任意文件变更（含与聊天无关的知识对象/技能）都会
-        // 触发这条 reload——若在此「切目标→清空会话」，改个知识对象就把正在进行的对话清掉了（逻辑错误）。
-        if (_isReloadingTarget) return;
-
-        // 运行中的流式不能被程序化重载中断/清空（兜底：切目标本就是用户主动动作，运行中不可能合法切换）。
+        // 运行中的流式不能被中断/清空（兜底：切目标本就是用户主动动作，运行中不可能合法切换）。
         if (IsAgentRunning) return;
 
         // 同一逻辑目标（同 Id+Kind；实例可能因 reload 被替换）→ 非用户切换，不重置会话。
+        // 程序化赋值（刷新池/恢复/启动）走 SetSelectedTargetSilently——它**先预置 _selectedTargetKey 再赋值**，
+        // 故此处 newKey == prevKey 恒成立、必然早退。只有用户在下拉主动选了**另一个**目标（key 真变）才落到下面。
         if (newKey == prevKey) return;
 
-        // 统一行为变更：用户主动切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
+        // 用户主动切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
         _currentConversationId = Guid.Empty;
         Messages.Clear();
         ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
@@ -1420,6 +1414,17 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         PersistSelectedTargetAsync().SafeFireAndForget();
         RefreshModeAsync().SafeFireAndForget();
+    }
+
+    /// <summary>程序化赋值 <see cref="SelectedChatTarget"/>（刷新池/启动恢复/恢复会话），**保证不触发会话重置**：
+    /// 先把 <c>_selectedTargetKey</c> 预置为目标的 key 再赋值，使 <see cref="OnSelectedChatTargetChanged"/> 里
+    /// <c>newKey == prevKey</c> 恒成立 → 早退。这样「重置会话」只可能由用户在 ComboBox 主动选别的目标触发——
+    /// 任何程序赋值（改 agent/rule/workflow 文件、改知识对象、git 写 labs）从机制上都不可能清空会话。</summary>
+    private void SetSelectedTargetSilently(object? target)
+    {
+        var kind = KindOf(target);
+        _selectedTargetKey = TargetKey(target, kind);
+        SelectedChatTarget = target;
     }
 
     partial void OnSelectedChatModeChanged(ChatMode value)
@@ -1453,19 +1458,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             foreach (var r in _rules.Rules) ChatTargetItems.Add(r);
             foreach (var w in _workflows.Workflows) ChatTargetItems.Add(w);
 
-            // 同一逻辑目标仍在池中 → 静默把 SelectedChatTarget 重定向到其新实例（仅同步引用/key，
-            // 供 ComboBox 显示正确项 + 后续 KindOf 取值正确）。此重定向**不得**走「切目标 → 重置会话」语义：
-            // 用 _isReloadingTarget 标志让 OnSelectedChatTargetChanged 跳过会话重置（否则 labs 任何文件变更——
-            // 包括与聊天无关的知识对象——触发的 reload 都会在目标瞬时缺位/换实例时清空当前会话）。
+            // 同一逻辑目标仍在池中 → 静默把 SelectedChatTarget 重定向到其新实例（仅同步引用，
+            // 供 ComboBox 显示正确项 + 后续 KindOf 取值正确）。走 SetSelectedTargetSilently——它预置 key 再赋值，
+            // 保证 OnSelectedChatTargetChanged 里 newKey==prevKey、绝不重置会话。labs 任何文件变更（含改 agent/
+            // rule/workflow 文件本身、改知识对象）触发的 reload 都经此处，从机制上不可能清空当前会话。
             if (curKey.Kind != ChatTargetKind.None)
             {
                 var next = ChatTargetItems.FirstOrDefault(t => TargetKey(t, KindOf(t)) == curKey);
                 if (next is not null && !ReferenceEquals(next, SelectedChatTarget))
-                {
-                    _isReloadingTarget = true;
-                    try { SelectedChatTarget = next; }
-                    finally { _isReloadingTarget = false; }
-                }
+                    SetSelectedTargetSilently(next);
             }
         });
     }
