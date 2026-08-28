@@ -225,5 +225,9 @@
       </StackPanel>
     </Panel>
     </DockPanel>
+
+    <!-- Layer 2: toast 提示宿主（右下角叠放，不占布局、不拦截交互；ToastService 经 AttachHost 注册后在此动态加气泡） -->
+    <StackPanel x:Name="ToastHost" IsHitTestVisible="False" Spacing="8"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16" />
   </Grid>
 </Window>

@@ -21,35 +21,10 @@
   </UserControl.Styles>
 
   <!-- labs 右栏（左树在 LeftTree 切换层 KoTreeView，按 labs tab 切显隐）。
-       状态条 + 上下两栏（上=按类型切换的表单，下=源码）。 -->
-  <Grid RowDefinitions="Auto,*">
-    <!-- 状态条：dirty 指示 + 名称 + 状态消息 + 保存 -->
-    <Border Grid.Row="0" Background="{DynamicResource SidebarBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,4">
-      <DockPanel>
-        <Button DockPanel.Dock="Right" Classes="ko-head" Command="{Binding SaveCommand}"
-                ToolTip.Tip="保存 (Ctrl+S)" VerticalAlignment="Center" Margin="4,0,0,0">
-          <Path Data="{x:Static shell:Codicons.Save}" Stretch="Uniform" Width="14" Height="14"
-                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-        </Button>
-        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusMessage}"
-                   VerticalAlignment="Center" Margin="8,0,6,0"
-                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                   IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
-        <Path DockPanel.Dock="Left" Data="{x:Static shell:Codicons.Dot}" Stretch="Uniform"
-              Width="8" Height="8" Margin="0,0,6,0" Fill="{DynamicResource AccentBrush}"
-              IsVisible="{Binding IsDirty}" VerticalAlignment="Center"/>
-        <TextBlock Text="{Binding SelectedNode.Name}" TextTrimming="CharacterEllipsis"
-                   VerticalAlignment="Center" FontWeight="SemiBold"
-                   IsVisible="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}"/>
-        <TextBlock Text="选择左侧文件打开对应编辑器" VerticalAlignment="Center"
-                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                   IsVisible="{Binding !EditorVisible}"/>
-      </DockPanel>
-    </Border>
-
+       上下两栏（上=按类型切换的表单，下=源码）；状态条已删——保存反馈走 toast（见 code-behind StatusMessage→IToastService）。 -->
+  <Grid RowDefinitions="*">
     <!-- form 类型：上下两栏（上=表单，下=源码）；代码类型：全宽源码 -->
-    <Grid Grid.Row="1" x:Name="EditorGrid">
+    <Grid x:Name="EditorGrid">
       <Grid.RowDefinitions>
         <RowDefinition Height="*"/>
         <RowDefinition Height="4"/>

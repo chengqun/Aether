@@ -161,7 +161,24 @@ public partial class KnowledgeObjectsView : UserControl
     {
         if (e.PropertyName == nameof(KnowledgeObjectsViewModel.ActiveEditVm))
             SyncEditor();
+        else if (e.PropertyName == nameof(KnowledgeObjectsViewModel.StatusMessage))
+            OnStatusMessageChanged();
     }
+
+    /// <summary>状态条已删——错误/保存反馈改经右上角 toast（IToastService 右下角气泡）。
+    /// VM 层 20 处 StatusMessage 赋值语义不变，此处只把「非空」转成 toast；「已保存」等成功反馈也弹（短暂绿泡），空则静默。</summary>
+    private void OnStatusMessageChanged()
+    {
+        var msg = _vm?.StatusMessage;
+        if (string.IsNullOrWhiteSpace(msg)) return;
+        var kind = IsErrorLike(msg) ? ToastKind.Error : ToastKind.Success;
+        (DesktopApp.Services?.GetService<IToastService>())?.Show(msg, kind);
+    }
+
+    /// <summary>按消息关键字判定错误（失败/重名/未找到/不存在 → 红泡）；其余（已保存等）→ 绿泡。</summary>
+    private static bool IsErrorLike(string msg)
+        => msg.Contains("失败") || msg.Contains("不存在") || msg.Contains("未找到")
+        || msg.Contains("未打开") || msg.Contains("不可用") || msg.Contains("同名");
 
     /// <summary>把活动文件源码载入编辑器并按扩展名语法设高亮 + 折叠。
     /// 源码编辑器显隐由 XAML 的 <c>EditorVisible</c>（= 选中文件即显，含代码类型）门控，此处不再动 <c>IsVisible</c>

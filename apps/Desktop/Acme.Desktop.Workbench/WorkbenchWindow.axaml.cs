@@ -76,6 +76,8 @@ public partial class WorkbenchWindow : Window
         ApplyChrome();   // borderless 皮肤（dream）开自绘标题栏；VM 已据 chrome.borderless 设好 IsBorderless
         ApplyPlatformChromeButtons(); // macOS 显示左上交通灯、非 macOS 显示右上三键
         UpdateMaxIcon(); // 据当前 WindowState 显最大化/还原图标
+        // 注册右下角 toast 宿主（ToastService 单例在此叠加气泡；窗口打开才有可视树）。
+        (DesktopApp.Services?.GetService<IToastService>() as ToastService)?.AttachHost(ToastHost);
         // Avalonia 12.1.1 无 StateChanged/WindowStateChanged 事件；WindowState 是 DirectProperty，
         // 经 AvaloniaObject.PropertyChanged 通用事件过滤 WindowStateProperty 捕获最大化↔还原（覆盖按钮/双击/OS snap 全路径）。
         // 最小化 → 进桌宠：黄色交通灯 / Cmd+M / 自绘按钮都会把 WindowState 置 Minimized，捕获后转成
@@ -103,6 +105,7 @@ public partial class WorkbenchWindow : Window
             return;
         }
         base.OnClosing(e);
+        (DesktopApp.Services?.GetService<IToastService>() as ToastService)?.DetachHost();
         StopAurora();      // 取消漂移动画（免关窗后空转）
         PersistWindowSize();
         // 不再在此同步 _pet.Close()——真退出路径在 ExitApplication 里已先关桌宠（见下）。此处失序/重入
