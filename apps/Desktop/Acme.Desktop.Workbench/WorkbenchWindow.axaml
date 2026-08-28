@@ -123,14 +123,14 @@
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,Auto,*,Auto">
-        <!-- 侧栏展开/收起 toggle（顶部 chevron：收起▸=点击展开 / 展开◂=点击收起） -->
+        <!-- 侧栏展开/收起 toggle（顶部 arrow：收起 →=点击展开 / 展开 ←=点击收起） -->
         <Button Grid.Row="0" Classes="nav-rail" Command="{Binding ToggleSidebarCommand}"
                 ToolTip.Tip="展开/收起侧栏" Margin="6,10,6,2">
           <Grid>
-            <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="16" Height="16"
+            <Path Data="{x:Static shell:Codicons.ArrowRight}" Stretch="Uniform" Width="16" Height="16"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                   IsVisible="{Binding !IsSidebarExpanded}"/>
-            <Path Data="{x:Static shell:Codicons.ChevronLeft}" Stretch="Uniform" Width="16" Height="16"
+            <Path Data="{x:Static shell:Codicons.ArrowLeft}" Stretch="Uniform" Width="16" Height="16"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                   IsVisible="{Binding IsSidebarExpanded}"/>
           </Grid>

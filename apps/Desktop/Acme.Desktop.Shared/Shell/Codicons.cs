@@ -35,6 +35,7 @@ public static class Codicons
     public static readonly string ChevronLeft = R(PackIconCodiconsKind.ChevronLeft);     // ◂ 侧栏收起
     public static readonly string ChevronRight = R(PackIconCodiconsKind.ChevronRight);   // ▸ 侧栏展开
     public static readonly string ArrowRight = R(PackIconCodiconsKind.ArrowRight);       // →
+    public static readonly string ArrowLeft = R(PackIconCodiconsKind.ArrowLeft);         // ←
     public static readonly string ArrowDown = R(PackIconCodiconsKind.ArrowDown);         // ↓
     public static readonly string Dot = R(PackIconCodiconsKind.CircleSmallFilled);       // ● 小实心点
     public static readonly string Loading = R(PackIconCodiconsKind.Loading);             // ⏳ pending/等待
