@@ -8,6 +8,9 @@
              x:Class="Acme.Desktop.Shared.Shell.ChatView"
              Background="{DynamicResource ContentBgBrush}">
 
+  <!-- 左边界线（1,0,0,0）与左栏各面板的右边框（0,0,1,0）对称——右栏与中间区之间也有常驻竖线分界。 -->
+  <Border Background="{DynamicResource ContentBgBrush}"
+          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource CardBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
@@ -253,4 +256,5 @@
          右栏紧凑视图与全屏 ChatPageView 共用此控件，两视图只差头部与输入区。 -->
     <shell:ChatMessagesView />
   </DockPanel>
+  </Border>
 </UserControl>

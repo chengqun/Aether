@@ -2,7 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shell="using:Acme.Desktop.Shared.Shell"
              x:Class="Acme.Desktop.Shared.Shell.BottomPanelView"
-             Background="{DynamicResource ContentBgBrush}">
+             Background="{DynamicResource ContentBgBrush}"
+             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
     <UserControl.Styles>
         <Style Selector="Button.btab">
             <Setter Property="Padding" Value="14,4"/>
