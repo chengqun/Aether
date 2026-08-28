@@ -61,10 +61,11 @@
         </Border>
       </Grid>
 
-      <!-- 中：上下分隔条（仅 form 类型） -->
+      <!-- 中：上下分隔条（仅 form 类型）。DragCompleted 实时写盘——切页不再丢拖动后的比例（VSCode 式）。 -->
       <GridSplitter Grid.Row="1" IsVisible="{Binding SplitterVisible}"
                     Height="4" HorizontalAlignment="Stretch"
-                    Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
+                    Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"
+                    DragCompleted="OnSplitterDragCompleted"/>
 
       <!-- 下栏：源码编辑器 + 空态（代码类型跨满 EditorGrid 三行＝全宽，form 类型仅 Row 2） -->
       <Grid Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}">

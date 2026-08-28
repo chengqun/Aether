@@ -65,6 +65,12 @@ public partial class KnowledgeObjectsView : UserControl
             RestoreLayout();
             WireHostWindowClosing();
         };
+        // 切走（IsVisible=false）再切回（true）时，GridSplitter 可能基于 XAML 默认 star 重新初始化分栏，
+        // 把拖动后的非默认比例冲掉。这里在每次重新可见时从盘恢复（拖动结束已即时写盘，读到的即最后一次拖的位置）。
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && IsVisible) RestoreLayout();
+        };
     }
 
     /// <summary>订阅宿主窗口 Closing，关闭时自持久化上下分栏比例。双订阅守卫防 Loaded 多次触发重复挂事件。</summary>
@@ -78,7 +84,8 @@ public partial class KnowledgeObjectsView : UserControl
         }
     }
 
-    /// <summary>持久化上下分栏比例（ko.previewStar/editorStar）。后台线程写文件，Wait 确保关闭前落盘。</summary>
+    /// <summary>持久化上下分栏比例（ko.previewStar/editorStar）。拖动结束/关窗时调用。
+    /// 非阻塞：写文件跑后台线程，UI 线程不 Wait（拖动结束事件里阻塞会冻住输入）。</summary>
     private void PersistLayout()
     {
         var store = DesktopApp.Services.GetService<IPreferencesStore>();
@@ -86,14 +93,19 @@ public partial class KnowledgeObjectsView : UserControl
         var (previewStar, editorStar) = CollectLayout();
         try
         {
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 await store.SetAsync("ko.previewStar", previewStar.ToString("0.###"));
                 await store.SetAsync("ko.editorStar", editorStar.ToString("0.###"));
-            }).Wait();
+            });
         }
-        catch { /* 关闭期写入失败忽略 */ }
+        catch { /* 写入失败忽略 */ }
     }
+
+    /// <summary>splitter 拖动结束 → 立即写盘。修复切换导航（切走再切回）时上下分栏比例被重置为默认的问题——
+    /// 之前只关窗时写一次，切页过程中拖动后的内存 Star 值未落盘，恢复逻辑（RestoreLayout）读到的还是旧值。</summary>
+    private void OnSplitterDragCompleted(object? sender, VectorEventArgs e)
+        => PersistLayout();
 
     /// <summary>恢复上下分栏比例。JsonPreferencesStore.GetAsync 同步完成，Loaded 期直接读。</summary>
     private void RestoreLayout()

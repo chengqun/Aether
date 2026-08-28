@@ -155,10 +155,11 @@
           <ctl:SelectableMarkdownViewer Markdown="{Binding ActiveTab.Content}" Margin="4,2"/>
         </Border>
 
-        <!-- 中：上下分隔条（md 双栏时显示） -->
+        <!-- 中：上下分隔条（md 双栏时显示）。DragCompleted 实时写盘——切页不再丢拖动后的比例（VSCode 式）。 -->
         <GridSplitter Grid.Row="1" IsVisible="{Binding IsSplitterVisible}"
                       Height="4" HorizontalAlignment="Stretch"
-                      Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"/>
+                      Background="{DynamicResource BorderBrush}" Cursor="SizeNorthSouth"
+                      DragCompleted="OnSplitterDragCompleted"/>
 
         <!-- 下/满：源码编辑器 + 空态（非 md 跨满 row0-2；md 双栏在下栏 row2） -->
         <Grid Grid.Row="{Binding EditorRow}" Grid.RowSpan="{Binding EditorRowSpan}"
