@@ -79,10 +79,16 @@
               </Flyout>
             </Button.Flyout>
           </Button>
-          <!-- 新聊天 -->
+          <!-- 新聊天（Comment 气泡 + 右下角 Add 加号徽标：合成「气泡里带 +」） -->
           <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
-            <Path Data="{x:Static shell:Codicons.Comment}" Stretch="Uniform" Width="14" Height="14"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+            <Panel Width="16" Height="14">
+              <Path Data="{x:Static shell:Codicons.Comment}" Stretch="Uniform" Width="14" Height="14"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"/>
+              <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="8" Height="8"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+            </Panel>
           </Button>
         </StackPanel>
       </Grid>
