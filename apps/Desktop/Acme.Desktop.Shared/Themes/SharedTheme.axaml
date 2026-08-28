@@ -509,11 +509,14 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
   </Style>
 
-  <!-- ═══ 分隔条分界线（区域拖动条）：Background 接主题 token SplitterBrush ════
+  <!-- ═══ 分隔条分界线（区域拖动条）：VSCode 式——静止透明（无分界线，靠区域背景对比），hover 才显 SplitterBrush ════
        WorkspaceView code 创建的 GridSplitter（工作台区域之间 / 终端 / 左树 / 右 chat）不设本地 Background，
-       由此样式 {DynamicResource SplitterBrush} 接管 → 分界线颜色随主题 JSON 变（改 JSON 即调分界线色）。
+       由此样式接管 → 悬停时 {DynamicResource SplitterBrush} 现身，颜色随主题 JSON 变（改 JSON 即调分界线色）。
        已在某元素上显式设 Background（如 BrowserView 用了 BorderBrush）的 splitter 不受此样式影响（本地值优先）。 -->
   <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="GridSplitter:pointerover">
     <Setter Property="Background" Value="{DynamicResource SplitterBrush}"/>
   </Style>
 
