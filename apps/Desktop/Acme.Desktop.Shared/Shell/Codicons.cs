@@ -51,7 +51,8 @@ public static class Codicons
     public static readonly string ChromeMaximize = R(PackIconCodiconsKind.ChromeMaximize);
     public static readonly string ChromeRestore = R(PackIconCodiconsKind.ChromeRestore);
 
-    // —— 标题栏面板 toggle（LayoutPanel=底部面板/终端，LayoutSidebarRight=右侧栏）——
+    // —— 标题栏面板 toggle（LayoutSidebarLeft=主侧栏/左栏，LayoutPanel=底部面板/终端，LayoutSidebarRight=右侧栏）——
+    public static readonly string LayoutSidebarLeft = R(PackIconCodiconsKind.LayoutSidebarLeft);   // ▍◂ 主侧栏（左栏）
     public static readonly string LayoutPanel = R(PackIconCodiconsKind.LayoutPanel);               // ▤ 底部面板/终端
     public static readonly string LayoutSidebarRight = R(PackIconCodiconsKind.LayoutSidebarRight); // ▸▍右侧栏
 

@@ -69,6 +69,16 @@
         <!-- ═══ 右上：面板 toggle（VSCode 式功能按钮）+ Windows 三键（仅非 macOS 显）════
              mac：右上 = 终端/AI 右栏两 toggle（交通灯在左上、三键隐藏）；Windows：右上 = 两 toggle + 三键。 -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
+          <!-- 主侧栏（左栏：文件树/SCM/知识树）toggle（codicon LayoutSidebarLeft 图标；accent 开/灰关） -->
+          <Button Classes="titlebar-toggle" Command="{Binding ToggleLeftTreeCommand}" ToolTip.Tip="主侧栏"
+                  Padding="5" Background="Transparent">
+            <Grid>
+              <Path Data="{x:Static shell:Codicons.LayoutSidebarLeft}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsLeftTreeVisible}"/>
+              <Path Data="{x:Static shell:Codicons.LayoutSidebarLeft}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsLeftTreeVisible}"/>
+            </Grid>
+          </Button>
           <!-- 终端面板 toggle（codicon LayoutPanel 图标；accent 开/灰关） -->
           <Button Classes="titlebar-toggle" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端面板"
                   Padding="5" Background="Transparent">

@@ -35,6 +35,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     private readonly IServiceProvider _serviceProvider;
     private ITerminalService? _terminalService;
     private IChatPanelService? _chatPanelService;
+    private ILeftTreePanelService? _leftTreePanelService;
     private INotifyPropertyChanged? _navWorkspace;
 
     /// <summary>布局持久化键（与 WorkspaceView 共用；每租户独立 preferences.json）。</summary>
@@ -72,6 +73,13 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         {
             _isChatVisible = _chatPanelService.IsChatVisible;
             _chatPanelService.ChatVisibilityChanged += OnChatVisibilityChanged;
+        }
+        // 主侧栏（左栏：文件树/SCM/知识树）显隐（VSCode 式可折叠左栏）：初始态从 service 读 + 订阅变更同步 IsLeftTreeVisible（标题栏 toggle 按钮绑此）。
+        _leftTreePanelService = serviceProvider.GetService<ILeftTreePanelService>();
+        if (_leftTreePanelService is not null)
+        {
+            _isLeftTreeVisible = _leftTreePanelService.IsLeftTreeVisible;
+            _leftTreePanelService.LeftTreeVisibilityChanged += OnLeftTreeVisibilityChanged;
         }
     }
 
@@ -131,6 +139,12 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// 状态由 <see cref="IChatPanelService.ChatVisibilityChanged"/> 事件同步——聊天面板内 ✕ 按钮 / 本 VM 的 ToggleChatCommand 都经 service 改态，事件回写此属性。</summary>
     [ObservableProperty]
     private bool _isChatVisible = true;
+
+    /// <summary>主侧栏（左栏：文件树/SCM/知识树）是否可见（标题栏「主侧栏」toggle 按钮绑此 + 驱动高亮态）。
+    /// 状态由 <see cref="ILeftTreePanelService.LeftTreeVisibilityChanged"/> 事件同步——本 VM 的 ToggleLeftTreeCommand 经 service 改态，事件回写此属性。
+    /// 与 tab 耦合：此属性是手动 toggle 是否开；有效可见还须当前是编辑器类 tab（由 WorkspaceView 叠加判定）。</summary>
+    [ObservableProperty]
+    private bool _isLeftTreeVisible = true;
 
     /// <summary>侧边栏是否展开（true=图标+导航文字 200px / false=仅图标 48px）。当前默认收起（仅图标）。
     /// 纯 shell 窗口态（侧栏 Border 宽 + nav 项文字显隐经 Classes.expanded 绑定 + SharedTheme 样式），
@@ -440,6 +454,14 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         => _chatPanelService?.SetChatVisible(!IsChatVisible);
 
     private void OnChatVisibilityChanged(bool visible) => IsChatVisible = visible;
+
+    /// <summary>标题栏「主侧栏」toggle：切换左栏（文件树/SCM/知识树）手动 toggle 显隐（树视图不销毁，仅折叠/展开 region 空间）。
+    /// 经 service 改态 → service 触发 LeftTreeVisibilityChanged → WorkspaceView 折叠/展开 region + 回写 IsLeftTreeVisible。</summary>
+    [RelayCommand]
+    private void ToggleLeftTree()
+        => _leftTreePanelService?.SetLeftTreeVisible(!IsLeftTreeVisible);
+
+    private void OnLeftTreeVisibilityChanged(bool visible) => IsLeftTreeVisible = visible;
 
     /// <summary>侧边栏展开/收起 toggle：切 IsSidebarExpanded + 持久化（fire-and-forget，SafeFireAndForget 记 Trace）。
     /// 纯 shell 态，无 service 回路——窗口 XAML 经 Classes.expanded 绑定即时切宽 + nav 文字显隐。</summary>

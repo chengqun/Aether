@@ -152,6 +152,8 @@ public static class DesktopCompositionExtensions
         services.AddSingleton<ITerminalService, TerminalService>();
         // AI 聊天面板显隐服务（单例，镜像终端）：侧栏「AI 聊天」toggle + 聊天面板内 ✕ 共用。仅持显隐态 + 持久化（聊天视图常驻、IsVisible 切换不销毁）。
         services.AddSingleton<IChatPanelService, ChatPanelService>();
+        // 主侧栏（左栏：文件树/SCM/知识树）显隐服务（单例，镜像聊天面板）：标题栏「主侧栏」toggle 共用。仅持手动 toggle 态 + 持久化（树视图常驻、IsVisible 切换不销毁）。
+        services.AddSingleton<ILeftTreePanelService, LeftTreePanelService>();
         aether.AddAskUserTool();
 
         // GetCurrentProjectDirectory：让 agent 查文档页当前打开的项目目录路径与顶层结构。

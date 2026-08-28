@@ -54,6 +54,7 @@ public partial class WorkspaceView : UserControl
     private int _leftTreeCol = -1;                   // lefttree 在 grid 的 child col（= i*2）
     private int _leftTreeSplitterCol = -1;           // lefttree 前的 GridSplitter col（= i*2-1）
     private GridLength _leftTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后）
+    private ILeftTreePanelService? _leftTreeService;  // 主侧栏手动 toggle（镜像 chat service；默认开）
     private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
     private int _sourceControlTabIndex = -1;         // sourcecontrol 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 SCM 面板）
     private int _knowledgeTabIndex = -1;             // knowledge 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 .md 树）
@@ -134,6 +135,13 @@ public partial class WorkspaceView : UserControl
             _chatService.ChatVisibilityChanged -= OnChatVisibilityChanged; // 防重复订阅
             _chatService.ChatVisibilityChanged += OnChatVisibilityChanged;
         }
+
+        // 订阅主侧栏手动 toggle（VSCode 式可折叠左栏）：折叠/展开 lefttree region 的 Grid 列宽（树视图不销毁，展开状态不丢）。
+        _leftTreeService ??= DesktopApp.Services?.GetService<ILeftTreePanelService>();
+        if (_leftTreeService is not null)
+            _leftTreeService.LeftTreeVisibilityChanged -= OnLeftTreeVisibilityChanged; // 防重复订阅
+        if (_leftTreeService is not null)
+            _leftTreeService.LeftTreeVisibilityChanged += OnLeftTreeVisibilityChanged;
 
         // 侧栏 shell 级左栏条件可见（VSCode 式）：documents tab→文件树 / sourcecontrol tab→SCM / knowledge tab→.md 树 / 其余 tab→列宽 0 隐藏。
         var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
@@ -486,10 +494,14 @@ public partial class WorkspaceView : UserControl
 
     /// <summary>显/隐侧栏左栏列并切对应树：kind 非空→恢复列宽 + splitter 显 + content 显 + SetActiveTree(kind)；
     /// kind=null→记展开宽 + 列宽 0 + splitter 隐 + content 隐（VSCode 式切到非编辑器页时目录栏消失）。
+    /// 另叠加手动 toggle（ILeftTreePanelService，默认开）：手动 toggle 关 → 即使 kind 非空也折叠（标题栏「主侧栏」按钮）。
     /// 恢复时用记忆的展开宽度（含用户拖动后的实际值）。</summary>
     private void ApplyLeftTreeVisibility(string? kind)
     {
         if (_leftTreeSplitGrid is null || _leftTreeCol < 0) return;
+        // 手动 toggle（默认开）：关则整体折叠，无视 tab 种类（镜像右栏 ApplyChatVisibility 的 toggleOn）。
+        bool toggleOn = _leftTreeService?.IsLeftTreeVisible ?? true;
+        if (!toggleOn) kind = null;
         // 无 documents/sourcecontrol/knowledge tab（均 -1）→ ResolveLeftTreeKind 恒 null → 永不显示。
         var col = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol];
         if (kind is null)
@@ -532,6 +544,10 @@ public partial class WorkspaceView : UserControl
     /// <summary>聊天面板显隐变更（ChatPanelService 触发，可能非 UI 线程）→ marshal 到 UI 线程重算（tab-coupled，须重算判定 chat nav）。</summary>
     private void OnChatVisibilityChanged(bool visible)
         => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyChatVisibility());
+
+    /// <summary>主侧栏手动 toggle 变更（LeftTreePanelService 触发，可能非 UI 线程）→ marshal 到 UI 线程重算（当前 tab 已解析，kind 仍按当前 tab 判定，叠加 toggle）。</summary>
+    private void OnLeftTreeVisibilityChanged(bool visible)
+        => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace?.SelectedTabIndex ?? -1)));
 
     /// <summary>折叠/展开右侧聊天 region：改其父 Grid 列宽（0 ↔ 展开宽度）+ splitter 显隐 + content 显隐。
     /// 折叠时聊天视图不销毁（仅隐藏 region 空间，流式回复继续在后台）。镜像 <see cref="ApplyLeftTreeVisibility"/>，
