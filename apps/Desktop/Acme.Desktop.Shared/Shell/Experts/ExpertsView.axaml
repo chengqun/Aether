@@ -6,8 +6,9 @@
              Background="{DynamicResource ContentBgBrush}">
 
   <DockPanel>
-    <!-- 顶部标题栏（labs 知识对象页承接 agent/rule/workflow/MCP/技能 创建+编辑后，专家页仅留连接器面板） -->
-    <Border DockPanel.Dock="Top" Classes="page-header">
+    <!-- 顶部标题栏（labs 知识对象页承接 agent/rule/workflow/MCP/技能 创建+编辑后，专家页仅留连接器面板）。
+         纯装饰标题（左侧 rail 已高亮当前页）→ 局部覆盖 page-header 去掉底部分隔横线，仅留标题文字更轻。 -->
+    <Border DockPanel.Dock="Top" Classes="page-header" BorderThickness="0">
       <TextBlock Text="连接器" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
     </Border>
 
