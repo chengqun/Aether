@@ -91,7 +91,10 @@ public partial class DocumentsEditorView : UserControl
     /// <summary>splitter 拖动结束 → 立即写盘。修复切换导航（切走再切回）时上下分栏比例被重置为默认的问题——
     /// 之前只关窗时写一次，切页过程中拖动后的内存 Star 值未落盘，恢复逻辑（RestoreLayout）读到的还是旧值。</summary>
     private void OnSplitterDragCompleted(object? sender, VectorEventArgs e)
-        => PersistLayout();
+    {
+        System.Diagnostics.Trace.WriteLine($"[Docs-Layout] DragCompleted row0={EditorGrid.RowDefinitions[0].Height.Value} row2={EditorGrid.RowDefinitions[2].Height.Value}");
+        PersistLayout();
+    }
 
     /// <summary>恢复上下分栏比例。JsonPreferencesStore.GetAsync 同步完成，Loaded 期直接读。</summary>
     private void RestoreLayout()
@@ -104,6 +107,7 @@ public partial class DocumentsEditorView : UserControl
             var es = double.TryParse(store.GetAsync("docs.editorStar").GetAwaiter().GetResult(), out var e) ? e : 1d;
             if (ps <= 0) ps = 1d;
             if (es <= 0) es = 1d;
+            System.Diagnostics.Trace.WriteLine($"[Docs-Layout] RestoreLayout ps={ps} es={es} currentRow0={EditorGrid.RowDefinitions[0].Height.Value} currentRow2={EditorGrid.RowDefinitions[2].Height.Value}");
             EditorGrid.RowDefinitions[0].Height = new GridLength(ps, GridUnitType.Star);
             EditorGrid.RowDefinitions[2].Height = new GridLength(es, GridUnitType.Star);
         }

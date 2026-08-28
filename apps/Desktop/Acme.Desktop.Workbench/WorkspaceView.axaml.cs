@@ -273,6 +273,9 @@ public partial class WorkspaceView : UserControl
                     ResizeDirection = horiz ? GridResizeDirection.Columns : GridResizeDirection.Rows,
                     Focusable = false,
                 };
+                // 拖动结束同步展开尺寸记忆字段——否则拖动只改 Grid 列/行宽、`_xxxExpandedWidth/Height` 还是旧值，
+                // 切导航时 ApplyXxxVisibility 用旧值覆盖 → 分栏「重置」回拖动前位置（VSCode 应保持拖动后位置）。
+                splitter.DragCompleted += (_, _) => SyncExpandedSizes();
                 if (horiz) { splitter.Width = 6; Grid.SetColumn(splitter, idx + 1); }
                 else { splitter.Height = 6; Grid.SetRow(splitter, idx + 1); }
                 grid.Children.Add(splitter);
@@ -539,6 +542,18 @@ public partial class WorkspaceView : UserControl
         foreach (var c in grid.Children)
             if (c is GridSplitter && Grid.GetColumn(c) == splitterCol)
                 c.IsVisible = visible;
+    }
+
+    /// <summary>拖动结束 → 把三个面板（终端/左栏/聊天右栏）的实际列宽/行高同步回记忆字段。否则拖动只改 Grid 尺寸、
+    /// <c>_xxxExpandedWidth/Height</c> 仍是旧值，下次 ApplyXxxVisibility（切导航触发）用旧值覆盖 → 「切导航就重置」。</summary>
+    private void SyncExpandedSizes()
+    {
+        if (_terminalSplitGrid is not null && _terminalRow >= 0)
+            _terminalExpandedHeight = _terminalSplitGrid.RowDefinitions[_terminalRow].Height;
+        if (_leftTreeSplitGrid is not null && _leftTreeCol >= 0)
+            _leftTreeExpandedWidth = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol].Width;
+        if (_chatSplitGrid is not null && _chatCol >= 0)
+            _chatExpandedWidth = _chatSplitGrid.ColumnDefinitions[_chatCol].Width;
     }
 
     // ── 右侧 AI 聊天面板折叠/展开（VSCode 式可折叠侧栏：chat region 改 Grid 列宽，聊天视图不销毁，流式不中断） ──
