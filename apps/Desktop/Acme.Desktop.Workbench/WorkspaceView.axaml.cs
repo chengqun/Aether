@@ -247,7 +247,9 @@ public partial class WorkspaceView : UserControl
             {
                 _leftTreeSplitGrid = grid;
                 _leftTreeCol = i * 2;
-                _leftTreeSplitterCol = i * 2 - 1; // lefttree 前的 splitter（lefttree 非首 child 时存在）
+                // lefttree 恒为首 child（i=0）——它前面的 splitter 不存在，要藏的是它**后面**的边界 splitter（idx+1 = i*2+1）。
+                // 与 chat（末 child，藏其前 splitter i*2-1）方向相反，故此处用 +1。
+                _leftTreeSplitterCol = i * 2 + 1;
                 _leftTreeExpandedWidth = grid.ColumnDefinitions[i * 2].Width;
             }
             // 含 chat region 的水平 split：记 Grid + chat 的列位置，用于折叠/展开右栏（VSCode 式可折叠侧栏）。
