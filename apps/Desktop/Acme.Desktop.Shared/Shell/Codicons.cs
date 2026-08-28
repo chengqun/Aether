@@ -50,6 +50,10 @@ public static class Codicons
     public static readonly string ChromeMaximize = R(PackIconCodiconsKind.ChromeMaximize);
     public static readonly string ChromeRestore = R(PackIconCodiconsKind.ChromeRestore);
 
+    // —— 标题栏面板 toggle（VSCode 式：LayoutPanel=底部面板/终端，LayoutSidebarRight=右侧栏）——
+    public static readonly string LayoutPanel = R(PackIconCodiconsKind.LayoutPanel);               // ▤ 底部面板/终端
+    public static readonly string LayoutSidebarRight = R(PackIconCodiconsKind.LayoutSidebarRight); // ▸▍右侧栏
+
     // —— 功能 / 卡片图标 ——
     public static readonly string Sparkle = R(PackIconCodiconsKind.Sparkle);             // 💭 思考 / ⚡
     public static readonly string Tools = R(PackIconCodiconsKind.Tools);                 // 🔧

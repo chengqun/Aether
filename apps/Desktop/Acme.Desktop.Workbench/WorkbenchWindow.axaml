@@ -32,56 +32,31 @@
             Background="Transparent"
             PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
       <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Stretch">
-        <!-- ═══ 左列：mac 交通灯 + 面板 toggle（VSCode 式功能按钮紧挨交通灯）════ -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Spacing="6">
-          <!-- ═══ mac 交通灯组（左上红黄绿三圆点，仅 macOS 显；Windows/Linux 用右侧三键）════
-               圆点内符号（×/－/⤢）hover 才显——显隐由 SharedTheme 的 `Button.mac-tl Path` /
-               `:pointerover Path` 选择器驱动（XAML 不写局部 IsVisible，否则局部值优先于 hover 样式）。 -->
-          <StackPanel x:Name="MacTrafficLights" Orientation="Horizontal" Spacing="8">
-            <!-- 红关闭：悬停显示 ×（Fill 由 SharedTheme 按类给深色符号色，XAML 不设避免覆盖样式） -->
-            <Button Classes="mac-tl mac-tl-close" Click="OnClose" ToolTip.Tip="关闭"
-                    Width="12" Height="12" Padding="0">
-              <Path x:Name="CloseGlyph" Data="{x:Static shell:Codicons.ChromeClose}" Stretch="Uniform"
-                    Width="8" Height="8"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-            <!-- 黄最小化：悬停显示 － -->
-            <Button Classes="mac-tl mac-tl-min" Click="OnMinimize" ToolTip.Tip="最小化"
-                    Width="12" Height="12" Padding="0">
-              <Path x:Name="MinGlyph" Data="{x:Static shell:Codicons.ChromeMinimize}" Stretch="Uniform"
-                    Width="8" Height="8"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-            <!-- 绿最大化：悬停显示 ⤢ -->
-            <Button Classes="mac-tl mac-tl-max" Click="OnMaximizeRestore" ToolTip.Tip="最大化/还原"
-                    Width="12" Height="12" Padding="0">
-              <Path x:Name="MaxGlyph" Data="{x:Static shell:Codicons.ChromeMaximize}" Stretch="Uniform"
-                    Width="8" Height="8"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-          </StackPanel>
-
-          <!-- ═══ 面板 toggle（VSCode 式标题栏功能按钮，全平台显；紧挨交通灯）════
-               终端面板 / AI 聊天右栏——状态图标 accent 高亮（开）/ 灰色（关）。
-               mac 与交通灯同排（用右边框分隔）；Windows 独立居左。 -->
-          <Border Height="14" Width="1" Background="{DynamicResource BorderBrush}" VerticalAlignment="Center" Margin="4,0,0,0"/>
-          <Button Classes="titlebar-toggle" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端面板"
-                  Padding="5" Background="Transparent">
-            <Grid>
-              <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="14" Height="14"
-                    Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
-              <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="14" Height="14"
-                    Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
-            </Grid>
+        <!-- ═══ 左上：mac 交通灯（红黄绿三圆点，仅 macOS 显；Windows/Linux 用右侧三键）════
+             圆点内符号（×/－/⤢）hover 才显——显隐由 SharedTheme 的 `Button.mac-tl Path` /
+             `:pointerover Path` 选择器驱动（XAML 不写局部 IsVisible，否则局部值优先于 hover 样式）。 -->
+        <StackPanel x:Name="MacTrafficLights" Grid.Column="0" Orientation="Horizontal"
+                    VerticalAlignment="Center" Margin="14,0,0,0" Spacing="8">
+          <!-- 红关闭：悬停显示 ×（Fill 由 SharedTheme 按类给深色符号色，XAML 不设避免覆盖样式） -->
+          <Button Classes="mac-tl mac-tl-close" Click="OnClose" ToolTip.Tip="关闭"
+                  Width="12" Height="12" Padding="0">
+            <Path x:Name="CloseGlyph" Data="{x:Static shell:Codicons.ChromeClose}" Stretch="Uniform"
+                  Width="8" Height="8"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Button>
-          <Button Classes="titlebar-toggle" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏"
-                  Padding="5" Background="Transparent">
-            <Grid>
-              <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="14" Height="14"
-                    Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsChatVisible}"/>
-              <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="14" Height="14"
-                    Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsChatVisible}"/>
-            </Grid>
+          <!-- 黄最小化：悬停显示 － -->
+          <Button Classes="mac-tl mac-tl-min" Click="OnMinimize" ToolTip.Tip="最小化"
+                  Width="12" Height="12" Padding="0">
+            <Path x:Name="MinGlyph" Data="{x:Static shell:Codicons.ChromeMinimize}" Stretch="Uniform"
+                  Width="8" Height="8"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Button>
+          <!-- 绿最大化：悬停显示 ⤢ -->
+          <Button Classes="mac-tl mac-tl-max" Click="OnMaximizeRestore" ToolTip.Tip="最大化/还原"
+                  Width="12" Height="12" Padding="0">
+            <Path x:Name="MaxGlyph" Data="{x:Static shell:Codicons.ChromeMaximize}" Stretch="Uniform"
+                  Width="8" Height="8"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Button>
         </StackPanel>
 
@@ -91,8 +66,32 @@
                    FontFamily="{DynamicResource UiFont}" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>
 
-        <!-- ═══ Windows 式三键（右上，仅非 macOS 显；macOS 用左上交通灯）════ -->
-        <StackPanel x:Name="WinButtons" Grid.Column="2" Orientation="Horizontal">
+        <!-- ═══ 右上：面板 toggle（VSCode 式功能按钮）+ Windows 三键（仅非 macOS 显）════
+             mac：右上 = 终端/AI 右栏两 toggle（交通灯在左上、三键隐藏）；Windows：右上 = 两 toggle + 三键。 -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
+          <!-- 终端面板 toggle（VSCode LayoutPanel 图标；accent 开/灰关） -->
+          <Button Classes="titlebar-toggle" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端面板"
+                  Padding="5" Background="Transparent">
+            <Grid>
+              <Path Data="{x:Static shell:Codicons.LayoutPanel}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
+              <Path Data="{x:Static shell:Codicons.LayoutPanel}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
+            </Grid>
+          </Button>
+          <!-- AI 聊天右栏 toggle（VSCode LayoutSidebarRight 图标） -->
+          <Button Classes="titlebar-toggle" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏"
+                  Padding="5" Background="Transparent">
+            <Grid>
+              <Path Data="{x:Static shell:Codicons.LayoutSidebarRight}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsChatVisible}"/>
+              <Path Data="{x:Static shell:Codicons.LayoutSidebarRight}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsChatVisible}"/>
+            </Grid>
+          </Button>
+
+          <!-- ═══ Windows 式三键（仅非 macOS 显；macOS 用左上交通灯）════ -->
+          <StackPanel x:Name="WinButtons" Orientation="Horizontal">
           <Button Classes="win-btn" Click="OnMinimize" ToolTip.Tip="最小化">
             <Path Data="{x:Static shell:Codicons.ChromeMinimize}" Stretch="Uniform" Width="12" Height="12"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -114,7 +113,8 @@
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Button>
-        </StackPanel>
+          </StackPanel>  <!-- /WinButtons -->
+        </StackPanel>  <!-- /右上（toggle + 三键） -->
       </Grid>
     </Border>
 
