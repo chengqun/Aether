@@ -256,10 +256,11 @@ public partial class WorkspaceView : UserControl
             grid.Children.Add(child);
             if (i < n - 1)
             {
+                // 分界线接主题 token SplitterBrush：Background 不在此设（保持默认 null），由 SharedTheme 的
+                // `GridSplitter` 样式用 {DynamicResource SplitterBrush} 接管——这样「改主题 JSON」即可调分界线颜色。
                 var splitter = new GridSplitter
                 {
                     ResizeDirection = horiz ? GridResizeDirection.Columns : GridResizeDirection.Rows,
-                    Background = Brushes.Transparent,
                     Focusable = false,
                 };
                 if (horiz) { splitter.Width = 6; Grid.SetColumn(splitter, idx + 1); }

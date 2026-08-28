@@ -32,6 +32,7 @@
     "ContentBgBrush": "#FFFFFF",
     "CardBgBrush": "#FFFFFF",
     "BorderBrush": "#E5E5E5",
+    "SplitterBrush": "#D8D8DC",
     "TextPrimaryBrush": "#0D0D0D",
     "TextSecondaryBrush": "#6E6E6E",
     "NavHoverBrush": "#E8ECF0",

@@ -52,6 +52,8 @@
       <SolidColorBrush x:Key="ToolResultBrush" Color="{StaticResource ToolResultColor}"/>
       <SolidColorBrush x:Key="ToolResultBorderBrush" Color="{StaticResource ToolResultBorderColor}"/>
       <SolidColorBrush x:Key="ToolResultTextBrush" Color="{StaticResource ToolResultTextColor}"/>
+      <!-- 分隔条 fallback 画刷（主题 JSON 的 SplitterBrush 会覆盖此值；缺失时用中性浅灰保证分界线仍可见） -->
+      <SolidColorBrush x:Key="SplitterBrush" Color="#D8D8DC"/>
 
       <!-- 语义/表面 token（dark 主题覆盖这些键即换肤）。
            Surface=次级表面（chip/代码块底，比 CardBg 略深/略浅以区分）；
@@ -505,6 +507,14 @@
   </Style>
   <Style Selector="Button.titlebar-toggle:pointerover">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+  </Style>
+
+  <!-- ═══ 分隔条分界线（区域拖动条）：Background 接主题 token SplitterBrush ════
+       WorkspaceView code 创建的 GridSplitter（工作台区域之间 / 终端 / 左树 / 右 chat）不设本地 Background，
+       由此样式 {DynamicResource SplitterBrush} 接管 → 分界线颜色随主题 JSON 变（改 JSON 即调分界线色）。
+       已在某元素上显式设 Background（如 BrowserView 用了 BorderBrush）的 splitter 不受此样式影响（本地值优先）。 -->
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="{DynamicResource SplitterBrush}"/>
   </Style>
 
 </Styles>
