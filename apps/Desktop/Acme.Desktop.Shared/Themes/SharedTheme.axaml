@@ -435,4 +435,76 @@
     <Setter Property="Spacing" Value="8"/>
   </Style>
 
+  <!-- ═══ mac 交通灯（自绘标题栏 macOS 专用：左上红黄绿三圆点，hover 显 ×/－/⤢）════
+       圆点色是 macOS 固定语义色（不受主题影响）：红 #FF5F57 关闭、黄 #FEBC2E 最小化、绿 #28C840 最大化。
+       符号 hover 才显——Selector: Button.mac-tl Path 默认隐藏，:pointerover 显。符号色用各圆点的深色变体，
+       明暗主题都清晰（亮圆点 + 深符号）。 -->
+  <Style Selector="Button.mac-tl">
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>   <!-- 半径=6 → 12px 直径正圆 -->
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.mac-tl-close">
+    <Setter Property="Background" Value="#FF5F57"/>
+  </Style>
+  <Style Selector="Button.mac-tl-min">
+    <Setter Property="Background" Value="#FEBC2E"/>
+  </Style>
+  <Style Selector="Button.mac-tl-max">
+    <Setter Property="Background" Value="#28C840"/>
+  </Style>
+  <!-- 圆点内符号：默认隐藏，hover 显 -->
+  <Style Selector="Button.mac-tl Path">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector="Button.mac-tl:pointerover Path">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <!-- 圆点背景 hover/pressed 保持纯 mac 圆点色（覆盖 Fluent Button 默认 hover/pressed 改背景） -->
+  <Style Selector="Button.mac-tl-close:pointerover">
+    <Setter Property="Background" Value="#FF5F57"/>
+  </Style>
+  <Style Selector="Button.mac-tl-close:pressed">
+    <Setter Property="Background" Value="#FF5F57"/>
+  </Style>
+  <Style Selector="Button.mac-tl-min:pointerover">
+    <Setter Property="Background" Value="#FEBC2E"/>
+  </Style>
+  <Style Selector="Button.mac-tl-min:pressed">
+    <Setter Property="Background" Value="#FEBC2E"/>
+  </Style>
+  <Style Selector="Button.mac-tl-max:pointerover">
+    <Setter Property="Background" Value="#28C840"/>
+  </Style>
+  <Style Selector="Button.mac-tl-max:pressed">
+    <Setter Property="Background" Value="#28C840"/>
+  </Style>
+  <!-- 符号色：各圆点深色变体（亮圆点 + 深符号，明暗主题都清晰） -->
+  <Style Selector="Button.mac-tl-close Path">
+    <Setter Property="Fill" Value="#990000"/>
+  </Style>
+  <Style Selector="Button.mac-tl-min Path">
+    <Setter Property="Fill" Value="#995700"/>
+  </Style>
+  <Style Selector="Button.mac-tl-max Path">
+    <Setter Property="Fill" Value="#006500"/>
+  </Style>
+
+  <!-- ═══ 标题栏面板 toggle（VSCode 式功能按钮：终端/AI 右栏，交通灯旁）════
+       透明底 + hover 浅灰圆角底（SurfaceHoverBrush），图标色由 XAML accented/灰双 Path 按状态切。 -->
+  <Style Selector="Button.titlebar-toggle">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusXs}"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="Height" Value="24"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="Button.titlebar-toggle:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+  </Style>
+
 </Styles>

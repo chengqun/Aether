@@ -74,6 +74,7 @@ public partial class WorkbenchWindow : Window
         ThemeLoader.Apply(this, _vm?.CustomThemeJson);
         ApplyThemeVariant();
         ApplyChrome();   // borderless 皮肤（dream）开自绘标题栏；VM 已据 chrome.borderless 设好 IsBorderless
+        ApplyPlatformChromeButtons(); // macOS 显示左上交通灯、非 macOS 显示右上三键
         UpdateMaxIcon(); // 据当前 WindowState 显最大化/还原图标
         // Avalonia 12.1.1 无 StateChanged/WindowStateChanged 事件；WindowState 是 DirectProperty，
         // 经 AvaloniaObject.PropertyChanged 通用事件过滤 WindowStateProperty 捕获最大化↔还原（覆盖按钮/双击/OS snap 全路径）。
@@ -288,6 +289,27 @@ public partial class WorkbenchWindow : Window
         var maximized = WindowState == WindowState.Maximized;
         if (MaxIcon is not null) MaxIcon.IsVisible = !maximized;
         if (RestoreIcon is not null) RestoreIcon.IsVisible = maximized;
+        ApplyMacMaxGlyph();
+    }
+
+    /// <summary>mac 交通灯绿点（最大化）hover 时显 ⤢（最大化）或 ⤡（还原）。绿点符号随 WindowState 切换，
+    /// 与 WinButtons 的 MaxIcon/RestoreIcon 同源。仅在 macOS 生效（MacTrafficLights 可见时）。</summary>
+    private void ApplyMacMaxGlyph()
+    {
+        if (MaxGlyph is null) return;
+        var maximized = WindowState == WindowState.Maximized;
+        MaxGlyph.Data = Geometry.Parse(maximized ? Codicons.ChromeRestore : Codicons.ChromeMaximize);
+    }
+
+    /// <summary>按平台切换标题栏按钮组：macOS 显示左上角交通灯（红黄绿圆点），非 macOS 显示右上角
+    /// Windows 式三键。交通灯的绿点（最大化）在 hover 时显 ⤢，且须随 WindowState 切「最大化/还原」符号——
+    /// 但 mac 交通灯圆点内符号 hover 才显，非 hover 恒圆点，故绿点符号用 <see cref="UpdateMacMaxGlyph"/> 单独维护。</summary>
+    private void ApplyPlatformChromeButtons()
+    {
+        var isMac = OperatingSystem.IsMacOS();
+        if (MacTrafficLights is not null) MacTrafficLights.IsVisible = isMac;
+        if (WinButtons is not null) WinButtons.IsVisible = !isMac;
+        ApplyMacMaxGlyph();
     }
 
     /// <summary>把主题明暗倾向同步到 Avalonia 原生控件主题。<see cref="ThemeLoader"/> 的 JSON overlay
