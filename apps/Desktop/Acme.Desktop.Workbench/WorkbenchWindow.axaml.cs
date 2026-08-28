@@ -77,7 +77,17 @@ public partial class WorkbenchWindow : Window
         UpdateMaxIcon(); // 据当前 WindowState 显最大化/还原图标
         // Avalonia 12.1.1 无 StateChanged/WindowStateChanged 事件；WindowState 是 DirectProperty，
         // 经 AvaloniaObject.PropertyChanged 通用事件过滤 WindowStateProperty 捕获最大化↔还原（覆盖按钮/双击/OS snap 全路径）。
-        PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) UpdateMaxIcon(); };
+        // 最小化 → 进桌宠：黄色交通灯 / Cmd+M / 自绘按钮都会把 WindowState 置 Minimized，捕获后转成
+        // EnterPetMode（Hide 主窗 + 显示桌宠）而非缩到 Dock——「最小化=进桌宠」语义，Dock 不驻留。
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty)
+            {
+                UpdateMaxIcon();
+                if (WindowState == WindowState.Minimized)
+                    OnTrueMinimized();
+            }
+        };
         // dream 类皮肤开 aurora 动画背景层（VM 在窗口打开前已据主题 animated 字段设好 IsDreamLayerVisible）。
         if (_vm?.IsDreamLayerVisible == true) StartAurora();
     }
@@ -241,10 +251,31 @@ public partial class WorkbenchWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
-    /// <summary>最小化（自绘标题栏按钮）：系统原生最小化到 Dock，不联动桌宠。
-    /// 主流桌宠只拦「关闭」不拦「最小化」——最小化语义是「暂时收起稍后还用」，关闭才是「缩到桌宠驻留」。
-    /// macOS 黄色交通灯本就走的 OS 原生最小化（不经过此 handler），此处自绘按钮恢复同语义。</summary>
-    public void OnMinimize(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    /// <summary>最小化（自绘标题栏按钮）：进桌宠，不缩到 Dock。与 X（关闭）同语义——
+    /// 「最小化=进桌宠」：主窗 Hide + 桌宠驻留。直接调 EnterPetMode，绕过 WindowState=Minimized
+    /// （否则会额外触发一次 OnTrueMinimized，且留下一个已 Minimized 的隐藏窗口状态不干净）。</summary>
+    public void OnMinimize(object? sender, RoutedEventArgs e) => EnterPetMode();
+
+    /// <summary>系统级最小化落到 WindowState=Minimized 后的统一处理：转成桌宠驻留。
+    /// 默认皮肤已全自绘标题栏（light/dark 也开了 chrome.borderless），黄色交通灯不再存在，主路径是
+    /// 自绘最小化按钮 <see cref="OnMinimize"/> 直接进桌宠。此兜底覆盖 Cmd+M 等 OS 级最小化快捷键——
+    /// macOS 最小化是异步 OS 动画，事件到达时动画可能仍在进行，若此刻同步 Hide()+复位 WindowState 会与
+    /// surface 竞态留下「内容已卸载、native shell 还在」的空壳。故：①先复位 Normal（顺序在 Hide 之前）；
+    /// ②延迟一帧再 EnterPetMode（让最小化动画先落地，避免时序打架）。</summary>
+    private void OnTrueMinimized()
+    {
+        // 桌宠驻留时（主窗已 Hide）也可能收到 PropertyChanged 噪声，避免重复进。
+        if (!IsVisible || _pet is { IsVisible: true }) return;
+        // ① 先复位：必须在 Hide 之前把 Minimized 态清掉，否则 Hide 后设 WindowState 会把已卸载内容的
+        //    native surface 重新拉回成一个空壳（内容已离屏、壳还在屏幕）。
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        // ② 延迟一帧再进桌宠：让最小化动画先收尾，Hide 不与 OS minimize surface 竞态。
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!IsVisible) return; // 期间可能已被其它路径关闭/恢复，不再重复进
+            EnterPetMode();
+        });
+    }
 
     public void OnMaximizeRestore(object? sender, RoutedEventArgs e)
         => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;

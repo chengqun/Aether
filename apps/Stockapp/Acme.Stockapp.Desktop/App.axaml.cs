@@ -69,24 +69,26 @@ public partial class App : global::Avalonia.Application
             // 不阻塞 UI 线程：DisposeAsync 里 MCP McpClient.DisposeAsync 等子进程退出无超时机制（死等），
             // 旧版 .Wait(3s) 在本回调（UI 线程）同步阻塞 → 退出卡顿。改后台线程 + 3s 超时竞速：
             // 超时放弃释放、主进程照常退出（MCP 子进程属本进程树，随进程退出由 OS 回收）。
-            desktop.ShutdownRequested += (_, _) =>
+            desktop.ShutdownRequested += async (_, _) =>
             {
                 // dock 右键 Quit / Cmd+Q 不经 ExitApplication——先标主窗真退出 + 关桌宠，
                 // 否则 OnClosing 见 _isReallyExiting=false 会拦截系统退出 → 退出崩溃（虽最终退出）。
                 try { (desktop.MainWindow as WorkbenchWindow)?.PrepareForShutdown(); } catch { /* 忽略 */ }
+                // 容器释放改「同步 await + 总超时上限」：旧版 fire-and-forget Task.Run 与主进程退出赛跑——
+                // 后台释放线程（McpClient.DisposeAsync 关 stdio 子进程，无上限阻塞）在进程 tear-down 后才跑完，
+                // 子进程在父进程死后才收到断开 → 报错/崩。此处 await 把它在进程收尾前接住，
+                // 释放完整跑完（含子进程干净退出）后 ShutdownRequested 才返回、进程才退出，消除赛跑。
                 try
                 {
                     if (Services is System.IAsyncDisposable disposable)
                     {
-                        _ = Task.Run(async () =>
+                        try
                         {
-                            try
-                            {
-                                var disposeTask = disposable.DisposeAsync().AsTask();
-                                await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(3)));
-                            }
-                            catch { /* 退出期释放失败/超时忽略 */ }
-                        });
+                            await disposable.DisposeAsync()
+                                .AsTask()
+                                .WaitAsync(TimeSpan.FromSeconds(3));
+                        }
+                        catch { /* 释放失败/超时忽略——残留子进程由 OS 随进程退出回收 */ }
                     }
                 }
                 catch { /* 退出期释放失败/超时忽略 */ }
