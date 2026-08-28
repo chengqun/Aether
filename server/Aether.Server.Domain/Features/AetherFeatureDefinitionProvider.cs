@@ -22,9 +22,5 @@ public class AetherFeatureDefinitionProvider : FeatureDefinitionProvider
         chatGroup.AddFeature("Chat.Moment", "true", isVisibleToClients: true);
         chatGroup.AddFeature("Chat.Group", "true", isVisibleToClients: true);
         chatGroup.AddFeature("Chat.ServiceAccount", "true", isVisibleToClients: true);
-
-        var marketplaceGroup = context.AddGroup("Marketplace");
-        marketplaceGroup.AddFeature("Marketplace.Publish", "true", isVisibleToClients: true);
-        marketplaceGroup.AddFeature("Marketplace.Install", "true", isVisibleToClients: true);
     }
 }

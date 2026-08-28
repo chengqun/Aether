@@ -41,7 +41,6 @@ public partial class App : Application
         Routing.RegisterRoute("ServiceAccountPostDetailPage", typeof(ServiceAccountPostDetailPage));
         // Stage 2b 次要子页
         Routing.RegisterRoute("VideoChannelsPage", typeof(VideoChannelsPage));
-        Routing.RegisterRoute("MarketPage", typeof(MarketPage));
         Routing.RegisterRoute("DeviceManagementPage", typeof(DeviceManagementPage));
         Routing.RegisterRoute("LlmConfigPage", typeof(LlmConfigPage));
         Routing.RegisterRoute("AiSettingsPage", typeof(AiSettingsPage));

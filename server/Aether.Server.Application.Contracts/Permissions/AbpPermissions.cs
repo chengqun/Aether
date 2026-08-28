@@ -102,16 +102,6 @@ public static class AbpPermissions
         public const string View = Default + ".View";
     }
 
-    // Agent配置管理权限
-    public static class AgentConfigs
-    {
-        public const string Default = GroupName + ".AgentConfigs";
-        public const string Manage = Default + ".Manage";
-        public const string Create = Default + ".Create";
-        public const string Update = Default + ".Update";
-        public const string Delete = Default + ".Delete";
-    }
-
     // LLM配置管理权限
     public static class LlmConfigs
     {

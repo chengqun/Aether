@@ -65,7 +65,6 @@ public static class MauiProgram
         builder.Services.AddTransient<ServiceAccountPostDetailViewModel>();
         // Stage 2b 次要子页 VM
         builder.Services.AddTransient<VideoChannelsViewModel>();
-        builder.Services.AddTransient<MarketViewModel>();
         builder.Services.AddTransient<DeviceManagementViewModel>();
         builder.Services.AddTransient<LlmConfigViewModel>();
         builder.Services.AddTransient<AiSettingsViewModel>();
@@ -96,7 +95,6 @@ public static class MauiProgram
         builder.Services.AddTransient<ServiceAccountPostDetailPage>();
         // Stage 2b 次要子页 Page
         builder.Services.AddTransient<VideoChannelsPage>();
-        builder.Services.AddTransient<MarketPage>();
         builder.Services.AddTransient<DeviceManagementPage>();
         builder.Services.AddTransient<LlmConfigPage>();
         builder.Services.AddTransient<AiSettingsPage>();

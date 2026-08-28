@@ -78,9 +78,6 @@ public class AbpDbContext :
     // 应用版本配置
     public virtual DbSet<AppVersionConfig> VersionConfigs { get; set; } = null!;
 
-    // Agent 配置
-    public virtual DbSet<AppNoteNode> NoteNodes { get; set; } = null!;
-
     // LLM 配置（每个用户可有多条，如 DeepSeek、GPT-4o、本地模型）
     public virtual DbSet<AppLlmConfig> LlmConfigs { get; set; } = null!;
 
@@ -223,23 +220,6 @@ public class AbpDbContext :
             b.Property(v => v.VersionName).HasMaxLength(50).IsRequired();
             b.Property(v => v.UpdateUrl).HasMaxLength(500).IsRequired();
             b.Property(v => v.UpdateNote).HasMaxLength(2000);
-        });
-
-        // 配置 NoteNode 表 - NoteNodes（替代旧 AppAgentConfigs，存市场发布的 agent/workflow 源文本）
-        builder.Entity<AppNoteNode>(b =>
-        {
-            b.ToTable("AppNoteNodes");
-            b.HasKey(n => n.Id);
-            b.HasIndex(n => n.CreatorId);
-            b.HasIndex(n => new { n.CreatorId, n.Title, n.NodeType });
-            b.HasIndex(n => n.IsPublished);
-            b.Property(n => n.NodeType).HasMaxLength(16).IsRequired();
-            b.Property(n => n.Title).HasMaxLength(128).IsRequired();
-            b.Property(n => n.Content).HasColumnType("nvarchar(max)");
-            b.Property(n => n.Description).HasColumnType("nvarchar(max)");
-            b.Property(n => n.Category).HasMaxLength(64).IsRequired();
-            b.Property(n => n.IsPublished).HasDefaultValue(false).IsRequired();
-            b.Property(n => n.MinAppVersion).HasMaxLength(32);
         });
 
         // 配置 LLM 配置表 - LlmConfigs

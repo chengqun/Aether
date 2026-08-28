@@ -72,13 +72,6 @@ public class AbpPermissionDefinitionProvider : PermissionDefinitionProvider
         chatPermission.AddChild(AbpPermissions.Chat.Send, L("Permission:Chat.Send"));
         chatPermission.AddChild(AbpPermissions.Chat.View, L("Permission:Chat.View"));
 
-        // Agent配置管理权限
-        var agentConfigPermission = myGroup.AddPermission(AbpPermissions.AgentConfigs.Default, L("Permission:AgentConfigs"));
-        agentConfigPermission.AddChild(AbpPermissions.AgentConfigs.Manage, L("Permission:AgentConfigs.Manage"));
-        agentConfigPermission.AddChild(AbpPermissions.AgentConfigs.Create, L("Permission:AgentConfigs.Create"));
-        agentConfigPermission.AddChild(AbpPermissions.AgentConfigs.Update, L("Permission:AgentConfigs.Update"));
-        agentConfigPermission.AddChild(AbpPermissions.AgentConfigs.Delete, L("Permission:AgentConfigs.Delete"));
-
         // LLM配置管理权限
         var llmConfigPermission = myGroup.AddPermission(AbpPermissions.LlmConfigs.Default, L("Permission:LlmConfigs"));
         llmConfigPermission.AddChild(AbpPermissions.LlmConfigs.Manage, L("Permission:LlmConfigs.Manage"));

@@ -67,17 +67,6 @@ public class AbpMenuContributor : IMenuContributor
             ));
         }
 
-        // 管理员菜单 - Agent配置管理（市场）
-        if (await context.IsGrantedAsync("Abp.AgentConfigs.Manage"))
-        {
-            administration.AddItem(new ApplicationMenuItem(
-                "AgentConfigManagement",
-                l["AgentConfigManagement"],
-                url: "/agent-config-management",
-                icon: "fas fa-robot"
-            ));
-        }
-
         // 管理员菜单 - LLM 配置管理
         if (await context.IsGrantedAsync("Abp.LlmConfigs.Manage"))
         {

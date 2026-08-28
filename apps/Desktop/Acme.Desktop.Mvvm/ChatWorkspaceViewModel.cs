@@ -53,13 +53,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private bool _syncingMode; // 程序化刷新 SelectedChatMode 时置 true，避免 OnSelectedChatModeChanged 回触 SetMode
     private CancellationTokenSource? _runCts; // 当前流式运行的取消令牌（停止生成用）
 
-    // 远程审批 pending 注册表：convId → (审批请求, TCS)。远程 run 撞审批时 onApprovalRequest 建 TCS 注册于此；
-    // 老板手机端发回 "ApprovalDecision" 消息 → HandleRemoteApprovalDecisionAsync 解 TCS → run 协作循环恢复。
-    // 每会话至多一个 pending（MAF 审批结束本轮）；新聊天取消旧 pending（TrySetResult(null) → loop break）。
-    private readonly Dictionary<Guid, RemotePendingApproval> _remoteApprovals = new();
-    /// <summary>一条 pending 远程审批：审批请求（带 RequestId）+ 等老板决策的 TCS。null 决策=取消。</summary>
-    private sealed record RemotePendingApproval(ToolApprovalRequest Req, TaskCompletionSource<ToolApprovalDecision?> Tcs);
-
     // —— 历史增量加载：切换会话时只渲染最近若干轮，更早的暂存，滚到顶部再加载 ——
     // 避免长会话一次性重建全部消息 + 同步 markdown 解析导致的卡顿（全在 UI 线程）。
     private List<ChatTurnItem>? _pendingHistoryTurns; // 暂存的更早轮（时间正序，最旧在前；尚未加入 Messages 渲染）
@@ -194,13 +187,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         string senderName,
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default,
-        // 远程路径传：关键节点信号（计划/审批/完成/错误）序列化成 RunProgress JSON 经 SignalR 以 "Progress" type 发回手机
-        // （老板视角：只收结论性信号）。本地路径不传（默认 null）→ 不发 Progress。注意：本地桌宠走 IRunProgressSink（广播），
-        // 与手机端这条互不相干——手机端是 remote-only，桌宠是 local+remote 都可见。逐字 token 两边都不传（噪音）。
-        Action<RunProgress>? onRemoteProgress = null,
-        // 远程路径传：撞审批时把请求 park 给手机（建 TCS + 注册 _remoteApprovals，等手机端 "ApprovalDecision" 消息解）。
-        // 本地路径不传（默认 null）→ 走桌面本地审批框 _approvalDialog。Auto 模式由 TryAutoApprove 自动批、不经此回调。
-        Func<ToolApprovalRequest, Task<ToolApprovalDecision?>>? onApprovalRequest = null)
+        // 远程路径传 true：老板手机只收最终概括，过程（计划/工具/思考/审批）全不发——审批也自动放行所有工具（含 Dangerous）。
+        // 本地路径传 false（默认）→ 走 4 档模式选择器 TryAutoApprove + 桌面本地审批框 _approvalDialog。
+        bool autoApproveAll = false)
     {
         var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
         var cursor = new StreamCursor(NewTextSegment(senderName, isReasoningContent: false));
@@ -281,7 +270,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     {
                         lock (pendingLock) pendingChunks.Add((text, true));
                         flushTimer.Change(50, Timeout.Infinite);
-                        EmitProgress(new RunProgress(RunProgressKind.Reasoning), onRemoteProgress);
+                        EmitProgress(new RunProgress(RunProgressKind.Reasoning));
                         return Task.CompletedTask;
                     },
                     OnToolEvent: (ev, _) =>
@@ -297,7 +286,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         {
                             EmitProgress(ev.Kind == ToolStreamEventKind.Call
                                 ? new RunProgress(RunProgressKind.ToolStarted, ToolName: ev.Name, ToolArgument: ExtractToolArgument(ev.Input))
-                                : new RunProgress(RunProgressKind.ToolFinished, ToolName: ev.Name), onRemoteProgress);
+                                : new RunProgress(RunProgressKind.ToolFinished, ToolName: ev.Name));
                         }
                         return Task.CompletedTask;
                     },
@@ -305,10 +294,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     {
                         pendingApproval = req;
                         // 关键节点广播：审批请求（下单/删除/推送等危险操作需确认）。
-                        EmitProgress(new RunProgress(RunProgressKind.ApprovalRequested, ToolName: req.ToolName), onRemoteProgress);
-                        // 按当前模式算自动决定（Auto 全自动批；AutoEdit 自动批非 Dangerous；Manual/Plan 弹框）。
+                        EmitProgress(new RunProgress(RunProgressKind.ApprovalRequested, ToolName: req.ToolName));
+                        // 远程 run（autoApproveAll）一律自动批准所有工具（含 Dangerous）——老板只收最终概括，不交互；
+                        // 本地 run 按当前模式算自动决定（Auto 全自动批；AutoEdit 自动批非 Dangerous；Manual/Plan 弹框）。
                         // 读 SelectedChatMode 是逐工具调用即时生效——运行中切档立即影响下一个工具（解决中途切模式）。
-                        autoDecision = TryAutoApprove(req);
+                        autoDecision = autoApproveAll
+                            ? new ToolApprovalDecision(req.RequestId, Approved: true, "远程自动批准", AlwaysApprove: false)
+                            : TryAutoApprove(req);
                         if (autoDecision is not null)
                             return Task.CompletedTask; // 自动批：不插审批卡，工具 call+result 仍经 OnToolEvent 正常渲染
                         var card = new ChatMessageItem
@@ -335,8 +327,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     OnTodoList: (list, _) =>
                     {
                         _dispatcher.Post(() => HandleTodoList(items, list, senderName));
-                        // 关键节点广播：计划更新（含手机端进度心跳——须带 Todos 供手机端逐条渲染）。
-                        EmitProgress(new RunProgress(RunProgressKind.PlanUpdated, PlanStepCount: list.Count, Todos: list), onRemoteProgress);
+                        // 关键节点广播：计划更新。
+                        EmitProgress(new RunProgress(RunProgressKind.PlanUpdated, PlanStepCount: list.Count, Todos: list));
                         return Task.CompletedTask;
                     },
                     OnError: (text, _) =>
@@ -346,7 +338,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                             EnsureTextSegment(cursor, items, senderName, isReasoningContent: false);
                             cursor.Current.Content += $"\n\n[错误：{text}]";
                         });
-                        EmitProgress(new RunProgress(RunProgressKind.RunError, Text: text), onRemoteProgress);
+                        EmitProgress(new RunProgress(RunProgressKind.RunError, Text: text));
                         return Task.CompletedTask;
                     },
                     OnUsage: info => _dispatcher.Post(() => TokenInfo = info));
@@ -358,19 +350,17 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 ToolApprovalDecision decision;
                 if (autoDecision is not null)
                 {
-                    // 模式自动批（Auto/AutoEdit-非Dangerous）：无对话框、无审批卡，直接走与用户批准相同的再调用路径恢复执行。
+                    // 自动批（远程 autoApproveAll / 本地 Auto/AutoEdit-非Dangerous）：无对话框、无审批卡，直接走与用户批准相同的再调用路径恢复执行。
                     decision = autoDecision;
                 }
                 else
                 {
-                    // 非自动批：远程路径把请求 park 给手机（onApprovalRequest 建 TCS 等老板决策），否则弹桌面本地框。
-                    var userDecision = onApprovalRequest is not null
-                        ? await onApprovalRequest(pendingApproval).ConfigureAwait(false)
-                        : (_approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false));
+                    // 非自动批：弹桌面本地框（本地路径）。远程 run 已由 autoApproveAll 保证恒批、不会走到这。
+                    var userDecision = _approvalDialog is null ? null : await _approvalDialog.ShowAsync(pendingApproval).ConfigureAwait(false);
                     if (userDecision is null)
                     {
                         _dispatcher.Post(() => { if (approvalCard is not null) approvalCard.ApprovalState = 2; });
-                        break; // 取消（本地框关闭 / 远程被新聊天取消）→ 终止本轮
+                        break; // 取消（本地框关闭）→ 终止本轮
                     }
                     decision = userDecision;
                     var approved = decision.Approved;
@@ -431,10 +421,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             // 桌宠逐字流收尾（打字机 flush 后停止）。RUN 不考虑 remote——桌宠本地/远程都收逐字。
             _petTokens?.EndAnswer();
             // 终态关键节点广播：本轮收敛为 Done 或 Error。不带原文/摘要——桌宠只冒固定短话「搞定啦」，
-            // 手机端最终结果由 ConversationSummaryService 的 LLM 概览单独发（Text type），Progress 心跳不发 long-form。
+            // 手机端最终结果由 ConversationSummaryService 的 LLM 概览单独发（Text type），过程信号不发手机。
             EmitProgress(errored
                 ? new RunProgress(RunProgressKind.RunError)
-                : new RunProgress(RunProgressKind.RunDone), onRemoteProgress);
+                : new RunProgress(RunProgressKind.RunDone));
         }
         return items.ToList();
     }
@@ -473,13 +463,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         return null;
     }
 
-    /// <summary>把一条关键节点信号广播给本地消费者（IRunProgressSink，桌宠等）+ 可选地转发给手机端
-    /// （onRemoteProgress，remote-only 路径）。两通道互不相干：本地桌宠 local+remote 都可见，手机端仅 remote 触发。
-    /// 逐字 token 不走此处（见 RunProgress 粒度约定）。</summary>
-    private void EmitProgress(RunProgress signal, Action<RunProgress>? onRemoteProgress)
+    /// <summary>把一条关键节点信号广播给本地消费者（IRunProgressSink，桌宠等）。
+    /// 逐字 token 不走此处（见 RunProgress 粒度约定）。手机端不再是消费者——远程只收最终概括。</summary>
+    private void EmitProgress(RunProgress signal)
     {
         _progressSink?.Post(signal);
-        onRemoteProgress?.Invoke(signal);
     }    /// <summary>确保当前段是目标类型（TextContent 思考/答案 vs TextReasoningContent 推理）的文本段；否则冻结/移除当前并新开一段。串行在 UI 线程调用。</summary>
     private void EnsureTextSegment(StreamCursor cursor, IList<ChatMessageItem> items, string senderName, bool isReasoningContent)
     {
@@ -786,67 +774,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     private Guid _recentConversationId;
 
-    /// <summary>处理老板手机端发回的审批决策（messageType="ApprovalDecision"）。
-    /// 反序列化 RemoteApprovalDecision → 查 _remoteApprovals 取 pending → 补上原 RequestId 建 ToolApprovalDecision → 解 TCS。
-    /// run 协作循环的 onApprovalRequest 被 TCS 唤醒，带 decision 重入 harness 同会话恢复（HarnessRuntime:272-299）。
-    /// 无 pending → 忽略（stale：已取消/超时/重复）。</summary>
-    private void HandleRemoteApprovalDecision(DeviceMessage msg)
-    {
-        RemoteApprovalDecision? dto = null;
-        try
-        {
-            dto = System.Text.Json.JsonSerializer.Deserialize<RemoteApprovalDecision>(msg.Content, ProgressJsonOpts);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[RemoteApproval] 反序列化失败（conv {msg.ConversationId}）: {ex.Message}");
-        }
-        if (dto is null) return;
-
-        lock (_remoteApprovals)
-        {
-            if (_remoteApprovals.TryGetValue(msg.ConversationId, out var pending))
-            {
-                _remoteApprovals.Remove(msg.ConversationId);
-                var decision = new ToolApprovalDecision(pending.Req.RequestId, dto.Approved, dto.Reason, AlwaysApprove: false);
-                pending.Tcs.TrySetResult(decision); // 唤醒 onApprovalRequest → run 协作循环带 approvalResponse 重入
-            }
-            // 无 pending → stale，忽略
-        }
-    }
-
-    /// <summary>取消同会话 pending 远程审批（新聊天起 turn 前调）。
-    /// TrySetResult(null) → onApprovalRequest 返回 null → run 协作循环 break 终止旧轮，避免新旧 turn 抢同 framework session。</summary>
-    private void CancelRemoteApproval(Guid convId)
-    {
-        lock (_remoteApprovals)
-        {
-            if (_remoteApprovals.TryGetValue(convId, out var pending))
-            {
-                _remoteApprovals.Remove(convId);
-                pending.Tcs.TrySetResult(null);
-            }
-        }
-    }
-
     /// <summary>收到远程 SignalR 消息回调（SignalR 线程）</summary>
     private async Task HandleMessageReceived(DeviceMessage msg)
     {
         _recentConversationId = msg.ConversationId;
 
         // 控制消息按 messageType 路由（不建可见 turn）：
-        // ApprovalDecision = 老板手机端审批决策（解 _remoteApprovals 的 pending TCS 恢复 run）；
         // Progress = 桌面是发送方，不消费自己发出的心跳。
         var mt = msg.MessageType;
-        if (string.Equals(mt, "ApprovalDecision", StringComparison.OrdinalIgnoreCase))
-        {
-            HandleRemoteApprovalDecision(msg);
-            return;
-        }
         if (string.Equals(mt, "Progress", StringComparison.OrdinalIgnoreCase)) return;
-
-        // 新聊天取消同会话 pending 远程审批（否则旧 run 挂着 TCS、新 turn 抢同 framework session → hang）。
-        CancelRemoteApproval(msg.ConversationId);
 
         // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent），并起一轮
         ChatTurnItem remoteTurn = null!;
@@ -883,25 +819,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     ? _workflowRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
                     : _agentRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
                 fullText,
-                // 进度心跳：关键节点信号序列化成 RunProgress JSON 经 SignalR 以 "Progress" type 发回手机。
-                // 老板视角=只收结论性信号：计划/审批/完成/错误；过程噪音（思考/工具起止）不发手机（桌宠本端经
-                // _progressSink 仍收全集）。手机反序列化回 RunProgress 按 kind 富渲染（与桌宠同款）。心跳丢失不影响主流程；不 await。
-                onRemoteProgress: signal =>
-                {
-                    if (signal.Kind is not (RunProgressKind.PlanUpdated or RunProgressKind.ApprovalRequested
-                                            or RunProgressKind.RunDone or RunProgressKind.RunError)) return;
-                    if (!_deviceChatClient.IsConnected) return;
-                    var json = System.Text.Json.JsonSerializer.Serialize(signal, ProgressJsonOpts);
-                    _deviceChatClient.SendMessageAsync(convId, json, "Progress").SafeFireAndForget();
-                },
-                // 远程审批：远程 run 撞审批时把请求 park 给手机（建 TCS + 注册到 _remoteApprovals），
-                // 等老板手机端发回 "ApprovalDecision" 消息解 TCS。Auto 模式由 TryAutoApprove 自动批、不经此回调。
-                onApprovalRequest: req =>
-                {
-                    var tcs = new TaskCompletionSource<ToolApprovalDecision?>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    lock (_remoteApprovals) _remoteApprovals[convId] = new RemotePendingApproval(req, tcs);
-                    return tcs.Task;
-                });
+                // 远程 run：老板手机只收最终概括，过程（进度心跳/审批）全不发——危险工具一律自动放行。
+                autoApproveAll: true);
             if (remoteKind != ChatTargetKind.Rule) await RefreshModeAsync(msg.ConversationId);
 
             // 远程消息触发运行：把回复通过 SignalR 发回远程发送方（否则对方收不到结果）。
@@ -1315,18 +1234,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
-
-    /// <summary>RunProgress/RemoteApprovalDecision 的 wire 序列化选项：camelCase + 枚举字符串 +
-    /// 保留中文（UnsafeRelaxed）。PropertyNameCaseInsensitive 使反序列化手机端发来的
-    /// RemoteApprovalDecision（可能 PascalCase/camelCase）稳健。勿复用 _prefsJson——它无 JsonStringEnumConverter。</summary>
-    private static readonly System.Text.Json.JsonSerializerOptions ProgressJsonOpts = new()
-    {
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
-    };
-
 
     /// <summary>加载 LLM 配置列表到下拉框，并恢复上次选中的 LLM（跨重启保留）。</summary>
     private async Task LoadLlmConfigsAsync()

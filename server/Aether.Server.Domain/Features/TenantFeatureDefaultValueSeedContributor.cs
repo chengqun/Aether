@@ -12,7 +12,7 @@ namespace Aether.Server.Features;
 /// 按租户用途种入功能特性默认值，使既有 qifu/stockapp 租户在启用特性门控后不丢能力：
 ///   qifu     → 毓数 / 云文档 开
 ///   stockapp → 股票行情 / 分析 开
-/// Chat.* / Marketplace.* 默认 true，回退即可，无需种入。
+/// Chat.* 默认 true，回退即可，无需种入。
 /// 仅在未显式设置时种入（GetOrNullAsync==null），管理员后续手改不会被覆盖。仅 host 上下文运行。
 /// </summary>
 public class TenantFeatureDefaultValueSeedContributor : IDataSeedContributor, ITransientDependency
