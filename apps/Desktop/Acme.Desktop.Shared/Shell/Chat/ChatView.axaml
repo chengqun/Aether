@@ -81,7 +81,7 @@
           </Button>
           <!-- 新聊天 -->
           <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
-            <Path Data="{x:Static shell:Codicons.Sparkle}" Stretch="Uniform" Width="14" Height="14"
+            <Path Data="{x:Static shell:Codicons.Comment}" Stretch="Uniform" Width="14" Height="14"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
           </Button>
         </StackPanel>

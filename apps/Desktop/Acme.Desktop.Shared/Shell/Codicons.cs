@@ -94,6 +94,7 @@ public static class Codicons
     public static readonly string Book = R(PackIconCodiconsKind.Book);
     public static readonly string Files = R(PackIconCodiconsKind.Files);
     public static readonly string CommentDiscussion = R(PackIconCodiconsKind.CommentDiscussion);
+    public static readonly string Comment = R(PackIconCodiconsKind.Comment);           // 💬 单气泡（新聊天）
     public static readonly string Collection = R(PackIconCodiconsKind.Collection);  // 📚 知识对象/集合资产
     public static readonly string NewFile = R(PackIconCodiconsKind.NewFile);        // 📄+ 新建文件
     public static readonly string NewFolder = R(PackIconCodiconsKind.NewFolder);    // 📁+ 新建文件夹
