@@ -31,7 +31,7 @@
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- 历史会话（Flyout 下拉） -->
           <Button x:Name="HistoryFlyoutButton" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="历史会话">
-            <Path Data="{x:Static shell:Codicons.Menu}" Stretch="Uniform" Width="14" Height="14"
+            <Path Data="{x:Static shell:Codicons.History}" Stretch="Uniform" Width="14" Height="14"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight">
@@ -81,7 +81,7 @@
           </Button>
           <!-- 新聊天 -->
           <Button Command="{Binding NewChatCommand}" Classes="ghost" Padding="8,4" FontSize="12" ToolTip.Tip="新聊天">
-            <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="14" Height="14"
+            <Path Data="{x:Static shell:Codicons.Sparkle}" Stretch="Uniform" Width="14" Height="14"
                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
           </Button>
         </StackPanel>

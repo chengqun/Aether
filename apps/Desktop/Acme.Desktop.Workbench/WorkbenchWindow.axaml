@@ -69,23 +69,23 @@
         <!-- ═══ 右上：面板 toggle（VSCode 式功能按钮）+ Windows 三键（仅非 macOS 显）════
              mac：右上 = 终端/AI 右栏两 toggle（交通灯在左上、三键隐藏）；Windows：右上 = 两 toggle + 三键。 -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
-          <!-- 终端面板 toggle（VSCode LayoutPanel 图标；accent 开/灰关） -->
+          <!-- 终端面板 toggle（codicon Terminal 图标；accent 开/灰关） -->
           <Button Classes="titlebar-toggle" Command="{Binding ToggleTerminalCommand}" ToolTip.Tip="终端面板"
                   Padding="5" Background="Transparent">
             <Grid>
-              <Path Data="{x:Static shell:Codicons.LayoutPanel}" Stretch="Uniform" Width="15" Height="15"
+              <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="15" Height="15"
                     Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsTerminalVisible}"/>
-              <Path Data="{x:Static shell:Codicons.LayoutPanel}" Stretch="Uniform" Width="15" Height="15"
+              <Path Data="{x:Static shell:Codicons.Terminal}" Stretch="Uniform" Width="15" Height="15"
                     Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsTerminalVisible}"/>
             </Grid>
           </Button>
-          <!-- AI 聊天右栏 toggle（VSCode LayoutSidebarRight 图标） -->
+          <!-- AI 聊天右栏 toggle（codicon CommentDiscussion 气泡图标，AI 对话语义） -->
           <Button Classes="titlebar-toggle" Command="{Binding ToggleChatCommand}" ToolTip.Tip="AI 聊天右栏"
                   Padding="5" Background="Transparent">
             <Grid>
-              <Path Data="{x:Static shell:Codicons.LayoutSidebarRight}" Stretch="Uniform" Width="15" Height="15"
+              <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="15" Height="15"
                     Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsChatVisible}"/>
-              <Path Data="{x:Static shell:Codicons.LayoutSidebarRight}" Stretch="Uniform" Width="15" Height="15"
+              <Path Data="{x:Static shell:Codicons.CommentDiscussion}" Stretch="Uniform" Width="15" Height="15"
                     Fill="{DynamicResource TextSecondaryBrush}" IsVisible="{Binding !IsChatVisible}"/>
             </Grid>
           </Button>
