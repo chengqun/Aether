@@ -43,8 +43,7 @@
   </UserControl.Styles>
 
   <!-- shell 级独立左栏：占满高度（由外层 LayoutSplit 控制宽度）。树头「文件 ▾」仅留树相关 3 项。 -->
-  <Border Background="{DynamicResource CardBgBrush}"
-          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+  <Border Background="{DynamicResource CardBgBrush}">
     <Grid RowDefinitions="Auto,*">
       <!-- 树头：「文件」下拉菜单（项目名不显——文件树根节点已是目录名，重复无意义，同原 DocumentsView 2026-08-15 决策） -->
       <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">

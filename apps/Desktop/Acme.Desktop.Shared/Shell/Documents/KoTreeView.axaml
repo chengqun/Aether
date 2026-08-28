@@ -43,8 +43,7 @@
   <!-- shell 级独立左栏（占满高度，宽度由外层 LayoutSplit 控制——终端只压右栏编辑器区不压本树，同 FileTreeView）。
        树头「知识对象 ▾」打开/关闭知识库目录。与 KnowledgeObjectsView（右栏）共享同一 KnowledgeObjectsViewModel 单例——
        树点 .md → VM.SelectedNode 变 → VM.OnSelectedNodeChanged 自动 OpenKnowledgeAsync → 右栏表单/源码刷新。 -->
-  <Border Background="{DynamicResource CardBgBrush}"
-          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+  <Border Background="{DynamicResource CardBgBrush}">
     <Grid RowDefinitions="Auto,*">
       <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
         <Menu Classes="ko-menu">

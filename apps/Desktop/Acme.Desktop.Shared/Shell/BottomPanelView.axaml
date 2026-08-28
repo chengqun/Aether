@@ -21,9 +21,6 @@
             <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
         </Style>
     </UserControl.Styles>
-    <!-- 顶边界线（0,1,0,0）与左右栏的竖线对称——底部面板与中间区之间也有常驻横线分界。 -->
-    <Border Background="{DynamicResource ContentBgBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
     <Grid RowDefinitions="Auto,*">
         <!-- tab 切换条（内部状态，独立于 workspace SelectedTabIndex——主 tabbed 不受影响） -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="6,3">
@@ -36,5 +33,4 @@
             <shell:BrowserView x:Name="BrowserPane" IsVisible="False"/>
         </Grid>
     </Grid>
-    </Border>
 </UserControl>
