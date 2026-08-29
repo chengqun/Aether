@@ -1,3 +1,4 @@
+using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.ViewModels;
 
 namespace Acme.Mobile.Shared.Views;
@@ -11,6 +12,12 @@ public partial class AiSettingsPage : ContentPage
         InitializeComponent();
         _vm = viewModel;
         BindingContext = _vm;
+        _vm.NavigationRequested += OnNavigationRequested;
+    }
+
+    private async void OnNavigationRequested(object? sender, NavigationRequestedEvent e)
+    {
+        await Shell.Current.GoToAsync(e.BuildNavigationUri());
     }
 
     protected override async void OnAppearing()

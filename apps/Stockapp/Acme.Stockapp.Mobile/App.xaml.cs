@@ -44,6 +44,7 @@ public partial class App : Application
         Routing.RegisterRoute("DeviceManagementPage", typeof(DeviceManagementPage));
         Routing.RegisterRoute("LlmConfigPage", typeof(LlmConfigPage));
         Routing.RegisterRoute("AiSettingsPage", typeof(AiSettingsPage));
+        Routing.RegisterRoute("AgentEditPage", typeof(AgentEditPage));
 
         return new Window(new AppShell());
     }

@@ -68,6 +68,7 @@ public static class MauiProgram
         builder.Services.AddTransient<DeviceManagementViewModel>();
         builder.Services.AddTransient<LlmConfigViewModel>();
         builder.Services.AddTransient<AiSettingsViewModel>();
+        builder.Services.AddTransient<AgentEditViewModel>();
 
         // —— Page 注册（Shell 导航按路由解析，页面 ctor 注入 VM，必须注册）——
         builder.Services.AddSingleton<SplashPage>();
@@ -98,6 +99,7 @@ public static class MauiProgram
         builder.Services.AddTransient<DeviceManagementPage>();
         builder.Services.AddTransient<LlmConfigPage>();
         builder.Services.AddTransient<AiSettingsPage>();
+        builder.Services.AddTransient<AgentEditPage>();
 
         // AiSettingsViewModel 静态 IAppSettings 引用（供 GetStockModeAgentName 快速返回）
         var appSettings = new Acme.Mobile.Shared.Services.MauiAppSettings(tenantDir);

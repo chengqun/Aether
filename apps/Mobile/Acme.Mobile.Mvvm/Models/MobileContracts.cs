@@ -12,9 +12,20 @@ namespace Acme.Mobile.Mvvm.Models;
 /// </summary>
 public class AgentInfoDto
 {
+    /// <summary>Agent 稳定身份（存于 labs 文件 front-matter 的 id: 字段）。管理入口编辑/删除靠它定位。</summary>
+    public Guid Id { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public AgentKind Kind { get; set; }
+
+    /// <summary>类型展示标签（智能体/工作流/规则），供列表与表单展示。</summary>
+    public string KindLabel => Kind switch
+    {
+        AgentKind.Workflow => "工作流",
+        AgentKind.RuleBased => "规则",
+        _ => "智能体",
+    };
 }
 
 /// <summary>

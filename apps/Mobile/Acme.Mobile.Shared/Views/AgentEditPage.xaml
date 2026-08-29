@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.AgentEditPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    x:DataType="vm:AgentEditViewModel"
+    Loaded="OnLoaded"
+    Title="编辑 AI 助手">
+
+    <ContentPage.Resources>
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{DynamicResource Primary}" HorizontalOptions="Start" />
+
+            <!-- 基础信息 -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="基础信息" FontFamily="OpenSansSemibold" FontSize="14" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="名称" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding AgentName}" Placeholder="如 技术分析专家" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="类型" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Picker ItemsSource="{Binding NodeTypeLabels}"
+                                SelectedIndex="{Binding NodeTypeIndex}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="描述" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Description}" Placeholder="一句话说明这个助手做什么" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="分类" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Category}" Placeholder="如 普通对话" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 提示词 / 规则程序 -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="提示词" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Label FontSize="11"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                           Text="智能体 = system prompt（Markdown）；规则 = 规则程序 YAML（steps/noMatchReply/maxSteps）" />
+                    <Editor Text="{Binding SystemPrompt}" HeightRequest="180"
+                            Placeholder="输入 system prompt…" AutoSize="TextChanges" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- LLM 配置（仅智能体；规则无 LLM） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsRule, Converter={StaticResource InverseBool}}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="LLM 配置" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Picker ItemsSource="{Binding AvailableLlmConfigs}"
+                            SelectedItem="{Binding SelectedLlmConfigItem}"
+                            ItemDisplayBinding="{Binding DisplayName}" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 工具勾选（仅智能体；规则走 run_rule 隐藏工具） -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsRule, Converter={StaticResource InverseBool}}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="工具" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <VerticalStackLayout Spacing="6" BindableLayout.ItemsSource="{Binding ToolCategories}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="model:ToolCategoryGroup">
+                                <VerticalStackLayout Spacing="6" Margin="0,4">
+                                    <HorizontalStackLayout Spacing="8">
+                                        <HorizontalStackLayout.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                        </HorizontalStackLayout.GestureRecognizers>
+                                        <Label Text="{Binding ExpandIndicator}" FontSize="12" VerticalOptions="Center" />
+                                        <Label Text="{Binding Category}" FontFamily="OpenSansSemibold" FontSize="14" VerticalOptions="Center" />
+                                        <Label Text="{Binding ToolCount, StringFormat='({0})'}" FontSize="12"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+
+                                    <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="4">
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Tools}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="model:ToolToggleItem">
+                                                    <HorizontalStackLayout Spacing="10" Padding="8,4">
+                                                        <Switch IsToggled="{Binding IsEnabled}" />
+                                                        <VerticalStackLayout Spacing="1">
+                                                            <Label Text="{Binding Name}" FontSize="14" />
+                                                            <Label Text="{Binding Description}" FontSize="11"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                                        </VerticalStackLayout>
+                                                    </HorizontalStackLayout>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 记忆 / 采样参数 -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="记忆与采样" FontFamily="OpenSansSemibold" FontSize="14" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="记忆模式" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Picker ItemsSource="{Binding MemoryModeLabels}"
+                                SelectedIndex="{Binding MemoryMode}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="最大历史条数" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding MaxHistory}" Keyboard="Numeric" Placeholder="20" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Top P（留空=默认）" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding TopP}" Keyboard="Numeric" Placeholder="如 0.9" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="最大输出 token（留空=默认）" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding MaxOutputTokens}" Keyboard="Numeric" Placeholder="如 2048" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="响应格式" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Picker ItemsSource="{Binding ResponseFormatLabels}"
+                                SelectedIndex="{Binding ResponseFormat}" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 开关组 -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="能力开关" FontFamily="OpenSansSemibold" FontSize="14" />
+
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableWebSearch}" />
+                        <Label Text="联网搜索" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableTodoProvider}" />
+                        <Label Text="计划列表（Todo）" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding RequireToolApproval}" />
+                        <Label Text="工具审批" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableAgentModeProvider}" />
+                        <Label Text="计划/执行模式" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableFileMemory}" />
+                        <Label Text="文件记忆" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableLongTermMemory}" />
+                        <Label Text="长期记忆" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch IsToggled="{Binding EnableOpenTelemetry}" />
+                        <Label Text="遥测日志" FontSize="14" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <Button Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
+            <Button Text="删除" Style="{StaticResource GhostButton}" Command="{Binding DeleteCommand}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

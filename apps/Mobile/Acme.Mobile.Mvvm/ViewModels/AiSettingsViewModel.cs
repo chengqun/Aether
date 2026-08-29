@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Acme.Notes.Domain;
 using Acme.Mobile.Mvvm.Models;
 using Acme.AppUpdate.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
+using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.Services;
 
 namespace Acme.Mobile.Mvvm.ViewModels;
@@ -167,6 +169,7 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
             {
                 AvailableAgents.Add(new AgentInfoDto
                 {
+                    Id = a.Id,
                     Name = a.Name,
                     Description = a.Description,
                     Kind = a.NodeType switch
@@ -496,5 +499,24 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
             }
         }
         return _cachedStockModeAgentName;
+    }
+
+    /// <summary>导航请求事件（AI 设置 → Agent 编辑表单）。</summary>
+    public event EventHandler<NavigationRequestedEvent>? NavigationRequested;
+
+    /// <summary>新建 Agent：导航到 AgentEditPage（无 agentId）。</summary>
+    [RelayCommand]
+    private void NavigateToNewAgent()
+    {
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("AgentEditPage"));
+    }
+
+    /// <summary>编辑 Agent：导航到 AgentEditPage?agentId=&lt;id&gt;。</summary>
+    [RelayCommand]
+    private void NavigateToAgentEdit(Guid agentId)
+    {
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
+            "AgentEditPage",
+            new Dictionary<string, object> { ["agentId"] = agentId.ToString() }));
     }
 }

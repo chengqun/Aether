@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     x:DataType="vm:AiSettingsViewModel"
     Title="AI 设置">
@@ -15,6 +16,51 @@
 
     <ScrollView>
         <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
+
+            <!-- Agent 管理（配置侧：新建/编辑/删除 AI 助手，与聊天侧分离；两租户都显示） -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="管理 AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="12,4"
+                                Command="{Binding NavigateToNewAgentCommand}" />
+                    </Grid>
+
+                    <VerticalStackLayout Spacing="4" BindableLayout.ItemsSource="{Binding AvailableAgents}">
+                        <BindableLayout.EmptyView>
+                            <Label Text="暂无 AI 助手" FontSize="13"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="model:AgentInfoDto">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="6,10">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToAgentEditCommand}"
+                                                              CommandParameter="{Binding Id}" />
+                                    </Grid.GestureRecognizers>
+                                    <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansSemibold"
+                                               LineBreakMode="TailTruncation" MaxLines="1"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                        <Label Text="{Binding Description}" FontSize="12"
+                                               LineBreakMode="TailTruncation" MaxLines="1"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                    </VerticalStackLayout>
+                                    <Border Grid.Column="1" BackgroundColor="{AppThemeBinding Light={StaticResource BubbleTool}, Dark={StaticResource BubbleToolDark}}"
+                                            StrokeShape="RoundRectangle 10" StrokeThickness="0" Padding="8,3"
+                                            VerticalOptions="Start">
+                                        <Label Text="{Binding KindLabel}" FontSize="11"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                    </Border>
+                                    <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
 
             <!-- Agent picker section（仅 Stockapp：股票模式默认 Agent 选择；Qifu 不串股票功能） -->
             <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStockTenant}">
