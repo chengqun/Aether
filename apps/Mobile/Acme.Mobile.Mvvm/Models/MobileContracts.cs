@@ -26,14 +26,20 @@ public class AgentInfoDto
         AgentKind.RuleBased => "规则",
         _ => "智能体",
     };
+}
 
-    /// <summary>类型头像图标（列表头像圆内展示），按 Kind 映射。</summary>
-    public string KindEmoji => Kind switch
-    {
-        AgentKind.Workflow => "🔀",
-        AgentKind.RuleBased => "📐",
-        _ => "🤖",
-    };
+/// <summary>工作流列表项（AI 设置页工作流 section）。从 <c>CustomWorkflowDefinition</c> 映射。</summary>
+public class WorkflowInfoDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>labs 文件资产列表项（技能/MCP/知识对象），按 name（文件名 stem / 文件夹名）定位编辑。</summary>
+public class NamedAssetDto
+{
+    public string Name { get; set; } = string.Empty;
 }
 
 /// <summary>

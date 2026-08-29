@@ -46,8 +46,8 @@ public partial class App : Application
         Routing.RegisterRoute("LlmConfigPage", typeof(LlmConfigPage));
         Routing.RegisterRoute("AiSettingsPage", typeof(AiSettingsPage));
         Routing.RegisterRoute("AgentEditPage", typeof(AgentEditPage));
-        Routing.RegisterRoute("LabsPage", typeof(LabsPage));
-        Routing.RegisterRoute("LabsFileViewPage", typeof(LabsFileViewPage));
+
+
         Routing.RegisterRoute("SkillCreatePage", typeof(SkillCreatePage));
         Routing.RegisterRoute("McpCreatePage", typeof(McpCreatePage));
         Routing.RegisterRoute("WorkflowCreatePage", typeof(WorkflowCreatePage));

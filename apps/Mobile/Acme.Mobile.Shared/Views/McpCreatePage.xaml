@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     x:DataType="vm:McpCreateViewModel"
-    Title="新建 MCP server">
+    Title="{Binding ScreenTitle, FallbackValue='新建 MCP 服务器'}">
 
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="16">
@@ -55,6 +55,10 @@
                 <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
                 <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
             </Grid>
+            <Button Text="删除" IsVisible="{Binding IsEditing}"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                    TextColor="White" CornerRadius="10"
+                    Command="{Binding DeleteCommand}" />
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

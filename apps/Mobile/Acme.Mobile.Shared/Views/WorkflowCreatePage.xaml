@@ -6,7 +6,7 @@
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     xmlns:model="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     x:DataType="vm:WorkflowCreateViewModel"
-    Title="新建工作流"
+    Title="{Binding ScreenTitle, FallbackValue='新建工作流'}"
     Loaded="OnLoaded">
 
     <ScrollView>
@@ -58,6 +58,10 @@
                 <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
                 <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
             </Grid>
+            <Button Text="删除" IsVisible="{Binding IsEditing}"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}"
+                    TextColor="White" CornerRadius="10"
+                    Command="{Binding DeleteCommand}" />
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
