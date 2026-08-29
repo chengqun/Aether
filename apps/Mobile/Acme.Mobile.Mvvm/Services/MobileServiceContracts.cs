@@ -131,3 +131,15 @@ public interface ICloudDocsTokenSyncService
     Task<bool> SyncToServerAsync(CancellationToken ct = default);
     Task<bool> SyncFromServerAsync(CancellationToken ct = default);
 }
+
+// —— mcphub 网关（毓数 SQL 查询/权限工单的鉴权）认证：本地手机接口。
+//   与毓数/云文档同模式：Mvvm 层定义本地接口，Qifu.Mobile 宿主桥接到 Domain 层 IMcphubAuthService。
+//   mcphub 手机端只需「从服务器同步 JWT」（上传是桌面端连接器的活），故不设 Mvvm token-sync 接口。
+
+/// <summary>mcphub 网关认证服务（手机端从服务器同步 JWT，桌面端浏览器 OAuth）。</summary>
+public interface IMcphubAuthService
+{
+    Task<bool> IsAuthenticatedAsync(CancellationToken ct = default);
+    /// <returns>登录成功返回非空 JWT；手机端=从服务器同步到的 JWT，桌面端=浏览器 OAuth JWT。</returns>
+    Task<string?> LoginAsync(CancellationToken ct = default);
+}
