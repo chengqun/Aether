@@ -27,6 +27,7 @@ using Acme.Video.Infrastructure.DependencyInjection;
 using Acme.ServiceAccount.Application.DependencyInjection;
 using Acme.ServiceAccount.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;
+using Acme.SystemTools.AI;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
@@ -121,6 +122,9 @@ public static class MobileCompositionExtensions
 
         // —— 公共 AI 工具 ——
         aether.AddMemoryTools();
+        // 系统工具（文件/搜索/HTTP 可移植子集）：手机沙盒内也有可写目录，文件工具可跑；
+        // 跳过 ExecuteCommand/ExecuteShellCommand（iOS 沙盒禁止 spawn 子进程/fork）。
+        aether.AddSystemTools(includeCommandTools: false);
 
         // ask_user 交互工具：手机端真实现（DisplayActionSheet/Prompt，见 MobileAskUserTool）。
         // AgentFactory 自动把 ask_user 纳入各 agent（免逐 agent 配置）。

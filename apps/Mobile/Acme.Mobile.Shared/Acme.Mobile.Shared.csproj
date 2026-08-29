@@ -52,6 +52,8 @@
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory.Sqlite\Aether.AI.Memory.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
+    <!-- SystemTools 文件/搜索/HTTP 工具（手机端用精简子集，跳过 spawn 子进程的命令执行工具） -->
+    <ProjectReference Include="..\..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
 
     <!-- 公共业务上下文（两租户共用；AddMobileCommon 注册 DI） -->
     <ProjectReference Include="..\..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />

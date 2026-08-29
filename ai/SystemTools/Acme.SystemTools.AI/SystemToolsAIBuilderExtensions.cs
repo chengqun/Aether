@@ -21,7 +21,19 @@ public static class SystemToolsAIBuilderExtensions
         "ApplyPatch", "ApplyPatchWithDelete"
     };
 
+    /// <summary>命令执行类工具名（ExecuteCommand / ExecuteShellCommand）——spawn 子进程，
+    /// 在 iOS 真机被沙盒禁止（App 不允许 fork），故手机端跳过。</summary>
+    public static readonly string[] CommandToolNames = { "ExecuteCommand", "ExecuteShellCommand" };
+
     public static AetherAIBuilder AddSystemTools(this AetherAIBuilder builder)
+        => AddSystemTools(builder, includeCommandTools: true);
+
+    /// <summary>
+    /// 注册系统工具（文件/搜索/HTTP/命令）。
+    /// <paramref name="includeCommandTools"/>=false 时跳过 ExecuteCommand/ExecuteShellCommand 两个
+    /// spawn 子进程的工具——手机端（iOS 沙盒禁止 fork）用此入口只拿文件/搜索/HTTP 的可移植子集。
+    /// </summary>
+    public static AetherAIBuilder AddSystemTools(this AetherAIBuilder builder, bool includeCommandTools)
     {
         var s = builder.Services;
         s.AddHttpClient();
@@ -38,9 +50,9 @@ public static class SystemToolsAIBuilderExtensions
         s.AddTransient<FileMoveTool>();
         s.AddTransient<GrepTool>();
         s.AddTransient<GlobTool>();
-        s.AddTransient<CommandExecutorTool>();
+        if (includeCommandTools) s.AddTransient<CommandExecutorTool>();
         s.AddTransient<DirectoryExplorerTool>();
-        s.AddTransient<ShellCommandTool>();
+        if (includeCommandTools) s.AddTransient<ShellCommandTool>();
         s.AddTransient<FileDiffTool>();
         s.AddTransient<ApplyPatchTool>();
 
@@ -63,12 +75,8 @@ public static class SystemToolsAIBuilderExtensions
                 sp => CreateTool<GrepTool>(sp, "Grep"));
             reg.Register("Glob", "按模式匹配文件（如 *.cs）", cat,
                 sp => CreateTool<GlobTool>(sp, "Glob"));
-            reg.Register("ExecuteCommand", "执行命令行程序", cat,
-                sp => CreateTool<CommandExecutorTool>(sp, "ExecuteCommand"), ToolApprovalLevel.Dangerous);
             reg.Register("ExploreDirectory", "浏览目录结构", cat,
                 sp => CreateTool<DirectoryExplorerTool>(sp, "ExploreDirectory"));
-            reg.Register("ExecuteShellCommand", "执行 Shell 命令", cat,
-                sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"), ToolApprovalLevel.Dangerous);
             reg.Register("FetchUrl", "抓取网页内容", cat,
                 sp => CreateTool<WebFetchTool>(sp, "FetchUrl"));
             reg.Register("DiffFile", "比较文件差异", cat,
@@ -79,6 +87,14 @@ public static class SystemToolsAIBuilderExtensions
                 sp => CreateTool<ApplyPatchTool>(sp, "ApplyPatch")); // Safe：自动跑 + 多文件事后 diff + 独立撤销
             reg.Register("ApplyPatchWithDelete", "批量编辑多个文件（含删除，危险）", cat,
                 sp => CreateTool<ApplyPatchTool>(sp, "ApplyPatchWithDelete"), ToolApprovalLevel.Dangerous);
+
+            if (includeCommandTools)
+            {
+                reg.Register("ExecuteCommand", "执行命令行程序", cat,
+                    sp => CreateTool<CommandExecutorTool>(sp, "ExecuteCommand"), ToolApprovalLevel.Dangerous);
+                reg.Register("ExecuteShellCommand", "执行 Shell 命令", cat,
+                    sp => CreateTool<ShellCommandTool>(sp, "ExecuteShellCommand"), ToolApprovalLevel.Dangerous);
+            }
         });
         return builder;
     }
