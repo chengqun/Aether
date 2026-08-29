@@ -160,11 +160,26 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- 退出登录 -->
-            <Button Text="退出登录"
-                    Style="{StaticResource PrimaryButton}"
-                    Command="{Binding LogoutCommand}"
-                    Margin="16,8" />
+            <!-- 设置：二级入口（退出登录藏于此，避免主界面误触） -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0" Padding="0">
+                <VerticalStackLayout Spacing="0">
+                    <!-- 退出登录 -->
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnLogoutTapped" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🚪" FontSize="20" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="退出登录" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
+                            <Label Text="退出当前账号" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
 
         </VerticalStackLayout>
     </ScrollView>

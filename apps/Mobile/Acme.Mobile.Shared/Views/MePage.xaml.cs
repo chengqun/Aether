@@ -31,6 +31,14 @@ public partial class MePage : ContentPage
         await _vm.ToggleThemeAsync(e.Value);
     }
 
+    /// <summary>退出登录前二次确认（防误触）。</summary>
+    private async void OnLogoutTapped(object? sender, TappedEventArgs e)
+    {
+        var ok = await DisplayAlert("退出登录", "确定要退出当前账号吗？", "退出", "取消");
+        if (ok && _vm.LogoutCommand.CanExecute(null))
+            await _vm.LogoutCommand.ExecuteAsync(null);
+    }
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
