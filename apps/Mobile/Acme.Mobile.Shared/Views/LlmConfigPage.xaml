@@ -17,7 +17,7 @@
     <ScrollView>
         <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
 
-            <!-- Status + Sync -->
+            <!-- Status -->
             <HorizontalStackLayout Spacing="8">
                 <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
                                    Color="{DynamicResource Primary}" VerticalOptions="Center" />
@@ -25,9 +25,13 @@
                        TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
             </HorizontalStackLayout>
 
-            <Button Text="从服务端同步" Style="{StaticResource GhostButton}"
-                    Command="{Binding SyncCommand}"
-                    HorizontalOptions="Start" />
+            <!-- 顶部操作：＋添加模型（主）+ 从服务端同步（次） -->
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Button Grid.Column="0" Text="＋ 添加模型" Style="{StaticResource PrimaryButton}"
+                        Clicked="OnAddClicked" />
+                <Button Grid.Column="1" Text="同步" Style="{StaticResource GhostButton}"
+                        Command="{Binding SyncCommand}" VerticalOptions="Center" />
+            </Grid>
 
             <!-- LLM list -->
             <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Llms}">
@@ -66,8 +70,8 @@
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
 
-            <!-- Edit / Add form -->
-            <Frame Style="{StaticResource CardFrame}">
+            <!-- Edit / Add form（点「＋添加模型」或点列表项才显示） -->
+            <Frame x:Name="EditFormPanel" Style="{StaticResource CardFrame}" IsVisible="False">
                 <VerticalStackLayout Spacing="12">
                     <Label x:Name="EditTitleLabel" Text="添加新 LLM" FontSize="16" FontFamily="OpenSansSemibold"
                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
@@ -112,8 +116,8 @@
                                 Clicked="OnSaveClicked" />
                     </Grid>
 
-                    <Button x:Name="CancelButton" Text="取消编辑" Style="{StaticResource GhostButton}"
-                            Clicked="OnCancelEditClicked" IsVisible="False" />
+                    <Button x:Name="CancelButton" Text="取消" Style="{StaticResource GhostButton}"
+                            Clicked="OnCancelEditClicked" />
                 </VerticalStackLayout>
             </Frame>
 

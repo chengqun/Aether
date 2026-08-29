@@ -15,6 +15,21 @@ public partial class LlmConfigPage : ContentPage
         BindingContext = _vm;
     }
 
+    /// <summary>点「＋添加模型」：进入新增态（显示表单，回填默认值）。</summary>
+    private void OnAddClicked(object? sender, EventArgs e)
+    {
+        _editingDto = null;
+        EditTitleLabel.Text = "添加新 LLM";
+        NameEntry.Text = string.Empty;
+        ModelEntry.Text = string.Empty;
+        ApiKeyEntry.Text = string.Empty;
+        EndpointEntry.Text = string.Empty;
+        TemperatureEntry.Text = "0.5";
+        IsDefaultSwitch.IsToggled = false;
+        CancelButton.Text = "取消";
+        EditFormPanel.IsVisible = true;
+    }
+
     private void OnLlmTapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is LlmConfigDto dto)
@@ -31,7 +46,8 @@ public partial class LlmConfigPage : ContentPage
         EndpointEntry.Text = dto.Endpoint;
         TemperatureEntry.Text = dto.Temperature.ToString();
         IsDefaultSwitch.IsToggled = dto.IsDefault;
-        CancelButton.IsVisible = true;
+        CancelButton.Text = "取消";
+        EditFormPanel.IsVisible = true;
     }
 
     private void OnCancelEditClicked(object? sender, EventArgs e)
@@ -39,6 +55,7 @@ public partial class LlmConfigPage : ContentPage
         ResetForm();
     }
 
+    /// <summary>收起表单（清空 + 隐藏编辑面板）。</summary>
     private void ResetForm()
     {
         _editingDto = null;
@@ -49,7 +66,7 @@ public partial class LlmConfigPage : ContentPage
         EndpointEntry.Text = string.Empty;
         TemperatureEntry.Text = "0.5";
         IsDefaultSwitch.IsToggled = false;
-        CancelButton.IsVisible = false;
+        EditFormPanel.IsVisible = false;
     }
 
     private async void OnSaveClicked(object? sender, EventArgs e)
