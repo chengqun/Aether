@@ -48,6 +48,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
     /// 待 <see cref="OnNewConversation"/> 回填）。用于删除时判断是否回到空态。</summary>
     private Guid _activeConversationId = Guid.Empty;
 
+    /// <summary>程序化填充下拉/恢复索引时置位，抑制 <see cref="OnSelectedAgentIndexChanged"/>/<see cref="OnSelectedLlmIndexChanged"/>
+    /// 的副作用（避免加载期误触发「开新对话」/「切 LLM」）。</summary>
+    private bool _syncingPicker;
+
     /// <summary>内嵌常驻聊天面板 VM（Singleton），页面把 AgentChatSurface.BindingContext 绑到它。</summary>
     public AgentChatDetailViewModel ChatSurface { get; }
 
@@ -76,6 +80,20 @@ public partial class AiChatViewModel : NavigableViewModelBase
 
     /// <summary>可用 agent 名单（供页面 agent chip ActionSheet 渲染；<c>null</c>=未加载/不可用）。</summary>
     public IReadOnlyList<string>? AgentNames => _agentNames;
+
+    /// <summary>agent 下拉选项（Picker ItemsSource，加载后填充；与 <see cref="SelectedAgentIndex"/> 配套）。</summary>
+    public ObservableCollection<string> AgentOptions { get; } = new();
+
+    /// <summary>agent 下拉选中索引（-1=未选）。变更即用该 agent 开新对话（对齐桌面 ComboBox 选目标）。</summary>
+    [ObservableProperty]
+    private int _selectedAgentIndex = -1;
+
+    /// <summary>LLM 下拉选项（首项「默认」，其余为各配置名；与 <see cref="SelectedLlmIndex"/> 配套）。</summary>
+    public ObservableCollection<string> LlmOptions { get; } = new();
+
+    /// <summary>LLM 下拉选中索引（0=默认回退平台默认；1..n=配置名）。变更调 <see cref="SetLlm"/>。</summary>
+    [ObservableProperty]
+    private int _selectedLlmIndex = -1;
 
     /// <summary>当前 LLM 显示名（"默认"=未选/用平台默认；与桌面端一致的全局默认语义，非按会话）。</summary>
     [ObservableProperty]
@@ -165,8 +183,16 @@ public partial class AiChatViewModel : NavigableViewModelBase
         try
         {
             LlmConfigs = await Task.Run(() => _llmConfigService.GetCachedAsync());
+
+            // 填充 LLM 下拉（首项「默认」+ 各配置名）
+            _syncingPicker = true;
+            LlmOptions.Clear();
+            LlmOptions.Add("默认");
+            foreach (var c in LlmConfigs ?? new List<LlmConfigDto>()) LlmOptions.Add(c.Name);
+
             // 恢复上次选择：持久化 id 命中列表则写 holder + 刷新显示名，否则回退默认。
             var savedId = _appSettings?.GetString("selectedLlmId", string.Empty);
+            int idx = 0;
             if (!string.IsNullOrEmpty(savedId) && Guid.TryParse(savedId, out var id))
             {
                 var matched = LlmConfigs?.FirstOrDefault(c => c.Id == id);
@@ -174,12 +200,15 @@ public partial class AiChatViewModel : NavigableViewModelBase
                 {
                     if (_llmHolder != null) _llmHolder.LlmConfigId = savedId;
                     CurrentLlmName = matched.Name;
+                    idx = (LlmConfigs ?? new List<LlmConfigDto>()).ToList().IndexOf(matched) + 1;
                 }
             }
             else
             {
                 CurrentLlmName = "默认";
             }
+            SelectedLlmIndex = idx;
+            _syncingPicker = false;
         }
         catch (Exception ex)
         {
@@ -200,7 +229,34 @@ public partial class AiChatViewModel : NavigableViewModelBase
         if (agentId != Guid.Empty) _agentRunner?.Invalidate(agentId);
     }
 
-    /// <summary>从 <see cref="ICustomAgentCatalog"/> 载入 agent 名单（agent chip ActionSheet + 新对话默认 agent 回退）。</summary>
+    /// <summary>agent 下拉变更：用所选 agent 开新对话（对齐桌面 ComboBox 选目标即切）。
+    /// 加载/恢复期置 <see cref="_syncingPicker"/> 短路，避免误触发。</summary>
+    partial void OnSelectedAgentIndexChanged(int value)
+    {
+        if (_syncingPicker) return;
+        if (value < 0 || value >= AgentOptions.Count) return;
+        var name = AgentOptions[value];
+        if (string.Equals(name, ChatSurface.AgentName, StringComparison.Ordinal) && ChatSurface.Messages.Count > 0) return;
+        _ = StartNewConversationWithAgentAsync(name);
+    }
+
+    /// <summary>LLM 下拉变更：索引 0=默认回退；否则取对应 <see cref="LlmConfigDto"/> 调 <see cref="SetLlm"/>。</summary>
+    partial void OnSelectedLlmIndexChanged(int value)
+    {
+        if (_syncingPicker) return;
+        if (value < 0 || value >= LlmOptions.Count) return;
+        if (value == 0)
+        {
+            if (!string.IsNullOrEmpty(_appSettings?.GetString("selectedLlmId", string.Empty)))
+                SetLlm(null);
+            return;
+        }
+        var configs = LlmConfigs ?? new List<LlmConfigDto>();
+        if (value - 1 < configs.Count)
+            SetLlm(configs[value - 1]);
+    }
+
+    /// <summary>从 <see cref="ICustomAgentCatalog"/> 载入 agent 名单（agent 下拉 + 新对话默认 agent 回退）。</summary>
     private async Task LoadAgentNamesAsync()
     {
         if (_agentCatalog == null) return;
@@ -208,6 +264,16 @@ public partial class AiChatViewModel : NavigableViewModelBase
         {
             var agents = await _agentCatalog.ListAsync();
             _agentNames = agents.Select(a => a.Name).ToList();
+
+            // 填充 agent 下拉 + 同步当前选中索引（当前 surface 的 agent 名优先，否则首个）。
+            _syncingPicker = true;
+            AgentOptions.Clear();
+            foreach (var n in _agentNames) AgentOptions.Add(n);
+            var current = ChatSurface.AgentName;
+            var idx = _agentNames.IndexOf(current);
+            if (idx < 0 && _agentNames.Count > 0) idx = 0;
+            SelectedAgentIndex = idx;
+            _syncingPicker = false;
         }
         catch (Exception ex)
         {
@@ -339,6 +405,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
         ChatSurface.IsVoiceMode = false;
         await ChatSurface.OnActivatedAsync();
         HasActiveChat = true;
+        SyncAgentPicker(conv.AgentName ?? conv.Name);
     }
 
     /// <summary>抽屉历史项 tap（页面 code-behind SelectionChanged 调）。</summary>
@@ -374,6 +441,19 @@ public partial class AiChatViewModel : NavigableViewModelBase
         await ChatSurface.OnActivatedAsync();
         HasActiveChat = true;
         IsDrawerOpen = false;
+        SyncAgentPicker(agentName);
+    }
+
+    /// <summary>把 agent 下拉索引同步到指定 agent 名（置 <see cref="_syncingPicker"/> 抑制副作用）。
+    /// 抽屉切会话 / 开新对话后调用，保证 Picker 显示与当前 surface agent 一致。</summary>
+    private void SyncAgentPicker(string? agentName)
+    {
+        if (string.IsNullOrEmpty(agentName)) return;
+        var idx = AgentOptions.IndexOf(agentName);
+        if (idx < 0) return;
+        _syncingPicker = true;
+        SelectedAgentIndex = idx;
+        _syncingPicker = false;
     }
 
     [RelayCommand]

@@ -45,7 +45,7 @@
                 <VerticalStackLayout Spacing="0">
 
                     <!-- 设备管理 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToDeviceManagementCommand}" />
                         </Grid.GestureRecognizers>
@@ -55,36 +55,44 @@
                         <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
 
                     <!-- AI设置 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToAiSettingsCommand}" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0" Text="🤖" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="AI设置" FontSize="16" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="AI 设置" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="管理助手 / labs 资料库 / 新建技能" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
 
                     <!-- LLM配置 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToLlmConfigCommand}" />
                         </Grid.GestureRecognizers>
                         <Label Grid.Column="0" Text="🧠" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="LLM配置" FontSize="16" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="模型配置" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="API 密钥 / 端点 / 模型" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
 
                     <!-- 同步证券（仅行情/Stockapp 租户显示） -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12"
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14"
                           IsVisible="{Binding IsStockTenant}">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding SyncSecuritiesCommand}" />
@@ -100,10 +108,10 @@
                         <ActivityIndicator Grid.Column="2" IsRunning="{Binding IsSyncingSecurities}"
                                            IsVisible="{Binding IsSyncingSecurities}" VerticalOptions="Center" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" IsVisible="{Binding IsStockTenant}" />
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" IsVisible="{Binding IsStockTenant}" />
 
                     <!-- 创建群组 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToCreateGroupCommand}" />
                         </Grid.GestureRecognizers>
@@ -113,13 +121,13 @@
                         <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
 
                     <!-- 主题切换 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Label Grid.Column="0" Text="{Binding ThemeIcon}" FontSize="20" VerticalOptions="Center" />
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="主题切换" FontSize="16"
+                            <Label Text="深色模式" FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
                             <Label Text="{Binding ThemeModeText}" FontSize="12"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
@@ -127,14 +135,18 @@
                         <Switch Grid.Column="2" IsToggled="{Binding IsDarkMode, Mode=OneWay}"
                                 Toggled="OnThemeToggled" VerticalOptions="Center" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
+                </VerticalStackLayout>
+            </Frame>
 
+            <!-- 应用信息 -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0" Padding="0">
+                <VerticalStackLayout Spacing="0">
                     <!-- 检查更新 -->
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding CheckUpdateCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="⬇️" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="0" Text="🔄" FontSize="20" VerticalOptions="Center" />
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                             <Label Text="检查更新" FontSize="16"
                                    TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
@@ -145,7 +157,6 @@
                         <ActivityIndicator Grid.Column="2" IsRunning="{Binding IsCheckingUpdate}"
                                            IsVisible="{Binding IsCheckingUpdate}" VerticalOptions="Center" />
                     </Grid>
-
                 </VerticalStackLayout>
             </Frame>
 

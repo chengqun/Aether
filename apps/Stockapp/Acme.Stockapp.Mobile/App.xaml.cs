@@ -16,9 +16,10 @@ public partial class App : Application
 
     private void InitializeMarkdownTheme()
     {
-        // Markdown 主题：light/dark 双 palette（映射 app token），供 MarkdownView 引用。
+        // Markdown 主题：light/dark 双 palette（读 Colors.xaml token），供 MarkdownView 引用。
         // MarkdownView 需设 UseAppTheme="True" 随 UserAppTheme 自动切换。
-        Resources["AppMarkdownTheme"] = MobileMarkdownTheme.Build();
+        // 传入 this.Resources：App ctor 期 Application.Current 未就绪，显式传已合并 Colors.xaml 的资源表。
+        Resources[MobileMarkdownTheme.ResourceKey] = MobileMarkdownTheme.Build(Resources);
     }
 
     protected override Window CreateWindow(IActivationState? activationState)

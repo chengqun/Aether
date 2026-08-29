@@ -20,12 +20,23 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 助手消息：占满宽度的气泡 + Markdown（手机端尽量多显示内容） -->
+        <!-- 助手消息：占满宽度的气泡 + Markdown（手机端尽量多显示内容）。
+             流式时（IsStreaming）在气泡尾部追加「生成中」指示点（ActivityIndicator），生成结束折叠。 -->
         <DataTemplate x:Key="AssistantTextTemplate" x:DataType="model:ChatMessageItem">
             <Border Margin="12,4" HorizontalOptions="Fill"
                     BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
                     StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8">
-                <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                <VerticalStackLayout Spacing="6">
+                    <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                    <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsStreaming}">
+                        <ActivityIndicator IsRunning="True" WidthRequest="14" HeightRequest="14"
+                                           Color="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}"
+                                           HorizontalOptions="Start" VerticalOptions="Center" />
+                        <Label Text="正在生成…" FontSize="11"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
             </Border>
         </DataTemplate>
 

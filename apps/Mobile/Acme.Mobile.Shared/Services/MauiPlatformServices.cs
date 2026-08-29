@@ -161,6 +161,9 @@ public sealed class MauiThemeManager : IThemeManager
                 ThemeMode.Dark => AppTheme.Dark,
                 _ => AppTheme.Unspecified,
             };
+            // 重建 markdown 主题资源：MarkdownView 的 palette 颜色从 Colors.xaml token 读，
+            // 主题切换后 ReadColor 快速路径可能缓存旧值，重挂载保证跟最新 token 一致。
+            MobileMarkdownTheme.Rebuild();
         }
     }
 

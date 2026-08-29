@@ -47,18 +47,20 @@
                  输入栏绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。 -->
             <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasActiveChat}" Spacing="0"
                                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                <!-- 选择条：agent chip(左,点=换助手) + LLM chip(右,点=选 LLM) -->
-                <Grid ColumnDefinitions="*,Auto" Padding="12,6,12,2" ColumnSpacing="8">
-                    <Button Grid.Column="0" HorizontalOptions="Start" Padding="14,6" FontSize="13"
-                            BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                <!-- 选择条：agent 下拉(左) + LLM 下拉(右)——对齐桌面 ComboBox 下拉选择，替代原 chip+ActionSheet -->
+                <Grid ColumnDefinitions="*,*" Padding="12,6,12,2" ColumnSpacing="8">
+                    <Picker Grid.Column="0" Title="选择助手"
+                            ItemsSource="{Binding AgentOptions}"
+                            SelectedIndex="{Binding SelectedAgentIndex}"
+                            FontSize="13"
                             TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                            Text="{Binding ChatSurface.AgentName, StringFormat='🤖 {0} ▾', FallbackValue='🤖 选择助手 ▾'}"
-                            Clicked="OnPickAgent" />
-                    <Button Grid.Column="1" x:Name="LlmChip" HorizontalOptions="End" Padding="14,6" FontSize="13"
-                            BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                            VerticalOptions="Center" />
+                    <Picker Grid.Column="1" Title="选择模型"
+                            ItemsSource="{Binding LlmOptions}"
+                            SelectedIndex="{Binding SelectedLlmIndex}"
+                            FontSize="13"
                             TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                            Text="{Binding CurrentLlmName, StringFormat='⚡ {0} ▾'}"
-                            Clicked="OnPickLlm" />
+                            VerticalOptions="Center" />
                 </Grid>
                 <!-- 输入栏 -->
                 <Border Padding="8" StrokeThickness="0">

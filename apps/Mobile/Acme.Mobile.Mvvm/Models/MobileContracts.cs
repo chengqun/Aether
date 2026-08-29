@@ -26,6 +26,14 @@ public class AgentInfoDto
         AgentKind.RuleBased => "规则",
         _ => "智能体",
     };
+
+    /// <summary>类型头像图标（列表头像圆内展示），按 Kind 映射。</summary>
+    public string KindEmoji => Kind switch
+    {
+        AgentKind.Workflow => "🔀",
+        AgentKind.RuleBased => "📐",
+        _ => "🤖",
+    };
 }
 
 /// <summary>
