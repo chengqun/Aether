@@ -459,12 +459,13 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [RelayCommand]
     private void OpenDrawer() => IsDrawerOpen = true;
 
-    /// <summary>返回聊天 tab（AI 页全屏无 tab bar，经绝对路由切回 ChatPage，tab bar 恢复）。</summary>
+    /// <summary>返回通讯录 tab（AI 页全屏无 tab bar，经绝对路由切回 ContactsPage，tab bar 恢复）。
+    /// AI 中间 tab 右滑返回回「通讯录」，与前一个 tab 连贯。</summary>
     [RelayCommand]
     private void CloseAi()
     {
         IsDrawerOpen = false;
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("ChatPage", isAbsolute: true));
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("ContactsPage", isAbsolute: true));
     }
 
     [RelayCommand]
