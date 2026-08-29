@@ -579,8 +579,12 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
     private StreamCursor? _streamCursor;
 
     // —— Token 批量刷新（避免逐 token Post 到 UI 线程导致假死，镜像桌面 50ms 批量 flush）——
-    private readonly StringBuilder _pendingTokens = new();
-    private readonly StringBuilder _pendingReasoning = new();
+    // 用「有序 chunk 队列」而非两个独立 StringBuilder：MAF 一个 update 可含混合 TextContent + TextReasoningContent，
+    // 且 reasoning→answer 边界常落在同一 50ms flush 窗口。两个独立 StringBuilder 会先处理 answer 再处理 reasoning，
+    // 把边界倒置 → 一段连续 thinking 被劈成两卡、answer 夹中间（「多个思考叠一行、乱了、正在生成残留」）。
+    // 有序队列保留 token 真实时序，连续同类型 chunk 合并进同一卡，仅在类型真切换时换段。
+    private readonly object _pendingLock = new();
+    private List<(string Text, bool IsReasoning)> _pendingChunks = new();
     private Timer? _flushTimer;
 
     /// <summary>流式分段光标：指向当前正在追加 token 的消息项；PendingTools 按 CallId 配对调用与结果。</summary>
@@ -597,20 +601,37 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         {
             var cursor = _streamCursor;
             if (cursor is null) return;
-            if (_pendingTokens.Length > 0)
+
+            List<(string Text, bool IsReasoning)> snapshot;
+            lock (_pendingLock)
             {
-                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: false);
-                cursor.Current.Content += _pendingTokens.ToString();
-                cursor.Current.MarkdownContent = cursor.Current.Content;
-                _pendingTokens.Clear();
-                StreamingContentUpdated?.Invoke();
+                if (_pendingChunks.Count == 0) return;
+                snapshot = _pendingChunks;                 // 整表换出：drain 原子，流式线程继续往新表 append
+                _pendingChunks = new List<(string, bool)>();
             }
-            if (_pendingReasoning.Length > 0)
+
+            // 按真实时序处理；连续同类型 chunk 合并成一个字符串再追加（O(段数) 次拼接，非 O(chunk 数) 次）。
+            var buf = new StringBuilder();
+            bool? segType = null;
+            foreach (var (text, isReasoning) in snapshot)
             {
-                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: true);
-                cursor.Current.Content += _pendingReasoning.ToString();
-                _pendingReasoning.Clear();
+                if (segType is { } prev && prev != isReasoning)
+                {
+                    EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: prev);
+                    cursor.Current.Content += buf.ToString();
+                    if (!prev) cursor.Current.MarkdownContent = cursor.Current.Content;
+                    buf.Clear();
+                }
+                segType = isReasoning;
+                buf.Append(text);
             }
+            if (buf.Length > 0 && segType is { } last)
+            {
+                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: last);
+                cursor.Current.Content += buf.ToString();
+                if (!last) cursor.Current.MarkdownContent = cursor.Current.Content;
+            }
+            StreamingContentUpdated?.Invoke();
         }), null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -761,9 +782,8 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             IsLoading = true;
             ErrorMessage = null;
 
-            // 清空上一轮残留的 token 缓冲（会话切换/重发时旧缓冲不应流入新段）。
-            _pendingTokens.Clear();
-            _pendingReasoning.Clear();
+            // 清空上一轮残留的 chunk 缓冲（会话切换/重发时旧缓冲不应流入新段）。
+            lock (_pendingLock) _pendingChunks = new List<(string, bool)>();
 
             // 本地显示用户消息（右侧气泡）+ 开首个答案段（cursor 指向它）
             _uiThreadDispatcher?.Post(() =>
@@ -824,7 +844,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 {
                     if (_streamVersion != version) return Task.CompletedTask;
                     fullText.Append(token);
-                    _pendingTokens.Append(token);
+                    lock (_pendingLock) _pendingChunks.Add((token, false));
                     _flushTimer?.Change(50, Timeout.Infinite);
                     if (!firstTokenReceived)
                     {
@@ -836,7 +856,7 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
                 OnReasoning: (text, _) =>
                 {
                     if (_streamVersion != version) return Task.CompletedTask;
-                    _pendingReasoning.Append(text);
+                    lock (_pendingLock) _pendingChunks.Add((text, true));
                     _flushTimer?.Change(50, Timeout.Infinite);
                     return Task.CompletedTask;
                 },
@@ -1013,29 +1033,27 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
         }
     }
 
-    /// <summary>运行结束收尾：drain 残留 token/reasoning 到当前段，finalize 末段，清空 cursor。须在 UI 线程调用。</summary>
+    /// <summary>运行结束收尾：drain 残留 chunk 到当前段（按真实时序），finalize 末段，清空 cursor。须在 UI 线程调用。</summary>
     private void FinalizeStreaming()
     {
         var cursor = _streamCursor;
         if (cursor is null) return;
 
-        if (_pendingTokens.Length > 0)
+        // drain 残留残留 chunk（按有序时序，连续同类型合并进同一段）。
+        lock (_pendingLock)
         {
-            EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: false);
-            cursor.Current.Content += _pendingTokens.ToString();
-            cursor.Current.MarkdownContent = cursor.Current.Content;
-            _pendingTokens.Clear();
-            StreamingContentUpdated?.Invoke();
-        }
-        if (_pendingReasoning.Length > 0)
-        {
-            EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: true);
-            cursor.Current.Content += _pendingReasoning.ToString();
-            _pendingReasoning.Clear();
+            foreach (var (text, isReasoning) in _pendingChunks)
+            {
+                EnsureTextSegment(cursor, Messages, AgentName, isReasoningContent: isReasoning);
+                cursor.Current.Content += text;
+                if (!isReasoning) cursor.Current.MarkdownContent = cursor.Current.Content;
+            }
+            _pendingChunks = new List<(string, bool)>();
         }
 
         FinalizeSegment(cursor.Current, Messages);
         _streamCursor = null;
+        StreamingContentUpdated?.Invoke();
     }
 
     /// <summary>

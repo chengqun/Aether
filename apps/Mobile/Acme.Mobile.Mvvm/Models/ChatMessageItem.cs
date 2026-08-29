@@ -124,6 +124,25 @@ public partial class ChatMessageItem : ObservableObject
     /// <summary>AI 文本回复（非工具/审批）。</summary>
     public bool IsAssistantText => Role == "assistant" && ItemType == "text";
 
+    // —— 流式状态派生标志（对齐桌面端，驱动模板在不同流式阶段正确切换）——
+    // 关键在于 OnIsStreamingChanged/OnIsReasoningContentChanged 联通知这些标志，使「流式思考/流式答案/
+    // 完成思考/最终答案」四种状态互斥、可被 CollectionView 模板正确切换（修「思考叠行」「生成中残留」混乱）。
+
+    /// <summary>流式中的文本段（任意，思考或答案）。</summary>
+    public bool IsAgentStreamingText => !IsUser && IsText && IsStreaming;
+
+    /// <summary>流式推理段（TextReasoningContent）：「思考中…」卡。</summary>
+    public bool IsAgentStreamingReasoning => !IsUser && IsText && IsStreaming && IsReasoningContent;
+
+    /// <summary>流式答案段（TextContent）：实时 markdown + 生成中指示。</summary>
+    public bool IsAgentStreamingAnswer => !IsUser && IsText && IsStreaming && !IsReasoningContent;
+
+    /// <summary>已结束的思考段：可折叠「思考 · Xs」卡。</summary>
+    public bool IsAgentThinkingCard => !IsUser && IsText && !IsStreaming && IsReasoning;
+
+    /// <summary>最终回答：markdown 气泡（非思考段）。</summary>
+    public bool IsAgentMarkdownText => !IsUser && IsText && !IsStreaming && !IsReasoning;
+
     /// <summary>是否有 Markdown 内容。</summary>
     public bool HasMarkdown => !string.IsNullOrEmpty(MarkdownContent);
 
@@ -217,18 +236,28 @@ public partial class ChatMessageItem : ObservableObject
         OnPropertyChanged(nameof(HasOutputDetail));
     }
 
-    /// <summary>流式停止时计算耗时摘要（供完成思考卡"思考 · 2s"展示）。</summary>
+    /// <summary>流式停止时计算耗时摘要（供完成思考卡"思考 · 2s"展示）+ 联通知流式状态标志。</summary>
     partial void OnIsStreamingChanged(bool value)
     {
         if (!value) ElapsedText = $"{(DateTime.Now - _startedAt).TotalSeconds:F0}s";
         OnPropertyChanged(nameof(IsReasoningExpanded));
+        OnPropertyChanged(nameof(IsAgentStreamingText));
+        OnPropertyChanged(nameof(IsAgentStreamingReasoning));
+        OnPropertyChanged(nameof(IsAgentStreamingAnswer));
+        OnPropertyChanged(nameof(IsAgentMarkdownText));
+        OnPropertyChanged(nameof(IsAgentThinkingCard));
     }
 
     partial void OnIsStreamingExpandedChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
 
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
 
-    partial void OnIsReasoningChanged(bool value) => OnPropertyChanged(nameof(IsReasoningExpanded));
+    partial void OnIsReasoningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsReasoningExpanded));
+        OnPropertyChanged(nameof(IsAgentThinkingCard));
+        OnPropertyChanged(nameof(IsAgentMarkdownText));
+    }
 
     /// <summary>点击工具卡切换展开/折叠（XAML TapGestureRecognizer 绑定）。</summary>
     [RelayCommand]
