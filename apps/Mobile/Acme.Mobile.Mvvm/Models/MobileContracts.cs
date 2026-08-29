@@ -176,3 +176,22 @@ public static class ContactBookBuilder
         return book;
     }
 }
+
+/// <summary>
+/// 桌面助手页「选择电脑」下拉选项。从 <see cref="Acme.DeviceManagement.Domain.MyDevice"/> 映射，
+/// 只保留下拉展示 + 导航创建会话所需的字段（DeviceId 即设备会话的 pendingContactId）。
+/// </summary>
+public class DesktopDeviceOption
+{
+    /// <summary>设备标识（32 位无连线 DeviceId 字符串，作为设备会话的 <c>pendingContactId</c>，
+    /// 与服务端 <c>get-or-create-device-conversation/{deviceId}</c> 路由对齐，非 Guid 主键）。</summary>
+    public string DeviceId { get; set; } = string.Empty;
+
+    /// <summary>设备显示名（下拉展示）。</summary>
+    public string DeviceName { get; set; } = string.Empty;
+
+    /// <summary>设备类型（desktop/windows/macos 等，供图标/判定）。</summary>
+    public string DeviceType { get; set; } = string.Empty;
+
+    public override string ToString() => DeviceName;
+}

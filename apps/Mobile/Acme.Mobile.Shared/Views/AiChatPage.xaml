@@ -42,13 +42,14 @@
                 </Grid>
             </Grid>
 
-            <!-- 底部组合栏：选择条（agent chip + LLM chip）上沿 + 输入栏，与输入框一体（仅活动对话时显示）。
+            <!-- 底部组合栏：选择条（agent ▾ / LLM ▾ / 💻桌面助理）上沿 + 输入栏，与输入框一体。
                  选择条绑页面 VM（agent 名经 ChatSurface.AgentName、LLM 经 CurrentLlmName）；
-                 输入栏绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。 -->
-            <VerticalStackLayout Grid.Row="2" IsVisible="{Binding HasActiveChat}" Spacing="0"
+                 输入栏绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。
+                 选择条始终显示（空态也能进桌面助理）；输入栏仅活动对话时显示。 -->
+            <VerticalStackLayout Grid.Row="2" Spacing="0"
                                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                <!-- 选择条：agent 下拉(左) + LLM 下拉(右)——对齐桌面 ComboBox 下拉选择，替代原 chip+ActionSheet -->
-                <Grid ColumnDefinitions="*,*" Padding="12,6,12,2" ColumnSpacing="8">
+                <!-- 选择条：agent 下拉(左) + LLM 下拉(中) + 桌面助理(右)——对齐桌面 ComboBox 下拉选择 + 千问式「AI 旁连本地电脑」 -->
+                <Grid ColumnDefinitions="*,*,Auto" Padding="12,6,12,2" ColumnSpacing="8">
                     <Picker Grid.Column="0" Title="选择助手"
                             ItemsSource="{Binding AgentOptions}"
                             SelectedIndex="{Binding SelectedAgentIndex}"
@@ -61,9 +62,15 @@
                             FontSize="13"
                             TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                             VerticalOptions="Center" />
+                    <!-- 桌面助理入口：有绑定 desktop 设备才显示；点进全屏设备会话页（心跳/摘要/审批 + 离线补拉）。 -->
+                    <Button Grid.Column="2" Text="💻" FontSize="18" Padding="4,0" WidthRequest="40"
+                            BackgroundColor="Transparent"
+                            IsVisible="{Binding IsDesktopAssistantVisible}"
+                            Command="{Binding OpenDesktopAssistantCommand}"
+                            VerticalOptions="Center" />
                 </Grid>
-                <!-- 输入栏 -->
-                <Border Padding="8" StrokeThickness="0">
+                <!-- 输入栏（仅活动对话时显示） -->
+                <Border Padding="8" StrokeThickness="0" IsVisible="{Binding HasActiveChat}">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Entry Grid.Column="0" x:Name="MessageEntry"
                                Text="{Binding ChatSurface.MessageText}"

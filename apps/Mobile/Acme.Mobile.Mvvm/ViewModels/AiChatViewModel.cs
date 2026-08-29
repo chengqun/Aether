@@ -15,6 +15,7 @@ using Acme.Mobile.Mvvm.Services;
 using Acme.Notes.Domain;
 using Aether.AI.Harness;
 using Aether.AI.Memory;
+using Acme.DeviceManagement.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -37,11 +38,15 @@ public partial class AiChatViewModel : NavigableViewModelBase
     private readonly SelectedLlmHolder? _llmHolder;
     private readonly ICustomAgentRunner? _agentRunner;
     private readonly IAppSettings? _appSettings;
+    private readonly IDeviceService? _deviceService;
     private Guid? _cachedUserId;
     private bool _isSubscribed = false;
     private bool _isBootstrapped = false;
     private bool _isLlmLoaded = false;
     private bool _isAgentListLoaded = false;
+    /// <summary>桌面设备标识（32 位 DeviceId 字符串，查一次缓存；无桌面设备则为 null → 入口隐藏）。</summary>
+    private string? _desktopDeviceId;
+    private bool _desktopDeviceResolved = false;
     /// <summary>可用 agent 名册（chip ActionSheet 渲染 + 新对话默认 agent 回退）。null=未加载。</summary>
     private List<string>? _agentNames;
     /// <summary>当前 surface 活动会话 Id（抽屉切换时记录；picker 新对话为 <see cref="Guid.Empty"/> 哨兵，
@@ -102,6 +107,28 @@ public partial class AiChatViewModel : NavigableViewModelBase
     /// <summary>导航请求（Mvvm 库不引用 MAUI Shell，由页面 code-behind 订阅执行 <c>Shell.Current.GoToAsync</c>）。</summary>
     public event EventHandler<NavigationRequestedEvent>? NavigationRequested;
 
+    /// <summary>是否显示「桌面助理」入口（有绑定的 desktop 设备则为 true）。加载后由 <see cref="ResolveDesktopDeviceAsync"/> 置位。</summary>
+    [ObservableProperty]
+    private bool _isDesktopAssistantVisible;
+
+    /// <summary>条目级「桌面助理」命令：导航进桌面助手页（顶部「选择电脑」下拉，多台 desktop 设备各自独立会话）。</summary>
+    [RelayCommand]
+    private async Task OpenDesktopAssistantAsync()
+    {
+        // 有 desktop 设备才显示入口（IsDesktopAssistantVisible 已门控），此处再次确认避免空入口跳转。
+        if (string.IsNullOrEmpty(_desktopDeviceId))
+        {
+            await ResolveDesktopDeviceAsync();
+            if (string.IsNullOrEmpty(_desktopDeviceId))
+            {
+                _uiThreadDispatcher?.Post(() => StatusMessage = "未找到桌面设备，请先在「我 → 设备管理」绑定电脑");
+                return;
+            }
+        }
+        // 无参跳转：DesktopAssistantPage 自行经 IDeviceService 加载 desktop 设备列表并默认打开第一台。
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("DesktopAssistantPage"));
+    }
+
     public AiChatViewModel(
         AiChatSurfaceViewModel chatSurface,
         IConversationStore? conversationStore = null,
@@ -112,7 +139,8 @@ public partial class AiChatViewModel : NavigableViewModelBase
         ILlmConfigService? llmConfigService = null,
         SelectedLlmHolder? llmHolder = null,
         ICustomAgentRunner? agentRunner = null,
-        IAppSettings? appSettings = null)
+        IAppSettings? appSettings = null,
+        IDeviceService? deviceService = null)
     {
         ChatSurface = chatSurface;
         _conversationStore = conversationStore;
@@ -124,6 +152,7 @@ public partial class AiChatViewModel : NavigableViewModelBase
         _llmHolder = llmHolder;
         _agentRunner = agentRunner;
         _appSettings = appSettings;
+        _deviceService = deviceService;
     }
 
     private async Task<Guid> GetCurrentUserIdAsync()
@@ -160,6 +189,13 @@ public partial class AiChatViewModel : NavigableViewModelBase
         {
             _isAgentListLoaded = true;
             await LoadAgentNamesAsync();
+        }
+
+        // 解析桌面设备（决定「桌面助理」入口显隐；无 IDeviceService / 无 desktop 设备则隐藏入口）。
+        if (!_desktopDeviceResolved)
+        {
+            _desktopDeviceResolved = true;
+            await ResolveDesktopDeviceAsync();
         }
 
         // 仅首次激活 bootstrap：恢复最近会话或进入空态。后续激活（tab 回切/picker 返回）只刷新历史列表。
@@ -254,6 +290,41 @@ public partial class AiChatViewModel : NavigableViewModelBase
         var configs = LlmConfigs ?? new List<LlmConfigDto>();
         if (value - 1 < configs.Count)
             SetLlm(configs[value - 1]);
+    }
+
+    /// <summary>查询并缓存 desktop 设备的 DeviceId 字符串（用于「桌面助理」入口显隐）。无 IDeviceService / 无 desktop 设备返回 null。
+    /// desktop 判定：DeviceType 含 desktop/windows/macos（兼容桌面端上报的不同类型串）。</summary>
+    private async Task<string?> ResolveDesktopDeviceAsync()
+    {
+        if (_desktopDeviceId != null) return _desktopDeviceId;
+
+        if (_deviceService == null)
+        {
+            _desktopDeviceId = null;
+            return null;
+        }
+
+        try
+        {
+            var devices = await Task.Run(async () => await _deviceService.GetMyDevicesAsync());
+            var desktop = devices?.FirstOrDefault(d =>
+            {
+                var t = d.DeviceType ?? string.Empty;
+                return t.Contains("desktop", StringComparison.OrdinalIgnoreCase)
+                    || t.Contains("windows", StringComparison.OrdinalIgnoreCase)
+                    || t.Contains("macos", StringComparison.OrdinalIgnoreCase);
+            });
+
+            _desktopDeviceId = !string.IsNullOrWhiteSpace(desktop?.DeviceId) ? desktop.DeviceId : null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AiChatViewModel] 解析桌面设备失败: {ex.Message}");
+            _desktopDeviceId = null;
+        }
+
+        IsDesktopAssistantVisible = !string.IsNullOrEmpty(_desktopDeviceId);
+        return _desktopDeviceId;
     }
 
     /// <summary>从 <see cref="ICustomAgentCatalog"/> 载入 agent 名单（agent 下拉 + 新对话默认 agent 回退）。</summary>

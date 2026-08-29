@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.DesktopAssistantPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:md="clr-namespace:Indiko.Maui.Controls.Markdown;assembly=Indiko.Maui.Controls.Markdown"
+    xmlns:domain="clr-namespace:Acme.ChatSocial.Domain;assembly=Acme.ChatSocial.Domain"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters;assembly=Acme.Mobile.Shared"
+    xmlns:views="clr-namespace:Acme.Mobile.Shared.Views;assembly=Acme.Mobile.Shared"
+    Title="桌面助手">
+
+    <ContentPage.Resources>
+        <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
+
+        <!-- 我的消息：右侧绿色气泡 -->
+        <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
+                <Border BackgroundColor="{StaticResource BubbleMine}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0"
+                        Padding="12,8" MaximumWidthRequest="280">
+                    <Label Text="{Binding Content}" TextColor="{StaticResource TextPrimary}" FontSize="15" LineBreakMode="WordWrap" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <!-- 对方消息：左侧气泡 + Markdown（桌面 agent 概览摘要走此模板） -->
+        <DataTemplate x:Key="OtherTemplate" x:DataType="domain:ChatMessage">
+            <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
+                <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
+                        StrokeShape="RoundRectangle 14" StrokeThickness="0"
+                        Padding="12,8" MaximumWidthRequest="300">
+                    <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                </Border>
+            </HorizontalStackLayout>
+        </DataTemplate>
+
+        <views:HumanChatMessageTemplateSelector x:Key="ChatMessageSelector"
+            MineTemplate="{StaticResource MineTemplate}"
+            OtherTemplate="{StaticResource OtherTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*,Auto">
+        <!-- 消息列表（复用通用聊天页的消息渲染：进度心跳已被 VM 过滤，历史不残留） -->
+        <CollectionView x:Name="MessagesList"
+                        Grid.Row="0"
+                        ItemsSource="{Binding Messages}"
+                        ItemTemplate="{StaticResource ChatMessageSelector}"
+                        VerticalOptions="Fill">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" />
+            </CollectionView.ItemsLayout>
+        </CollectionView>
+
+        <!-- 底部组合栏：设备下拉（选择电脑）上沿 + 输入栏，对齐 AI 页 agent/LLM 选择条的位置 -->
+        <VerticalStackLayout Grid.Row="1" Spacing="0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
+            <!-- 选择电脑下拉（多台 desktop 设备各自独立会话） -->
+            <Grid ColumnDefinitions="Auto,*" Padding="12,6,12,2" ColumnSpacing="8">
+                <Label Grid.Column="0" Text="💻" FontSize="16" VerticalOptions="Center" />
+                <Picker Grid.Column="1" Title="选择电脑"
+                        ItemsSource="{Binding Devices}"
+                        SelectedIndex="{Binding SelectedDeviceIndex}"
+                        FontSize="14"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
+                        VerticalOptions="Center" />
+            </Grid>
+            <!-- 输入栏（轻控制：直接发指令给当前选中的桌面电脑） -->
+            <Border Padding="8" StrokeThickness="0">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Entry Grid.Column="0" x:Name="MessageEntry"
+                           Text="{Binding MessageInput}"
+                           Placeholder="发送指令给这台电脑…"
+                           ReturnType="Send"
+                           ReturnCommand="{Binding SendMessageCommand}" />
+                    <Button Grid.Column="1" Text="发送" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding SendMessageCommand}"
+                            IsEnabled="{Binding HasMessageInput}"
+                            Padding="16,8" />
+                </Grid>
+            </Border>
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

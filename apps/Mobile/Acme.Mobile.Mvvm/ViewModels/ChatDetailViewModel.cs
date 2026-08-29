@@ -11,6 +11,7 @@ using Aether.AI.Core.Agents;
 using Acme.ChatSocial.Domain;
 using Acme.AppAuth.Application.Auth;
 using Acme.AppAuth.Domain;
+using Acme.DeviceManagement.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.Models;
@@ -30,6 +31,7 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
     private readonly IClipboardService? _clipboardService;
     private readonly IToastService? _toastService;
     private readonly ISpeechRecognitionService? _speechRecognitionService;
+    private readonly IDeviceService? _deviceService;
     private Guid _currentConversationId;
     private Guid _currentUserId;
 
@@ -103,6 +105,23 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
     private readonly HashSet<Guid> _displayedMessageIds = new();
     private DateTime _lastMessageTime;
 
+    /// <summary>是否为桌面助手设备模式（顶部设备下拉显隐；由页面经 query 置位）。</summary>
+    [ObservableProperty]
+    private bool _isDesktopAssistant;
+
+    /// <summary>桌面助手页「选择电脑」下拉选项（仅 desktop/windows/macos 设备）。</summary>
+    public ObservableCollection<DesktopDeviceOption> Devices { get; } = new();
+
+    /// <summary>桌面助手页设备下拉选中索引（-1=未选）。</summary>
+    [ObservableProperty]
+    private int _selectedDeviceIndex = -1;
+
+    /// <summary>设备列表是否已加载（切换会话时避免重复拉 IDeviceService）。</summary>
+    private bool _devicesLoaded = false;
+
+    /// <summary>程序化回填设备下拉索引时置位，抑制 <see cref="OnSelectedDeviceIndexChanged"/> 的切换副作用（对齐 AiChatViewModel._syncingPicker）。</summary>
+    private bool _syncingDevicePicker = false;
+
     public ChatDetailViewModel(IAppAuthService? authService = null,
                                IChatService? chatService = null,
                                ISignalRChatService? signalRChatService = null,
@@ -113,7 +132,8 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
                                IUIThreadDispatcher? uiThreadDispatcher = null,
                                IClipboardService? clipboardService = null,
                                IToastService? toastService = null,
-                               ISpeechRecognitionService? speechRecognitionService = null)
+                               ISpeechRecognitionService? speechRecognitionService = null,
+                               IDeviceService? deviceService = null)
     {
         _authService = authService;
         _chatService = chatService;
@@ -126,6 +146,7 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
         _clipboardService = clipboardService;
         _toastService = toastService;
         _speechRecognitionService = speechRecognitionService;
+        _deviceService = deviceService;
     }
 
     public override async Task OnActivatedAsync()
@@ -149,6 +170,15 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
 
         try
         {
+            // 桌面助手模式：首次进入时加载 desktop 设备列表（决定顶部「选择电脑」下拉）。
+            // 切设备重载会话时不重复拉（_devicesLoaded 置位），Devices 集合保留。
+            if (IsDesktopAssistant && !_devicesLoaded)
+            {
+                _devicesLoaded = true;
+                await LoadDesktopDevicesAsync();
+                if (version != _loadVersion) { _isAppearing = false; return; }
+            }
+
             _currentUserId = await Task.Run(async () => await ResolveCurrentUserIdAsync());
             System.Diagnostics.Debug.WriteLine($"[ChatDetail] OnAppearing: userId={_currentUserId}, PendingContactId={PendingContactId}, PendingContactType={PendingContactType}, ConversationId={ConversationId}");
             if (version != _loadVersion) { _isAppearing = false; return; }
@@ -231,6 +261,76 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
         HasMessageInput = !string.IsNullOrWhiteSpace(value);
     }
 
+    /// <summary>
+    /// 加载 desktop 设备列表填充「选择电脑」下拉（桌面助手页）。无 IDeviceService / 无 desktop 设备则空列表 + 提示。
+    /// 默认选中首台；UI 层经 Picker SelectedIndex 回填 <see cref="SelectedDeviceIndex"/>。
+    /// </summary>
+    private async Task LoadDesktopDevicesAsync()
+    {
+        if (_deviceService == null) return;
+
+        try
+        {
+            var devices = await Task.Run(async () => await _deviceService.GetMyDevicesAsync());
+            var desktop = devices?.Where(d =>
+            {
+                var t = d.DeviceType ?? string.Empty;
+                return t.Contains("desktop", StringComparison.OrdinalIgnoreCase)
+                    || t.Contains("windows", StringComparison.OrdinalIgnoreCase)
+                    || t.Contains("macos", StringComparison.OrdinalIgnoreCase);
+            }).ToList() ?? new List<MyDevice>();
+
+            Devices.Clear();
+            foreach (var d in desktop)
+            {
+                // DeviceId 是 32 位无连线字符串，原样保存（设备会话端点按此查找）。
+                if (!string.IsNullOrWhiteSpace(d.DeviceId))
+                    Devices.Add(new DesktopDeviceOption { DeviceId = d.DeviceId, DeviceName = d.DeviceName, DeviceType = d.DeviceType });
+            }
+
+            if (Devices.Count > 0)
+            {
+                _syncingDevicePicker = true;
+                SelectedDeviceIndex = 0;
+                _syncingDevicePicker = false;
+
+                // 入口未指定设备（AI 页 💻 无参跳转）：默认选中第一台，回填 PendingContactId 使 OnActivatedAsync 走设备会话创建。
+                if (string.IsNullOrEmpty(PendingContactId))
+                {
+                    PendingContactId = Devices[0].DeviceId;
+                    PendingContactType = "设备";
+                    ConversationName = string.IsNullOrEmpty(Devices[0].DeviceName) ? "桌面助手" : Devices[0].DeviceName;
+                }
+            }
+            else
+                ErrorMessage = "暂无绑定桌面电脑，请先到「我 → 设备管理」绑定";
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChatDetail] 加载桌面设备失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 桌面助手页切换设备：改 <see cref="PendingContactId"/> 为所选设备，重走 <see cref="OnActivatedAsync"/> 重载会话。
+    /// <see cref="ResetState"/> + <c>_loadVersion</c> 幂等机制保证旧会话的异步操作作废、消息不串台。
+    /// </summary>
+    partial void OnSelectedDeviceIndexChanged(int value)
+    {
+        if (_syncingDevicePicker) return;   // 程序化回填索引，非用户切换
+        if (value < 0 || value >= Devices.Count) return;
+        // 用户在同一设备上重选（索引未变）不改会话。
+        var deviceId = Devices[value].DeviceId;
+        if (PendingContactId == deviceId && !string.IsNullOrEmpty(ConversationId)) return;
+
+        PendingContactId = deviceId;
+        PendingContactType = "设备";
+        ConversationName = string.IsNullOrEmpty(Devices[value].DeviceName) ? "桌面助手" : Devices[value].DeviceName;
+        // 清空 ConversationId，使重载走「新建/恢复设备会话」分支（CreatePendingConversationAsync）。
+        ConversationId = string.Empty;
+        _ = OnActivatedAsync();
+    }
+
 
     private async Task<Guid?> CreatePendingConversationAsync()
     {
@@ -256,9 +356,11 @@ public partial class ChatDetailViewModel : NavigableViewModelBase
             }
             else if (PendingContactType == "设备")
             {
-                var deviceId = Guid.Parse(PendingContactId);
-                System.Diagnostics.Debug.WriteLine($"[ChatDetail] 创建设备会话: PendingContactId={PendingContactId}, deviceId={deviceId}");
-                var deviceConv = await Task.Run(() => _chatService.GetOrCreateDirectConversationAsync(deviceId));
+                // 传原始 32 位 DeviceId 字符串，走专用设备会话端点（与桌面端 SignalRDeviceChatClient 同一 key=device_{userId}_{device.Id}）。
+                // 之前 Guid.Parse(PendingContactId) 把 32 位 hex 强转 Guid + 调 GetOrCreateDirectConversationAsync 建「用户↔用户」会话，
+                // 导致手机/桌面进两个不同会话、对话不通——这是「选了电脑不能真实对话」的根因。
+                System.Diagnostics.Debug.WriteLine($"[ChatDetail] 创建设备会话: DeviceId={PendingContactId}");
+                var deviceConv = await Task.Run(() => _chatService.GetOrCreateDeviceConversationAsync(PendingContactId));
                 System.Diagnostics.Debug.WriteLine($"[ChatDetail] 设备会话响应: ConvId={deviceConv?.Id}");
                 if (deviceConv == null)
                 {

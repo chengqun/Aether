@@ -30,6 +30,7 @@ public partial class App : Application
         Routing.RegisterRoute("AgentChatDetailPage", typeof(AgentChatDetailPage));
         Routing.RegisterRoute("AgentPickerPage", typeof(AgentPickerPage));
         Routing.RegisterRoute("ChatDetailPage", typeof(ChatDetailPage));
+        Routing.RegisterRoute("DesktopAssistantPage", typeof(DesktopAssistantPage));
         Routing.RegisterRoute("ContactDetailPage", typeof(ContactDetailPage));
         Routing.RegisterRoute("ContactMomentsPage", typeof(ContactMomentsPage));
         Routing.RegisterRoute("MomentsPage", typeof(MomentsPage));

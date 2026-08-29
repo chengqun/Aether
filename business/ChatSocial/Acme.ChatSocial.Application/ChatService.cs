@@ -31,6 +31,13 @@ public class ChatService : IChatService
         return await ParseResponseAsync<Conversation>(response, ct);
     }
 
+    public async Task<Conversation?> GetOrCreateDeviceConversationAsync(string deviceId, CancellationToken ct = default)
+    {
+        // deviceId 是 32 位无连线十六进制串（可能含特殊字符），路由需 URL 转义。
+        var response = await _httpClient.PostRawAsync($"api/app/chat/get-or-create-device-conversation/{Uri.EscapeDataString(deviceId)}", new object(), ct);
+        return await ParseResponseAsync<Conversation>(response, ct);
+    }
+
     public async Task<List<Conversation>?> GetMyConversationsAsync(CancellationToken ct = default)
     {
         // 不兜底 ?? new——null=HTTP 失败，空列表=成功无数据。调用方（缓存同步）必须能区分，否则失败时会误清空本地缓存。
