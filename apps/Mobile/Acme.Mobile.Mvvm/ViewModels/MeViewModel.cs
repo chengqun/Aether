@@ -229,6 +229,13 @@ public partial class MeViewModel : NavigableViewModelBase
     }
 
     [RelayCommand]
+    private Task NavigateToSettingsAsync()
+    {
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("SettingsPage"));
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
     private Task NavigateToCreateGroupAsync()
     {
         NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("CreateGroupPage"));

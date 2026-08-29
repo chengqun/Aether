@@ -160,19 +160,18 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- 设置：二级入口（退出登录藏于此，避免主界面误触） -->
+            <!-- 设置：二级入口（退出登录藏在设置页里，主界面「我」页不直接露退出） -->
             <Frame Style="{StaticResource CardFrame}" Margin="16,0" Padding="0">
                 <VerticalStackLayout Spacing="0">
-                    <!-- 退出登录 -->
                     <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
                         <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnLogoutTapped" />
+                            <TapGestureRecognizer Command="{Binding NavigateToSettingsCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🚪" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="0" Text="⚙️" FontSize="20" VerticalOptions="Center" />
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="退出登录" FontSize="16"
-                                   TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
-                            <Label Text="退出当前账号" FontSize="12"
+                            <Label Text="设置" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="账号与退出登录" FontSize="12"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                         </VerticalStackLayout>
                         <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"

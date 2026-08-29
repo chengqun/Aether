@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:SettingsViewModel"
+    Title="设置">
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="16" Padding="0,16,0,32">
+
+            <!-- 账号 -->
+            <Frame Style="{StaticResource CardFrame}" Margin="16,0" Padding="0">
+                <VerticalStackLayout Spacing="0">
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,14">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnLogoutTapped" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🚪" FontSize="20" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="退出登录" FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Danger}, Dark={StaticResource DangerDark}}" />
+                            <Label Text="退出当前账号" FontSize="12"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </VerticalStackLayout>
+                        <ActivityIndicator Grid.Column="2" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                                           Color="{DynamicResource Primary}" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
