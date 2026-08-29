@@ -196,6 +196,6 @@ public partial class ExpertsViewModel : ObservableObject
     {
         var tools = _catalog.GetAvailableTools();
         var models = _catalog.GetAvailableModels();
-        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList());
+        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList(), _catalog.CurrentHost);
     }
 }

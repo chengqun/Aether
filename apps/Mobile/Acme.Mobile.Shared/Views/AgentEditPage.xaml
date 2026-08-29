@@ -97,10 +97,12 @@
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="model:ToolToggleItem">
                                                     <HorizontalStackLayout Spacing="10" Padding="8,4">
-                                                        <Switch IsToggled="{Binding IsEnabled}" />
+                                                        <Switch IsToggled="{Binding IsEnabled}" IsEnabled="{Binding IsAvailable}" />
                                                         <VerticalStackLayout Spacing="1">
                                                             <Label Text="{Binding Name}" FontSize="14" />
                                                             <Label Text="{Binding Description}" FontSize="11"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                                                            <Label Text="{Binding AvailabilityHint}" FontSize="10" IsVisible="{Binding IsUnavailable}"
                                                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                                                         </VerticalStackLayout>
                                                     </HorizontalStackLayout>

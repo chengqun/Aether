@@ -28,21 +28,23 @@ public static class TradingAIBuilderExtensions
         services.AddTransient<CreateLeanAlgorithmTool>();
 
         const string cat = "量化回测";
+        // 回测/策略工具依赖 Lean 引擎 + Trading.Runtime.Lean（externals/Lean）——仅桌面端可执行。
+        const HostCapability host = HostCapability.DesktopOnly;
         builder.ConfigureToolRegistry(reg =>
         {
             reg.Register("RunBacktest", "运行策略历史回测", cat,
-                sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)));
+                sp => CreateTool<BacktestTool>(sp, nameof(BacktestTool.RunBacktest)), hostCapability: host);
             // 信号探针：进程内逐根求信号，不起 Lean、不算 PnL（只读，Safe）。镜像 run_rule。
             reg.Register("RunStrategy", "探针：取最近若干根 bar 进程内求策略信号（不起引擎，不算 PnL）", cat,
-                sp => CreateTool<RunStrategyTool>(sp, nameof(RunStrategyTool.RunStrategy)));
+                sp => CreateTool<RunStrategyTool>(sp, nameof(RunStrategyTool.RunStrategy)), hostCapability: host);
             reg.Register("CreateStrategy", "创建交易策略（C# 源码笔记）", cat,
-                sp => CreateTool<CreateStrategyTool>(sp, nameof(CreateStrategyTool.CreateStrategy)), ToolApprovalLevel.Confirm);
+                sp => CreateTool<CreateStrategyTool>(sp, nameof(CreateStrategyTool.CreateStrategy)), ToolApprovalLevel.Confirm, host);
             // 声明式 YAML 策略（无 LLM 写代码的风险，schema 有界）：解析验证 + 落 Strategy 笔记。镜像 CreateStrategy。
             reg.Register("CreateYamlStrategy", "创建声明式 YAML 交易策略（配方笔记）", cat,
-                sp => CreateTool<CreateYamlStrategyTool>(sp, nameof(CreateYamlStrategyTool.CreateYamlStrategy)), ToolApprovalLevel.Confirm);
+                sp => CreateTool<CreateYamlStrategyTool>(sp, nameof(CreateYamlStrategyTool.CreateYamlStrategy)), ToolApprovalLevel.Confirm, host);
             // Lean 算法策略（继承 QCAlgorithm，复用 Lean 全部能力）：经 ILeanAlgorithmScriptingService.TryCompile 即时编译验证 + 落 LeanAlgorithm 笔记。镜像 CreateStrategy。
             reg.Register("CreateLeanAlgorithm", "创建 Lean 算法策略（C# 源码笔记，继承 QCAlgorithm，复用 Lean 全部能力）", cat,
-                sp => CreateTool<CreateLeanAlgorithmTool>(sp, nameof(CreateLeanAlgorithmTool.CreateLeanAlgorithm)), ToolApprovalLevel.Confirm);
+                sp => CreateTool<CreateLeanAlgorithmTool>(sp, nameof(CreateLeanAlgorithmTool.CreateLeanAlgorithm)), ToolApprovalLevel.Confirm, host);
         });
         return builder;
     }

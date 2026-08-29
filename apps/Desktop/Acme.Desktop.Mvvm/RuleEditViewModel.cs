@@ -21,7 +21,7 @@ public sealed partial class RuleEditViewModel : ObservableObject
     /// <param name="nodeType">规则节点类型：<see cref="NoteNodeType.Rule"/>（YAML 规则）或
     /// <see cref="NoteNodeType.CodeRule"/>（C# 代码规则）。两者共用同一表单（基本信息/记忆/工具/审批），
     /// 仅 NodeType、默认类别与默认模板不同。代码规则另经笔记页两栏编辑（规则 tab 卡片无「编辑」按钮）。</param>
-    public RuleEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<McpServerStatus>? mcpServers, NoteNodeType nodeType = NoteNodeType.Rule)
+    public RuleEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<McpServerStatus>? mcpServers, NoteNodeType nodeType = NoteNodeType.Rule, string currentHost = "All")
     {
         _nodeType = nodeType;
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
@@ -38,7 +38,9 @@ public sealed partial class RuleEditViewModel : ObservableObject
                 ApprovalLevel = (existing?.ToolApprovals is not null
                     && existing.ToolApprovals.TryGetValue(meta.Name, out var ov)) ? ov : meta.ApprovalLevel,
                 IsSelected = selectedSet.Contains(meta.Name),
+                HostCapability = meta.HostCapability,
             };
+            opt.ResolveAvailability(currentHost);
 
             var group = ToolCategories.FirstOrDefault(g => g.Category == meta.Category);
             if (group == null)

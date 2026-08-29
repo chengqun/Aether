@@ -34,6 +34,18 @@ public partial class ToolOption : ObservableObject
     }
     [ObservableProperty] private bool _isSelected;
 
+    /// <summary>工具声明的宿主能力名："All"/"DesktopOnly"/"MobileOnly"。</summary>
+    public string HostCapability { get; set; } = "All";
+
+    /// <summary>当前宿主是否可执行本工具（HostCapability == "All" 或 == 当前宿主）。false → 勾选框置灰。</summary>
+    public bool IsAvailable { get; set; } = true;
+
+    /// <summary>不可用时的提示文案（如「仅桌面端」）。null = 可用。</summary>
+    public string? AvailabilityHint { get; set; }
+
+    /// <summary>反义快捷属性：true = 当前平台不可用（供 UI 免转换器绑定提示显隐）。</summary>
+    public bool IsUnavailable => AvailabilityHint is not null;
+
     /// <summary>审批等级可选项（ComboBox 用）。</summary>
     public static IReadOnlyList<ApprovalLevelOption> ApprovalLevelOptions { get; } = new[]
     {
@@ -41,6 +53,20 @@ public partial class ToolOption : ObservableObject
         new ApprovalLevelOption("Confirm", "审批"),
         new ApprovalLevelOption("Dangerous", "危险"),
     };
+
+    /// <summary>按宿主能力 + 当前宿主名计算可勾选性与提示文案。</summary>
+    public void ResolveAvailability(string currentHost)
+    {
+        (IsAvailable, AvailabilityHint) = HostCapability switch
+        {
+            "All" or "" => (true, null),
+            _ when HostCapability.Equals(currentHost, StringComparison.OrdinalIgnoreCase) => (true, null),
+            "DesktopOnly" => (false, "仅桌面端"),
+            "MobileOnly" => (false, "仅手机端"),
+            _ => (false, "当前平台不可用"),
+        };
+        OnPropertyChanged(nameof(IsUnavailable));
+    }
 }
 
 /// <summary>审批等级选项（值 + 中文标签）。</summary>
@@ -99,7 +125,7 @@ public class ResponseFormatOption
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
     public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels,
-        IReadOnlyList<McpServerStatus>? mcpServers = null)
+        IReadOnlyList<McpServerStatus>? mcpServers = null, string currentHost = "All")
     {
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
@@ -119,7 +145,9 @@ public sealed partial class ExpertEditViewModel : ObservableObject
                     && existing.ToolApprovals.TryGetValue(meta.Name, out var ov)) ? ov : meta.ApprovalLevel,
                 IsSelected = selectedSet.Contains(meta.Name),
                 AutoApprove = autoApproveSet.Contains(meta.Name) && meta.ApprovalLevel != "Safe",
+                HostCapability = meta.HostCapability,
             };
+            opt.ResolveAvailability(currentHost);
 
             var group = ToolCategories.FirstOrDefault(g => g.Category == meta.Category);
             if (group == null)

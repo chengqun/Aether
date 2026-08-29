@@ -29,6 +29,8 @@ public static class StockTradingAIBuilderExtensions
         services.AddTransient<StockTradingOrderTool>();
 
         const string cat = "股票交易";
+        // 股票下单走同花顺 GUI 自动化（FlaUI，Windows-only）——仅桌面端（且 Windows）可执行。
+        const HostCapability host = HostCapability.DesktopOnly;
         builder.ConfigureToolRegistry(reg =>
         {
             // 注意：CreateTool 第 3 参（显式工具名）必须 = 注册名。2 参 AIFunctionFactory.Create 会把
@@ -36,20 +38,20 @@ public static class StockTradingAIBuilderExtensions
             // 不符 → MAF 按 Name 分发时 CodeRuleBrain.Call("StockTradingGetStatus") 失败，且与 Ctp 的
             // "GetStatus" 撞名（同 agent 两边都选时 LLM 看到两个 GetStatus）。故显式传注册名进 3 参 Create。
             reg.Register("StockTradingGetStatus", "查询股票交易（同花顺）连接状态", cat,
-                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.GetStatusAsync), "StockTradingGetStatus"));
+                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.GetStatusAsync), "StockTradingGetStatus"), hostCapability: host);
             reg.Register("StockTradingConnect", "连接同花顺下单客户端（需先启动并手动登录）", cat,
-                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.ConnectAsync), "StockTradingConnect"));
+                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.ConnectAsync), "StockTradingConnect"), hostCapability: host);
             reg.Register("StockTradingLaunchClient", "启动同花顺下单客户端 exe（不等待登录）", cat,
-                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.LaunchClientAsync), "StockTradingLaunchClient"));
+                sp => CreateTool<StockTradingStatusTool>(sp, nameof(StockTradingStatusTool.LaunchClientAsync), "StockTradingLaunchClient"), hostCapability: host);
             reg.Register("StockTradingQueryPositions", "查询股票持仓", cat,
-                sp => CreateTool<StockTradingPositionTool>(sp, nameof(StockTradingPositionTool.QueryPositionsAsync), "StockTradingQueryPositions"));
+                sp => CreateTool<StockTradingPositionTool>(sp, nameof(StockTradingPositionTool.QueryPositionsAsync), "StockTradingQueryPositions"), hostCapability: host);
             // 下单/撤单不可逆 → Dangerous（否则默认 Safe 会在审批开启时自动执行）
             reg.Register("StockTradingPlaceOrder", "股票下单（限价买入/卖出）", cat,
                 sp => CreateTool<StockTradingOrderTool>(sp, nameof(StockTradingOrderTool.PlaceOrderAsync), "StockTradingPlaceOrder"),
-                ToolApprovalLevel.Dangerous);
+                ToolApprovalLevel.Dangerous, host);
             reg.Register("StockTradingCancelOrder", "股票撤单", cat,
                 sp => CreateTool<StockTradingOrderTool>(sp, nameof(StockTradingOrderTool.CancelOrderAsync), "StockTradingCancelOrder"),
-                ToolApprovalLevel.Dangerous);
+                ToolApprovalLevel.Dangerous, host);
         });
         return builder;
     }

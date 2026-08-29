@@ -19,21 +19,25 @@ public sealed class DelegateToolRegistryContributor : IToolRegistryContributor
     public void Contribute(ToolRegistry registry) => _configure(registry);
 }
 
-/// <summary>工具元数据（名称 + 描述 + 分类 + 审批等级），供 UI 选择展示。
-/// 审批等级 <see cref="ToolApprovalLevel"/> 已上移到 Aether.AI.Core.Agents。</summary>
+/// <summary>工具元数据（名称 + 描述 + 分类 + 审批等级 + 宿主能力），供 UI 选择展示。
+/// 审批等级 <see cref="ToolApprovalLevel"/> 与宿主能力 <see cref="HostCapability"/> 均已上移到 Aether.AI.Core.Agents。</summary>
 public sealed class ToolMeta
 {
     public string Name { get; }
     public string Description { get; }
     public string Category { get; }
     public ToolApprovalLevel ApprovalLevel { get; }
+    public HostCapability HostCapability { get; }
 
-    public ToolMeta(string name, string description, string category, ToolApprovalLevel approvalLevel = ToolApprovalLevel.Safe)
+    public ToolMeta(string name, string description, string category,
+        ToolApprovalLevel approvalLevel = ToolApprovalLevel.Safe,
+        HostCapability hostCapability = HostCapability.All)
     {
         Name = name;
         Description = description;
         Category = category;
         ApprovalLevel = approvalLevel;
+        HostCapability = hostCapability;
     }
 }
 
@@ -49,12 +53,18 @@ public sealed class ToolRegistry
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, ToolEntry> _entries = new();
     private readonly ILogger? _logger;
+    private readonly Func<HostCapability> _currentHost;
 
     public ToolRegistry() : this(NullServiceProvider.Instance) { }
 
-    public ToolRegistry(IServiceProvider serviceProvider)
+    /// <param name="currentHost">
+    /// 当前宿主类型解析器（桌面端恒返 DesktopOnly / 手机端恒返 MobileOnly）。为 null 时视作 <see cref="HostCapability.All"/>
+    /// （不做平台过滤——Harness 库测试/不声明宿主的场景向后兼容）。由 Hosting 的 AddAetherAI 经
+    /// AetherAIOptions.Host 注入，避免 Harness 直接引用 Hosting（反向依赖成环）。</param>
+    public ToolRegistry(IServiceProvider serviceProvider, Func<HostCapability>? currentHost = null)
     {
         _serviceProvider = serviceProvider;
+        _currentHost = currentHost ?? (() => HostCapability.All);
         _logger = serviceProvider is NullServiceProvider
             ? null
             : (serviceProvider.GetService(typeof(ILoggerFactory)) as ILoggerFactory)?.CreateLogger<ToolRegistry>();
@@ -73,10 +83,12 @@ public sealed class ToolRegistry
     /// the tool is resolved for an agent — not at registration time.
     /// </summary>
     /// <param name="approvalLevel">审批等级（默认 Safe 自动放行）；危险工具由适配器显式声明 Confirm/Dangerous。</param>
+    /// <param name="hostCapability">宿主能力（默认 All 两端通用）；依赖 CTP/FlaUI/Lean/桌面 UI 等仅桌面可执行的工具显式声明 DesktopOnly。</param>
     public ToolRegistry Register(string name, string description, string category,
-        Func<IServiceProvider, AIFunction> factory, ToolApprovalLevel approvalLevel = ToolApprovalLevel.Safe)
+        Func<IServiceProvider, AIFunction> factory, ToolApprovalLevel approvalLevel = ToolApprovalLevel.Safe,
+        HostCapability hostCapability = HostCapability.All)
     {
-        _entries[name] = new ToolEntry(name, description, category, factory, approvalLevel);
+        _entries[name] = new ToolEntry(name, description, category, factory, approvalLevel, hostCapability);
         return this;
     }
 
@@ -86,10 +98,11 @@ public sealed class ToolRegistry
     /// 名称冲突时跳过（不覆盖已注册的原生工具 / 先注册的 MCP 工具）。
     /// </summary>
     public bool RegisterMcpTool(AIFunction tool, string category = "MCP",
-        ToolApprovalLevel approvalLevel = ToolApprovalLevel.Dangerous)
+        ToolApprovalLevel approvalLevel = ToolApprovalLevel.Dangerous,
+        HostCapability hostCapability = HostCapability.All)
     {
         if (tool is null || string.IsNullOrEmpty(tool.Name)) return false;
-        return _entries.TryAdd(tool.Name, new ToolEntry(tool.Name, tool.Description ?? "", category, _ => tool, approvalLevel));
+        return _entries.TryAdd(tool.Name, new ToolEntry(tool.Name, tool.Description ?? "", category, _ => tool, approvalLevel, hostCapability));
     }
 
     /// <summary>
@@ -108,10 +121,10 @@ public sealed class ToolRegistry
         }
     }
 
-    /// <summary>获取所有工具的元数据（名称 + 描述 + 分类 + 审批等级），不实例化 AIFunction。</summary>
+    /// <summary>获取所有工具的元数据（名称 + 描述 + 分类 + 审批等级 + 宿主能力），不实例化 AIFunction。</summary>
     public IReadOnlyList<ToolMeta> GetAllMetas()
         => _entries.Values
-            .Select(t => new ToolMeta(t.Name, t.Description, t.Category, t.ApprovalLevel))
+            .Select(t => new ToolMeta(t.Name, t.Description, t.Category, t.ApprovalLevel, t.HostCapability))
             .OrderBy(t => t.Category).ThenBy(t => t.Name)
             .ToList();
 
@@ -119,14 +132,25 @@ public sealed class ToolRegistry
     public ToolApprovalLevel LevelOf(string name)
         => _entries.TryGetValue(name, out var entry) ? entry.ApprovalLevel : ToolApprovalLevel.Safe;
 
-    /// <summary>Resolves tools by name, invoking factories lazily.</summary>
+    /// <summary>Resolves tools by name, invoking factories lazily.
+    /// 运行时兜底：跳过「当前宿主不可用」的工具（HostCapability 与 currentHost 不匹配），记 LogWarning——
+    /// 即便 UI 置灰漏了、或持久化残留了跨平台迁移带来的不可用工具名，也不会在调用时崩。</summary>
     public IReadOnlyList<AIFunction> ResolveAll(IEnumerable<string> names)
     {
+        var host = _currentHost();
         var resolved = new List<AIFunction>();
         foreach (var name in names)
         {
             if (_entries.TryGetValue(name, out var entry))
             {
+                if (entry.HostCapability != HostCapability.All
+                    && host != HostCapability.All
+                    && entry.HostCapability != host)
+                {
+                    _logger?.LogWarning("工具 {Tool}（宿主能力 {Capability}）在当前宿主 {Host} 不可用，已跳过。",
+                        name, entry.HostCapability, host);
+                    continue;
+                }
                 try { resolved.Add(entry.Factory(_serviceProvider)); }
                 catch (Exception ex)
                 {
@@ -147,6 +171,9 @@ public sealed class ToolRegistry
     /// <summary>Whether a tool with the given name is registered.</summary>
     public bool Contains(string name) => _entries.ContainsKey(name);
 
+    /// <summary>当前宿主类型（构造期注入的 <c>currentHost</c> 委托的求值结果）。供 UI/编辑层判定工具可勾选性。</summary>
+    public HostCapability CurrentHost => _currentHost();
+
     /// <summary>All registered tool names.</summary>
     public IReadOnlyCollection<string> AllNames => _entries.Keys.ToList();
 
@@ -157,15 +184,18 @@ public sealed class ToolRegistry
         public string Category { get; }
         public Func<IServiceProvider, AIFunction> Factory { get; }
         public ToolApprovalLevel ApprovalLevel { get; }
+        public HostCapability HostCapability { get; }
 
         public ToolEntry(string name, string description, string category,
-            Func<IServiceProvider, AIFunction> factory, ToolApprovalLevel approvalLevel)
+            Func<IServiceProvider, AIFunction> factory, ToolApprovalLevel approvalLevel,
+            HostCapability hostCapability)
         {
             Name = name;
             Description = description;
             Category = category;
             Factory = factory;
             ApprovalLevel = approvalLevel;
+            HostCapability = hostCapability;
         }
     }
 

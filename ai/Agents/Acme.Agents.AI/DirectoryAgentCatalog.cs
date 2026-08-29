@@ -182,8 +182,11 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         => _toolRegistry.GetAllMetas()
             .Where(m => !string.Equals(m.Name, "ask_user", StringComparison.OrdinalIgnoreCase))
             .Where(m => !string.Equals(m.Category, "MCP", StringComparison.OrdinalIgnoreCase))
-            .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category, m.ApprovalLevel.ToString()))
+            .Select(m => new CustomToolMeta(m.Name, m.Description, m.Category, m.ApprovalLevel.ToString(), m.HostCapability.ToString()))
             .ToList();
+
+    /// <summary>当前宿主类型名（string 化，供编辑页判定工具可勾选性——business 不引 Aether.AI.* 契约）。</summary>
+    public string CurrentHost => _toolRegistry.CurrentHost.ToString();
 
     public IReadOnlyList<CustomModelOption> GetAvailableModels()
         => _modelSource.GetModels();

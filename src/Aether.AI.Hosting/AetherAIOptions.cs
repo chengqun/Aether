@@ -1,3 +1,5 @@
+using Aether.AI.Core.Agents;
+
 namespace Aether.AI.Hosting;
 
 /// <summary>
@@ -44,6 +46,14 @@ public sealed class AetherAIOptions
 
     /// <summary>OpenTelemetry 导出配置。配了任一项才启用 OTel SDK（接 Aether.AI.Harness + MAF 的 Activity 源）。</summary>
     public OpenTelemetryOptions OpenTelemetry { get; set; } = new();
+
+    /// <summary>
+    /// 当前宿主类型（桌面端 = DesktopOnly / 手机端 = MobileOnly）。默认 <c>All</c>（库测试/不声明时不做平台过滤）。
+    /// 供 <c>ToolRegistry</c> 在运行时按工具的 <c>HostCapability</c> 声明跳过当前宿主不可用的工具；
+    /// 桌面/手机宿主在 <c>aether.Configure(o =&gt; o.Host = …)</c> 里设置（早于 ToolRegistry 首次 resolve，
+    /// 故走 IOptions 延迟解析安全）。
+    /// </summary>
+    public HostCapability Host { get; set; } = HostCapability.All;
 }
 
 /// <summary>OTel 导出选项：控制台 + OTLP（至少配一个才导出；agent 的 EnableOpenTelemetry 控制是否发 Activity）。</summary>

@@ -249,13 +249,14 @@ public partial class AgentEditViewModel : NavigableViewModelBase
 
             // 工具勾选（仅 Agent 类型有意义；Rule 用规则程序，工具极少或由 run_rule 隐藏）
             var allTools = _agentCatalog?.GetAvailableTools() ?? Array.Empty<CustomToolMeta>();
+            var currentHost = _agentCatalog?.CurrentHost ?? "All";
             var enabledNames = _agentDef.Tools is { Count: > 0 } ? _agentDef.Tools : Array.Empty<string>();
 
             var categories = new ObservableCollection<ToolCategoryGroup>();
             foreach (var t in allTools)
             {
                 var isEnabled = enabledNames.Contains(t.Name);
-                var item = new ToolToggleItem(t.Name, t.Description, t.Category, isEnabled);
+                var item = new ToolToggleItem(t.Name, t.Description, t.Category, isEnabled, t.HostCapability, currentHost);
                 var group = categories.FirstOrDefault(g => g.Category == t.Category);
                 if (group == null)
                 {

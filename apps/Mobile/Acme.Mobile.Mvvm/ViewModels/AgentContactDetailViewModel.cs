@@ -276,13 +276,14 @@ public partial class AgentContactDetailViewModel : NavigableViewModelBase
             // 工具列表取自完整工具池（ICustomAgentCatalog.GetAvailableTools），而非 Agent 当前已启用工具。
             // 否则取消勾选某工具后，下次进入页面该工具会从列表消失、无法再次勾选。
             var allTools = _agentCatalog?.GetAvailableTools() ?? Array.Empty<CustomToolMeta>();
+            var currentHost = _agentCatalog?.CurrentHost ?? "All";
 
             var categories = new ObservableCollection<ToolCategoryGroup>();
 
             foreach (var t in allTools)
             {
                 var isEnabled = enabledToolNames == null || enabledToolNames.Contains(t.Name);
-                var item = new ToolToggleItem(t.Name, t.Description, t.Category, isEnabled);
+                var item = new ToolToggleItem(t.Name, t.Description, t.Category, isEnabled, t.HostCapability, currentHost);
                 item.IsEnabledChanged += OnToolIsEnabledChanged;
 
                 var group = categories.FirstOrDefault(g => g.Category == t.Category);

@@ -27,22 +27,24 @@ public static class CtpAIBuilderExtensions
         services.AddTransient<QueryMarketDataTool>();
 
         const string cat = "期货交易";
+        // 期货工具依赖 CTP 原生库（externals/Ctp.Net.Core）——仅桌面端可执行。
+        const HostCapability host = HostCapability.DesktopOnly;
         builder.ConfigureToolRegistry(reg =>
         {
             reg.Register("GetStatus", "查询 CTP 连接状态", cat,
-                sp => CreateTool<CtpLoginTool>(sp, nameof(CtpLoginTool.GetStatus)));
+                sp => CreateTool<CtpLoginTool>(sp, nameof(CtpLoginTool.GetStatus)), hostCapability: host);
             reg.Register("QueryAccount", "查询资金账户", cat,
-                sp => CreateTool<QueryAccountTool>(sp, nameof(QueryAccountTool.QueryAccountAsync)));
+                sp => CreateTool<QueryAccountTool>(sp, nameof(QueryAccountTool.QueryAccountAsync)), hostCapability: host);
             reg.Register("QueryPositions", "查询持仓", cat,
-                sp => CreateTool<QueryPositionTool>(sp, nameof(QueryPositionTool.QueryPositionsAsync)));
+                sp => CreateTool<QueryPositionTool>(sp, nameof(QueryPositionTool.QueryPositionsAsync)), hostCapability: host);
             reg.Register("OrderInsert", "报单（下单）", cat,
-                sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)), ToolApprovalLevel.Dangerous);
+                sp => CreateTool<OrderInsertTool>(sp, nameof(OrderInsertTool.OrderInsertAsync)), ToolApprovalLevel.Dangerous, host);
             reg.Register("OrderAction", "撤单", cat,
-                sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)), ToolApprovalLevel.Dangerous);
+                sp => CreateTool<OrderActionTool>(sp, nameof(OrderActionTool.OrderActionAsync)), ToolApprovalLevel.Dangerous, host);
             reg.Register("QueryLatestTick", "查询最新行情快照", cat,
-                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)));
+                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryLatestTickAsync)), hostCapability: host);
             reg.Register("QueryAllLatestTicks", "查询所有订阅行情快照", cat,
-                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)));
+                sp => CreateTool<QueryMarketDataTool>(sp, nameof(QueryMarketDataTool.QueryAllLatestTicksAsync)), hostCapability: host);
         });
         return builder;
     }

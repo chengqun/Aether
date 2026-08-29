@@ -16,15 +16,36 @@ public partial class ToolToggleItem : ObservableObject
     public string Description { get; }
     public string Category { get; }
 
+    /// <summary>当前宿主是否可执行本工具（HostCapability == "All" 或 == 当前宿主）。false → 开关置灰。</summary>
+    public bool IsAvailable { get; }
+
+    /// <summary>不可用时的提示文案（如「仅桌面端」）。null = 可用。</summary>
+    public string? AvailabilityHint { get; }
+
+    /// <summary>反义快捷属性：true = 当前平台不可用（供 UI 免转换器绑定提示显隐）。</summary>
+    public bool IsUnavailable => AvailabilityHint is not null;
+
     public event Action<ToolToggleItem>? IsEnabledChanged;
 
-    public ToolToggleItem(string name, string description, string category, bool isEnabled = true)
+    public ToolToggleItem(string name, string description, string category, bool isEnabled = true,
+        string hostCapability = "All", string currentHost = "All")
     {
         Name = name;
         Description = description;
         Category = category;
         IsEnabled = isEnabled;
+        (IsAvailable, AvailabilityHint) = ResolveAvailability(hostCapability, currentHost);
     }
+
+    private static (bool available, string? hint) ResolveAvailability(string hostCapability, string currentHost)
+        => hostCapability switch
+        {
+            "All" or "" => (true, null),
+            _ when hostCapability.Equals(currentHost, StringComparison.OrdinalIgnoreCase) => (true, null),
+            "DesktopOnly" => (false, "仅桌面端"),
+            "MobileOnly" => (false, "仅手机端"),
+            _ => (false, "当前平台不可用"),
+        };
 
     partial void OnIsEnabledChanged(bool value)
     {

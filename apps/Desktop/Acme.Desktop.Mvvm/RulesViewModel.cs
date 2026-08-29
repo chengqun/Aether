@@ -150,13 +150,13 @@ public partial class RulesViewModel : ObservableObject
     public RuleEditViewModel CreateEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
-        return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList());
+        return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList(), currentHost: _catalog.CurrentHost);
     }
 
     /// <summary>创建代码规则编辑 ViewModel（labs 知识对象页两栏用；NodeType=CodeRule，默认类别「代码规则」、默认 C# 模板）。</summary>
     public RuleEditViewModel CreateCodeRuleEditViewModel(ExpertItem? existing)
     {
         var tools = _catalog.GetAvailableTools();
-        return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList(), NoteNodeType.CodeRule);
+        return new RuleEditViewModel(existing, tools, Mcp.Servers.ToList(), NoteNodeType.CodeRule, _catalog.CurrentHost);
     }
 }

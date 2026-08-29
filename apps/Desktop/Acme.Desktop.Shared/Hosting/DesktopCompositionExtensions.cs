@@ -56,6 +56,7 @@ public static class DesktopCompositionExtensions
         var aether = services.AddAetherAI();
         aether.Configure(o =>
         {
+            o.Host = HostCapability.DesktopOnly;
             o.OpenAI.ApiKey = llm.ApiKey;
             o.OpenAI.ModelId = llm.ModelName;
             o.OpenAI.Endpoint = llm.Endpoint;

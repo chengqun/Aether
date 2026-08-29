@@ -27,6 +27,7 @@ using Acme.Video.Infrastructure.DependencyInjection;
 using Acme.ServiceAccount.Application.DependencyInjection;
 using Acme.ServiceAccount.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;
+using Aether.AI.Core.Agents;
 using Aether.AI.Harness;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Tools;
@@ -63,6 +64,7 @@ public static class MobileCompositionExtensions
         var llm = LlmBootstrap.GetOrCreateActive(Path.Combine(tenantDir, "llm.db"), "mobile-default");
         aether.Configure(o =>
         {
+            o.Host = HostCapability.MobileOnly;
             o.OpenAI.ApiKey = llm.ApiKey;
             o.OpenAI.ModelId = llm.ModelName;
             o.OpenAI.Endpoint = llm.Endpoint;

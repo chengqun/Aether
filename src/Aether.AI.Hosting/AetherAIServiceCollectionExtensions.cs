@@ -67,7 +67,7 @@ public static class AetherAIServiceCollectionExtensions
         // from each adapter's IToolRegistryContributor. Factories are only invoked
         // when resolving tools for an agent, so GetAllMetas() never instantiates
         // AIFunction and never fails due to missing DI dependencies.
-        services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp));
+        services.AddSingleton<ToolRegistry>(sp => new ToolRegistry(sp, () => sp.GetRequiredService<AetherAIOptions>().Host));
 
         // 工具等级查询（Core 契约）：UI 层 AutoEdit 模式按等级区分自动批/弹框，不经此不直引 Harness。
         services.AddSingleton<IToolApprovalLevelLookup>(sp => new ToolApprovalLevelLookup(sp.GetRequiredService<ToolRegistry>()));
