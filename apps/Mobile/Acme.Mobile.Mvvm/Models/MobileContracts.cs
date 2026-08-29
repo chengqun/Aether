@@ -42,6 +42,20 @@ public class NamedAssetDto
     public string Name { get; set; } = string.Empty;
 }
 
+/// <summary>通用 labs 资产列表项（AI 设置 → 某类型列表页）。agent/workflow 用 <see cref="Id"/>（Guid），
+/// skill/mcp/knowledge 用 <see cref="Name"/>（文件名/文件夹名，即编辑页的 name 键）。</summary>
+public class AssetListItem
+{
+    /// <summary>稳定身份（agent/workflow 有值；skill/mcp/knowledge 为 null，改用 Name）。</summary>
+    public Guid? Id { get; set; }
+
+    /// <summary>显示名（agent/workflow=定义名；其余=文件名/文件夹名）。</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>副标题（类型标签/描述/分类），可空。</summary>
+    public string? Subtitle { get; set; }
+}
+
 /// <summary>
 /// 关系类型（值与 Aether <see cref="Relationship.Type"/> 的 int 一致）。
 /// 移植自旧 AlphaAgent 的 RelationshipType 枚举。

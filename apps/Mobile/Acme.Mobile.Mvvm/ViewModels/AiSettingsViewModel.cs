@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,9 +8,6 @@ using CommunityToolkit.Mvvm.Input;
 using Acme.Notes.Domain.Agents;
 using Acme.AppAuth.Domain;
 using Acme.Notes.Domain;
-using Acme.Notes.Domain.Catalog;
-using Acme.Notes.Domain.Knowledge;
-using Acme.Notes.Domain.Skills;
 using Acme.Mobile.Mvvm.Models;
 using Acme.AppUpdate.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
@@ -54,10 +50,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     private readonly IMcphubAuthService? _mcphubAuthService;
     private readonly IPlatformInfo? _platformInfo;
     private readonly IToastService? _toastService;
-    private readonly ICustomWorkflowCatalog? _workflowCatalog;
-    private readonly Func<string?>? _labsRoot;
-    private readonly ISkillSourceParser? _skillParser;
-    private readonly IDocumentKnowledgeSourceParser? _knowledgeParser;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -113,20 +105,8 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     /// <summary>是否为股票租户（Stockapp）。股票模式 AI 助手选择仅 Stockapp 显示；Qifu 不串股票功能。</summary>
     public bool IsStockTenant => _serverOptions?.Tenant == "stockapp";
 
-    /// <summary>所有可用的 Agent/Workflow 列表</summary>
+    /// <summary>所有可用的 Agent/Workflow 列表（股票模式 Picker 用）。</summary>
     public ObservableCollection<AgentInfoDto> AvailableAgents { get; } = new();
-
-    /// <summary>工作流列表（ICustomWorkflowCatalog 投影）。</summary>
-    public ObservableCollection<WorkflowInfoDto> Workflows { get; } = new();
-
-    /// <summary>技能列表（labs skills/ 目录扫描）。</summary>
-    public ObservableCollection<NamedAssetDto> Skills { get; } = new();
-
-    /// <summary>MCP server 列表（labs mcp-servers/ 目录扫描）。</summary>
-    public ObservableCollection<NamedAssetDto> McpServers { get; } = new();
-
-    /// <summary>知识对象列表（labs knowledge/ 目录扫描）。</summary>
-    public ObservableCollection<NamedAssetDto> KnowledgeObjects { get; } = new();
 
     /// <summary>当前选择的描述文本</summary>
     public string CurrentSelectionText
@@ -152,11 +132,7 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
                                ICloudDocsTokenSyncService? cloudDocsTokenSyncService = null,
                                IMcphubAuthService? mcphubAuthService = null,
                                IPlatformInfo? platformInfo = null,
-                               IToastService? toastService = null,
-                               ICustomWorkflowCatalog? workflowCatalog = null,
-                               Func<string?>? labsRoot = null,
-                               ISkillSourceParser? skillParser = null,
-                               IDocumentKnowledgeSourceParser? knowledgeParser = null)
+                               IToastService? toastService = null)
     {
         _agentCatalog = agentCatalog;
         _appSettings = appSettings;
@@ -168,10 +144,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
         _mcphubAuthService = mcphubAuthService;
         _platformInfo = platformInfo;
         _toastService = toastService;
-        _workflowCatalog = workflowCatalog;
-        _labsRoot = labsRoot;
-        _skillParser = skillParser;
-        _knowledgeParser = knowledgeParser;
 
         // 设置静态引用，供 GetStockModeAgentName() 使用
         if (appSettings != null)
@@ -249,10 +221,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
 
                 OnPropertyChanged(nameof(CurrentSelectionText));
             }
-
-            // —— 工作流 / 技能 / MCP / 知识对象（catalog 或 labs 目录扫描）——
-            await Task.Run(() => LoadWorkflows());
-            await Task.Run(() => LoadFileAssets());
         }
         catch (Exception ex)
         {
@@ -261,64 +229,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
         finally
         {
             IsLoading = false;
-        }
-    }
-
-    /// <summary>加载工作流列表（<see cref="ICustomWorkflowCatalog.ListAsync"/>）。</summary>
-    private void LoadWorkflows()
-    {
-        Workflows.Clear();
-        if (_workflowCatalog == null) return;
-        try
-        {
-            var defs = _workflowCatalog.ListAsync().GetAwaiter().GetResult();
-            foreach (var d in defs)
-                Workflows.Add(new WorkflowInfoDto { Id = d.Id, Name = d.Name, Description = d.Description });
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 加载工作流失败: {ex.Message}");
-        }
-    }
-
-    /// <summary>扫描 labs 目录加载 技能/MCP/知识对象 三类文件列表（无 catalog，直接扫目录）。</summary>
-    private void LoadFileAssets()
-    {
-        Skills.Clear();
-        McpServers.Clear();
-        KnowledgeObjects.Clear();
-        var root = _labsRoot?.Invoke();
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return;
-
-        // 技能：skills/<name>/SKILL.md（文件夹节点）
-        var skillDir = Path.Combine(root, CatalogNoteDirectory.For(NoteNodeType.Skill).DirectoryName);
-        ScanFolderAssets(skillDir, Skills, isFolder: true);
-        // MCP：mcp-servers/<name>.json
-        var mcpDir = Path.Combine(root, CatalogNoteDirectory.For(NoteNodeType.McpServer).DirectoryName);
-        ScanFlatAssets(mcpDir, McpServers, "*.json");
-        // 知识对象：knowledge/<name>.md
-        var koDir = Path.Combine(root, CatalogNoteDirectory.For(NoteNodeType.Knowledge).DirectoryName);
-        ScanFlatAssets(koDir, KnowledgeObjects, "*.md");
-    }
-
-    private static void ScanFolderAssets(string dir, ObservableCollection<NamedAssetDto> target, bool isFolder)
-    {
-        if (!Directory.Exists(dir)) return;
-        foreach (var sub in Directory.GetDirectories(dir))
-        {
-            var name = Path.GetFileName(sub);
-            if (name.StartsWith(".")) continue;
-            target.Add(new NamedAssetDto { Name = name });
-        }
-    }
-
-    private static void ScanFlatAssets(string dir, ObservableCollection<NamedAssetDto> target, string pattern)
-    {
-        if (!Directory.Exists(dir)) return;
-        foreach (var f in Directory.GetFiles(dir, pattern))
-        {
-            var name = Path.GetFileNameWithoutExtension(f);
-            target.Add(new NamedAssetDto { Name = name });
         }
     }
 
@@ -667,70 +577,26 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
         return _cachedStockModeAgentName;
     }
 
-    /// <summary>导航请求事件（AI 设置 → Agent 编辑表单）。</summary>
+    /// <summary>导航请求事件（AI 设置 → 某类型入口）。</summary>
     public event EventHandler<NavigationRequestedEvent>? NavigationRequested;
 
-    /// <summary>新建 Agent：导航到 AgentEditPage（无 agentId）。</summary>
-    [RelayCommand]
-    private void NavigateToNewAgent()
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("AgentEditPage"));
-    }
-
-    /// <summary>编辑 Agent：导航到 AgentEditPage?agentId=&lt;id&gt;。</summary>
-    [RelayCommand]
-    private void NavigateToAgentEdit(Guid agentId)
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-            "AgentEditPage",
-            new Dictionary<string, object> { ["agentId"] = agentId.ToString() }));
-    }
-
-    /// <summary>编辑工作流：导航到 WorkflowCreatePage?id=&lt;id&gt;（编辑态）。</summary>
-    [RelayCommand]
-    private void NavigateToEditWorkflow(Guid id)
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-            "WorkflowCreatePage",
-            new Dictionary<string, object> { ["id"] = id.ToString() }));
-    }
-
-    /// <summary>编辑技能：导航到 SkillCreatePage?name=&lt;name&gt;（编辑态）。</summary>
-    [RelayCommand]
-    private void NavigateToEditSkill(string name)
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-            "SkillCreatePage",
-            new Dictionary<string, object> { ["name"] = name }));
-    }
-
-    /// <summary>编辑 MCP：导航到 McpCreatePage?name=&lt;name&gt;（编辑态）。</summary>
-    [RelayCommand]
-    private void NavigateToEditMcp(string name)
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-            "McpCreatePage",
-            new Dictionary<string, object> { ["name"] = name }));
-    }
-
-    /// <summary>编辑知识对象：导航到 KnowledgeCreatePage?name=&lt;name&gt;（编辑态）。</summary>
-    [RelayCommand]
-    private void NavigateToEditKnowledge(string name)
-    {
-        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To(
-            "KnowledgeCreatePage",
-            new Dictionary<string, object> { ["name"] = name }));
-    }
+    /// <summary>进入某类型的资产列表页（AssetListPage?type=…）。</summary>
+    private void NavigateToAssetList(string type)
+        => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("AssetListPage",
+            new Dictionary<string, object> { ["type"] = type }));
 
     [RelayCommand]
-    private void NavigateToCreateSkill() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("SkillCreatePage"));
+    private void NavigateToAgentList() => NavigateToAssetList("agent");
 
     [RelayCommand]
-    private void NavigateToCreateMcp() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("McpCreatePage"));
+    private void NavigateToWorkflowList() => NavigateToAssetList("workflow");
 
     [RelayCommand]
-    private void NavigateToCreateWorkflow() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("WorkflowCreatePage"));
+    private void NavigateToSkillList() => NavigateToAssetList("skill");
 
     [RelayCommand]
-    private void NavigateToCreateKnowledge() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("KnowledgeCreatePage"));
+    private void NavigateToMcpList() => NavigateToAssetList("mcp");
+
+    [RelayCommand]
+    private void NavigateToKnowledgeList() => NavigateToAssetList("knowledge");
 }

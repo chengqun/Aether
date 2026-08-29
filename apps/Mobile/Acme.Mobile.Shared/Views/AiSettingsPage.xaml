@@ -17,185 +17,76 @@
     <ScrollView>
         <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
 
-            <!-- ===== labs 创作面：各类型直接列在 AI 设置页，每类一节（列表 + 新建 + 编辑），无需单独 labs 页 ===== -->
-
-            <!-- AI 助手（智能体 / 规则） -->
+            <!-- ===== labs 资产入口：5 个类型入口行，点进各类型的列表页（列表 + 新建 + 编辑） ===== -->
             <Frame Style="{StaticResource CardFrame}" Padding="0">
                 <VerticalStackLayout Spacing="0">
-                    <Grid ColumnDefinitions="*,Auto" Padding="14,12,6,8">
-                        <VerticalStackLayout Grid.Column="0" Spacing="2" VerticalOptions="Center">
-                            <Label Text="AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
+
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToAgentListCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🤖" FontSize="20" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="AI 助手" FontSize="15" FontFamily="OpenSansSemibold"
                                    TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
                             <Label Text="智能体 / 规则" FontSize="11"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                         </VerticalStackLayout>
-                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="14,6" FontSize="13"
-                                Command="{Binding NavigateToNewAgentCommand}" VerticalOptions="Center" />
+                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
-                    <VerticalStackLayout Spacing="0" Padding="0,4" BindableLayout.ItemsSource="{Binding AvailableAgents}">
-                        <BindableLayout.EmptyView>
-                            <Label Text="暂无 AI 助手" FontSize="13" Margin="14,10"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        </BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="model:AgentInfoDto">
-                                <Grid ColumnDefinitions="*,Auto" Padding="14,10">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToAgentEditCommand}"
-                                                              CommandParameter="{Binding Id}" />
-                                    </Grid.GestureRecognizers>
-                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                        <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansSemibold"
-                                               LineBreakMode="TailTruncation" MaxLines="1"
-                                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                        <Label Text="{Binding KindLabel}" FontSize="11"
-                                               TextColor="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}" />
-                                    </VerticalStackLayout>
-                                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToWorkflowListCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🔀" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="工作流" FontSize="15" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToSkillListCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🧩" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="技能" FontSize="15" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToMcpListCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🔌" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="MCP 服务器" FontSize="15" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+
+                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding NavigateToKnowledgeListCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="📚" FontSize="20" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="知识对象" FontSize="15" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- 工作流 -->
-            <Frame Style="{StaticResource CardFrame}" Padding="0">
-                <VerticalStackLayout Spacing="0">
-                    <Grid ColumnDefinitions="*,Auto" Padding="14,12,6,8">
-                        <Label Grid.Column="0" Text="工作流" FontSize="16" FontFamily="OpenSansSemibold" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="14,6" FontSize="13"
-                                Command="{Binding NavigateToCreateWorkflowCommand}" VerticalOptions="Center" />
-                    </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
-                    <VerticalStackLayout Spacing="0" Padding="0,4" BindableLayout.ItemsSource="{Binding Workflows}">
-                        <BindableLayout.EmptyView>
-                            <Label Text="暂无工作流" FontSize="13" Margin="14,10"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        </BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="model:WorkflowInfoDto">
-                                <Grid ColumnDefinitions="*,Auto" Padding="14,10">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToEditWorkflowCommand}"
-                                                              CommandParameter="{Binding Id}" />
-                                    </Grid.GestureRecognizers>
-                                    <Label Grid.Column="0" Text="{Binding Name}" FontSize="15"
-                                           LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Frame>
-
-            <!-- 技能 -->
-            <Frame Style="{StaticResource CardFrame}" Padding="0">
-                <VerticalStackLayout Spacing="0">
-                    <Grid ColumnDefinitions="*,Auto" Padding="14,12,6,8">
-                        <Label Grid.Column="0" Text="技能" FontSize="16" FontFamily="OpenSansSemibold" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="14,6" FontSize="13"
-                                Command="{Binding NavigateToCreateSkillCommand}" VerticalOptions="Center" />
-                    </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
-                    <VerticalStackLayout Spacing="0" Padding="0,4" BindableLayout.ItemsSource="{Binding Skills}">
-                        <BindableLayout.EmptyView>
-                            <Label Text="暂无技能" FontSize="13" Margin="14,10"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        </BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="model:NamedAssetDto">
-                                <Grid ColumnDefinitions="*,Auto" Padding="14,10">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToEditSkillCommand}"
-                                                              CommandParameter="{Binding Name}" />
-                                    </Grid.GestureRecognizers>
-                                    <Label Grid.Column="0" Text="{Binding Name}" FontSize="15"
-                                           LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Frame>
-
-            <!-- MCP 服务器 -->
-            <Frame Style="{StaticResource CardFrame}" Padding="0">
-                <VerticalStackLayout Spacing="0">
-                    <Grid ColumnDefinitions="*,Auto" Padding="14,12,6,8">
-                        <Label Grid.Column="0" Text="MCP 服务器" FontSize="16" FontFamily="OpenSansSemibold" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="14,6" FontSize="13"
-                                Command="{Binding NavigateToCreateMcpCommand}" VerticalOptions="Center" />
-                    </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
-                    <VerticalStackLayout Spacing="0" Padding="0,4" BindableLayout.ItemsSource="{Binding McpServers}">
-                        <BindableLayout.EmptyView>
-                            <Label Text="暂无 MCP 服务器" FontSize="13" Margin="14,10"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        </BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="model:NamedAssetDto">
-                                <Grid ColumnDefinitions="*,Auto" Padding="14,10">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToEditMcpCommand}"
-                                                              CommandParameter="{Binding Name}" />
-                                    </Grid.GestureRecognizers>
-                                    <Label Grid.Column="0" Text="{Binding Name}" FontSize="15"
-                                           LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Frame>
-
-            <!-- 知识对象 -->
-            <Frame Style="{StaticResource CardFrame}" Padding="0">
-                <VerticalStackLayout Spacing="0">
-                    <Grid ColumnDefinitions="*,Auto" Padding="14,12,6,8">
-                        <Label Grid.Column="0" Text="知识对象" FontSize="16" FontFamily="OpenSansSemibold" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Button Grid.Column="1" Text="＋ 新建" Style="{StaticResource PrimaryButton}" Padding="14,6" FontSize="13"
-                                Command="{Binding NavigateToCreateKnowledgeCommand}" VerticalOptions="Center" />
-                    </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="14,0" />
-                    <VerticalStackLayout Spacing="0" Padding="0,4" BindableLayout.ItemsSource="{Binding KnowledgeObjects}">
-                        <BindableLayout.EmptyView>
-                            <Label Text="暂无知识对象" FontSize="13" Margin="14,10"
-                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                        </BindableLayout.EmptyView>
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="model:NamedAssetDto">
-                                <Grid ColumnDefinitions="*,Auto" Padding="14,10">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.NavigateToEditKnowledgeCommand}"
-                                                              CommandParameter="{Binding Name}" />
-                                    </Grid.GestureRecognizers>
-                                    <Label Grid.Column="0" Text="{Binding Name}" FontSize="15"
-                                           LineBreakMode="TailTruncation" MaxLines="1" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </Frame>
 
             <!-- Agent picker section（仅 Stockapp：股票模式默认 Agent 选择；Qifu 不串股票功能） -->
             <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStockTenant}">

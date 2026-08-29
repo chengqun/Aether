@@ -104,6 +104,8 @@ public static class MauiProgram
         builder.Services.AddTransient<DeviceManagementPage>();
         builder.Services.AddTransient<LlmConfigPage>();
         builder.Services.AddTransient<AiSettingsPage>();
+        builder.Services.AddTransient<AssetListViewModel>();
+        builder.Services.AddTransient<AssetListPage>();
         builder.Services.AddTransient<AgentEditPage>();
 
 
