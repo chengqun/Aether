@@ -139,6 +139,17 @@ public static class MobileCompositionExtensions
         // 规则程序注册表 + run_rule 工具（共享宿主胶水；YAML 规则。CodeRule 需 Roslyn，手机跳过）。
         aether.AddRunRuleTool();
 
+        // —— 创作类工具（镜像桌面的同名工具，复用 Notes.Domain 契约 + labs 文件 CRUD，无桌面 UI/系统依赖）——
+        // 技能（skill_list/add/remove）：写 labs/skills/<name>/SKILL.md + 重载 SkillRegistry 索引。
+        aether.AddSkillManagementTool();
+        // 知识对象（List/Read/Create/UpdateDocumentKnowledgeObject）：写 labs/knowledge/*.md。
+        aether.AddDocumentKnowledgeTool();
+        // MCP 配置（mcp_list/add/remove_server）：文件 CRUD on labs/mcp-servers/*.json——
+        // 手机端无 MCP 运行时（iOS 禁 spawn），只管理权威配置文件，连接在桌面端生效。
+        aether.AddMcpConfigTool();
+        // agent 自举（agent_configure/reload/get_current_agent）：复用 ICustomAgentCatalog/Runner/ToolRegistry。
+        aether.AddAgentManagementTool();
+
         // skills（提示词级能力，从 labs/skills/ 加载 SKILL.md）
         aether.ConfigureSkillRegistry(reg => reg.LoadFromDirectory(Path.Combine(tenantDir, "labs", "skills")));
 
