@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.McpCreatePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:McpCreateViewModel"
+    Title="新建 MCP server">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{DynamicResource Primary}" HorizontalOptions="Start" />
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                   IsVisible="{Binding StatusMessage}" />
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="server 名称" FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Entry Text="{Binding Name}" Placeholder="如 my-server" />
+                    <Label Text="类型" FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Picker ItemsSource="{Binding TransportOptions}" SelectedIndex="{Binding TransportIndex}" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- stdio：本地命令 + 参数 -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStdio}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="命令" FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Entry Text="{Binding Command}" Placeholder="如 npx / dotnet / 绝对路径" />
+                    <Label Text="参数（每行一个）" FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Editor Text="{Binding ArgsText}" HeightRequest="80" Placeholder="-y&#10;some-mcp-server" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- http：远程 URL -->
+            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsHttp}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="URL" FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Entry Text="{Binding Url}" Placeholder="https://mcp.example.com/sse" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Label Text="注：手机端只保存配置（不连接）；连接在桌面端做"
+                   FontSize="11"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
+                <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

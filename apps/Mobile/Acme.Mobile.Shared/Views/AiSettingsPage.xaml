@@ -62,6 +62,35 @@
                 </VerticalStackLayout>
             </Frame>
 
+            <!-- labs 入口（浏览 labs 目录下的 agent/rule/workflow/knowledge/skill/mcp 文件） -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="labs 资料库" FontSize="16" FontFamily="OpenSansSemibold"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="›" FontSize="20" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </Grid>
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding NavigateToLabsCommand}" />
+                    </Grid.GestureRecognizers>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- 新建（各类型：Skill / MCP / Workflow / 知识对象；Agent/Rule 走上方「管理 AI 助手 → ＋新建」） -->
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="新建" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                        <Button Grid.Row="0" Grid.Column="0" Text="＋ 技能" Command="{Binding NavigateToCreateSkillCommand}" />
+                        <Button Grid.Row="0" Grid.Column="1" Text="＋ MCP" Command="{Binding NavigateToCreateMcpCommand}" />
+                        <Button Grid.Row="1" Grid.Column="0" Text="＋ 工作流" Command="{Binding NavigateToCreateWorkflowCommand}" />
+                        <Button Grid.Row="1" Grid.Column="1" Text="＋ 知识对象" Command="{Binding NavigateToCreateKnowledgeCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Frame>
+
             <!-- Agent picker section（仅 Stockapp：股票模式默认 Agent 选择；Qifu 不串股票功能） -->
             <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStockTenant}">
                 <VerticalStackLayout Spacing="12">

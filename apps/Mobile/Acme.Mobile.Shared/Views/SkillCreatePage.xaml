@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.SkillCreatePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:SkillCreateViewModel"
+    Title="新建技能">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{DynamicResource Primary}" HorizontalOptions="Start" />
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                   IsVisible="{Binding StatusMessage}" />
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="基础信息" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="名称" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Name}" Placeholder="技能显示名" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="描述" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Description}" Placeholder="一句话说明这个技能做什么" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="分类" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Category}" Placeholder="如 通用" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="技能正文" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Editor Text="{Binding Body}" HeightRequest="200" Placeholder="技能指令 / 脚本调用说明（markdown）" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
+                <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

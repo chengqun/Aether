@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.KnowledgeCreatePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:KnowledgeCreateViewModel"
+    Title="新建知识对象">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{DynamicResource Primary}" HorizontalOptions="Start" />
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                   IsVisible="{Binding StatusMessage}" />
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="基础信息" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="名称" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Name}" Placeholder="文件名 stem（不含 .md）" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="kind（分类）" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Kind}" Placeholder="如 数据源 / 规则 / 流程" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="正文" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Editor Text="{Binding Body}" HeightRequest="180" Placeholder="markdown 正文（说明 / 结构化数据）" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="links（可选，每行 role|target）" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <Label Text="target 为相对路径，指向 knowledge/ 下另一 .md 文件"
+                           FontSize="11"
+                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    <Editor Text="{Binding LinksText}" HeightRequest="100" Placeholder="uses|业务分析/会员日志" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
+                <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

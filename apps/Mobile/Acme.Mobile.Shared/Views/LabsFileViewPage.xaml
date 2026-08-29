@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.LabsFileViewPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:LabsFileViewViewModel"
+    Loaded="OnLoaded"
+    Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*">
+        <Label Grid.Row="0" Text="{Binding StatusMessage}" FontSize="12" Margin="20,8,20,0"
+               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+               IsVisible="{Binding StatusMessage}" />
+
+        <ScrollView Grid.Row="1">
+            <Label Text="{Binding Content}" FontSize="12" FontFamily="Menlo,monospace"
+                   Padding="20" LineBreakMode="WordWrap" />
+        </ScrollView>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.WorkflowCreatePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    x:DataType="vm:WorkflowCreateViewModel"
+    Title="新建工作流"
+    Loaded="OnLoaded">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{DynamicResource Primary}" HorizontalOptions="Start" />
+            <Label Text="{Binding StatusMessage}" FontSize="12"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                   IsVisible="{Binding StatusMessage}" />
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="基础信息" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="名称" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Name}" Placeholder="工作流名称" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="描述" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding Description}" Placeholder="一句话说明工作流" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame Style="{StaticResource CardFrame}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="参与者（勾选）" FontFamily="OpenSansSemibold" FontSize="14" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Participants}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="model:WorkflowParticipantOption">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Padding="0,6">
+                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding Name}" FontSize="14" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="入口 agent（参与者序号，0 起，缺省第一个勾选）" FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Entry Text="{Binding EntryIndex}" Keyboard="Numeric" Placeholder="0" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Button Grid.Column="0" Text="取消" Command="{Binding CancelCommand}" />
+                <Button Grid.Column="1" Text="保存" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" />
+            </Grid>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -163,6 +163,9 @@ public static class MobileCompositionExtensions
                 () => Path.Combine(tenantDir, "labs"),
                 sp.GetRequiredService<IWorkflowSourceParser>()));
 
+        // labs 根目录 provider（供 labs 列表 VM 等扫描 <tenantDir>/labs；与 DirectoryAgentCatalog 同源闭包）。
+        services.AddSingleton<Func<string?>>(() => Path.Combine(tenantDir, "labs"));
+
         // 模型源/客户端工厂（共享宿主胶水 LlmConfigChatClientFactory/LlmConfigModelSource，UI 无关）。
         // 手机端包一层 ToolHistorySanitizingChatClient（修孤儿 tool 消息防 DeepSeek 等 OpenAI 兼容端点 400）。
         // 先注册具体类型再别名接口——保证 MobileAgentConfigInitializer（依赖具体类型调 ClearCache/Invalidate）

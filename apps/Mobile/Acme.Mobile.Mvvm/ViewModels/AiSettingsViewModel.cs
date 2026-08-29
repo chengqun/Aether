@@ -595,4 +595,23 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
             "AgentEditPage",
             new Dictionary<string, object> { ["agentId"] = agentId.ToString() }));
     }
+
+    /// <summary>打开 labs：导航到 LabsPage（labs 目录列表入口）。</summary>
+    [RelayCommand]
+    private void NavigateToLabs()
+    {
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("LabsPage"));
+    }
+
+    [RelayCommand]
+    private void NavigateToCreateSkill() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("SkillCreatePage"));
+
+    [RelayCommand]
+    private void NavigateToCreateMcp() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("McpCreatePage"));
+
+    [RelayCommand]
+    private void NavigateToCreateWorkflow() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("WorkflowCreatePage"));
+
+    [RelayCommand]
+    private void NavigateToCreateKnowledge() => NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("KnowledgeCreatePage"));
 }
