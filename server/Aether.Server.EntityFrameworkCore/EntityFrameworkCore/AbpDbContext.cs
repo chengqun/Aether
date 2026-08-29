@@ -96,6 +96,9 @@ public class AbpDbContext :
     // 360Teams 云文档 sid（跨端同步）
     public virtual DbSet<AppCloudDocsToken> CloudDocsTokens { get; set; } = null!;
 
+    // mcphub 网关 dashboard JWT（跨端同步）
+    public virtual DbSet<AppMcphubToken> McphubTokens { get; set; } = null!;
+
     #endregion
 
     public AbpDbContext(DbContextOptions<AbpDbContext> options)
@@ -299,6 +302,16 @@ public class AbpDbContext :
             b.Property(t => t.Sid).HasMaxLength(2000).IsRequired();
             b.Property(t => t.Env).HasMaxLength(16).IsRequired();
             b.Property(t => t.CapturedAt).HasMaxLength(64);
+        });
+
+        // 配置 mcphub 网关 JWT 表 - McphubTokens
+        builder.Entity<AppMcphubToken>(b =>
+        {
+            b.ToTable("AppMcphubTokens");
+            b.HasKey(t => t.Id);
+            b.HasIndex(t => t.UserId).IsUnique();
+            b.Property(t => t.Jwt).HasMaxLength(4000).IsRequired();
+            b.Property(t => t.Username).HasMaxLength(128);
         });
 
 
