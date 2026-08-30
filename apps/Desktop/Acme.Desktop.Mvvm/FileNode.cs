@@ -28,16 +28,6 @@ public partial class FileNode : ObservableObject
     /// <summary>是否入口节点（=带 FillCardIcon），驱动 View 切换圆角方块图标 vs 小图标。</summary>
     public bool IsTypeEntry => !string.IsNullOrEmpty(FillCardIcon);
 
-    /// <summary>是否虚拟根节点（labs 树的透明壳根——去掉「labs」目录名层，树直接平铺 11 个类型入口）。
-    /// 虚拟根不渲染 header（无名字/图标/chevron），仅作 Children 容器。默认 false（普通节点）。</summary>
-    public bool IsVirtualRoot { get; init; }
-
-    /// <summary>是否显示展开/收起 chevron（文件夹且非虚拟根）。虚拟根不显 chevron（无 header 可展开）。</summary>
-    public bool ShowChevron => IsFolder && !IsVirtualRoot;
-
-    /// <summary>是否渲染节点 header（名字/图标）。虚拟根 false → header 整行空白（仅作 Children 容器）。</summary>
-    public bool ShowHeader => !IsVirtualRoot;
-
     /// <summary>磁盘绝对路径。</summary>
     public string Path { get; }
 
