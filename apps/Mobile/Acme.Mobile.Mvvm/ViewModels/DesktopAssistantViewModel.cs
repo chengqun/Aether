@@ -29,6 +29,8 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
     private readonly IEventBusService? _eventBusService;
     private readonly ICurrentUser? _currentUser;
     private readonly IDeviceService? _deviceService;
+    private readonly IGlobalMessageHandler? _globalMessageHandler;
+    private readonly IAppSettings? _appSettings;
 
     private Guid _currentConversationId = Guid.Empty;
     private Guid _currentUserId = Guid.Empty;
@@ -70,7 +72,9 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         IEventBusService? eventBusService = null,
         ICurrentUser? currentUser = null,
         IDeviceService? deviceService = null,
-        IUIThreadDispatcher? uiThreadDispatcher = null)
+        IUIThreadDispatcher? uiThreadDispatcher = null,
+        IGlobalMessageHandler? globalMessageHandler = null,
+        IAppSettings? appSettings = null)
     {
         _chatService = chatService;
         _signalRChatService = signalRChatService;
@@ -78,6 +82,8 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         _currentUser = currentUser;
         _deviceService = deviceService;
         _uiThreadDispatcher = uiThreadDispatcher;
+        _globalMessageHandler = globalMessageHandler;
+        _appSettings = appSettings;
     }
 
     partial void OnMessageInputChanged(string value)
@@ -117,6 +123,13 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 if (version != _loadVersion) return;
 
                 SubscribeToEvents();
+                // 桌面助手页冷启动也须自行拉起 SignalR 传输 + 消息事件发布链。这两步原本只在社交聊天
+                // ChatViewModel.OnActivatedAsync 调用——用户直接进桌面助手页（未先开聊天 tab）时从未接线，
+                // JoinConversationAsync 因「未连接」早返回 → 手机不在 conv_{id} 组 → 桌面回复实时推送收不到
+                // （REST 拉取仍正常，故表现为「能发、收不到实时」）。
+                EnsureSignalRListening();
+                await EnsureSignalRConnectedAsync();
+                if (version != _loadVersion) return;
                 await JoinConversationGroupAsync(_currentConversationId);
                 await LoadMessagesAsync(version);
             }
@@ -309,9 +322,36 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
 
     private async void OnSignalRReconnected(SignalRReconnectedEvent @event)
     {
-        // 重连后补拉错过的最新消息。
+        // 重连产生新 connectionId，旧的 conv_{id} 组成员资格失效，须重新入组再补拉错过的消息。
         var version = _loadVersion;
+        await JoinConversationGroupAsync(_currentConversationId);
         await LoadMessagesAsync(version);
+    }
+
+    /// <summary>接社交聊天未先进入时，桌面助手页冷启动也要自行拉起 SignalR 消息事件发布链。
+    /// GlobalMessageHandler 是单例，StartListening/StartListeningReconnected 用 -=/+= 幂等订阅
+    /// OnMessageReceived（发布 NewMessageEvent）与 OnReconnected（发布 SignalRReconnectedEvent）。
+    /// 二者原本只在 ChatViewModel.OnActivatedAsync 调用，直接进桌面助手页时从未接线 →
+    /// 即便 SignalR 已连接，OnMessageReceived 也无人发布 NewMessageEvent → OnNewMessage 永不触发。</summary>
+    private void EnsureSignalRListening()
+    {
+        _globalMessageHandler?.StartListening();
+        _globalMessageHandler?.StartListeningReconnected();
+    }
+
+    private async Task EnsureSignalRConnectedAsync()
+    {
+        if (_signalRChatService == null) return;
+        if (_signalRChatService.IsConnected) return;
+        try
+        {
+            var serverAddress = _appSettings?.ServerBaseAddress ?? "https://localhost/";
+            await Task.Run(() => _signalRChatService.ConnectAsync(serverAddress));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] SignalR 连接失败: {ex.Message}");
+        }
     }
 
     private async Task JoinConversationGroupAsync(Guid conversationId)
