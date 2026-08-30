@@ -239,24 +239,8 @@ public partial class ContactsViewModel : NavigableViewModelBase
             });
         }
 
-        var acceptedDevices = contacts.Devices.ToList();
-        if (acceptedDevices.Count > 0)
-        {
-            ContactGroups.Add(new ContactGroup
-            {
-                Title = $"设备 ({acceptedDevices.Count})",
-                Contacts = new ObservableCollection<ContactItem>(
-                    acceptedDevices.Select(d => new ContactItem
-                    {
-                        Id = d.TargetId,
-                        RelationshipId = d.Id.ToString(),
-                        Name = d.TargetName,
-                        Initial = d.Initial,
-                        Type = "设备",
-                        DeviceType = d.DeviceType
-                    }))
-            });
-        }
+        // 设备分组已移除——设备对话统一迁移至「AI 页 → 桌面助手」（走 IDeviceService/AppDevice，非 Relationship）。
+        // 底层 AppRelationship(Device) 数据保留，仅不再在通讯录展示。
 
         var acceptedStocks = contacts.Stocks.ToList();
         if (acceptedStocks.Count > 0)

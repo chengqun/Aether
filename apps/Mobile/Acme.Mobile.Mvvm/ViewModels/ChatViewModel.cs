@@ -214,6 +214,8 @@ public partial class ChatViewModel : NavigableViewModelBase
             {
                 // AI 会话（Type 3/4）已移至「AI」tab，不进社交列表（过滤历史残留缓存条目）。
                 if (conv.Type == 3 || conv.Type == 4) continue;
+                // 设备会话已迁移至「桌面助手」页，不进社交列表。
+                if (IsDeviceConversation(conv)) continue;
 
                 // 为缓存中的 Agent 会话补充 AgentName 和 Kind 信息
                 if (conv.Type == 3 || conv.Type == 4)
@@ -322,6 +324,9 @@ public partial class ChatViewModel : NavigableViewModelBase
                         serverConv.Kind = (int?)agentKindMap.GetValueOrDefault(serverConv.AgentName);
                     }
 
+                    // 设备会话已迁移至「桌面助手」页，不进社交列表。
+                    if (IsDeviceConversation(serverConv)) continue;
+
                     var local = Conversations.FirstOrDefault(c => c.Id == serverConv.Id);
                     if (local != null)
                     {
@@ -333,12 +338,13 @@ public partial class ChatViewModel : NavigableViewModelBase
                     }
                 }
 
-                // 移除服务端已不存在的会话（排除 Agent 会话和服务号文件夹）
+                // 移除服务端已不存在、或已转为设备会话的会话（排除 Agent 会话和服务号文件夹）。
                 var serverIds = serverConversations.Select(c => c.Id).ToHashSet();
                 for (int i = Conversations.Count - 1; i >= 0; i--)
                 {
-                    if (!serverIds.Contains(Conversations[i].Id)
-                        && Conversations[i].Type != 3 && Conversations[i].Type != 4 && Conversations[i].Type != 5)
+                    var conv = Conversations[i];
+                    if (conv.Type != 3 && conv.Type != 4 && conv.Type != 5
+                        && (!serverIds.Contains(conv.Id) || !string.IsNullOrEmpty(conv.OtherDeviceId)))
                     {
                         Conversations.RemoveAt(i);
                     }
@@ -511,6 +517,7 @@ public partial class ChatViewModel : NavigableViewModelBase
 
             var match = conversations.FirstOrDefault(c => c.Id == conversationId);
             if (match == null) return; // 服务端也没有该会话，忽略
+            if (IsDeviceConversation(match)) return; // 设备会话已迁移至「桌面助手」页，不进社交列表
 
             _uiThreadDispatcher?.Post(() =>
             {
@@ -571,6 +578,8 @@ public partial class ChatViewModel : NavigableViewModelBase
 
         // AI 会话（Type 3/4）由 AiChatViewModel 接收，不进社交列表。
         if (conv.Type == 3 || conv.Type == 4) return;
+        // 设备会话已迁移至「桌面助手」页，不进社交列表。
+        if (IsDeviceConversation(conv)) return;
 
         // 对于 Agent 会话（Type 3/4），确保 Kind 属性已设置
         if ((conv.Type == 3 || conv.Type == 4) && conv.Kind == null && !string.IsNullOrEmpty(conv.AgentName))
@@ -635,6 +644,13 @@ public partial class ChatViewModel : NavigableViewModelBase
         // 从服务端同步该会话的完整数据，替换占位会话（如果存在）或新增
         _ = SyncSingleConversationAsync(conversationId);
     }
+
+    /// <summary>
+    /// 设备会话（<see cref="Conversation.OtherDeviceId"/> 非空）已迁移至「AI 页 → 桌面助手」，
+    /// 不再出现在社交聊天列表——此处统一过滤（底层数据保留）。
+    /// </summary>
+    private static bool IsDeviceConversation(Conversation conv) =>
+        !string.IsNullOrEmpty(conv.OtherDeviceId);
 
     /// <summary>
     /// 排序会话列表：只在顺序变化时才重建，减少 CollectionView 闪烁
@@ -714,6 +730,8 @@ public partial class ChatViewModel : NavigableViewModelBase
                 {
                     // AI 会话（Type 3/4）已移至「AI」tab，不进社交列表。
                     if (conv.Type == 3 || conv.Type == 4) continue;
+                    // 设备会话已迁移至「桌面助手」页，不进社交列表。
+                    if (IsDeviceConversation(conv)) continue;
                     Conversations.Add(new ObservableConversation(conv));
                 }
             }
@@ -727,6 +745,8 @@ public partial class ChatViewModel : NavigableViewModelBase
                         Conversations.Clear();
                         foreach (var conv in response)
                         {
+                            // 设备会话已迁移至「桌面助手」页，不进社交列表。
+                            if (IsDeviceConversation(conv)) continue;
                             Conversations.Add(new ObservableConversation(conv));
                         }
                     }
