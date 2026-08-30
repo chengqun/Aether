@@ -932,7 +932,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             if (remoteKind != ChatTargetKind.Rule) await RefreshModeAsync(msg.ConversationId);
 
             // 远程消息触发运行：把回复通过 SignalR 发回远程发送方（否则对方收不到结果）。
-            // 回环安全：SignalRDeviceChatClient 用 _recentSentMessageIds 去重，服务端 echo 回本机的消息会被忽略。
+            // 回环安全：服务端对设备发送方用 GroupExcept 不回广播给本机（见 SignalRChatNotifier），
+            // 桌面端不会收到自己的回复→不会重跑 agent。客户端 _recentSentMessageIds 仅作边缘竞态兜底。
             // 老板视角：不回传全量过程，只发一段 LLM 概览摘要（用与 agent 同款模型）。失败/Rule 退化为截断全量。
             var full = fullText.ToString();
             string replyText;

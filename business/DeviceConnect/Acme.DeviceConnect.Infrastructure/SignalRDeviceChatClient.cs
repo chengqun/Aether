@@ -11,7 +11,8 @@ namespace Acme.DeviceConnect.Infrastructure;
 public class SignalRDeviceChatClient : IDeviceChatClient
 {
     private HubConnection? _connection;
-    // 自己发出消息的 Id 去重集（服务端会把设备发的消息广播回设备自身，靠此过滤）。
+    // 自己发出消息的 Id 去重集——服务端对设备发送方已用 GroupExcept 不回广播（见 SignalRChatNotifier），
+    // 此 LRU 为防御性兜底：若因多连接/追踪器边缘竞态仍有 echo 漏过则按 Id 丢弃。
     // 有界 LRU：消费即移除（回广播只来一次）；超量淘汰最旧——防止无限重连长连接下无限增长。
     private readonly object _recentSentLock = new();
     private readonly HashSet<Guid> _recentSentMessageIds = new();

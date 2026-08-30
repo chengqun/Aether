@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Aether.Server.Application.Contracts.DTOs.Chat;
 using Aether.Server.Application.Contracts.Services.Chat;
@@ -20,9 +21,21 @@ public class SignalRChatNotifier : IChatNotifier
 
     public async Task NotifyMessageAsync(Guid conversationId, ChatMessageDto message, Guid senderId)
     {
-        // 广播给会话组中所有连接（发送者的回声由客户端根据 SenderId 过滤）
-        await _hubContext.Clients.Group($"conv_{conversationId}")
-            .SendAsync("ReceiveMessage", message);
+        // 设备发送方排除其自身连接，避免桌面端收到自己的回声。
+        // 此前广播给全组含发送者，桌面端靠 SignalRDeviceChatClient 的 _recentSentMessageIds 去重，
+        // 但该 LRU 有竞态：服务端在 SendMessage 返回前已广播，echo 可在客户端登记 sentId 之前到达→
+        // 漏过→桌面把自己的回复当新消息重跑 agent→发新回复→死循环。
+        // 服务端不回广播给发送者从根上消除竞态。
+        // 设备连接登记在 _deviceConnectionTracker；用户连接不在其中（GetConnections 返回空→走全量广播），
+        // 用户发送方（手机经 REST SendMessageAsync）的自回声仍由手机端客户端按 SenderId 过滤，行为不变。
+        var groupName = $"conv_{conversationId}";
+        var excluded = _deviceConnectionTracker.GetConnections(senderId);
+        if (excluded.Count > 0)
+            await _hubContext.Clients.GroupExcept(groupName, excluded.ToArray())
+                .SendAsync("ReceiveMessage", message);
+        else
+            await _hubContext.Clients.Group(groupName)
+                .SendAsync("ReceiveMessage", message);
     }
 
     public async Task NotifyUnreadCountUpdatedAsync(Guid conversationId, Guid userId, int unreadCount)
