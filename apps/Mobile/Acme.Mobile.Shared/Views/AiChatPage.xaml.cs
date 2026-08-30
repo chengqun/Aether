@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Linq;
 using Acme.Mobile.Mvvm.Events;
+using Acme.Mobile.Mvvm.Models;
 using Acme.Mobile.Mvvm.ViewModels;
 
 namespace Acme.Mobile.Shared.Views;
@@ -98,25 +99,33 @@ public partial class AiChatPage : ContentPage
     }
 
     /// <summary>底部选择器 sheet 滑入/滑出 + 遮罩淡入/淡出（镜像 <see cref="AnimateDrawerAsync"/>，Y 轴）。
-    /// 平移不改变命中测试区，故关闭态须 InputTransparent 让触摸穿透，否则挡住底下输入胶囊/chip。</summary>
+    /// 关键：大屏（iPhone 14 Pro Max 高约 932pt）下 TranslationY=600 不足以移出屏幕，会露出 ✕+空白
+    /// 挡住输入区。故关闭后直接 IsVisible=false（而非仅靠平移）；移出量用页面高度兜底必移出。
+    /// 平移不改变命中测试区，故开启态须 InputTransparent=False 才可点 sheet 内项。</summary>
+    /// <summary>选择器下拉浮层开合：从 chip 处小幅淡入/微滑（非从屏底长途滑入）。
+    /// sheet 锚 Row1 底（chip 上沿），开时 TranslationY=14 + Opacity=0 → 0/1，视觉上从 chip 处浮现展开。
+    /// 关闭态 IsVisible=false（不渲染、不挡输入框）。</summary>
     private async Task AnimatePickerSheetAsync(bool open)
     {
-        SheetBackdrop.InputTransparent = !open;
-        PickerSheet.InputTransparent = !open;
+        const double popOffset = 14; // chip 处小幅浮现位移
         if (open)
         {
+            PickerSheet.TranslationY = popOffset;
+            PickerSheet.Opacity = 0;
+            SheetBackdrop.Opacity = 0;
             PickerSheet.IsVisible = true;
             SheetBackdrop.IsVisible = true;
         }
-        // sheet 从底纵向平移（移出量取实测高度，未布局时回退 600）+ 遮罩透明度
-        var offset = Math.Max(PickerSheet.Height, 600);
+        SheetBackdrop.InputTransparent = !open;
+        PickerSheet.InputTransparent = !open;
         await Task.WhenAll(
-            PickerSheet.TranslateTo(0, open ? 0 : offset, 220, Easing.SinOut),
-            SheetBackdrop.FadeTo(open ? 1 : 0, 220));
+            PickerSheet.TranslateTo(0, open ? 0 : popOffset, 180, Easing.SinOut),
+            PickerSheet.FadeTo(open ? 1 : 0, 180),
+            SheetBackdrop.FadeTo(open ? 1 : 0, 180));
         if (!open)
         {
-            // 关闭后隐藏遮罩；sheet 保留可见（已移出屏幕）以便下次动画无闪烁
             SheetBackdrop.IsVisible = false;
+            PickerSheet.IsVisible = false;
         }
     }
 
@@ -126,6 +135,15 @@ public partial class AiChatPage : ContentPage
         // 清除选择，便于再次点同一项
         ((CollectionView)sender!).SelectedItem = null;
         await _vm.SelectHistoryAsync(item);
+    }
+
+    /// <summary>底部 sheet 选项点击：转发到 VM SelectPickerItemCommand。
+    /// BindableLayout 项模板的 TapGestureRecognizer Tapped 事件（非 Command RelativeSource 绑定，source-gen 下事件更稳）。
+    /// sender 是被点的 Grid，其 BindingContext 即 PickerItem。</summary>
+    private async void OnPickerItemTapped(object? sender, EventArgs e)
+    {
+        if (sender is not VisualElement { BindingContext: PickerItem item }) return;
+        await _vm.SelectPickerItemCommand.ExecuteAsync(item);
     }
 
     protected override async void OnAppearing()

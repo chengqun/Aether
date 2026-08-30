@@ -91,6 +91,23 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         };
     }
 
+    /// <summary>当前选中电脑名（chip 显示；无设备时占位「选择电脑」）。</summary>
+    [ObservableProperty]
+    private string _currentDeviceName = "选择电脑";
+
+    /// <summary>底部选择器 sheet（电脑列表）是否展开。</summary>
+    [ObservableProperty]
+    private bool _isPickerSheetOpen;
+
+    /// <summary>底部选择器 sheet 标题。</summary>
+    [ObservableProperty]
+    private string _pickerSheetTitle = string.Empty;
+
+    /// <summary>底部选择器 sheet 选项（复用通用 PickerItem）。</summary>
+    public ObservableCollection<PickerItem> CurrentPickerItems { get; } = new();
+
+    private bool _pickerSheetIsDevice;
+
     /// <summary>当前用户 Id（供消息模板选择器区分「我的」/「桌面」气泡）。</summary>
     public Guid CachedUserId => _currentUserId;
 
@@ -280,9 +297,20 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
     /// <summary>切换设备：重设会话并重载（_loadVersion 已使旧异步结果作废）。</summary>
     partial void OnSelectedDeviceIndexChanged(int value)
     {
+        UpdateCurrentDeviceName();
         if (_syncingDevicePicker) return;
         if (value < 0 || value >= Devices.Count) return;
         _ = OnActivatedAsync();
+    }
+
+    /// <summary>同步 chip 显示的当前电脑名（按 SelectedDeviceIndex 取 Devices 项；越界回退占位）。</summary>
+    private void UpdateCurrentDeviceName()
+    {
+        CurrentDeviceName = (SelectedDeviceIndex >= 0 && SelectedDeviceIndex < Devices.Count)
+            ? (string.IsNullOrWhiteSpace(Devices[SelectedDeviceIndex].DeviceName)
+                ? Devices[SelectedDeviceIndex].DeviceId
+                : Devices[SelectedDeviceIndex].DeviceName)
+            : "选择电脑";
     }
 
     private async Task LoadMessagesAsync(int version)
@@ -463,4 +491,58 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
             System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] 发送失败: {ex}");
         }
     }
+
+    /// <summary>打开/关闭「选择电脑」底部 sheet（再点同一 chip 收起）。填充设备列表，当前选中 ✓。
+    /// 镜像 AiChatPage 的 agent/LLM 选择器 sheet 范式（共用 PickerItem + 项模板）。</summary>
+    [RelayCommand]
+    private void OpenDevicePicker()
+    {
+        // toggle：设备 sheet 已开 → 再点 chip 收起
+        if (IsPickerSheetOpen && _pickerSheetIsDevice)
+        {
+            IsPickerSheetOpen = false;
+            return;
+        }
+        CurrentPickerItems.Clear();
+        for (var i = 0; i < Devices.Count; i++)
+        {
+            var d = Devices[i];
+            CurrentPickerItems.Add(new PickerItem
+            {
+                Name = string.IsNullOrWhiteSpace(d.DeviceName) ? d.DeviceId : d.DeviceName,
+                Description = d.DeviceType,
+                IsSelected = i == SelectedDeviceIndex
+            });
+        }
+        _pickerSheetIsDevice = true;
+        PickerSheetTitle = "选择电脑";
+        IsPickerSheetOpen = true;
+    }
+
+    /// <summary>sheet 选项点击：按名匹配设备索引，切设备触发重载（与原下拉 Picker 同路径）。</summary>
+    [RelayCommand]
+    private async Task SelectPickerItem(PickerItem? item)
+    {
+        if (item is null) return;
+        IsPickerSheetOpen = false;
+        if (!_pickerSheetIsDevice) return;
+        var idx = -1;
+        for (var i = 0; i < Devices.Count; i++)
+        {
+            var d = Devices[i];
+            var name = string.IsNullOrWhiteSpace(d.DeviceName) ? d.DeviceId : d.DeviceName;
+            if (string.Equals(name, item.Name, StringComparison.Ordinal))
+            {
+                idx = i;
+                break;
+            }
+        }
+        // 命中且非当前 → 设索引，OnSelectedDeviceIndexChanged 接管重载（同下拉 Picker 切设备）
+        if (idx >= 0 && idx != SelectedDeviceIndex)
+            SelectedDeviceIndex = idx;
+        await Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private void ClosePickerSheet() => IsPickerSheetOpen = false;
 }

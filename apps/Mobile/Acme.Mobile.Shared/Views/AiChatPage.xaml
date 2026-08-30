@@ -41,6 +41,67 @@
                 <Grid IsVisible="{Binding HasActiveChat}">
                     <views:AgentChatSurface x:Name="Surface" ShowInputBar="False" />
                 </Grid>
+
+                <!-- ═══ 选择器下拉浮层（agent/LLM 复用）。放在消息区内、chip 行上方 ═══
+                     关键：sheet + 遮罩只在消息区（Row1）内，不覆盖 Row2 的 chip 行 / 输入框——
+                     故下拉从 chip 处展开盖消息区，输入框始终可见可用（用户要求「下拉在 agent 选择那、别挡输入框」）。
+                     VerticalOptions=End 对齐 Row1 底部 = chip 行上沿，sheet 从此往上展开盖消息区下半。 -->
+
+                <!-- 半透明遮罩（仅覆盖消息区；关闭态 InputTransparent 穿透，点遮罩收起） -->
+                <BoxView x:Name="SheetBackdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="True">
+                    <BoxView.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ClosePickerSheetCommand}" />
+                    </BoxView.GestureRecognizers>
+                </BoxView>
+
+                <!-- 下拉浮层：VerticalOptions=End 锚 Row1 底（chip 上沿）+ TranslationY 移出 + 初始 IsVisible=False。
+                     MaximumHeightRequest=420（不固定高度）——内容少时按内容撑（无多余空白），内容多时封顶 420 + 滚动。
+                     内层用 ScrollView+BindableLayout.VerticalStackLayout 而非 CollectionView：CollectionView 无约束高度会塌缩，
+                     BindableLayout 按内容自然撑高，少则小多则滚动。StrokeShape 只顶圆角。开合由 code-behind 翻转。 -->
+                <Border x:Name="PickerSheet" VerticalOptions="End" HorizontalOptions="Fill"
+                        MaximumHeightRequest="420"
+                        TranslationY="600" IsVisible="False" InputTransparent="True"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                        StrokeShape="RoundRectangle 16,16,0,0" StrokeThickness="0">
+                    <VerticalStackLayout Spacing="0" Padding="0">
+                        <!-- 浮层头：标题 + ✕ 关闭 -->
+                        <Grid ColumnDefinitions="*,44" Padding="16,14,8,10">
+                            <Label Grid.Column="0" Text="{Binding PickerSheetTitle}" FontSize="16" FontFamily="OpenSansSemibold"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Button Grid.Column="1" Text="✕" FontSize="18" Padding="0" WidthRequest="44"
+                                    BackgroundColor="Transparent"
+                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                    Command="{Binding ClosePickerSheetCommand}" />
+                        </Grid>
+                        <!-- 选项列表（agent / LLM 共用，按 PickerItem 渲染）。
+                             ScrollView+BindableLayout 按内容撑高（少则小不空白，多则滚动）。项点击用 TapGestureRecognizer Tapped 事件
+                             （非 Command RelativeSource 绑定，source-gen 下事件更稳）→ code-behind 转发 SelectPickerItemCommand。 -->
+                        <ScrollView>
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding CurrentPickerItems}" Spacing="0" Padding="0">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="model:PickerItem">
+                                        <Grid ColumnDefinitions="*,Auto" Padding="16,14" ColumnSpacing="8"
+                                              BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnPickerItemTapped" />
+                                            </Grid.GestureRecognizers>
+                                            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                                <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansRegular"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                                <Label Text="{Binding Description}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                                       IsVisible="{Binding HasDescription}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1" Text="✓" FontSize="16" VerticalOptions="Center"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}"
+                                                   IsVisible="{Binding IsSelected}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </ScrollView>
+                    </VerticalStackLayout>
+                </Border>
             </Grid>
 
             <!-- 底部组合栏：chip 行（agent ▾ / LLM ▾ + 💻桌面助理）上沿 + 输入胶囊，主流化（豆包/千问式）。
@@ -185,59 +246,6 @@
                 <Button Grid.Row="2" Text="↻ 刷新" BackgroundColor="Transparent"
                         TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
                         Command="{Binding RefreshConversationsCommand}" Margin="12,4,12,12" />
-            </Grid>
-        </Border>
-
-        <!-- ═══ 底部选择器 sheet（agent/LLM 复用，镜像抽屉 overlay 范式） ═══ -->
-
-        <!-- 半透明遮罩（覆盖整页；关闭态 InputTransparent 穿透，与 SheetBackdrop 同生死） -->
-        <BoxView x:Name="SheetBackdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="True">
-            <BoxView.GestureRecognizers>
-                <TapGestureRecognizer Command="{Binding ClosePickerSheetCommand}" />
-            </BoxView.GestureRecognizers>
-        </BoxView>
-
-        <!-- 底部 sheet：从下滑入。VerticalOptions=End 锚底 + TranslationY=600 移出屏幕；
-             InputTransparent=True 初始（关闭态）——平移不改变命中测试区，关闭时必须穿透，
-             否则挡住底下输入胶囊 / chip（镜像抽屉 Drawer 的 InputTransparent 翻转）。开合由 code-behind 翻转。 -->
-        <Border x:Name="PickerSheet" VerticalOptions="End" HorizontalOptions="Fill"
-                TranslationY="600" InputTransparent="True"
-                BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
-                StrokeShape="RoundRectangle 16,16,0,0" StrokeThickness="0">
-            <Grid RowDefinitions="Auto,*" Padding="0">
-                <!-- sheet 头：标题 + ✕ 关闭 -->
-                <Grid Grid.Row="0" ColumnDefinitions="*,44" Padding="16,14,8,10">
-                    <Label Grid.Column="0" Text="{Binding PickerSheetTitle}" FontSize="16" FontFamily="OpenSansSemibold"
-                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                    <Button Grid.Column="1" Text="✕" FontSize="18" Padding="0" WidthRequest="44"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                            Command="{Binding ClosePickerSheetCommand}" />
-                </Grid>
-                <!-- 选项列表（agent / LLM 共用，按 PickerItem 渲染） -->
-                <CollectionView Grid.Row="1" ItemsSource="{Binding CurrentPickerItems}" SelectionMode="None">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="model:PickerItem">
-                            <Grid ColumnDefinitions="*,Auto" Padding="16,14" ColumnSpacing="8"
-                                  BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
-                                <Grid.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectPickerItemCommand}"
-                                                          CommandParameter="{Binding .}" />
-                                </Grid.GestureRecognizers>
-                                <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                    <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansRegular"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                                    <Label Text="{Binding Description}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1"
-                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
-                                           IsVisible="{Binding HasDescription}" />
-                                </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="✓" FontSize="16" VerticalOptions="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}"
-                                       IsVisible="{Binding IsSelected}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
             </Grid>
         </Border>
     </Grid>

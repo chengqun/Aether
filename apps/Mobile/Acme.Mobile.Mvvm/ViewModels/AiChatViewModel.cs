@@ -150,6 +150,12 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [RelayCommand]
     private Task OpenAgentPicker()
     {
+        // toggle：agent 模式已开 → 再点 agent chip 关闭（主流「点一下开 / 点一下关」）
+        if (IsPickerSheetOpen && _pickerSheetIsAgent)
+        {
+            IsPickerSheetOpen = false;
+            return Task.CompletedTask;
+        }
         CurrentPickerItems.Clear();
         var current = ChatSurface.AgentName;
         var defs = _agentDefs;
@@ -189,6 +195,12 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [RelayCommand]
     private Task OpenLlmPicker()
     {
+        // toggle：LLM 模式已开 → 再点 LLM chip 关闭
+        if (IsPickerSheetOpen && !_pickerSheetIsAgent)
+        {
+            IsPickerSheetOpen = false;
+            return Task.CompletedTask;
+        }
         CurrentPickerItems.Clear();
         var current = CurrentLlmName;
         CurrentPickerItems.Add(new PickerItem

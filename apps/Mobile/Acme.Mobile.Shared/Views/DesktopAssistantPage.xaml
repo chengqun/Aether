@@ -7,16 +7,14 @@
     xmlns:domain="clr-namespace:Acme.ChatSocial.Domain;assembly=Acme.ChatSocial.Domain"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters;assembly=Acme.Mobile.Shared"
     xmlns:views="clr-namespace:Acme.Mobile.Shared.Views;assembly=Acme.Mobile.Shared"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     Title="桌面助手">
 
     <ContentPage.Resources>
         <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
 
-        <!-- 我的消息：**镜像桌面端 user 文本布局**（ChatMessagesView MsgTemplate 的 IsUserText 分支）——
-             根=Grid（占满整行 cell 宽）+ 内层 Border(HorizontalOptions=End) 右对齐。
-             旧版根=HorizontalStackLayout(HorizontalOptions=End)——HorizontalStackLayout 按内容宽收缩，
-             在 iOS CollectionView 里 cell 只分配内容宽、End 无多余空间可推 → 短消息贴左「跑前面」、
-             长消息测量不一致被裁「被挡住」。Grid 永远拿 cell 全宽，内层 End 必有空间推到右边，可靠右对齐。 -->
+        <!-- 我的消息：镜像桌面端 user 文本布局——根=Grid（占满整行 cell 宽）+ 内层 Border(HorizontalOptions=End) 右对齐。
+             Grid 永远拿 cell 全宽，内层 End 必有空间推到右边，可靠右对齐（HorizontalStackLayout 收缩致 iOS 不可靠）。 -->
         <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
             <Grid Margin="12,4" HorizontalOptions="Fill">
                 <Border HorizontalOptions="End"
@@ -28,12 +26,7 @@
             </Grid>
         </DataTemplate>
 
-        <!-- 桌面消息：**镜像桌面端 AI agent 回复布局**（ChatMessagesView MsgTemplate 的 IsAgentMarkdownText 分支）——
-             全宽无框 + Markdown，不用气泡背景。桌面端是 StackPanel(HorizontalAlignment=Stretch) + SelectableMarkdownViewer(Stretch)，
-             无 Border/无圆角/无底色，markdown 直接占满整行、文字按页面底色显示。手机端等价实现：
-             Grid(Fill) + MarkdownView(Fill)——Grid（非 VSL）在 measure 期把自身全宽分配给子元素，不按子内容宽自测，
-             根治 Indiko MarkdownView 单次渲染（POCO 摘要一次性到达、无流式收敛）按内容宽自测致长行右缘被裁「被挡住」。
-             用户消息仍是右侧绿色窄气泡（对齐桌面端 bubble-user 右气泡）。 -->
+        <!-- 桌面消息：镜像桌面端 AI agent 回复布局——全宽无框 + Markdown，不用气泡背景。 -->
         <DataTemplate x:Key="DesktopTemplate" x:DataType="domain:ChatMessage">
             <Grid Margin="12,4" HorizontalOptions="Fill">
                 <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}"
@@ -48,51 +41,119 @@
     </ContentPage.Resources>
 
     <Grid RowDefinitions="*,Auto">
-        <!-- 消息列表（复用通用聊天页的消息渲染：进度心跳已被 VM 过滤，历史不残留） -->
-        <!-- ItemSizingStrategy=MeasureAllItems（关键）：iOS CollectionView 默认 MeasureFirstItem——
-             测第一个 item 的高度后复用给所有 item。本页第一条通常是用户的短气泡（MaximumWidthRequest=280，
-             行高小）→ 后续桌面端全宽 Markdown 回复被裁到该短高度「被挡住/裁切」，尤其从历史记录批量载入时必现
-             （流式逐条追加时 CollectionView 会重测故不明显）。MeasureAllItems 逐 item 自测高度，根治纵向裁切。 -->
-        <CollectionView x:Name="MessagesList"
-                        Grid.Row="0"
-                        ItemsSource="{Binding Messages}"
-                        ItemTemplate="{StaticResource ChatMessageSelector}"
-                        ItemSizingStrategy="MeasureAllItems"
-                        VerticalOptions="Fill">
-            <CollectionView.ItemsLayout>
-                <LinearItemsLayout Orientation="Vertical" />
-            </CollectionView.ItemsLayout>
-        </CollectionView>
+        <!-- 消息区容器：CollectionView + 选择器浮层 overlay（浮层只盖消息区，不挡底部 chip 行/输入框） -->
+        <Grid Grid.Row="0">
+            <!-- 消息列表（进度心跳已被 VM 过滤，历史不残留）。
+                 ItemSizingStrategy=MeasureAllItems（关键）：iOS CollectionView 默认 MeasureFirstItem，会拿第一条短气泡
+                 高度复用给所有 item，致后续全宽 Markdown 回复被裁到该短高度「被挡住」。MeasureAllItems 逐 item 自测，根治纵向裁切。 -->
+            <CollectionView x:Name="MessagesList"
+                            ItemsSource="{Binding Messages}"
+                            ItemTemplate="{StaticResource ChatMessageSelector}"
+                            ItemSizingStrategy="MeasureAllItems"
+                            VerticalOptions="Fill">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" />
+                </CollectionView.ItemsLayout>
+            </CollectionView>
 
-        <!-- 底部组合栏：设备下拉（选择电脑）上沿 + 输入栏，对齐 AI 页 agent/LLM 选择条的位置 -->
-        <VerticalStackLayout Grid.Row="1" Spacing="0"
+            <!-- 选择器下拉浮层（选择电脑）：放在消息区内、chip 行上方。
+                 sheet + 遮罩只在消息区（Row0）内，不覆盖 Row1 的 chip 行/输入框——下拉从 chip 处展开盖消息区，输入框始终可见可用（对齐 AI 页选择器浮层）。 -->
+
+            <!-- 半透明遮罩（仅覆盖消息区；关闭态 InputTransparent 穿透，点遮罩收起） -->
+            <BoxView x:Name="SheetBackdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="True">
+                <BoxView.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ClosePickerSheetCommand}" />
+                </BoxView.GestureRecognizers>
+            </BoxView>
+
+            <!-- 下拉浮层：VerticalOptions=End 锚 Row0 底（chip 上沿）+ TranslationY 移出 + 初始 IsVisible=False。
+                 MaximumHeightRequest=420（不固定高度）——内容少时按内容撑（无多余空白），内容多时封顶+滚动。
+                 内层用 ScrollView+BindableLayout.VerticalStackLayout（CollectionView 无约束高度会塌缩）。开合由 code-behind 翻转。 -->
+            <Border x:Name="PickerSheet" VerticalOptions="End" HorizontalOptions="Fill"
+                    MaximumHeightRequest="420"
+                    TranslationY="600" IsVisible="False" InputTransparent="True"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                    StrokeShape="RoundRectangle 16,16,0,0" StrokeThickness="0">
+                <VerticalStackLayout Spacing="0" Padding="0">
+                    <!-- 浮层头：标题 + ✕ 关闭 -->
+                    <Grid ColumnDefinitions="*,44" Padding="16,14,8,10">
+                        <Label Grid.Column="0" Text="{Binding PickerSheetTitle}" FontSize="16" FontFamily="OpenSansSemibold"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Button Grid.Column="1" Text="✕" FontSize="18" Padding="0" WidthRequest="44"
+                                BackgroundColor="Transparent"
+                                TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                Command="{Binding ClosePickerSheetCommand}" />
+                    </Grid>
+                    <!-- 选项列表（电脑设备），ScrollView+BindableLayout 按内容撑高。项点击 TapGestureRecognizer Tapped 事件
+                         （source-gen 下事件更稳）→ code-behind 转发 SelectPickerItemCommand。 -->
+                    <ScrollView>
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding CurrentPickerItems}" Spacing="0" Padding="0">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="model:PickerItem">
+                                    <Grid ColumnDefinitions="*,Auto" Padding="16,14" ColumnSpacing="8"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnPickerItemTapped" />
+                                        </Grid.GestureRecognizers>
+                                        <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                            <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansRegular"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                            <Label Text="{Binding Description}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                                   IsVisible="{Binding HasDescription}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="✓" FontSize="16" VerticalOptions="Center"
+                                               TextColor="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}"
+                                               IsVisible="{Binding IsSelected}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </ScrollView>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- 底部组合栏：电脑 chip + 在线/离线状态（同一行）+ 输入胶囊（主流化，对齐 AI 页豆包/千问式） -->
+        <VerticalStackLayout Grid.Row="1" Spacing="6" Padding="8,6,8,8"
                              BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-            <!-- 选择电脑下拉（多台 desktop 设备各自独立会话） -->
-            <Grid ColumnDefinitions="Auto,*" Padding="12,6,12,2" ColumnSpacing="8">
-                <Label Grid.Column="0" Text="💻" FontSize="16" VerticalOptions="Center" />
-                <Picker Grid.Column="1" Title="选择电脑"
-                        ItemsSource="{Binding Devices}"
-                        SelectedIndex="{Binding SelectedDeviceIndex}"
-                        FontSize="14"
-                        TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                        VerticalOptions="Center" />
+            <!-- chip 行：💻 电脑 chip（点弹底部 sheet 选电脑）+ 在线/离线·专家 状态紧随其后同一行
+                 （原独立只读状态行上移进 chip 行，更紧凑合理） -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="4,0">
+                <Border Grid.Column="0" Style="{StaticResource ChipBorder}" MaximumWidthRequest="180">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding OpenDevicePickerCommand}" />
+                    </Border.GestureRecognizers>
+                    <HorizontalStackLayout Spacing="4">
+                        <Label Text="💻" FontSize="14" VerticalOptions="Center" />
+                        <Label Text="{Binding CurrentDeviceName}" FontSize="13" LineBreakMode="TailTruncation" MaxLines="1"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Label Text="▾" FontSize="10" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                    </HorizontalStackLayout>
+                </Border>
+                <!-- 在线/离线 + 当前专家：只读状态，紧随电脑 chip 后同一行（服务端内存态，桌面上报，手机不可改） -->
+                <Label Grid.Column="1" Text="{Binding DesktopStatusText}" FontSize="12" Opacity="0.75"
+                       VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
             </Grid>
-            <!-- 桌面只读状态：在线/离线 + 当前选中专家名（服务端内存态，桌面上报，手机不可改） -->
-            <Label Padding="12,0,12,4" FontSize="12" Opacity="0.75"
-                   Text="{Binding DesktopStatusText}"
-                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-            <!-- 输入栏（轻控制：直接发指令给当前选中的桌面电脑） -->
-            <Border Padding="8" StrokeThickness="0">
+            <!-- 输入胶囊：圆角 pill + 弹性 Entry + 圆形 ↑ 发送。StrokeThickness=0 不走 stroke（Border stroke
+                 AppThemeBinding 会崩），靠 Shadow 做边缘 lift。 -->
+            <Border StrokeShape="RoundRectangle 20" StrokeThickness="0"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                    Padding="14,7">
+                <Border.Shadow>
+                    <Shadow Offset="0,2" Radius="8" Opacity="0.08" Brush="Black" />
+                </Border.Shadow>
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <Entry Grid.Column="0" x:Name="MessageEntry"
                            Text="{Binding MessageInput}"
                            Placeholder="发送指令给这台电脑…"
                            ReturnType="Send"
                            ReturnCommand="{Binding SendMessageCommand}" />
-                    <Button Grid.Column="1" Text="发送" Style="{StaticResource PrimaryButton}"
+                    <Button Grid.Column="1" Style="{StaticResource SendButton}"
                             Command="{Binding SendMessageCommand}"
-                            IsEnabled="{Binding HasMessageInput}"
-                            Padding="16,8" />
+                            IsEnabled="{Binding HasMessageInput}" />
                 </Grid>
             </Border>
         </VerticalStackLayout>
