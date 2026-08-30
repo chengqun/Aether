@@ -56,6 +56,10 @@ public partial class App : Application
         Routing.RegisterRoute("WorkflowCreatePage", typeof(WorkflowCreatePage));
         Routing.RegisterRoute("KnowledgeCreatePage", typeof(KnowledgeCreatePage));
 
+        // —— 连接器页（MySQL 卡，与 Qifu 同构）——
+        Routing.RegisterRoute("ConnectorPage", typeof(Acme.Mobile.Shared.Views.ConnectorPage));
+        Routing.RegisterRoute("MySqlSettingsPage", typeof(Acme.Mobile.Shared.Views.MySqlSettingsPage));
+
         return new Window(new AppShell());
     }
 }

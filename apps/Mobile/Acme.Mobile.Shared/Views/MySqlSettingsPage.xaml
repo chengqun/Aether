@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.MySqlSettingsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels.Connector;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters;assembly=Acme.Mobile.Shared"
+    x:DataType="vm:MySqlConnectorCard"
+    Title="MySQL 连接配置">
+
+    <ContentPage.Resources>
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="14" Padding="16,16,16,32">
+
+            <Label Text="配置 MySQL 直连参数。保存后对 AI 的 ExecuteSql 工具即时生效，无需重启。"
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="主机地址" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Entry Text="{Binding Host}" Placeholder="如 117.72.186.128" Keyboard="Url" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="端口" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Entry Text="{Binding Port}" Placeholder="3306" Keyboard="Numeric" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="用户名" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Entry Text="{Binding User}" Placeholder="如 root" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="密码" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Entry Text="{Binding Password}" Placeholder="（输入密码）" IsPassword="True" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="数据库" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                <Entry Text="{Binding Database}" Placeholder="如 fin_dw" />
+            </VerticalStackLayout>
+
+            <!-- 测试连接 -->
+            <HorizontalStackLayout Spacing="10" Margin="0,6,0,0">
+                <Button Text="测试连接" Style="{StaticResource PrimaryButton}"
+                        Command="{Binding ConnectCommand}"
+                        IsEnabled="{Binding IsPrimaryEnabled}" />
+                <ActivityIndicator IsRunning="{Binding IsPrimaryInProgress}" IsVisible="{Binding IsPrimaryInProgress}"
+                                   Color="{DynamicResource Primary}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <!-- 状态 -->
+            <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                <Label Text="●" FontSize="12" TextColor="Green"
+                       IsVisible="{Binding IsConnected}" VerticalOptions="Center" />
+                <Label Text="○" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                       IsVisible="{Binding IsConnected, Converter={StaticResource InverseBool}}" VerticalOptions="Center" />
+                <Label Text="{Binding StatusText}" FontSize="12"
+                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                       VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,3 +1,6 @@
+using Acme.DataQuery.AI;
+using Acme.DataQuery.Application;
+using Acme.DataQuery.Infrastructure;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Mobile.Mvvm.ViewModels;
 using Acme.Mobile.Shared.Hosting;
@@ -37,6 +40,36 @@ public static class MauiProgram
         builder.Services.AddQuotesInfrastructure(Path.Combine(tenantDir, "quotes.db"));
         builder.Services.AddQuotesApplication();
         aether.AddQuotesTools();  // QuerySecurity + CalculateIndicators（agent 工具，非 UI 页）
+
+        // —— MySQL 直连数据查询（ExecuteSql 工具 + 连接器页 MySQL 卡，与 Qifu 同构）——
+        // AddDataQueryInfrastructure 内部 AddSingleton<DataQueryOptions>()（空实例）；随后覆盖为从
+        // 手机沙盒 preferences.json 读 mysql.* 键（与桌面连接器卡同键名，复用 IAppSettings）的实例（DI 后注册 win）。
+        builder.Services.AddDataQueryInfrastructure();
+        builder.Services.AddDataQueryApplication();
+        builder.Services.AddSingleton<Acme.DataQuery.Domain.DataQueryOptions>(sp =>
+        {
+            var settings = sp.GetRequiredService<IAppSettings>();
+            var opts = new Acme.DataQuery.Domain.DataQueryOptions
+            {
+                Host = settings.GetString("mysql.host", string.Empty),
+                User = settings.GetString("mysql.user", string.Empty),
+                Password = settings.GetString("mysql.password", string.Empty),
+                Database = settings.GetString("mysql.database", string.Empty),
+            };
+            if (int.TryParse(settings.GetString("mysql.port", "3306"), out var port)) opts.Port = port;
+            return opts;
+        });
+        aether.AddDataQueryTools();  // ExecuteSql（agent 工具，Dangerous）
+
+        // —— 连接器页（MySQL 卡；毓数/云文档/mcphub 是 Qifu 专属，Stockapp 不注册→不进 DI→连接器页只显 MySQL 卡）——
+        // 卡 Singleton（MySQL 字段跨页面访问需留存）；ConnectorVM Transient（取 IEnumerable<ConnectorCardViewModel>）；
+        // MySQL 卡【具体类 Singleton + 工厂转发到基类同一实例】保证 MySqlSettingsPage 注入具体类型 + 连接器页 IEnumerable 拿到同一单例。
+        builder.Services.AddSingleton<Acme.Mobile.Mvvm.ViewModels.Connector.MySqlConnectorCard>();
+        builder.Services.AddSingleton<Acme.Mobile.Mvvm.ViewModels.Connector.ConnectorCardViewModel>(
+            sp => sp.GetRequiredService<Acme.Mobile.Mvvm.ViewModels.Connector.MySqlConnectorCard>());
+        builder.Services.AddTransient<Acme.Mobile.Mvvm.ViewModels.Connector.ConnectorViewModel>();
+        builder.Services.AddTransient<Acme.Mobile.Shared.Views.ConnectorPage>();
+        builder.Services.AddTransient<Acme.Mobile.Shared.Views.MySqlSettingsPage>();
 
         // —— ViewModel 注册（TabBar 主页 Singleton 保持状态；子页面 Transient 避免串扰）——
         builder.Services.AddSingleton<SplashViewModel>();

@@ -45,6 +45,13 @@
 		<ProjectReference Include="..\..\..\business\Quotes\Acme.Quotes.Application\Acme.Quotes.Application.csproj" />
 		<ProjectReference Include="..\..\..\business\Quotes\Acme.Quotes.Infrastructure\Acme.Quotes.Infrastructure.csproj" />
 		<ProjectReference Include="..\..\..\ai\Quotes\Acme.Quotes.AI\Acme.Quotes.AI.csproj" />
+		<!-- MySQL 直连数据查询（DataQuery 上下文，纯 net10.0 + MySqlConnector 纯 managed——手机可引）。
+		     Domain(DataQueryOptions)/Application(ISqlQueryService)/Infrastructure(MySqlSqlExecutor)/AI(ExecuteSql 工具)。
+		     与 Qifu 同构：连接器页 MySQL 卡 + AI ExecuteSql 工具。 -->
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Domain\Acme.DataQuery.Domain.csproj" />
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Application\Acme.DataQuery.Application.csproj" />
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Infrastructure\Acme.DataQuery.Infrastructure.csproj" />
+		<ProjectReference Include="..\..\..\ai\DataQuery\Acme.DataQuery.AI\Acme.DataQuery.AI.csproj" />
 	</ItemGroup>
 
 </Project>

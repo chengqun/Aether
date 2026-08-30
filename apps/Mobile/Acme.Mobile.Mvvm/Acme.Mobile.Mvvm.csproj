@@ -25,6 +25,11 @@
     <ProjectReference Include="..\..\..\business\Securities\Acme.Securities.Application\Acme.Securities.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Llm\Acme.Llm.Application\Acme.Llm.Application.csproj" />
     <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Domain\Acme.Notes.Domain.csproj" />
+    <!-- DataQuery：MySQL 直连查询（通用上下文，两租户都可注册连接器卡 + ExecuteSql 工具）。
+         VM 库只引 Domain(DataQueryOptions/DataQueryDefaults) + Application(ISqlQueryService)；Infrastructure(MySqlSqlExecutor)
+         由租户宿主注册。 -->
+    <ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Domain\Acme.DataQuery.Domain.csproj" />
+    <ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Application\Acme.DataQuery.Application.csproj" />
     <ProjectReference Include="..\..\..\business\AppUpdate\Acme.AppUpdate.Domain\Acme.AppUpdate.Domain.csproj" />
     <!-- NOTE: Qifu (Yushu/CloudDocs) is intentionally NOT referenced here — Qifu projects are
          hidden from the slnx (not synced to GitHub). AiSettingsViewModel's qifu auth deps are

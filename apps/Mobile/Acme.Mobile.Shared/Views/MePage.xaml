@@ -11,6 +11,7 @@
 
     <ContentPage.Resources>
         <conv:StringToBoolConverter x:Key="StringToBool" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
     </ContentPage.Resources>
 
     <!-- 我页：对标微信「我」——灰底 + 白卡片分组 + 矢量彩色图标（36×36 彩色圆角方块 + 白填充字形）+ 行尾矢量 › 箭头。
