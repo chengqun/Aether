@@ -109,8 +109,11 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
             if (Devices.Count > 0)
             {
                 var idx = SelectedDeviceIndex >= 0 ? SelectedDeviceIndex : 0;
-                var deviceId = Devices[idx].DeviceId;
-                _currentConversationId = await EnsureDeviceConversationAsync(deviceId);
+                var device = Devices[idx];
+                // 服务端 get-or-create-device-conversation 把 Name 设为 device.DeviceName，故本地等价回填即可，
+                // 命中缓存跳过 POST 时也有会话名。
+                ConversationName = string.IsNullOrWhiteSpace(device.DeviceName) ? "桌面助手" : device.DeviceName;
+                _currentConversationId = await EnsureDeviceConversationAsync(device.DeviceId);
                 if (version != _loadVersion) return;
 
                 SubscribeToEvents();
@@ -199,10 +202,16 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         }
     }
 
+    /// <summary>设备↔用户会话 1:1 且稳定（get-or-create 每次返回同一会话 Id）。跨 VM 实例缓存命中即跳过 POST，
+    /// 省掉服务端 GetLastMessageAsync 等全量查询——重复切换设备/重新进入页面时秒开。</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Guid> s_deviceConversationCache = new();
+
     /// <summary>按 32 位 DeviceId 建/恢复用户↔设备会话，返回会话 Id。</summary>
     private async Task<Guid> EnsureDeviceConversationAsync(string deviceId)
     {
         if (_chatService == null) return Guid.Empty;
+        if (s_deviceConversationCache.TryGetValue(deviceId, out var cached) && cached != Guid.Empty)
+            return cached;
         try
         {
             var conv = await Task.Run(() => _chatService.GetOrCreateDeviceConversationAsync(deviceId));
@@ -211,7 +220,7 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 ErrorMessage = "创建桌面会话失败";
                 return Guid.Empty;
             }
-            ConversationName = string.IsNullOrEmpty(conv.Name) ? "桌面助手" : conv.Name;
+            s_deviceConversationCache[deviceId] = conv.Id;
             return conv.Id;
         }
         catch (Exception ex)

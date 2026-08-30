@@ -90,7 +90,9 @@ public class ConversationManager : DomainService, IConversationManager
         var existing = await _conversationRepository.FirstOrDefaultAsync(c => c.ConversationKey == key);
         if (existing != null)
         {
-            // 检查用户是否仍是参与者（用户可能之前删除过会话）
+            // 检查用户与设备是否仍是参与者（用户或设备可能之前删除过会话）。对称恢复二者——
+            // 仅恢复用户会导致设备 participant 缺失 → GetUserConversationsAsync(deviceId) 取不到该会话
+            // → 桌面设备连接 OnConnectedAsync 自动 join 漏掉该会话组 → 桌面收不到手机消息。
             var userParticipantExists = await _participantRepository.AnyAsync(p =>
                 p.ConversationId == existing.Id && p.UserId == userId);
             if (!userParticipantExists)
@@ -98,6 +100,15 @@ public class ConversationManager : DomainService, IConversationManager
                 await _participantRepository.InsertAsync(
                     new AppConversationParticipant(GuidGenerator.Create(), existing.Id, userId), true);
             }
+
+            var deviceParticipantExists = await _participantRepository.AnyAsync(p =>
+                p.ConversationId == existing.Id && p.UserId == deviceId);
+            if (!deviceParticipantExists)
+            {
+                await _participantRepository.InsertAsync(
+                    new AppConversationParticipant(GuidGenerator.Create(), existing.Id, deviceId), true);
+            }
+
             return existing;
         }
 

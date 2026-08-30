@@ -6,6 +6,7 @@ using Aether.Server.Application.Contracts.DTOs.Chat;
 using Aether.Server.Application.Contracts.Services.Chat;
 using Aether.Server.Domain.Services.Chat;
 using Aether.Server.Domain.Services.Devices;
+using Aether.Server.HttpApi.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +22,7 @@ public class ChatHub : Hub
     private readonly IChatAppService _chatAppService;
     private readonly IChatNotifier _chatNotifier;
     private readonly IDeviceManager _deviceManager;
+    private readonly IDeviceConnectionTracker _deviceConnectionTracker;
     private readonly ILogger<ChatHub> _logger;
 
     public ChatHub(
@@ -28,12 +30,14 @@ public class ChatHub : Hub
         IChatAppService chatAppService,
         IChatNotifier chatNotifier,
         IDeviceManager deviceManager,
+        IDeviceConnectionTracker deviceConnectionTracker,
         ILogger<ChatHub> logger)
     {
         _conversationManager = conversationManager;
         _chatAppService = chatAppService;
         _chatNotifier = chatNotifier;
         _deviceManager = deviceManager;
+        _deviceConnectionTracker = deviceConnectionTracker;
         _logger = logger;
     }
 
@@ -52,6 +56,11 @@ public class ChatHub : Hub
             _logger.LogInformation("连接 {ConnectionId} 认证成功，IdentityId: {IdentityId}，IsDevice: {IsDevice}",
                 Context.ConnectionId, identityId, IsDeviceConnection());
 
+            // 设备连接登记到追踪器：设备无 sub claim，Clients.User 触达不了，
+            // 需追踪器让服务端能主动把已连接设备拉进新建会话的 SignalR 组。
+            if (IsDeviceConnection())
+                _deviceConnectionTracker.Register(identityId.Value, Context.ConnectionId);
+
             var conversations = await _conversationManager.GetUserConversationsAsync(identityId.Value);
             foreach (var conversation in conversations)
             {
@@ -66,6 +75,13 @@ public class ChatHub : Hub
         }
 
         await base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        // 连接断开注销追踪（按 connectionId 反查 deviceId；非设备连接或未登记则无操作）。
+        _deviceConnectionTracker.Unregister(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
     }
 
     /// <summary>

@@ -34,6 +34,9 @@ public class AbpHttpApiModule : AbpModule
         ConfigureAutoApiControllers();
 
         context.Services.AddSingleton<IChatNotifier, SignalRChatNotifier>();
+        // 设备 SignalR 连接追踪：设备经 authorizationCode 连接（无 sub claim，Clients.User 触达不了），
+        // 需主动追踪连接以便服务端把已连接设备拉进会话组。
+        context.Services.AddSingleton<IDeviceConnectionTracker, DeviceConnectionTracker>();
     }
     
     private void ConfigureAutoApiControllers()

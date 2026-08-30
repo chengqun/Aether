@@ -124,6 +124,11 @@ public class ChatAppService : ApplicationService, IChatAppService
 
         var conversation = await _conversationManager.GetOrCreateDeviceConversationAsync(userId, device.Id);
 
+        // 关闭竞态：设备经 authorizationCode 连接（无 sub claim，Clients.User 触达不了），若桌面先连、
+        // 手机后建/恢复会话，桌面不在 conv_{id} 组里收不到消息。手机 ensure 会话时主动把已连接的桌面
+        // 连接拉进组，确保首条消息送达；桌面连接晚于会话创建时由 OnConnectedAsync 自动 join 兜底。
+        await _chatNotifier.EnsureDeviceConnectionsJoinedAsync(conversation.Id, device.Id);
+
         var participant = await _participantRepository.FirstOrDefaultAsync(p =>
             p.ConversationId == conversation.Id && p.UserId == userId);
         var lastMessage = await GetLastMessageAsync(conversation.Id);
@@ -207,8 +212,14 @@ public class ChatAppService : ApplicationService, IChatAppService
         var userId = CurrentUser.Id!.Value;
         await _conversationManager.EnsureParticipantAsync(conversationId, userId);
 
-        var messages = await _messageRepository.GetListAsync(m => m.ConversationId == conversationId);
-        var ordered = messages.OrderByDescending(m => m.SentAt).Skip(skipCount).Take(maxResultCount).ToList();
+        // DB-level 分页：旧实现 GetListAsync 把整段会话消息全拉进内存再 LINQ OrderByDescending+Skip+Take，
+        // maxResultCount=50 的分页参数根本没下到 DB。会话越长越慢。改走可查询 + DB 排序分页。
+        var query = await _messageRepository.GetQueryableAsync();
+        var ordered = await AsyncExecuter.ToListAsync(
+            query.Where(m => m.ConversationId == conversationId)
+                 .OrderByDescending(m => m.SentAt)
+                 .Skip(skipCount)
+                 .Take(maxResultCount));
 
         // 批量解析发送者名（修 N+1：一次查用户表 + 一次查设备表，替代逐条 await）
         var nameMap = await ResolveNamesBatchAsync(ordered.Select(m => m.SenderId));
@@ -245,15 +256,17 @@ public class ChatAppService : ApplicationService, IChatAppService
 
         DateTime? lastReadAt = participant?.LastReadAt;
 
-        var messages = await _messageRepository.GetListAsync(m => m.ConversationId == conversationId);
-        var unreadMessages = lastReadAt.HasValue
-            ? messages.Where(m => m.SentAt > lastReadAt.Value).ToList()
-            : messages.ToList();
+        // DB-level 过滤：旧实现 GetListAsync 全量加载会话消息进内存再 LINQ 过滤未读，会话越长越慢。
+        var query = await _messageRepository.GetQueryableAsync();
+        var unreadQuery = lastReadAt.HasValue
+            ? query.Where(m => m.ConversationId == conversationId && m.SentAt > lastReadAt.Value)
+            : query.Where(m => m.ConversationId == conversationId);
+        var unreadMessages = await AsyncExecuter.ToListAsync(unreadQuery.OrderBy(m => m.SentAt));
 
         await _conversationManager.MarkAsReadAsync(conversationId, userId);
         await _chatNotifier.NotifyUnreadCountUpdatedAsync(conversationId, userId, 0);
 
-        var sortedUnread = unreadMessages.OrderBy(m => m.SentAt).ToList();
+        var sortedUnread = unreadMessages; // 已按 SentAt 排序（DB 层 OrderBy）
         var nameMap = await ResolveNamesBatchAsync(sortedUnread.Select(m => m.SenderId));
 
         var dtos = new List<ChatMessageDto>();
@@ -352,8 +365,12 @@ public class ChatAppService : ApplicationService, IChatAppService
 
     private async Task<AppChatMessage?> GetLastMessageAsync(Guid conversationId)
     {
-        var messages = await _messageRepository.GetListAsync(m => m.ConversationId == conversationId);
-        return messages.OrderByDescending(m => m.SentAt).FirstOrDefault();
+        // DB-level TOP 1：旧实现 GetListAsync 把整段会话消息全拉进内存再 OrderByDescending 取首条，
+        // 会话越长越慢（设备对话累积大量 Progress/ApprovalDecision 过程态消息）。改走可查询 + DB 排序取首条。
+        var query = await _messageRepository.GetQueryableAsync();
+        return await AsyncExecuter.FirstOrDefaultAsync(
+            query.Where(m => m.ConversationId == conversationId)
+                 .OrderByDescending(m => m.SentAt));
     }
 
     private async Task<string> ResolveNameAsync(Guid identityId)
