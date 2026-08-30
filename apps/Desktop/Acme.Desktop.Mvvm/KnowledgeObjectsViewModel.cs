@@ -45,6 +45,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private bool _isSkillsRoot;
     /// <summary>当前选中是否为 mcp-servers 根目录（右栏内嵌 MCP 管理面板，镜像专家页 MCP tab）。</summary>
     private bool _isMcpRoot;
+    /// <summary>当前选中是否为「可平铺卡片」的类型目录根（agents/workflows/rules/coderules/knowledge/strategies/
+    /// codestrategies/leanalgorithms）——右栏内嵌文件卡片网格（对齐 skills/mcp 的「点根目录 → 卡片」范式）。</summary>
+    private bool _isFileCardsRoot;
+    /// <summary>文件卡片根目录对应的类型（<see cref="_isFileCardsRoot"/> 为 true 时非 null）。</summary>
+    private NoteNodeType? _fileCardsType;
     /// <summary>README 的 markdown 文案（上栏预览绑定源；ObservableProperty 驱动 SelectableMarkdownViewer 重渲染）。</summary>
     [ObservableProperty] private string _readmeMarkdown = string.Empty;
 
@@ -181,6 +186,22 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>MCP 工具 tab VM（DI 单例，懒解析）。mcp-servers 根目录选中时 labs 右栏内嵌其管理面板 + 触发 EnsureLoadedAsync 刷新。</summary>
     public McpViewModel? McpVm => _mcpVm ??= ServiceProvider.GetService<McpViewModel>();
 
+    /// <summary>当前选中的类型目录根是否显示文件卡片网格（而非展开树）。drive View 覆盖显示 <c>FileCardsView</c>。</summary>
+    public bool IsFileCardsRoot => _isFileCardsRoot;
+
+    private FileCardsViewModel? _fileCardsVm;
+    /// <summary>文件卡片 VM（懒建，纯容器——卡片数据由 <see cref="_isFileCardsRoot"/>/<see cref="BuildFileCardsAsync"/> 注入）。
+    /// 根目录选中时 labs 右栏内嵌 + 触发 BuildFileCardsAsync 刷新。</summary>
+    public FileCardsViewModel? FileCardsVm
+    {
+        get
+        {
+            if (!_isFileCardsRoot) return null;
+            return _fileCardsVm ??= new FileCardsViewModel(
+                ServiceProvider.GetRequiredService<IUiDispatcher>());
+        }
+    }
+
     /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏；skills/mcp 根目录走卡片/面板。</summary>
     public bool HasRightPane => (IsFormNode || IsReadme) && !IsSkillsRoot && !IsMcpRoot;
 
@@ -214,6 +235,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsReadme));
         OnPropertyChanged(nameof(IsSkillsRoot));
         OnPropertyChanged(nameof(IsMcpRoot));
+        OnPropertyChanged(nameof(IsFileCardsRoot));
+        OnPropertyChanged(nameof(FileCardsVm));
         OnPropertyChanged(nameof(HasRightPane));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
@@ -249,6 +272,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     {
         _isSkillsRoot = value is { IsFolder: true } && IsSkillsRootFolder(value);
         _isMcpRoot = value is { IsFolder: true } && IsMcpRootFolder(value);
+        _isFileCardsRoot = value is { IsFolder: true } && IsFileCardsRootFolder(value);
+        _fileCardsType = _isFileCardsRoot ? ResolveDirType(value!.Path) : null;
+        _fileCardsVm = null; // 类型目录根切换/选中变化 → 重建（懒建在上次类型，须清空避免串类型）
         RaiseLayout();
         if (value is null) return;
         if (value.IsFolder)
@@ -273,6 +299,17 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 _activePath = null;
                 ActiveEditVm = null;
                 McpVm?.EnsureLoadedAsync().SafeFireAndForget();
+                return;
+            }
+            if (_isFileCardsRoot)
+            {
+                // 类型目录根（agents/workflows/rules/coderules/knowledge/strategies/...）→ 右栏内嵌资产卡片网格。
+                // 清旧活动文件态（防旧源码/表单残留）；BuildFileCardsAsync 后台扫目录 + 解析 front-matter 取 name/description。
+                _isReadme = false;
+                ReadmeMarkdown = string.Empty;
+                _activePath = null;
+                ActiveEditVm = null;
+                if (_fileCardsType is { } ct) BuildFileCardsAsync(ct).SafeFireAndForget();
                 return;
             }
             OpenFolderReadmeAsync(value.Path).SafeFireAndForget();
@@ -322,6 +359,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _activeType = type;
         _isSkillsRoot = false;
         _isMcpRoot = false;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
         _isReadme = false;
         ReadmeMarkdown = string.Empty;
         _currentSource = content;
@@ -655,6 +695,106 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         catch { return false; }
     }
 
+    /// <summary>是否为「可平铺卡片」的类型目录根（labs 根的直接子目录，且目录名映射为
+    /// agent/workflow/rule/coderule/knowledge/strategy/codestrategy/leanalgorithm——不含 skills/mcp，
+    /// 两者走各自专属面板）。这些类型目录点根时右栏平铺该类型直辖文件的卡片（对齐 skills/mcp 范式）。</summary>
+    private bool IsFileCardsRootFolder(FileNode node)
+    {
+        if (!node.IsFolder || string.IsNullOrEmpty(RootPath)) return false;
+        var type = ResolveDirType(node.Path);
+        if (type is null) return false;
+        if (type is NoteNodeType.Skill or NoteNodeType.McpServer or NoteNodeType.Note) return false;
+        try
+        {
+            var rel = Path.GetRelativePath(RootPath, node.Path);
+            return rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length == 1;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>为类型目录根构建资产卡片（后台扫文件 + 解析 front-matter 取 name/description，路径保留供点开）。
+    /// agent/rule/coderule/workflow 经各自 parser 解析（name/description/category 真值）；
+    /// knowledge 文件名 stem 为 name、<c>kind</c> 为描述；策略族/其它无 name 字段 → 文件名 stem 为 name、无描述。</summary>
+    private async Task BuildFileCardsAsync(NoteNodeType type)
+    {
+        var root = RootPath;
+        if (string.IsNullOrWhiteSpace(root)) return;
+        var cards = await Task.Run(() =>
+        {
+            var list = new List<FileCardItem>();
+            var (dir, ext) = CatalogNoteDirectory.For(type);
+            var fullDir = Path.Combine(root, dir);
+            if (!Directory.Exists(fullDir)) return list;
+            foreach (var file in Directory.EnumerateFiles(fullDir, "*" + ext)
+                         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            {
+                var name = StripCompound(Path.GetFileName(file), ext); // 显示名默认=文件名 stem
+                var card = new FileCardItem { Name = name, Path = file };
+                string content;
+                try { content = File.ReadAllText(file); } catch { list.Add(card); continue; }
+
+                switch (type)
+                {
+                    case NoteNodeType.Agent:
+                        var ap = ServiceProvider.GetService<IAgentSourceParser>();
+                        if (ap is not null && ap.TryParse(content, out var adef, out _) && adef is not null)
+                            card = new FileCardItem
+                            {
+                                Name = string.IsNullOrWhiteSpace(adef.Name) ? name : adef.Name,
+                                Description = adef.Description ?? string.Empty,
+                                Category = adef.Category,
+                                Path = file,
+                            };
+                        break;
+                    case NoteNodeType.Rule:
+                        var rp = ServiceProvider.GetService<IRuleSourceParser>();
+                        if (rp is not null && rp.TryParse(content, out var rdef, out _) && rdef is not null)
+                            card = new FileCardItem
+                            {
+                                Name = string.IsNullOrWhiteSpace(rdef.Name) ? name : rdef.Name,
+                                Description = rdef.Description ?? string.Empty,
+                                Category = rdef.Category,
+                                Path = file,
+                            };
+                        break;
+                    case NoteNodeType.CodeRule:
+                        var cp = ServiceProvider.GetService<ICodeSourceParser>();
+                        if (cp is not null && cp.TryParse(content, out var cdef, out _) && cdef is not null)
+                            card = new FileCardItem
+                            {
+                                Name = string.IsNullOrWhiteSpace(cdef.Name) ? name : cdef.Name,
+                                Description = cdef.Description ?? string.Empty,
+                                Category = cdef.Category,
+                                Path = file,
+                            };
+                        break;
+                    case NoteNodeType.Workflow:
+                        var wp = ServiceProvider.GetService<IWorkflowSourceParser>();
+                        if (wp is not null && wp.TryParse(content, out var wdef, out _) && wdef is not null)
+                            card = new FileCardItem
+                            {
+                                Name = string.IsNullOrWhiteSpace(wdef.Name) ? name : wdef.Name,
+                                Description = wdef.Description ?? string.Empty,
+                                Category = wdef.Category,
+                                Path = file,
+                            };
+                        break;
+                    case NoteNodeType.Knowledge:
+                        var kp = ServiceProvider.GetService<IDocumentKnowledgeSourceParser>();
+                        if (kp is not null && kp.TryParse(content, out var kdef, out _) && kdef is not null)
+                            card = new FileCardItem { Name = name, Description = kdef.Kind, Path = file };
+                        break;
+                    // Strategy/CodeStrategy/LeanAlgorithm/其它：无 name/description 字段 → 文件名 stem。
+                }
+                list.Add(card);
+            }
+            return list;
+        }).ConfigureAwait(false);
+
+        if (FileCardsVm is { } fvm)
+            await fvm.LoadAsync(cards, NoteNodeTypeRegistry.Get(type).Display);
+    }
+
     /// <summary>目录是否在 knowledge 类型子树下（相对根的首段目录名映射为 <see cref="NoteNodeType.Knowledge"/>）。
     /// 与 <see cref="ResolveType"/> 同构（首段即类型），故 knowledge/ 下任意深度的 README 均判为知识对象。</summary>
     private bool IsKnowledgeSubtree(string folderPath)
@@ -705,6 +845,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         ActiveEditVm = null;
         _activePath = readmePath;
         _activeType = NoteNodeType.Note;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
         _isReadme = true; // markdown 上预览 + 下源码两栏
         ReadmeMarkdown = content;
         _currentSource = content;
@@ -920,6 +1063,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _activePath = null;
         _activeType = null;
         _isReadme = false;
+        _isSkillsRoot = false;
+        _isMcpRoot = false;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
         ReadmeMarkdown = string.Empty;
         _currentSource = string.Empty;
         IsDirty = false;

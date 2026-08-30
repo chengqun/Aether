@@ -53,6 +53,8 @@ public partial class KnowledgeObjectsView : UserControl
             CodeEditorSetup.ConfigureAppearance(CodeEditor);
             SyncEditor();
         };
+        // 文件卡片「打开」→ 转调 VM 打开该文件（经 OpenKnowledgeByPathAsync，与右键「打开」同链路）。
+        FileCards.OpenFileRequested += path => _vm?.OpenKnowledgeByPathAsync(path).SafeFireAndForget();
         // 主题明暗切换 + 主题 JSON 换肤时重染编辑器（.md=markdown 高亮随两信号重设）。
         CodeEditorSetup.WireThemeReapply(CodeEditor, () =>
         {

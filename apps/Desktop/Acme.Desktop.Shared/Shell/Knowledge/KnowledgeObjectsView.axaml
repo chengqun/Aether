@@ -102,6 +102,14 @@
               Background="{DynamicResource CardBgBrush}">
         <shell:McpView DataContext="{Binding McpVm}"/>
       </Border>
+
+      <!-- 其它类型目录根（agents/workflows/rules/coderules/knowledge/strategies/codestrategies/leanalgorithms）：
+           文件卡片网格（对齐 skills/mcp 的「点根目录 → 卡片」范式），跨满 EditorGrid 覆盖空态。
+           点卡片「→」打开文件进两栏 form/全宽源码编辑器。 -->
+      <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsFileCardsRoot}"
+              Background="{DynamicResource CardBgBrush}">
+        <shell:FileCardsView x:Name="FileCards" DataContext="{Binding FileCardsVm}"/>
+      </Border>
     </Grid>
   </Grid>
 </UserControl>
