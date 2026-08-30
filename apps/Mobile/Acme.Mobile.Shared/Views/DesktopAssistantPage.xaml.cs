@@ -5,15 +5,15 @@ using Acme.Mobile.Mvvm.ViewModels;
 namespace Acme.Mobile.Shared.Views;
 
 /// <summary>
-/// 桌面助手页（专用薄壳）：顶部「选择电脑」下拉 + 复用 <see cref="ChatDetailViewModel"/> 的设备会话链路。
-/// 「一个 AI，两个运行位置」里的「桌面」位——多台 desktop 设备各自独立会话，下拉切换。
-/// 消息渲染/心跳过滤/离线补拉/审批全部复用 ChatDetailViewModel，本页只增设备选择 UI。
+/// 桌面助手页：手机远程控制桌面 agent 的独立功能入口。
+/// 顶部「选择电脑」下拉 + 消息列表 + 输入栏。绑定独立 <see cref="DesktopAssistantViewModel"/>
+/// （不复用社交聊天 <see cref="ChatDetailViewModel"/>）。
 /// </summary>
-public partial class DesktopAssistantPage : ContentPage, IQueryAttributable
+public partial class DesktopAssistantPage : ContentPage
 {
-    private readonly ChatDetailViewModel _vm;
+    private readonly DesktopAssistantViewModel _vm;
 
-    public DesktopAssistantPage(ChatDetailViewModel viewModel)
+    public DesktopAssistantPage(DesktopAssistantViewModel viewModel)
     {
         InitializeComponent();
         _vm = viewModel;
@@ -23,38 +23,15 @@ public partial class DesktopAssistantPage : ContentPage, IQueryAttributable
         _vm.PropertyChanged += OnVmPropertyChanged;
     }
 
-    /// <summary>
-    /// 接收导航 query：AI 页 💻 入口传入初始设备（pendingContactId + pendingContactType=设备）。
-    /// 置桌面助手模式标志，让 VM 加载 desktop 设备列表。
-    /// </summary>
-    public void ApplyQueryAttributes(IDictionary<string, object> query)
-    {
-        _vm.IsDesktopAssistant = true;
-
-        if (query.TryGetValue("pendingContactId", out var cid) && cid != null)
-            _vm.PendingContactId = cid.ToString()!;
-
-        if (query.TryGetValue("pendingContactType", out var ct) && ct != null)
-            _vm.PendingContactType = ct.ToString()!;
-        else
-            _vm.PendingContactType = "设备";
-
-        if (query.TryGetValue("conversationName", out var convName) && convName != null)
-            _vm.ConversationName = convName.ToString()!;
-        else
-            _vm.ConversationName = "桌面助手";
-    }
-
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ChatDetailViewModel.ConversationName))
+        if (e.PropertyName == nameof(DesktopAssistantViewModel.ConversationName))
             Title = _vm.ConversationName;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _vm.IsVoiceMode = false; // 桌面助手无语音输入（轻控制）
         Title = _vm.ConversationName;
         await _vm.OnActivatedAsync();
         await ScrollToBottomAsync();

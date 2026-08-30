@@ -23,8 +23,8 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 对方消息：左侧气泡 + Markdown（桌面 agent 概览摘要走此模板） -->
-        <DataTemplate x:Key="OtherTemplate" x:DataType="domain:ChatMessage">
+        <!-- 桌面消息：左侧气泡 + Markdown（桌面 agent 概览摘要/结果走此模板） -->
+        <DataTemplate x:Key="DesktopTemplate" x:DataType="domain:ChatMessage">
             <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
@@ -34,9 +34,9 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <views:HumanChatMessageTemplateSelector x:Key="ChatMessageSelector"
+        <views:DesktopAssistantTemplateSelector x:Key="ChatMessageSelector"
             MineTemplate="{StaticResource MineTemplate}"
-            OtherTemplate="{StaticResource OtherTemplate}" />
+            DesktopTemplate="{StaticResource DesktopTemplate}" />
     </ContentPage.Resources>
 
     <Grid RowDefinitions="*,Auto">

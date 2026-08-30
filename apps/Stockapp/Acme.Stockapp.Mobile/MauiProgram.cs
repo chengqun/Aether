@@ -53,6 +53,7 @@ public static class MauiProgram
         builder.Services.AddTransient<AgentChatDetailViewModel>();
         builder.Services.AddTransient<AgentPickerViewModel>();
         builder.Services.AddTransient<ChatDetailViewModel>();
+        builder.Services.AddTransient<DesktopAssistantViewModel>();
         builder.Services.AddTransient<ContactDetailViewModel>();
         builder.Services.AddTransient<ContactMomentsViewModel>();
         builder.Services.AddTransient<MomentsViewModel>();

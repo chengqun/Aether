@@ -210,10 +210,14 @@ public class ChatAppService : ApplicationService, IChatAppService
         var messages = await _messageRepository.GetListAsync(m => m.ConversationId == conversationId);
         var ordered = messages.OrderByDescending(m => m.SentAt).Skip(skipCount).Take(maxResultCount).ToList();
 
+        // 批量解析发送者名（修 N+1：一次查用户表 + 一次查设备表，替代逐条 await）
+        var nameMap = await ResolveNamesBatchAsync(ordered.Select(m => m.SenderId));
+
         var dtos = new List<ChatMessageDto>();
         foreach (var msg in ordered)
         {
-            var senderName = await ResolveNameAsync(msg.SenderId);
+            nameMap.TryGetValue(msg.SenderId, out var senderName);
+            if (string.IsNullOrEmpty(senderName)) senderName = "未知用户";
             dtos.Add(new ChatMessageDto
             {
                 Id = msg.Id,
@@ -249,10 +253,14 @@ public class ChatAppService : ApplicationService, IChatAppService
         await _conversationManager.MarkAsReadAsync(conversationId, userId);
         await _chatNotifier.NotifyUnreadCountUpdatedAsync(conversationId, userId, 0);
 
+        var sortedUnread = unreadMessages.OrderBy(m => m.SentAt).ToList();
+        var nameMap = await ResolveNamesBatchAsync(sortedUnread.Select(m => m.SenderId));
+
         var dtos = new List<ChatMessageDto>();
-        foreach (var msg in unreadMessages.OrderBy(m => m.SentAt))
+        foreach (var msg in sortedUnread)
         {
-            var senderName = await ResolveNameAsync(msg.SenderId);
+            nameMap.TryGetValue(msg.SenderId, out var senderName);
+            if (string.IsNullOrEmpty(senderName)) senderName = "未知用户";
             dtos.Add(new ChatMessageDto
             {
                 Id = msg.Id,
@@ -360,5 +368,32 @@ public class ChatAppService : ApplicationService, IChatAppService
             return device.DeviceName;
 
         return "未知用户";
+    }
+
+    /// <summary>
+    /// 批量解析发送者名：一次性查用户表 + 设备表（各一次 DB 往返），替代逐条 <see cref="ResolveNameAsync"/> 的 N+1。
+    /// 设备消息 SenderId = AppDevice.Id（非 DeviceId 字符串），故按 Id 匹配；未命中用户再查设备。
+    /// </summary>
+    private async Task<Dictionary<Guid, string>> ResolveNamesBatchAsync(IEnumerable<Guid> identityIds)
+    {
+        var distinct = identityIds.Distinct().ToList();
+        var nameMap = new Dictionary<Guid, string>();
+
+        // 1. 批量查用户（EF 翻译为 IN 子句）
+        var users = await _userRepository.GetListAsync(u => distinct.Contains(u.Id));
+        foreach (var u in users)
+            nameMap[u.Id] = u.UserName ?? "未知用户";
+
+        // 2. 剩余未命中用户的 id 批量查设备（设备消息发送者在用户表查不到）
+        var unresolved = distinct.Where(id => !nameMap.ContainsKey(id)).ToList();
+        if (unresolved.Count > 0)
+        {
+            var deviceRepo = LazyServiceProvider.LazyGetRequiredService<IRepository<AppDevice, Guid>>();
+            var devices = await deviceRepo.GetListAsync(d => unresolved.Contains(d.Id));
+            foreach (var d in devices)
+                nameMap[d.Id] = d.DeviceName ?? "设备";
+        }
+
+        return nameMap;
     }
 }
