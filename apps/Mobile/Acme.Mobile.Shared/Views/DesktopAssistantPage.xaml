@@ -11,6 +11,7 @@
 
     <ContentPage.Resources>
         <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
+        <conv:NotNullConverter x:Key="NotNull" />
 
         <!-- 我的消息：右侧绿色气泡 -->
         <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
@@ -39,10 +40,17 @@
             DesktopTemplate="{StaticResource DesktopTemplate}" />
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="*,Auto">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- ⚠️ 临时诊断条：实时收不到回复时显示 SignalR 连接态/消息事件，确认后移除 -->
+        <Label Grid.Row="0" Text="{Binding SignalRDebug}" FontSize="11" Opacity="0.75"
+               Padding="12,4" LineBreakMode="TailTruncation"
+               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+               BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
+               IsVisible="{Binding SignalRDebug, Converter={StaticResource NotNull}}" />
+
         <!-- 消息列表（复用通用聊天页的消息渲染：进度心跳已被 VM 过滤，历史不残留） -->
         <CollectionView x:Name="MessagesList"
-                        Grid.Row="0"
+                        Grid.Row="1"
                         ItemsSource="{Binding Messages}"
                         ItemTemplate="{StaticResource ChatMessageSelector}"
                         VerticalOptions="Fill">
@@ -52,7 +60,7 @@
         </CollectionView>
 
         <!-- 底部组合栏：设备下拉（选择电脑）上沿 + 输入栏，对齐 AI 页 agent/LLM 选择条的位置 -->
-        <VerticalStackLayout Grid.Row="1" Spacing="0"
+        <VerticalStackLayout Grid.Row="2" Spacing="0"
                              BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
             <!-- 选择电脑下拉（多台 desktop 设备各自独立会话） -->
             <Grid ColumnDefinitions="Auto,*" Padding="12,6,12,2" ColumnSpacing="8">
