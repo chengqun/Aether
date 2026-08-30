@@ -159,6 +159,12 @@ public class ChatAppService : ApplicationService, IChatAppService
 
         foreach (var conv in conversations)
         {
+            // 设备会话（桌面助手）不进社交会话列表——它是独立功能入口（桌面助手页按 deviceId
+            // 经 GetOrCreateDeviceConversationAsync 自取会话），混进来既污染列表又让用户无法区分。
+            // 用 ConversationKey 的 "device_" 前缀判定（与 ResurrectParticipantsAsync 同一约定）。
+            if (conv.ConversationKey.StartsWith("device_"))
+                continue;
+
             var participant = await _participantRepository.FirstOrDefaultAsync(p =>
                 p.ConversationId == conv.Id && p.UserId == userId);
             var lastMessage = await GetLastMessageAsync(conv.Id);

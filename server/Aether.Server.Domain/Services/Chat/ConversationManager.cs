@@ -115,9 +115,7 @@ public class ConversationManager : DomainService, IConversationManager
         var conversation = new AppConversation(
             GuidGenerator.Create(),
             ConversationType.Direct,
-            key,
-            deviceId,
-            null
+            key
         );
 
         await _conversationRepository.InsertAsync(conversation, true);
@@ -201,7 +199,21 @@ public class ConversationManager : DomainService, IConversationManager
     public async Task<int> GetTotalUnreadCountAsync(Guid userId)
     {
         var participants = await _participantRepository.GetListAsync(p => p.UserId == userId);
-        return participants.Sum(p => p.UnreadCount);
+        if (participants.Count == 0)
+            return 0;
+
+        // 排除设备会话（桌面助手）的未读——它不进社交列表，未读也不该计入社交总未读角标
+        // （否则角标数着一个列表里看不见的会话）。用 ConversationKey 的 "device_" 前缀判定。
+        var conversationIds = participants.Select(p => p.ConversationId).ToList();
+        var conversations = await _conversationRepository.GetListAsync(c => conversationIds.Contains(c.Id));
+        var deviceConvIds = conversations
+            .Where(c => c.ConversationKey.StartsWith("device_"))
+            .Select(c => c.Id)
+            .ToHashSet();
+
+        return participants
+            .Where(p => !deviceConvIds.Contains(p.ConversationId))
+            .Sum(p => p.UnreadCount);
     }
 
     public async Task<AppConversationParticipant> AddParticipantAsync(Guid conversationId, Guid userId,

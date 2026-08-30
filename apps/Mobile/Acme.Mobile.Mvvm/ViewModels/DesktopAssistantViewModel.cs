@@ -132,6 +132,9 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 if (version != _loadVersion) return;
                 await JoinConversationGroupAsync(_currentConversationId);
                 await LoadMessagesAsync(version);
+                // 重置未读角标：历史未读（含之前未实时收到期间累积）在加载后清零。
+                // 实时到达的消息由 OnNewMessage 单独标记已读；此处理会话期间离开又回来的累积。
+                await MarkAsReadAsync();
             }
             else
             {
