@@ -1,14 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Aether.Server.Application.Contracts.DTOs.Chat;
 using Aether.Server.Application.Contracts.Services.Chat;
+using Aether.Server.Domain.Entities;
 using Aether.Server.Domain.Services.Chat;
 using Aether.Server.Domain.Services.Devices;
 using Aether.Server.HttpApi.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace Aether.Server.HttpApi.Hubs;
 
@@ -23,6 +27,8 @@ public class ChatHub : Hub
     private readonly IChatNotifier _chatNotifier;
     private readonly IDeviceManager _deviceManager;
     private readonly IDeviceConnectionTracker _deviceConnectionTracker;
+    private readonly IRepository<IdentityUser, Guid> _userRepository;
+    private readonly IRepository<AppDevice, Guid> _deviceRepository;
     private readonly ILogger<ChatHub> _logger;
 
     public ChatHub(
@@ -31,6 +37,8 @@ public class ChatHub : Hub
         IChatNotifier chatNotifier,
         IDeviceManager deviceManager,
         IDeviceConnectionTracker deviceConnectionTracker,
+        IRepository<IdentityUser, Guid> userRepository,
+        IRepository<AppDevice, Guid> deviceRepository,
         ILogger<ChatHub> logger)
     {
         _conversationManager = conversationManager;
@@ -38,6 +46,8 @@ public class ChatHub : Hub
         _chatNotifier = chatNotifier;
         _deviceManager = deviceManager;
         _deviceConnectionTracker = deviceConnectionTracker;
+        _userRepository = userRepository;
+        _deviceRepository = deviceRepository;
         _logger = logger;
     }
 
@@ -155,6 +165,84 @@ public class ChatHub : Hub
     }
 
     /// <summary>
+    /// 设备上报当前选中的专家/目标显示名（供手机只读状态显示）。仅设备连接可用。
+    /// 桌面端在目标切换 +（重）连接成功后调用，让手机能看「桌面当前会用哪个专家回」。
+    /// </summary>
+    public async Task ReportSelectedAgent(string? agentName)
+    {
+        var deviceId = await GetIdentityIdOrThrowAsync();
+        if (!IsDeviceConnection()) return;
+        _deviceConnectionTracker.SetSelectedAgent(deviceId, agentName);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 手机查询某台桌面电脑的在线状态 + 当前选中专家名（只读）。
+    /// deviceId 参数是 32 位 DeviceId 字符串（手机端既有字段），服务端反查主键 + 校验归属。
+    /// 返回 { IsOnline, SelectedAgentName }；设备从未上报过 SelectedAgentName 为空。
+    /// </summary>
+    public async Task<object?> GetDeviceStatus(string deviceId)
+    {
+        var userId = await GetIdentityIdOrThrowAsync();
+        if (IsDeviceConnection()) return null;  // 仅用户连接可查（手机端 JWT）
+        if (string.IsNullOrWhiteSpace(deviceId)) return null;
+
+        var device = await _deviceManager.GetDeviceByDeviceIdAsync(deviceId, userId);
+        if (device == null) return null;
+
+        var isOnline = _deviceConnectionTracker.GetConnections(device.Id).Count > 0;
+        var agentName = _deviceConnectionTracker.GetSelectedAgent(device.Id) ?? string.Empty;
+        return new { IsOnline = isOnline, SelectedAgentName = agentName };
+    }
+
+    /// <summary>
+    /// 设备补拉离线消息：返回该设备各会话中「最后一条未被设备回复的用户消息」（每会话至多一条）。
+    /// 桌面端离线期间手机发的消息已持久化但实时广播丢失——重连/冷启动后调用此方法取回并回放，
+    /// 避免老板「发了没反应」。仅设备连接可用。
+    /// </summary>
+    public async Task<List<ChatMessageDto>> GetCatchUpMessages()
+    {
+        var deviceId = await GetIdentityIdOrThrowAsync();
+        if (!IsDeviceConnection())
+            return new List<ChatMessageDto>();
+
+        var messages = await _conversationManager.GetCatchUpMessagesAsync(deviceId);
+        if (messages.Count == 0)
+            return new List<ChatMessageDto>();
+
+        var nameMap = await ResolveNamesBatchAsync(messages.Select(m => m.SenderId).Distinct());
+        return messages.Select(m => new ChatMessageDto
+        {
+            Id = m.Id,
+            ConversationId = m.ConversationId,
+            SenderId = m.SenderId,
+            SenderName = nameMap.TryGetValue(m.SenderId, out var n) ? n : "用户",
+            Content = m.Content,
+            MessageType = m.MessageType,
+            SentAt = m.SentAt,
+            IsMine = false
+        }).ToList();
+    }
+
+    /// <summary>批量解析发送者名（用户表 + 设备表各一次查询）。镜像 ChatAppService.ResolveNamesBatchAsync。</summary>
+    private async Task<Dictionary<Guid, string>> ResolveNamesBatchAsync(IEnumerable<Guid> identityIds)
+    {
+        var ids = identityIds.ToList();
+        var map = new Dictionary<Guid, string>();
+        var users = await _userRepository.GetListAsync(u => ids.Contains(u.Id));
+        foreach (var u in users)
+            map[u.Id] = u.UserName;
+        var missing = ids.Except(map.Keys).ToList();
+        if (missing.Count > 0)
+        {
+            var devices = await _deviceRepository.GetListAsync(d => missing.Contains(d.Id));
+            foreach (var d in devices)
+                map[d.Id] = d.DeviceName;
+        }
+        return map;
+    }
+
+    /// <summary>
     /// 判断当前连接是否为设备认证
     /// </summary>
     private bool IsDeviceConnection()
@@ -180,8 +268,9 @@ public class ChatHub : Hub
         // 设备授权码认证
         var httpContext = Context.GetHttpContext();
         var authorizationCode = httpContext?.Request.Query["authorizationCode"].ToString();
+        // 授权码是登录凭证，不落明文日志（防日志泄漏 → 越权冒充设备）。仅记长度 + 首尾掩码。
         _logger.LogInformation("设备连接尝试: ConnectionId={ConnectionId}, authorizationCode={Code}",
-            Context.ConnectionId, authorizationCode ?? "(空)");
+            Context.ConnectionId, MaskAuthorizationCode(authorizationCode));
 
         if (string.IsNullOrEmpty(authorizationCode))
             return null;
@@ -189,7 +278,7 @@ public class ChatHub : Hub
         var device = await _deviceManager.GetDeviceByAuthorizationCodeAsync(authorizationCode);
         if (device == null)
         {
-            _logger.LogWarning("授权码无效: {Code}", authorizationCode);
+            _logger.LogWarning("授权码无效: {Code}", MaskAuthorizationCode(authorizationCode));
             return null;
         }
 
@@ -214,5 +303,13 @@ public class ChatHub : Hub
         if (identityId == null)
             throw new HubException("未授权");
         return identityId.Value;
+    }
+
+    /// <summary>授权码掩码：仅留长度 + 首尾各 4 字符，中间用 * 替代。空/过短直接记 "(空)" 不泄露。</summary>
+    private static string MaskAuthorizationCode(string? code)
+    {
+        if (string.IsNullOrEmpty(code)) return "(空)";
+        if (code.Length <= 8) return new string('*', code.Length);
+        return $"{code[..4]}***{code[^4..]}(len={code.Length})";
     }
 }

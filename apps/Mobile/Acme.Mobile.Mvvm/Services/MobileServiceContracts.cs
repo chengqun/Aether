@@ -22,6 +22,17 @@ public interface ISignalRChatService
     Task ConnectAsync(string baseUrl);
     Task DisconnectAsync();
     Task JoinConversationAsync(Guid conversationId);
+
+    /// <summary>查询某台桌面电脑的在线状态 + 当前选中专家名（只读）。deviceId = 32 位设备字符串。
+    /// 返回 null = 未连接/查询失败。供桌面助手页只读状态显示。</summary>
+    Task<DeviceStatusResult?> GetDeviceStatusAsync(string deviceId);
+}
+
+/// <summary>桌面只读状态（供桌面助手页显示）。</summary>
+public sealed class DeviceStatusResult
+{
+    public bool IsOnline { get; set; }
+    public string SelectedAgentName { get; set; } = string.Empty;
 }
 
 /// <summary>消息本地缓存（离线优先）。实现：SqliteStoreBase（Stage 1）。</summary>

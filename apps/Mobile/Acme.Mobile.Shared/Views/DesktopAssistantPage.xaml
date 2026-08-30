@@ -64,6 +64,10 @@
                         TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
                         VerticalOptions="Center" />
             </Grid>
+            <!-- 桌面只读状态：在线/离线 + 当前选中专家名（服务端内存态，桌面上报，手机不可改） -->
+            <Label Padding="12,0,12,4" FontSize="12" Opacity="0.75"
+                   Text="{Binding DesktopStatusText}"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
             <!-- 输入栏（轻控制：直接发指令给当前选中的桌面电脑） -->
             <Border Padding="8" StrokeThickness="0">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">

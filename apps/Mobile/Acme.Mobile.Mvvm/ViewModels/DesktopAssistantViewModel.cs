@@ -34,6 +34,7 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
 
     private Guid _currentConversationId = Guid.Empty;
     private Guid _currentUserId = Guid.Empty;
+    private string _currentDeviceId = string.Empty;  // 当前选中设备的 32 位 DeviceId（供重连后刷新只读状态）
     private int _loadVersion;               // 会话切换/重载时递增，废弃过期异步结果
     private bool _devicesLoaded = false;
     private bool _syncingDevicePicker = false;  // 程序化回填设备下拉索引时抑制切换副作用
@@ -62,6 +63,33 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
 
     [ObservableProperty]
     private string _conversationName = "桌面助手";
+
+    /// <summary>桌面是否在线（只读状态显示）。</summary>
+    [ObservableProperty]
+    private bool _isDesktopOnline;
+
+    /// <summary>桌面当前选中的专家名（只读状态显示；空 = 未选用）。</summary>
+    [ObservableProperty]
+    private string _desktopAgentName = string.Empty;
+
+    /// <summary>合并后的桌面状态文案（在线/离线 + 专家名），供页面直接绑定。</summary>
+    [ObservableProperty]
+    private string _desktopStatusText = "⚫ 离线";
+
+    partial void OnIsDesktopOnlineChanged(bool value) => UpdateDesktopStatusText();
+    partial void OnDesktopAgentNameChanged(string value) => UpdateDesktopStatusText();
+    private void UpdateDesktopStatusText()
+    {
+        var hasAgent = !string.IsNullOrWhiteSpace(DesktopAgentName);
+        var agent = hasAgent ? DesktopAgentName : "未选用";
+        DesktopStatusText = (IsDesktopOnline, hasAgent) switch
+        {
+            (true, true) => $"🟢 在线 · 专家：{agent}",
+            (true, false) => "🟢 在线 · 专家：未选用",
+            (false, true) => $"⚫ 离线 · 上次专家：{agent}",
+            _ => "⚫ 离线",
+        };
+    }
 
     /// <summary>当前用户 Id（供消息模板选择器区分「我的」/「桌面」气泡）。</summary>
     public Guid CachedUserId => _currentUserId;
@@ -119,6 +147,7 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 // 服务端 get-or-create-device-conversation 把 Name 设为 device.DeviceName，故本地等价回填即可，
                 // 命中缓存跳过 POST 时也有会话名。
                 ConversationName = string.IsNullOrWhiteSpace(device.DeviceName) ? "桌面助手" : device.DeviceName;
+                _currentDeviceId = device.DeviceId;
                 _currentConversationId = await EnsureDeviceConversationAsync(device.DeviceId);
                 if (version != _loadVersion) return;
 
@@ -135,6 +164,8 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 // 重置未读角标：历史未读（含之前未实时收到期间累积）在加载后清零。
                 // 实时到达的消息由 OnNewMessage 单独标记已读；此处理会话期间离开又回来的累积。
                 await MarkAsReadAsync();
+                // 拉取桌面只读状态（在线 + 当前选中专家名）。SignalR 已连接后调用。
+                await RefreshDeviceStatusAsync(version);
             }
             else
             {
@@ -329,6 +360,8 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         var version = _loadVersion;
         await JoinConversationGroupAsync(_currentConversationId);
         await LoadMessagesAsync(version);
+        // 重连后桌面在线态可能已变——刷新只读状态。
+        await RefreshDeviceStatusAsync(version);
     }
 
     /// <summary>接社交聊天未先进入时，桌面助手页冷启动也要自行拉起 SignalR 消息事件发布链。
@@ -354,6 +387,30 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] SignalR 连接失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>从服务端拉取桌面只读状态（在线 + 当前选中专家名）并刷新绑定属性。
+    /// 在进入页面 + SignalR 重连后调用。查询失败保持既有显示（不清空，避免抖动）。</summary>
+    private async Task RefreshDeviceStatusAsync(int version)
+    {
+        if (_signalRChatService == null) return;
+        if (string.IsNullOrEmpty(_currentDeviceId)) return;
+        if (!_signalRChatService.IsConnected) return;
+        try
+        {
+            var status = await Task.Run(() => _signalRChatService.GetDeviceStatusAsync(_currentDeviceId));
+            if (version != _loadVersion) return;  // 已切走，丢弃过期结果
+            if (status is null) return;
+            _uiThreadDispatcher?.Post(() =>
+            {
+                IsDesktopOnline = status.IsOnline;
+                DesktopAgentName = status.SelectedAgentName ?? string.Empty;
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] 刷新桌面状态失败: {ex.Message}");
         }
     }
 

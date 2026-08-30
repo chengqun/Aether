@@ -20,4 +20,7 @@ public interface IConversationManager
     Task EnsureParticipantAsync(Guid conversationId, Guid userId);
     Task<List<AppConversationParticipant>> GetParticipantsAsync(Guid conversationId);
     Task ResurrectParticipantsAsync(Guid conversationId);
+    /// <summary>设备补拉：返回该设备各会话中「最后一条未被设备回复的用户消息」（每会话至多一条）。
+    /// 桌面端离线期间手机发的消息已持久化但实时广播丢失——设备重连/冷启动调此取回并回放。</summary>
+    Task<List<AppChatMessage>> GetCatchUpMessagesAsync(Guid deviceId);
 }

@@ -62,13 +62,7 @@ public sealed class SignalRChatService : ISignalRChatService
                 // 显式开 case-insensitive，让 messageType→MessageType 等 camelCase 字段正确映射。
                 options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
             })
-            .WithAutomaticReconnect(new[]
-            {
-                TimeSpan.FromSeconds(0),
-                TimeSpan.FromSeconds(2),
-                TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(10),
-            })
+            .WithAutomaticReconnect(new ExponentialBackoffRetryPolicy())
             .Build();
 
         _hubConnection.On<ChatMessage>("ReceiveMessage", async message =>
@@ -130,5 +124,45 @@ public sealed class SignalRChatService : ISignalRChatService
         {
             System.Diagnostics.Debug.WriteLine($"[SignalR] JoinConversation 失败: {ex.Message}");
         }
+    }
+
+    public async Task<DeviceStatusResult?> GetDeviceStatusAsync(string deviceId)
+    {
+        if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
+            return null;
+        if (string.IsNullOrWhiteSpace(deviceId)) return null;
+
+        try
+        {
+            // 服务端返回匿名对象 { IsOnline, SelectedAgentName }（camelCase）。手动解析以避开类型可见性。
+            var json = await _hubConnection.InvokeAsync<System.Text.Json.JsonElement>("GetDeviceStatus", deviceId);
+            if (json.ValueKind == System.Text.Json.JsonValueKind.Null ||
+                json.ValueKind == System.Text.Json.JsonValueKind.Undefined)
+                return null;
+            return new DeviceStatusResult
+            {
+                IsOnline = json.TryGetProperty("isOnline", out var io) && io.GetBoolean(),
+                SelectedAgentName = json.TryGetProperty("selectedAgentName", out var an) ? an.GetString() ?? "" : "",
+            };
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SignalR] GetDeviceStatus 失败: {ex.Message}");
+            return null;
+        }
+    }
+}
+
+/// <summary>无限指数退避重连策略：首次 0s 立即，之后 2^n 秒封顶 60s + 0~2s 抖动。
+/// 旧版固定 4 次重连后放弃 → 网络长抖动后手机永不自愈，需手动重开页面才恢复。</summary>
+internal sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
+{
+    public TimeSpan? NextRetryDelay(RetryContext context)
+    {
+        var n = context.PreviousRetryCount;
+        if (n == 0) return TimeSpan.Zero;
+        var secs = Math.Min(Math.Pow(2, n), 60);
+        var jitter = Random.Shared.NextDouble() * 2;
+        return TimeSpan.FromSeconds(secs + jitter);
     }
 }

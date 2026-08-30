@@ -24,12 +24,21 @@ public interface IDeviceConnectionTracker
 
     /// <summary>取某设备当前所有活跃连接（可能多端同时在线）。</summary>
     IReadOnlyCollection<string> GetConnections(Guid deviceId);
+
+    /// <summary>设备上报当前选中的专家/目标显示名（手机只读状态用）。null/空 = 未选用。
+    /// 进程内内存态：服务重启后丢失，桌面端（重）连接时重新上报覆盖。</summary>
+    void SetSelectedAgent(Guid deviceId, string? agentName);
+
+    /// <summary>取设备最近上报的选中专家名（可能设备已离线，保留「上次已知」供手机显示）。</summary>
+    string? GetSelectedAgent(Guid deviceId);
 }
 
 public class DeviceConnectionTracker : IDeviceConnectionTracker
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> _deviceToConnections = new();
     private readonly ConcurrentDictionary<string, Guid> _connectionToDevice = new();
+    // 设备最近上报的选中专家名（保留「上次已知」，设备离线后仍供手机只读显示；不随连接断开清空）。
+    private readonly ConcurrentDictionary<Guid, string?> _selectedAgents = new();
 
     public void Register(Guid deviceId, string connectionId)
     {
@@ -56,5 +65,17 @@ public class DeviceConnectionTracker : IDeviceConnectionTracker
         if (_deviceToConnections.TryGetValue(deviceId, out var set))
             return set.Keys.ToArray();
         return Array.Empty<string>();
+    }
+
+    public void SetSelectedAgent(Guid deviceId, string? agentName)
+    {
+        if (deviceId == Guid.Empty) return;
+        // 空/null 统一存空串（便于手机端「未选用」判断），不删条目——保留槽位供离线后显示「上次已知」。
+        _selectedAgents[deviceId] = string.IsNullOrWhiteSpace(agentName) ? string.Empty : agentName.Trim();
+    }
+
+    public string? GetSelectedAgent(Guid deviceId)
+    {
+        return _selectedAgents.TryGetValue(deviceId, out var name) ? name : null;
     }
 }

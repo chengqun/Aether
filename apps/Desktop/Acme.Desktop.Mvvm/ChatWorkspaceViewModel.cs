@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading.Channels;
 using System.Windows.Input;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
@@ -115,6 +116,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 IsConnected = _deviceChatClient.IsConnected;
                 StatusText = IsConnected ? string.Empty : status;
             });
+            // 重连/首次连接成功后补拉离线期间手机发的消息（每会话最后一条未回复的用户消息）。
+            // 初始化完成前不跑（目标未恢复，会对旧消息发「未选用专家」回执）——RunCatchUpAsync 内自守卫。
+            if (status == "已连接" || status == "重新连接成功")
+            {
+                RunCatchUpAsync().SafeFireAndForget();
+                // 上报当前选中专家名给服务端（手机只读状态用）。重连后服务端内存态可能已被清，需重新覆盖；
+                // 未连接时 ReportSelectedTargetToServer 自静默，故此处直接调无妨。
+                ReportSelectedTargetToServer();
+            }
         };
 
         _deviceChatClient.OnMessageReceived += HandleMessageReceived;
@@ -774,7 +784,58 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     private Guid _recentConversationId;
 
-    /// <summary>收到远程 SignalR 消息回调（SignalR 线程）</summary>
+    // —— 远程消息去重（补拉 vs 实时收到的同一条不重复处理）——
+    // 重连补拉可能在实时收到某条消息后再次取回它（连接瞬断→重连→服务端见最新一条仍「未回复」→补拉回放），
+    // 用有界集合记录已处理的消息 Id 防重复跑 agent。上限 200，超限丢最旧（远超任何合理 burst）。
+    private readonly object _processedRemoteLock = new();
+    private readonly HashSet<Guid> _processedRemoteIds = new();
+    private readonly Queue<Guid> _processedRemoteQueue = new();
+    private const int MaxProcessedRemoteIds = 200;
+
+    /// <summary>声明一条远程消息已处理。返回 false=已处理过（重复，跳过）；true=首次（继续）。
+    /// Id 为空（不应发生）时返回 true 放行且不入集合（无法去重）。</summary>
+    private bool TryClaimRemoteId(Guid id)
+    {
+        if (id == Guid.Empty) return true;
+        lock (_processedRemoteLock)
+        {
+            if (!_processedRemoteIds.Add(id)) return false;
+            _processedRemoteQueue.Enqueue(id);
+            while (_processedRemoteQueue.Count > MaxProcessedRemoteIds)
+                _processedRemoteIds.Remove(_processedRemoteQueue.Dequeue());
+            return true;
+        }
+    }
+
+    /// <summary>重连/冷启动后补拉离线期间手机发的消息：取回每会话最后一条未回复的用户消息并回放。
+    /// 回放走同一 HandleMessageReceived（含去重），已实时收到过的会被 TryClaimRemoteId 跳过。
+    /// 仅在初始化完成后运行（目标已恢复）——否则会在 boot 期对未选目标的旧消息发「未选用专家」回执。</summary>
+    private async Task RunCatchUpAsync()
+    {
+        if (_isInitializing) return;
+        try
+        {
+            var messages = await _deviceChatClient.GetCatchUpMessagesAsync();
+            if (messages.Count == 0) return;
+            foreach (var msg in messages)
+                await HandleMessageReceived(msg);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"[Chat] 补拉离线消息失败: {ex.Message}");
+        }
+    }
+
+    // —— 远程消息按会话串行处理（长 agent run 不阻塞 SignalR 消息泵）——
+    // SignalR On 处理器 await HandleMessageReceived；若该方法直接跑 agent（秒级），会阻塞泵使后续消息
+    // 排队乃至超时。故入口只做去重+入队（微秒级返回），实际处理在每会话独占的 drainer 里串行跑——
+    // 既不阻塞泵，又保证同一会话消息 FIFO（共享 convId 会话，并发写会竞态）。
+    private readonly Dictionary<Guid, Channel<DeviceMessage>> _remoteQueues = new();
+    private readonly object _remoteQueuesLock = new();
+    private const int MaxRemoteQueueDepth = 500;
+
+    /// <summary>收到远程 SignalR 消息回调（SignalR 线程）。仅去重+入队，实际处理见
+    /// <see cref="ProcessRemoteMessageAsync"/>（每会话 drainer 串行调用）。</summary>
     private async Task HandleMessageReceived(DeviceMessage msg)
     {
         _recentConversationId = msg.ConversationId;
@@ -784,6 +845,53 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         var mt = msg.MessageType;
         if (string.Equals(mt, "Progress", StringComparison.OrdinalIgnoreCase)) return;
 
+        // 去重：补拉回放的消息若已实时处理过则跳过（连接瞬断→重连竞态）。
+        if (!TryClaimRemoteId(msg.Id)) return;
+
+        EnqueueRemote(msg);
+    }
+
+    /// <summary>按会话入队并（首次时）启动独占 drainer。FIFO 保证同会话消息顺序处理。</summary>
+    private void EnqueueRemote(DeviceMessage msg)
+    {
+        Channel<DeviceMessage>? ch;
+        lock (_remoteQueuesLock)
+        {
+            if (!_remoteQueues.TryGetValue(msg.ConversationId, out ch))
+            {
+                ch = Channel.CreateBounded<DeviceMessage>(MaxRemoteQueueDepth);
+                _remoteQueues[msg.ConversationId] = ch;
+                DrainRemoteQueueAsync(msg.ConversationId, ch).SafeFireAndForget();
+            }
+        }
+        // TryWrite：队列已满（500）说明严重积压，丢弃以保护内存——实际不应发生。
+        ch.Writer.TryWrite(msg);
+    }
+
+    /// <summary>每会话独占 drainer：FIFO 依次处理消息，跑完一条接下一条。队列排空后自清理。</summary>
+    private async Task DrainRemoteQueueAsync(Guid convId, Channel<DeviceMessage> ch)
+    {
+        await foreach (var msg in ch.Reader.ReadAllAsync())
+        {
+            try
+            {
+                await ProcessRemoteMessageAsync(msg);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[Chat] 远程消息处理异常 (conv {convId}): {ex.Message}");
+            }
+        }
+        lock (_remoteQueuesLock)
+        {
+            if (_remoteQueues.TryGetValue(convId, out var current) && ReferenceEquals(current, ch))
+                _remoteQueues.Remove(convId);
+        }
+    }
+
+    /// <summary>实际处理一条远程消息（drainer 串行调用）：显示 + 跑 agent + 回复 / 未选目标回执。</summary>
+    private async Task ProcessRemoteMessageAsync(DeviceMessage msg)
+    {
         // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent），并起一轮
         ChatTurnItem remoteTurn = null!;
         await _dispatcher.InvokeAsync(() =>
@@ -875,6 +983,19 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             t.Finish(TurnStatus.Done);
             Messages.Add(t);
         });
+        // 回执手机：未选用专家目标时告知，否则老板「发了没反应」。
+        if (_deviceChatClient.IsConnected)
+        {
+            try
+            {
+                await _deviceChatClient.SendMessageAsync(msg.ConversationId,
+                    "⚠️ 桌面端当前未选用专家目标，请先在桌面端选择目标后再发送指令。", "Text");
+            }
+            catch
+            {
+                // 回执失败不影响本地已显示的回复
+            }
+        }
     }
 
     // —— 聊天消息列表 ——
@@ -1235,6 +1356,22 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    /// <summary>当前选中目标的显示名（供手机只读状态显示）；未选用返回空串。</summary>
+    private string CurrentTargetDisplayName() => SelectedChatTarget switch
+    {
+        ExpertItem ei => ei.Name,
+        WorkflowItem wi => wi.Name,
+        _ => string.Empty,
+    };
+
+    /// <summary>把当前选中专家名上报给服务端（手机只读状态用）。未连接/上报失败静默丢弃，不影响主流程。
+    /// 在目标切换 +（重）连接成功后调用——让手机能看「桌面当前会用哪个专家回」。</summary>
+    private void ReportSelectedTargetToServer()
+    {
+        if (!_deviceChatClient.IsConnected) return;
+        _deviceChatClient.ReportSelectedAgentAsync(CurrentTargetDisplayName()).SafeFireAndForget();
+    }
+
     /// <summary>加载 LLM 配置列表到下拉框，并恢复上次选中的 LLM（跨重启保留）。</summary>
     private async Task LoadLlmConfigsAsync()
     {
@@ -1326,6 +1463,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         PersistSelectedTargetAsync().SafeFireAndForget();
         RefreshModeAsync().SafeFireAndForget();
+        // 用户切换了目标 → 上报新专家名给服务端（手机只读状态即时更新）。
+        ReportSelectedTargetToServer();
     }
 
     /// <summary>程序化赋值 <see cref="SelectedChatTarget"/>（刷新池/启动恢复/恢复会话），**保证不触发会话重置**：

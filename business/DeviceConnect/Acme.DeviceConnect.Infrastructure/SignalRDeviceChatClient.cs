@@ -2,6 +2,7 @@ using Acme.DeviceConnect.Domain;
 using Microsoft.AspNetCore.SignalR.Client;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -10,7 +11,12 @@ namespace Acme.DeviceConnect.Infrastructure;
 public class SignalRDeviceChatClient : IDeviceChatClient
 {
     private HubConnection? _connection;
-    private readonly ConcurrentDictionary<Guid, byte> _recentSentMessageIds = new();
+    // 自己发出消息的 Id 去重集（服务端会把设备发的消息广播回设备自身，靠此过滤）。
+    // 有界 LRU：消费即移除（回广播只来一次）；超量淘汰最旧——防止无限重连长连接下无限增长。
+    private readonly object _recentSentLock = new();
+    private readonly HashSet<Guid> _recentSentMessageIds = new();
+    private readonly Queue<Guid> _recentSentQueue = new();
+    private const int MaxRecentSentIds = 500;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
@@ -32,7 +38,9 @@ public class SignalRDeviceChatClient : IDeviceChatClient
 
         _connection = new HubConnectionBuilder()
             .WithUrl(hubUrl)
-            .WithAutomaticReconnect(new[] { TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
+            // 无限指数退避重连：首次 0s 立即，之后 2^n 秒封顶 60s + 0~2s 抖动。
+            // 旧版固定 4 次重连（0/2/5/10s）后放弃 → 网络长抖动后桌面永不自愈，需手动重启 app 才恢复。
+            .WithAutomaticReconnect(new ExponentialBackoffRetryPolicy())
             .Build();
 
         _connection.On<JsonElement>("ReceiveMessage", async message =>
@@ -46,7 +54,7 @@ public class SignalRDeviceChatClient : IDeviceChatClient
 
             if (convId == Guid.Empty) return;
 
-            if (msgId != Guid.Empty && _recentSentMessageIds.TryRemove(msgId, out _))
+            if (msgId != Guid.Empty && TryConsumeRecentSentId(msgId))
                 return;
 
             var msg = new DeviceMessage
@@ -94,7 +102,7 @@ public class SignalRDeviceChatClient : IDeviceChatClient
         var sentMsg = await _connection.InvokeAsync<JsonElement>("SendMessage", conversationId, content, messageType);
         var sentId = sentMsg.TryGetProperty("id", out var sid) ? sid.GetGuid() : Guid.Empty;
         if (sentId != Guid.Empty)
-            _recentSentMessageIds.TryAdd(sentId, 0);
+            AddRecentSentId(sentId);
         return sentId;
     }
 
@@ -111,8 +119,88 @@ public class SignalRDeviceChatClient : IDeviceChatClient
             {
             }
             _connection = null;
-            _recentSentMessageIds.Clear();
+            lock (_recentSentLock)
+            {
+                _recentSentMessageIds.Clear();
+                _recentSentQueue.Clear();
+            }
             ConnectionStateChanged?.Invoke("已断开");
         }
+    }
+
+    public async Task ReportSelectedAgentAsync(string? agentName)
+    {
+        if (_connection == null || !IsConnected) return;
+        try
+        {
+            // 上报失败不影响连接与正常收发——静默吞掉（手机状态是次要显示）。
+            await _connection.InvokeAsync("ReportSelectedAgent", agentName ?? string.Empty);
+        }
+        catch
+        {
+        }
+    }
+
+    public async Task<IReadOnlyList<DeviceMessage>> GetCatchUpMessagesAsync()
+    {
+        if (_connection == null || !IsConnected)
+            return Array.Empty<DeviceMessage>();
+        try
+        {
+            var arr = await _connection.InvokeAsync<JsonElement[]>("GetCatchUpMessages");
+            if (arr == null || arr.Length == 0)
+                return Array.Empty<DeviceMessage>();
+            var list = new List<DeviceMessage>(arr.Length);
+            foreach (var m in arr)
+            {
+                list.Add(new DeviceMessage
+                {
+                    Id = m.TryGetProperty("id", out var id) ? id.GetGuid() : Guid.Empty,
+                    Content = m.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "",
+                    ConversationId = m.TryGetProperty("conversationId", out var ci) ? ci.GetGuid() : Guid.Empty,
+                    SenderName = m.TryGetProperty("senderName", out var sn) ? sn.GetString() ?? "用户" : "用户",
+                    MessageType = m.TryGetProperty("messageType", out var mt) ? mt.GetString() ?? "Text" : "Text"
+                });
+            }
+            return list;
+        }
+        catch
+        {
+            // 补拉失败不应影响已建立的连接与正常收发——静默退化为「无补拉」。
+            return Array.Empty<DeviceMessage>();
+        }
+    }
+
+    private void AddRecentSentId(Guid id)
+    {
+        if (id == Guid.Empty) return;
+        lock (_recentSentLock)
+        {
+            if (!_recentSentMessageIds.Add(id)) return;
+            _recentSentQueue.Enqueue(id);
+            while (_recentSentQueue.Count > MaxRecentSentIds)
+                _recentSentMessageIds.Remove(_recentSentQueue.Dequeue());
+        }
+    }
+
+    private bool TryConsumeRecentSentId(Guid id)
+    {
+        if (id == Guid.Empty) return false;
+        lock (_recentSentLock)
+            return _recentSentMessageIds.Remove(id);  // 消费即移除（回广播只来一次）
+    }
+}
+
+/// <summary>无限指数退避重连策略：首次 0s 立即，之后 2^n 秒封顶 60s + 0~2s 抖动。</summary>
+internal sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
+{
+    public TimeSpan? NextRetryDelay(RetryContext context)
+    {
+        // PreviousRetryCount 为 0 = 首次重试，立即重连（覆盖瞬断）。
+        var n = context.PreviousRetryCount;
+        if (n == 0) return TimeSpan.Zero;
+        var secs = Math.Min(Math.Pow(2, n), 60);  // 2,4,8,16,32,60,60…
+        var jitter = Random.Shared.NextDouble() * 2;  // 0~2s 抖动，避免多端同步重连风暴
+        return TimeSpan.FromSeconds(secs + jitter);
     }
 }

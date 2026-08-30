@@ -310,4 +310,30 @@ public class ConversationManager : DomainService, IConversationManager
         Array.Sort(ids, StringComparer.Ordinal);
         return $"{ids[0]}|{ids[1]}";
     }
+
+    /// <summary>
+    /// 设备补拉：返回该设备各会话中「最后一条未被设备回复的用户消息」（每会话至多一条）。
+    /// 桌面端离线期间手机发的消息已持久化但实时广播丢失；设备重连/冷启动调此取回并回放，
+    /// 避免老板「发了没反应」。判断「已回复」= 该会话最新一条消息的 SenderId == 设备。
+    /// </summary>
+    public async Task<List<AppChatMessage>> GetCatchUpMessagesAsync(Guid deviceId)
+    {
+        var conversations = await GetUserConversationsAsync(deviceId);
+        var result = new List<AppChatMessage>();
+        foreach (var conv in conversations)
+        {
+            var queryable = await _messageRepository.GetQueryableAsync();
+            // 按时间倒序取最近 20 条，最新一条在最前。
+            var recent = await AsyncExecuter.ToListAsync(
+                queryable.Where(m => m.ConversationId == conv.Id)
+                         .OrderByDescending(m => m.SentAt)
+                         .Take(20));
+            if (recent.Count == 0) continue;
+            // 最新一条是设备发的 → 已回复，无补拉。
+            if (recent[0].SenderId == deviceId) continue;
+            // 最新一条是用户发的 → 尚未回复，补拉这一条。
+            result.Add(recent[0]);
+        }
+        return result;
+    }
 }
