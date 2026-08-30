@@ -63,11 +63,6 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
     [ObservableProperty]
     private string _conversationName = "桌面助手";
 
-    // ⚠️ 临时诊断：实时收不到桌面回复时，页面顶部显示 SignalR 连接态 + 收到的消息事件，
-    // 供无 iOS 日志可抓时人工定位（确认后移除）。
-    [ObservableProperty]
-    private string? _signalRDebug;
-
     /// <summary>当前用户 Id（供消息模板选择器区分「我的」/「桌面」气泡）。</summary>
     public Guid CachedUserId => _currentUserId;
 
@@ -135,7 +130,6 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
                 EnsureSignalRListening();
                 await EnsureSignalRConnectedAsync();
                 if (version != _loadVersion) return;
-                SignalRDebug = $"🔍 SignalR={(_signalRChatService?.IsConnected == true ? "已连接" : "未连接")} 服务器={_appSettings?.ServerBaseAddress ?? "(空)"} 会话={_currentConversationId}";
                 await JoinConversationGroupAsync(_currentConversationId);
                 await LoadMessagesAsync(version);
             }
@@ -311,11 +305,6 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
     private async void OnNewMessage(NewMessageEvent @event)
     {
         var msg = @event.Message;
-        // ⚠️ 临时诊断：任何消息到达都记录，便于判断是「SignalR 没连上」还是「事件没发布」还是「被过滤」。
-        var matched = msg.ConversationId == _currentConversationId;
-        var mine = msg.SenderId == _currentUserId;
-        _uiThreadDispatcher?.Post(() =>
-            SignalRDebug = $"📨 收到消息 conv匹配={matched} 自发={mine} 类型={msg.MessageType} 发送者={msg.SenderId}");
         if (msg.ConversationId != _currentConversationId) return;
         if (msg.SenderId == _currentUserId) return;  // 自发自收
         // 进度心跳不渲染为气泡（桌面助手只显示概览摘要/最终答案）。
@@ -361,7 +350,6 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         }
         catch (Exception ex)
         {
-            SignalRDebug = $"⚠️ SignalR 连接异常: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] SignalR 连接失败: {ex.Message}");
         }
     }
@@ -375,7 +363,6 @@ public partial class DesktopAssistantViewModel : NavigableViewModelBase
         }
         catch (Exception ex)
         {
-            SignalRDebug = $"⚠️ 加入会话组失败: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"[DesktopAssistant] 加入会话组失败: {ex.Message}");
         }
     }
