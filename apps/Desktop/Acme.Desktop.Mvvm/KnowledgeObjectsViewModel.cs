@@ -1133,6 +1133,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         // 而非裸英文目录名。深层子目录（用户自建）保持原目录名。
         string? subtitle = null;
         string? fillCardIcon = null;
+        FileIcons.Icon? entryIcon = null;
         if (!isRoot && !string.IsNullOrEmpty(RootPath))
         {
             var parent = Path.GetDirectoryName(fullPath);
@@ -1146,10 +1147,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 name = d.Display;
                 subtitle = d.Description;
                 fillCardIcon = d.FillIconPath;
+                // 入口节点必须显式传 iconOverride：否则 FileNode 走 FileIcons.ForFile(中文名) 回退灰色 Default，
+                // 圆角方块底色（绑定 IconColor）会变灰而非类型色。
+                entryIcon = new FileIcons.Icon(fillCardIcon ?? d.IconPathData, d.IconColor, IsFill: true);
             }
         }
 
-        var node = new FileNode(name, name, fullPath, isFolder: true, subtitle: subtitle, fillCardIcon: fillCardIcon);
+        var node = new FileNode(name, name, fullPath, isFolder: true, iconOverride: entryIcon,
+            subtitle: subtitle, fillCardIcon: fillCardIcon);
 
         // 子目录：先目录后文件排序。类型目录内的子目录继承类型（knowledge/子目录 仍收 .md）。
         // 根层按租户过滤：非 stockapp 跳过策略三目录（strategies/codestrategies/leanalgorithms，Qifu 不依赖 Trading）。
