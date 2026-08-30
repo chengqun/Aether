@@ -47,6 +47,7 @@
                         Grid.Row="0"
                         ItemsSource="{Binding Messages}"
                         ItemTemplate="{StaticResource ChatMessageSelector}"
+                        ItemSizingStrategy="MeasureAllItems"
                         VerticalOptions="Fill">
             <CollectionView.ItemsLayout>
                 <LinearItemsLayout Orientation="Vertical" />

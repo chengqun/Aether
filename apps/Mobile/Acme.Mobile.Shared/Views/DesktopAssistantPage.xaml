@@ -23,14 +23,21 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 桌面消息：占满宽度的气泡 + Markdown（对齐 AI agent 助手回复布局，尽量多显示概览摘要/结果）。
+        <!-- 桌面消息：占满宽度的气泡 + Markdown，**逐字镜像 AgentChatSurface 的 AssistantTextTemplate**
+             （桌面端 chat 回复的已知可用模板）。用户明确要求「如同手机端和 aiagent 聊天回复占满一行一样」，
+             故直接复用同一布局：Border(HorizontalOptions=Fill) → VerticalStackLayout → MarkdownView。
+             前三次失败均因偏离此结构（#1 直放 MarkdownView 无 VSL；#2 VSL 当根无 Border；#3 Grid 当根无 Border 无 VSL）——
+             iOS CollectionView 下 Indiko MarkdownView 直放 Grid/无 VSL 包装时 measure 按内容宽报尺寸，
+             长文本溢出右边缘「被挡住」；VSL 包装在 measure 期把子元素约束到父宽，文本正确换行。
              桌面端每 run 只发一条 Text 概览（非流式），故不附「生成中」指示。 -->
         <DataTemplate x:Key="DesktopTemplate" x:DataType="domain:ChatMessage">
             <Border Margin="12,4" HorizontalOptions="Fill"
                     BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
-                    StrokeShape="RoundRectangle 14" StrokeThickness="0"
-                    Padding="12,8">
-                <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                    StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8">
+                <VerticalStackLayout Spacing="6">
+                    <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}"
+                                     Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
+                </VerticalStackLayout>
             </Border>
         </DataTemplate>
 
@@ -41,10 +48,15 @@
 
     <Grid RowDefinitions="*,Auto">
         <!-- 消息列表（复用通用聊天页的消息渲染：进度心跳已被 VM 过滤，历史不残留） -->
+        <!-- ItemSizingStrategy=MeasureAllItems（关键）：iOS CollectionView 默认 MeasureFirstItem——
+             测第一个 item 的高度后复用给所有 item。本页第一条通常是用户的短气泡（MaximumWidthRequest=280，
+             行高小）→ 后续桌面端全宽 Markdown 回复被裁到该短高度「被挡住/裁切」，尤其从历史记录批量载入时必现
+             （流式逐条追加时 CollectionView 会重测故不明显）。MeasureAllItems 逐 item 自测高度，根治纵向裁切。 -->
         <CollectionView x:Name="MessagesList"
                         Grid.Row="0"
                         ItemsSource="{Binding Messages}"
                         ItemTemplate="{StaticResource ChatMessageSelector}"
+                        ItemSizingStrategy="MeasureAllItems"
                         VerticalOptions="Fill">
             <CollectionView.ItemsLayout>
                 <LinearItemsLayout Orientation="Vertical" />
