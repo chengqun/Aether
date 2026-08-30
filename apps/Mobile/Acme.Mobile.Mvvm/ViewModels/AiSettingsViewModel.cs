@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +8,6 @@ using Acme.Notes.Domain.Agents;
 using Acme.AppAuth.Domain;
 using Acme.Notes.Domain;
 using Acme.Mobile.Mvvm.Models;
-using Acme.AppUpdate.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
 using Acme.Mobile.Mvvm.Services;
@@ -17,12 +15,13 @@ using Acme.Mobile.Mvvm.Services;
 namespace Acme.Mobile.Mvvm.ViewModels;
 
 /// <summary>
-/// AI 设置 ViewModel：管理股票模式默认 Agent 选择、毓数平台认证等配置。
+/// AI 设置 ViewModel：管理 labs 资料库入口 + 股票模式默认 Agent 选择。
+///
+/// 毓数/云文档/mcphub 认证已迁出至独立「连接器」页（<see cref="ConnectorViewModel"/> + auth 卡），
+/// 本页只留 labs 资料库（agent/workflow/skill/mcp/knowledge）入口与 Stockapp 股票模式默认 agent picker。
 ///
 /// Aether 适配：旧 IAgentService.GetAvailableAgentsAsync → <see cref="ICustomAgentCatalog.ListAsync"/>
 /// （返回 <c>CustomAgentDefinition</c>，映射成本地 <see cref="AgentInfoDto"/>）。
-/// 毓数/云文档认证：Qifu 业务项目隐藏于 slnx，故用 <c>Acme.Mobile.Mvvm.Services</c> 下的本地手机接口
-/// （<see cref="IYushuAuthService"/> 等），由 Qifu.Mobile 租户宿主提供适配器实现。
 /// </summary>
 public partial class AiSettingsViewModel : NavigableViewModelBase
 {
@@ -43,64 +42,12 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     private readonly ICustomAgentCatalog? _agentCatalog;
     private readonly IAppSettings? _appSettings;
     private readonly AppServerOptions? _serverOptions;
-    private readonly IYushuAuthService? _yushuAuthService;
-    private readonly IYushuTokenSyncService? _yushuTokenSyncService;
-    private readonly ICloudDocsAuthService? _cloudDocsAuthService;
-    private readonly ICloudDocsTokenSyncService? _cloudDocsTokenSyncService;
-    private readonly IMcphubAuthService? _mcphubAuthService;
-    private readonly IPlatformInfo? _platformInfo;
-    private readonly IToastService? _toastService;
 
     [ObservableProperty]
     private bool _isLoading;
 
     [ObservableProperty]
     private int _selectedAgentIndex = -1;
-
-    [ObservableProperty]
-    private bool _isYushuAuthenticated;
-
-    [ObservableProperty]
-    private string _yushuStatusText = "未认证";
-
-    [ObservableProperty]
-    private bool _isYushuLoggingIn;
-
-    [ObservableProperty]
-    private bool _isYushuSyncing;
-
-    [ObservableProperty]
-    private bool _isCloudDocsAuthenticated;
-
-    [ObservableProperty]
-    private string _cloudDocsStatusText = "未认证";
-
-    [ObservableProperty]
-    private bool _isCloudDocsLoggingIn;
-
-    [ObservableProperty]
-    private bool _isCloudDocsSyncing;
-
-    [ObservableProperty]
-    private bool _isMcphubAuthenticated;
-
-    [ObservableProperty]
-    private string _mcphubStatusText = "未认证";
-
-    [ObservableProperty]
-    private bool _isMcphubLoggingIn;
-
-    /// <summary>是否为桌面平台（支持浏览器 OAuth 登录）</summary>
-    public bool IsDesktopPlatform => _platformInfo?.GetAppPlatform() is AppPlatform.Windows or AppPlatform.MacOS;
-
-    /// <summary>是否接入了云文档认证服务（未接入时隐藏云文档卡片，如 MAUI）</summary>
-    public bool HasCloudDocs => _cloudDocsAuthService != null;
-
-    /// <summary>是否接入了毓数认证服务（未接入时隐藏毓数卡片——Stockapp 不注册毓数适配器）</summary>
-    public bool HasYushu => _yushuAuthService != null;
-
-    /// <summary>是否接入了 mcphub 网关认证服务（未接入时隐藏 mcphub 卡片——Stockapp 不注册）</summary>
-    public bool HasMcphub => _mcphubAuthService != null;
 
     /// <summary>是否为股票租户（Stockapp）。股票模式 AI 助手选择仅 Stockapp 显示；Qifu 不串股票功能。</summary>
     public bool IsStockTenant => _serverOptions?.Tenant == "stockapp";
@@ -125,25 +72,11 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     public AiSettingsViewModel(ICustomAgentCatalog? agentCatalog = null,
                                IAppSettings? appSettings = null,
                                IUIThreadDispatcher? uiThreadDispatcher = null,
-                               AppServerOptions? serverOptions = null,
-                               IYushuAuthService? yushuAuthService = null,
-                               IYushuTokenSyncService? yushuTokenSyncService = null,
-                               ICloudDocsAuthService? cloudDocsAuthService = null,
-                               ICloudDocsTokenSyncService? cloudDocsTokenSyncService = null,
-                               IMcphubAuthService? mcphubAuthService = null,
-                               IPlatformInfo? platformInfo = null,
-                               IToastService? toastService = null)
+                               AppServerOptions? serverOptions = null)
     {
         _agentCatalog = agentCatalog;
         _appSettings = appSettings;
         _serverOptions = serverOptions;
-        _yushuAuthService = yushuAuthService;
-        _yushuTokenSyncService = yushuTokenSyncService;
-        _cloudDocsAuthService = cloudDocsAuthService;
-        _cloudDocsTokenSyncService = cloudDocsTokenSyncService;
-        _mcphubAuthService = mcphubAuthService;
-        _platformInfo = platformInfo;
-        _toastService = toastService;
 
         // 设置静态引用，供 GetStockModeAgentName() 使用
         if (appSettings != null)
@@ -165,9 +98,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
     public override async Task OnActivatedAsync()
     {
         await LoadDataAsync();
-        await CheckYushuAuthStatusAsync();
-        await CheckCloudDocsAuthStatusAsync();
-        await CheckMcphubAuthStatusAsync();
     }
 
     [RelayCommand]
@@ -241,294 +171,6 @@ public partial class AiSettingsViewModel : NavigableViewModelBase
             _ = SetStockModeAgentNameAsync(agentName);
         }
         OnPropertyChanged(nameof(CurrentSelectionText));
-    }
-
-    /// <summary>
-    /// 检查毓数平台认证状态
-    /// </summary>
-    private async Task CheckYushuAuthStatusAsync()
-    {
-        if (_yushuAuthService == null) return;
-
-        try
-        {
-            var isAuth = await Task.Run(async () => await _yushuAuthService.IsAuthenticatedAsync());
-            IsYushuAuthenticated = isAuth;
-            YushuStatusText = isAuth ? "已认证" : "未认证";
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 检查毓数认证状态失败: {ex.Message}");
-            IsYushuAuthenticated = false;
-            YushuStatusText = "状态未知";
-        }
-    }
-
-    /// <summary>
-    /// 毓数平台登录命令（桌面端走浏览器 OAuth，移动端从服务器同步 token）
-    /// </summary>
-    [RelayCommand]
-    private async Task YushuLoginAsync()
-    {
-        if (_yushuAuthService == null || IsYushuLoggingIn) return;
-
-        IsYushuLoggingIn = true;
-        YushuStatusText = IsDesktopPlatform ? "正在登录..." : "正在从服务器同步...";
-
-        try
-        {
-            var token = await Task.Run(async () => await _yushuAuthService.LoginAsync());
-
-            if (token != null)
-            {
-                IsYushuAuthenticated = true;
-                YushuStatusText = "已认证";
-                await (_toastService?.ShowAsync(IsDesktopPlatform ? "毓数平台登录成功" : "毓数平台同步成功") ?? Task.CompletedTask);
-            }
-            else
-            {
-                YushuStatusText = IsDesktopPlatform ? "登录失败" : "同步失败（服务器无有效token）";
-                await (_toastService?.ShowAsync("操作失败，请重试") ?? Task.CompletedTask);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 毓数登录失败: {ex.Message}");
-            YushuStatusText = "操作失败";
-            await (_toastService?.ShowAsync("操作失败，请重试") ?? Task.CompletedTask);
-        }
-        finally
-        {
-            IsYushuLoggingIn = false;
-        }
-    }
-
-    /// <summary>
-    /// 手动将本地毓数 token 同步到服务器（供桌面端使用）
-    /// </summary>
-    [RelayCommand]
-    private async Task YushuSyncToServerAsync()
-    {
-        if (_yushuTokenSyncService == null || IsYushuSyncing) return;
-
-        IsYushuSyncing = true;
-        YushuStatusText = "正在同步到服务器...";
-
-        try
-        {
-            var success = await Task.Run(async () => await _yushuTokenSyncService.SyncToServerAsync());
-
-            if (success)
-            {
-                YushuStatusText = "已认证（同步成功）";
-                await (_toastService?.ShowAsync("Token 已同步到服务器") ?? Task.CompletedTask);
-            }
-            else
-            {
-                YushuStatusText = IsYushuAuthenticated ? "已认证（同步失败）" : "同步失败";
-                await (_toastService?.ShowAsync("同步失败，请检查网络连接") ?? Task.CompletedTask);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 毓数同步失败: {ex.Message}");
-            YushuStatusText = IsYushuAuthenticated ? "已认证（同步失败）" : "同步失败";
-            await (_toastService?.ShowAsync("同步失败，请重试") ?? Task.CompletedTask);
-        }
-        finally
-        {
-            IsYushuSyncing = false;
-        }
-    }
-
-    /// <summary>
-    /// 检查云文档认证状态
-    /// </summary>
-    private async Task CheckCloudDocsAuthStatusAsync()
-    {
-        if (_cloudDocsAuthService == null) return;
-
-        try
-        {
-            var isAuth = await Task.Run(async () => await _cloudDocsAuthService.IsAuthenticatedAsync());
-            IsCloudDocsAuthenticated = isAuth;
-            CloudDocsStatusText = isAuth ? "已认证" : "未认证";
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 检查云文档认证状态失败: {ex.Message}");
-            IsCloudDocsAuthenticated = false;
-            CloudDocsStatusText = "状态未知";
-        }
-    }
-
-    /// <summary>
-    /// 云文档登录命令：桌面端打开浏览器完成 SSO 登录并捕获 sid（需先 `playwright install chromium`）；
-    /// 手机端从服务器拉取桌面端已上传的 sid（与毓数手机端行为一致）。
-    /// </summary>
-    [RelayCommand]
-    private async Task CloudDocsLoginAsync()
-    {
-        if (_cloudDocsAuthService == null || IsCloudDocsLoggingIn) return;
-
-        IsCloudDocsLoggingIn = true;
-        CloudDocsStatusText = IsDesktopPlatform ? "正在打开浏览器登录..." : "正在从服务器同步...";
-
-        try
-        {
-            bool success;
-            if (IsDesktopPlatform)
-            {
-                // 桌面端：Playwright 浏览器 SSO 登录捕获 sid
-                var result = await Task.Run(async () => await _cloudDocsAuthService.LoginAsync());
-                success = result?.Success == true;
-                if (!success)
-                {
-                    await (_toastService?.ShowAsync(result?.Error ?? "登录失败，请重试") ?? Task.CompletedTask);
-                }
-            }
-            else
-            {
-                // 手机端：从服务器拉取 sid（依赖桌面端已上传）
-                if (_cloudDocsTokenSyncService == null)
-                {
-                    success = false;
-                }
-                else
-                {
-                    var synced = await Task.Run(async () => await _cloudDocsTokenSyncService.SyncFromServerAsync());
-                    // 拉取后再校验 sid 是否有效
-                    success = synced && await Task.Run(async () => await _cloudDocsAuthService.IsAuthenticatedAsync());
-                }
-            }
-
-            if (success)
-            {
-                IsCloudDocsAuthenticated = true;
-                CloudDocsStatusText = "已认证";
-                await (_toastService?.ShowAsync(IsDesktopPlatform ? "云文档登录成功" : "云文档同步成功") ?? Task.CompletedTask);
-            }
-            else
-            {
-                CloudDocsStatusText = IsDesktopPlatform ? "登录失败" : "同步失败（服务器无有效sid）";
-                if (IsDesktopPlatform)
-                {
-                    // 桌面端失败提示已在上方给出，避免重复
-                }
-                else
-                {
-                    await (_toastService?.ShowAsync("同步失败，服务器无有效sid") ?? Task.CompletedTask);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 云文档登录失败: {ex.Message}");
-            CloudDocsStatusText = "操作失败";
-            await (_toastService?.ShowAsync("操作失败，请重试") ?? Task.CompletedTask);
-        }
-        finally
-        {
-            IsCloudDocsLoggingIn = false;
-        }
-    }
-
-    /// <summary>
-    /// 手动将本地云文档 sid 同步到服务器（供手机端拉取使用）
-    /// </summary>
-    [RelayCommand]
-    private async Task CloudDocsSyncToServerAsync()
-    {
-        if (_cloudDocsTokenSyncService == null || IsCloudDocsSyncing) return;
-
-        IsCloudDocsSyncing = true;
-        CloudDocsStatusText = "正在同步到服务器...";
-
-        try
-        {
-            var success = await Task.Run(async () => await _cloudDocsTokenSyncService.SyncToServerAsync());
-
-            if (success)
-            {
-                CloudDocsStatusText = "已认证（同步成功）";
-                await (_toastService?.ShowAsync("sid 已同步到服务器") ?? Task.CompletedTask);
-            }
-            else
-            {
-                CloudDocsStatusText = IsCloudDocsAuthenticated ? "已认证（同步失败）" : "同步失败";
-                await (_toastService?.ShowAsync("同步失败，请检查网络连接") ?? Task.CompletedTask);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 云文档同步失败: {ex.Message}");
-            CloudDocsStatusText = IsCloudDocsAuthenticated ? "已认证（同步失败）" : "同步失败";
-            await (_toastService?.ShowAsync("同步失败，请重试") ?? Task.CompletedTask);
-        }
-        finally
-        {
-            IsCloudDocsSyncing = false;
-        }
-    }
-
-    /// <summary>
-    /// 检查 mcphub 网关认证状态
-    /// </summary>
-    private async Task CheckMcphubAuthStatusAsync()
-    {
-        if (_mcphubAuthService == null) return;
-
-        try
-        {
-            var isAuth = await Task.Run(async () => await _mcphubAuthService.IsAuthenticatedAsync());
-            IsMcphubAuthenticated = isAuth;
-            McphubStatusText = isAuth ? "已认证" : "未认证";
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] 检查 mcphub 认证状态失败: {ex.Message}");
-            IsMcphubAuthenticated = false;
-            McphubStatusText = "状态未知";
-        }
-    }
-
-    /// <summary>
-    /// mcphub 网关登录命令：桌面端浏览器 OAuth；手机端从服务器拉取桌面端已上传的 JWT（与毓数/云文档手机端一致）。
-    /// </summary>
-    [RelayCommand]
-    private async Task McphubLoginAsync()
-    {
-        if (_mcphubAuthService == null || IsMcphubLoggingIn) return;
-
-        IsMcphubLoggingIn = true;
-        McphubStatusText = IsDesktopPlatform ? "正在登录..." : "正在从服务器同步...";
-
-        try
-        {
-            var token = await Task.Run(async () => await _mcphubAuthService.LoginAsync());
-
-            if (token != null)
-            {
-                IsMcphubAuthenticated = true;
-                McphubStatusText = "已认证";
-                await (_toastService?.ShowAsync(IsDesktopPlatform ? "mcphub 登录成功" : "mcphub 同步成功") ?? Task.CompletedTask);
-            }
-            else
-            {
-                McphubStatusText = IsDesktopPlatform ? "登录失败" : "同步失败（服务器无有效凭据）";
-                await (_toastService?.ShowAsync("操作失败，请重试") ?? Task.CompletedTask);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AiSettingsViewModel] mcphub 登录失败: {ex.Message}");
-            McphubStatusText = "操作失败";
-            await (_toastService?.ShowAsync("操作失败，请重试") ?? Task.CompletedTask);
-        }
-        finally
-        {
-            IsMcphubLoggingIn = false;
-        }
     }
 
     /// <summary>

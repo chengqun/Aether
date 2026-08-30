@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage Shell.TabBarIsVisible="False"
+    x:Class="Acme.Mobile.Shared.Views.ConnectorPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels.Connector;assembly=Acme.Mobile.Mvvm"
+    xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
+    x:DataType="vm:ConnectorViewModel"
+    Title="连接器">
+
+    <ContentPage.Resources>
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="12" Padding="16,16,16,32">
+
+            <Label Text="连接器管理各外部数据源与认证，供 AI 工具鉴权调用。"
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+            <!-- 数据驱动卡片列表：加卡 = 加一个 card VM 子类 + DI 注册，零 XAML 改动（对齐桌面 ExpertsView）。 -->
+            <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding Cards}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConnectorCardViewModel">
+                        <Frame Style="{StaticResource CardFrame}" Padding="14">
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+
+                                <!-- Row 0: icon + title -->
+                                <Grid Grid.Row="0" ColumnDefinitions="34,*,Auto" ColumnSpacing="10">
+                                    <Label Grid.Column="0" Text="{Binding Icon}" FontSize="24" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding Title}" FontSize="16" FontFamily="OpenSansSemibold"
+                                           LineBreakMode="TailTruncation" MaxLines="1"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                </Grid>
+
+                                <!-- Row 1: description -->
+                                <Label Grid.Row="1" Text="{Binding Description}" FontSize="13" LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+
+                                <!-- Row 2: status dot + status text（绿点=已连接 / 灰点=未连接；无 StringToColorConverter 故双 Label 互斥显隐） -->
+                                <HorizontalStackLayout Grid.Row="2" Spacing="6" VerticalOptions="Center">
+                                    <Label Text="●" FontSize="12" TextColor="Green"
+                                           IsVisible="{Binding IsConnected}" VerticalOptions="Center" />
+                                    <Label Text="○" FontSize="12"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                           IsVisible="{Binding IsConnected, Converter={StaticResource InverseBool}}" VerticalOptions="Center" />
+                                    <Label Text="{Binding StatusText}" FontSize="12"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                           VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+
+                                <!-- Row 3: 主按钮 + 进行中指示器 -->
+                                <HorizontalStackLayout Grid.Row="3" Spacing="8">
+                                    <Button Text="{Binding PrimaryButtonText}" Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding PrimaryCommand}"
+                                            IsEnabled="{Binding IsPrimaryEnabled}"
+                                            MinimumWidthRequest="140" />
+                                    <ActivityIndicator IsRunning="{Binding IsPrimaryInProgress}" IsVisible="{Binding IsPrimaryInProgress}"
+                                                       Color="{DynamicResource Primary}" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

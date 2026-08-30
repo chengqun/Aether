@@ -222,6 +222,13 @@ public partial class MeViewModel : NavigableViewModelBase
     }
 
     [RelayCommand]
+    private Task NavigateToConnectorAsync()
+    {
+        NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("ConnectorPage"));
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
     private Task NavigateToLlmConfigAsync()
     {
         NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("LlmConfigPage"));
