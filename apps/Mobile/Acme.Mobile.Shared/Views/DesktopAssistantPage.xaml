@@ -23,22 +23,18 @@
             </HorizontalStackLayout>
         </DataTemplate>
 
-        <!-- 桌面消息：占满宽度的气泡 + Markdown，**逐字镜像 AgentChatSurface 的 AssistantTextTemplate**
-             （桌面端 chat 回复的已知可用模板）。用户明确要求「如同手机端和 aiagent 聊天回复占满一行一样」，
-             故直接复用同一布局：Border(HorizontalOptions=Fill) → VerticalStackLayout → MarkdownView。
-             前三次失败均因偏离此结构（#1 直放 MarkdownView 无 VSL；#2 VSL 当根无 Border；#3 Grid 当根无 Border 无 VSL）——
-             iOS CollectionView 下 Indiko MarkdownView 直放 Grid/无 VSL 包装时 measure 按内容宽报尺寸，
-             长文本溢出右边缘「被挡住」；VSL 包装在 measure 期把子元素约束到父宽，文本正确换行。
-             桌面端每 run 只发一条 Text 概览（非流式），故不附「生成中」指示。 -->
+        <!-- 桌面消息：**镜像桌面端 AI agent 回复布局**（ChatMessagesView MsgTemplate 的 IsAgentMarkdownText 分支）——
+             全宽无框 + Markdown，不用气泡背景。桌面端是 StackPanel(HorizontalAlignment=Stretch) + SelectableMarkdownViewer(Stretch)，
+             无 Border/无圆角/无底色，markdown 直接占满整行、文字按页面底色显示。手机端等价实现：
+             Grid(Fill) + MarkdownView(Fill)——Grid（非 VSL）在 measure 期把自身全宽分配给子元素，不按子内容宽自测，
+             根治 Indiko MarkdownView 单次渲染（POCO 摘要一次性到达、无流式收敛）按内容宽自测致长行右缘被裁「被挡住」。
+             用户消息仍是右侧绿色窄气泡（对齐桌面端 bubble-user 右气泡）。 -->
         <DataTemplate x:Key="DesktopTemplate" x:DataType="domain:ChatMessage">
-            <Border Margin="12,4" HorizontalOptions="Fill"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
-                    StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8">
-                <VerticalStackLayout Spacing="6">
-                    <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}"
-                                     Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
-                </VerticalStackLayout>
-            </Border>
+            <Grid Margin="12,4" HorizontalOptions="Fill">
+                <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}"
+                                 Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True"
+                                 HorizontalOptions="Fill" />
+            </Grid>
         </DataTemplate>
 
         <views:DesktopAssistantTemplateSelector x:Key="ChatMessageSelector"
