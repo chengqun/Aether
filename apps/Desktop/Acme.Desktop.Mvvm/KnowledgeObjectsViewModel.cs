@@ -1149,7 +1149,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             }
         }
 
-        var node = new FileNode(name, name, fullPath, isFolder: true, subtitle: subtitle, fillCardIcon: fillCardIcon);
+        // 根节点 = 透明壳（去掉「labs」目录名层）：不渲染 header，直接平铺 11 个类型入口为子节点。
+        var node = new FileNode(name, name, fullPath, isFolder: true, subtitle: subtitle, fillCardIcon: fillCardIcon)
+        {
+            IsVirtualRoot = isRoot
+        };
 
         // 子目录：先目录后文件排序。类型目录内的子目录继承类型（knowledge/子目录 仍收 .md）。
         // 根层按租户过滤：非 stockapp 跳过策略三目录（strategies/codestrategies/leanalgorithms，Qifu 不依赖 Trading）。

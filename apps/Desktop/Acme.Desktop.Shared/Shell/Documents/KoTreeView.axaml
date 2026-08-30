@@ -7,7 +7,7 @@
   <UserControl.Resources>
     <!-- .md 树节点模板（镜像 FileTreeView/FileNodeTemplate，纯 .md 知识对象树）。 -->
     <TreeDataTemplate x:Key="FileNodeTemplate" ItemsSource="{Binding Children}">
-      <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+      <Grid ColumnDefinitions="Auto,*" Background="Transparent" IsVisible="{Binding ShowHeader}">
         <!-- 普通文件/子目录：14×14 描边/填充小图标 -->
         <Path Grid.Column="0" Data="{Binding Icon}" Stretch="Uniform" Width="14" Height="14"
               Margin="0,0,7,0" Fill="{Binding IconColor}" IsVisible="{Binding ShowFillIcon}"
@@ -24,7 +24,7 @@
                 Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
-          <TextBlock Text="{Binding Name}"
+          <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}"
                      TextTrimming="CharacterEllipsis"/>
           <!-- 类型目录入口的描述副标题（labs 树顶部入口；普通文件/子目录无 Subtitle → 不显） -->
           <TextBlock Text="{Binding Subtitle}" FontSize="10" Opacity="0.6"
@@ -40,7 +40,7 @@
     <!-- 共享样式（ScrollViewer 横滚禁用 / TreeViewItem 选中反白 / IsExpanded 双绑）已上移 SharedTheme.axaml，
          匹配 TreeView.ko-tree class 选择器。此处仅留树特有的 chevron 箭头（IsFolder）+ 树头菜单栏样式。 -->
     <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
-      <Setter Property="IsVisible" Value="{Binding IsFolder}"/>
+      <Setter Property="IsVisible" Value="{Binding ShowChevron}"/>
     </Style>
     <!-- 树头菜单栏：透明背景融入树头（镜像 FileTreeView docs-menu） -->
     <Style Selector="Menu.ko-menu">
