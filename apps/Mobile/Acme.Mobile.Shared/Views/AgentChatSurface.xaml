@@ -11,13 +11,16 @@
     <ContentView.Resources>
         <conv:StringToBoolConverter x:Key="StringToBool" />
         <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
-        <!-- 用户消息：右侧绿色气泡 -->
+        <!-- 用户消息：右侧绿色气泡。根=Grid(占满整行 cell 宽)+内层 Border(End) 右对齐——
+             同 DesktopAssistantPage.MineTemplate 修法（镜像桌面端 ChatMessagesView IsUserText 分支）。
+             旧版根=HorizontalStackLayout(End) 按内容宽收缩，iOS CollectionView cell 只分配内容宽、
+             End 无多余空间可推 → 短消息贴左「跑前面」、长消息测量不一致「被挡住」。Grid 拿 cell 全宽，可靠右对齐。 -->
         <DataTemplate x:Key="UserTextTemplate" x:DataType="model:ChatMessageItem">
-            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
-                <Border BackgroundColor="{StaticResource BubbleMine}" StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8" MaximumWidthRequest="280">
+            <Grid Margin="12,4" HorizontalOptions="Fill">
+                <Border HorizontalOptions="End" BackgroundColor="{StaticResource BubbleMine}" StrokeShape="RoundRectangle 14" StrokeThickness="0" Padding="12,8" MaximumWidthRequest="280">
                     <Label Text="{Binding Content}" TextColor="{StaticResource TextPrimary}" FontSize="15" LineBreakMode="WordWrap" />
                 </Border>
-            </HorizontalStackLayout>
+            </Grid>
         </DataTemplate>
 
         <!-- 助手消息：占满宽度的气泡 + Markdown（手机端尽量多显示内容）。
