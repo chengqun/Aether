@@ -12,15 +12,20 @@
     <ContentPage.Resources>
         <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
 
-        <!-- 我的消息：右侧绿色气泡 -->
+        <!-- 我的消息：**镜像桌面端 user 文本布局**（ChatMessagesView MsgTemplate 的 IsUserText 分支）——
+             根=Grid（占满整行 cell 宽）+ 内层 Border(HorizontalOptions=End) 右对齐。
+             旧版根=HorizontalStackLayout(HorizontalOptions=End)——HorizontalStackLayout 按内容宽收缩，
+             在 iOS CollectionView 里 cell 只分配内容宽、End 无多余空间可推 → 短消息贴左「跑前面」、
+             长消息测量不一致被裁「被挡住」。Grid 永远拿 cell 全宽，内层 End 必有空间推到右边，可靠右对齐。 -->
         <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
-            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
-                <Border BackgroundColor="{StaticResource BubbleMine}"
+            <Grid Margin="12,4" HorizontalOptions="Fill">
+                <Border HorizontalOptions="End"
+                        BackgroundColor="{StaticResource BubbleMine}"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
                         Padding="12,8" MaximumWidthRequest="280">
                     <Label Text="{Binding Content}" TextColor="{StaticResource TextPrimary}" FontSize="15" LineBreakMode="WordWrap" />
                 </Border>
-            </HorizontalStackLayout>
+            </Grid>
         </DataTemplate>
 
         <!-- 桌面消息：**镜像桌面端 AI agent 回复布局**（ChatMessagesView MsgTemplate 的 IsAgentMarkdownText 分支）——
