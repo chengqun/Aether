@@ -18,23 +18,40 @@ public static class NoteNodeTypeRegistry
     {
         All = new List<NoteNodeTypeDescriptor>
         {
-            //                          IsFormNode HasAgentRunner IsChatTarget
-            new(NoteNodeType.Note,     "文本",      NavIcons.FileText, "#6B6B70", null,         null,   "新笔记",   "",                  false, false, false),
-            new(NoteNodeType.Agent,    "Agent",     NavIcons.Bot,      "#5B5FC7", "bot",        "yaml", "新 Agent", "# Agent 模板\n\n系统提示词...", true,  true,  true),
-            new(NoteNodeType.Workflow, "Workflow",  NavIcons.Workflow, "#1F8A4C", "workflow",   "json", "新专家团", "# Workflow 模板\n\n",              true,  true,  true),
-            new(NoteNodeType.Knowledge, "知识对象", NavIcons.Knowledge, "#0891B2", "knowledge", "yaml", "新知识对象", KnowledgeTemplate,            true,  false, false),
-            new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate,                       true,  true,  true),
-            new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate,             true,  true,  true),
-            new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate,       false, false, false),
-            new(NoteNodeType.Strategy,  "策略",      NavIcons.BarChart,  "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           true,  false, false),
-            new(NoteNodeType.LeanAlgorithm, "Lean 算法", NavIcons.Cpu,    "#0EA5E9", "cpu",       "csharp", "新 Lean 算法", LeanAlgorithmTemplate,       false, false, false),
+            //                          IsFormNode HasAgentRunner IsChatTarget  Description          FillIconPath
+            new(NoteNodeType.Note,     "文本笔记",  NavIcons.FileText, "#6B6B70", null,         null,   "新笔记",   "",                  false, false, false, "纯文本/markdown 文档", I.Description),
+            new(NoteNodeType.Agent,    "AI 助手",   NavIcons.Bot,      "#5B5FC7", "bot",        "yaml", "新 Agent", "# Agent 模板\n\n系统提示词...", true,  true,  true, "智能体 + 规则 + 代码规则", I.SmartToy),
+            new(NoteNodeType.Workflow, "工作流",    NavIcons.Workflow, "#1F8A4C", "workflow",   "json", "新专家团", "# Workflow 模板\n\n",              true,  true,  true, "多智能体协作编排", I.Tree),
+            new(NoteNodeType.Knowledge, "知识对象", NavIcons.Knowledge, "#0891B2", "knowledge", "yaml", "新知识对象", KnowledgeTemplate,            true,  false, false, "typed links 知识图谱", I.Book),
+            new(NoteNodeType.Rule,      "规则",      NavIcons.Rule,      "#B45309", "rule",      "yaml", "新规则",   RuleTemplate,                       true,  true,  true, "无 LLM 确定性规则大脑", I.Receipt),
+            new(NoteNodeType.CodeRule,  "代码规则",  NavIcons.Code,      "#1F8A4C", "code",      "csharp", "新代码规则", CodeRuleTemplate,             true,  true,  true, "C# 源码编译成规则大脑", I.Code),
+            new(NoteNodeType.CodeStrategy, "代码策略", NavIcons.LineChart, "#2563EB", "line",     "csharp", "新代码策略", CodeStrategyTemplate,       false, false, false, "C# IStrategy 实现类", I.QueryStats),
+            new(NoteNodeType.Strategy,  "策略(YAML)", NavIcons.BarChart, "#7C3AED", "bar",       "yaml",   "新策略",   YamlStrategyTemplate,           true,  false, false, "声明式 YAML 配方", I.BarChart),
+            new(NoteNodeType.LeanAlgorithm, "Lean 算法", NavIcons.Cpu,    "#0EA5E9", "cpu",       "csharp", "新 Lean 算法", LeanAlgorithmTemplate,       false, false, false, "直写 QCAlgorithm 子类", I.Memory),
             // 技能是文件夹节点 skills/<name>/SKILL.md（+ 可选兄弟脚本）。镜像知识对象两栏 form（无 links）。
             // HasAgentRunner=false——技能无运行时缓存需失效；IsChatTarget=false——技能非聊天目标，是跨 agent 按需 load_skill 引用的提示词能力。
-            new(NoteNodeType.Skill,     "技能",      NavIcons.Sparkles,  "#7C3AED", "sparkles",  "markdown", "新技能",   SkillTemplate,                  true,  false, false),
+            new(NoteNodeType.Skill,     "技能",      NavIcons.Sparkles,  "#7C3AED", "sparkles",  "markdown", "新技能",   SkillTemplate,                  true,  false, false, "跨 agent 按需 load 的能力", I.Extension),
             // MCP server 配置：扁平 mcp-servers/<name>.json（mcpServers 映射格式，兼容 Claude Code/Cursor）。
             // 纯代码节点（全宽 JSON 编辑器，无 form）；点击 mcp-servers 根目录内嵌 MCP 管理面板（镜像专家页 MCP tab）。
-            new(NoteNodeType.McpServer, "MCP",      NavIcons.Plug,      "#6366F1", "plug",      "json",     "新 MCP 配置", McpTemplate,                  false, false, false),
+            new(NoteNodeType.McpServer, "MCP 服务器", NavIcons.Plug,      "#6366F1", "plug",      "json",     "新 MCP 配置", McpTemplate,                  false, false, false, "外部工具服务器配置", I.Cloud),
         };
+    }
+
+    /// <summary>入口节点的 Material filled 图标（24×24 白填充字形，与手机 AiSettingsPage 同源）。
+    /// 5 类直接搬手机端 path，其余按 Material Symbols (Material Icons) 官方 filled path 补齐。命名按语义。</summary>
+    private static class I
+    {
+        public const string Description = "M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z";
+        public const string SmartToy = "M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zm-9 7H8v-2h3v2zm0-4H8v-2h3v2zm5 4h-3v-2h3v2zm0-4h-3v-2h3v2z";
+        public const string Tree = "M3 4h4v4H3zM17 4h4v4h-4zM10 16h4v4h-4zM5 10.4h14v1.2H5zM4.4 8h1.2v2.4H4.4zM18.4 8h1.2v2.4H18.4zM11.4 11h1.2v5h-1.2z";
+        public const string Book = "M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM6 4h5v8l-2.5-1.5L6 12V4z";
+        public const string Receipt = "M19.5 3.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5zM19 19.09H5V4.91h14v14.18zM6 15h12v2H6zm0-4h12v2H6zm0-4h12v2H6z";
+        public const string Code = "M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z";
+        public const string QueryStats = "M19.88 18.47c.44-.7.7-1.51.7-2.39 0-2.49-2.01-4.5-4.5-4.5s-4.5 2.01-4.5 4.5 2.01 4.5 4.5 4.5c.88 0 1.69-.26 2.39-.7L21.58 23 23 21.58l-3.12-3.11zm-3.8.11a2.5 2.5 0 010-5 2.5 2.5 0 010 5zm-.36-8.5c-.74.02-1.45.18-2.1.45l-.55-.83-3.8 6.18-3.01-3.52-3.63 5.81L1.5 20.17 3 21.83l1.61-2.58 3.63-5.81 3.01 3.52 3.99-6.46.28.42c.28-.46.62-.88 1.02-1.25z";
+        public const string BarChart = "M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z";
+        public const string Memory = "M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2V9h2zm-4 8H7V7h10v10z";
+        public const string Extension = "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5A2.5 2.5 0 0010.5 1 2.5 2.5 0 008 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5a2.5 2.5 0 000-5 2.5 2.5 0 00-2.5 2.5V11z";
+        public const string Cloud = "M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.55 5.35 8.04A5.99 5.99 0 000 14a6 6 0 006 6h13a5 5 0 005-5c0-2.64-2.05-4.78-4.65-4.96z";
     }
 
     /// <summary>

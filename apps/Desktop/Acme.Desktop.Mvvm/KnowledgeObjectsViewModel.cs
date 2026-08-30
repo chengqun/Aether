@@ -1128,7 +1128,28 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             ? Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             : Path.GetFileName(fullPath);
         if (string.IsNullOrEmpty(name)) name = fullPath;
-        var node = new FileNode(name, fullPath, isFolder: true);
+
+        // labs 根的直接类型子目录（agents/rules/workflows/...）→ 节点显示中文语义名 + 描述 + Material 入口图标（入口卡样式），
+        // 而非裸英文目录名。深层子目录（用户自建）保持原目录名。
+        string? subtitle = null;
+        string? fillCardIcon = null;
+        if (!isRoot && !string.IsNullOrEmpty(RootPath))
+        {
+            var parent = Path.GetDirectoryName(fullPath);
+            bool isDirectChild = string.Equals(
+                parent?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                RootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+            if (isDirectChild && CatalogNoteDirectory.TypeForDirectory(name) is { } dirType)
+            {
+                var d = NoteNodeTypeRegistry.Get(dirType);
+                name = d.Display;
+                subtitle = d.Description;
+                fillCardIcon = d.FillIconPath;
+            }
+        }
+
+        var node = new FileNode(name, name, fullPath, isFolder: true, subtitle: subtitle, fillCardIcon: fillCardIcon);
 
         // 子目录：先目录后文件排序。类型目录内的子目录继承类型（knowledge/子目录 仍收 .md）。
         // 根层按租户过滤：非 stockapp 跳过策略三目录（strategies/codestrategies/leanalgorithms，Qifu 不依赖 Trading）。

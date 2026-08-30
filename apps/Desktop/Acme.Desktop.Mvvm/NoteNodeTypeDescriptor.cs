@@ -21,7 +21,12 @@ public sealed record NoteNodeTypeDescriptor(
     /// <summary>源码直改后失效 <c>ICustomAgentRunner</c> 缓存（Agent/Rule/CodeRule/Workflow）。Knowledge/策略族/Note 无 agent 运行时。</summary>
     bool HasAgentRunner,
     /// <summary>可召唤到聊天（Agent/Rule/CodeRule/Workflow）。Knowledge/策略族/Note 非聊天目标。</summary>
-    bool IsChatTarget)
+    bool IsChatTarget,
+    /// <summary>类型目录入口的描述副标题（labs 树顶部入口节点显示；手机 AiSettingsPage 入口同源）。null=无描述（单行显示）。</summary>
+    string? Description = null,
+    /// <summary>入口节点的 Material filled 图标 path（24×24 白填充字形，手机 AiSettingsPage 同源）。
+    /// labs 树入口节点渲染成「彩色圆角方块 + 白填充字形」；null=回退 <see cref="IconPathData"/>（Lucide 描边）。</summary>
+    string? FillIconPath = null)
 {
     /// <summary>是否强制语法（非空=覆盖节点自身 Syntax，如 Agent=yaml；null=跟随节点 Syntax）。</summary>
     public bool HasForcedSyntax => Syntax is not null;

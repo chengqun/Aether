@@ -15,6 +15,19 @@ public partial class FileNode : ObservableObject
     /// <summary>显示名（文件/文件夹名）。</summary>
     public string Name { get; }
 
+    /// <summary>节点描述副标题（labs 树顶部类型目录入口显示，如「智能体 + 规则」；null=无副标题，单行显示）。</summary>
+    public string? Subtitle { get; }
+
+    /// <summary>是否带描述副标题（驱动 View 副标题行可见性；Avalonia 无法 string→bool 隐式转换，需此 bool）。</summary>
+    public bool HasSubtitle => !string.IsNullOrEmpty(Subtitle);
+
+    /// <summary>入口节点的 Material filled 图标 path（24×24 白填充字形），渲染成「彩色圆角方块 + 白字形」。
+    /// 仅 labs 树顶部类型目录入口有值；普通文件/子目录为 null → 走现有小图标。</summary>
+    public string? FillCardIcon { get; }
+
+    /// <summary>是否入口节点（=带 FillCardIcon），驱动 View 切换圆角方块图标 vs 小图标。</summary>
+    public bool IsTypeEntry => !string.IsNullOrEmpty(FillCardIcon);
+
     /// <summary>磁盘绝对路径。</summary>
     public string Path { get; }
 
@@ -55,10 +68,14 @@ public partial class FileNode : ObservableObject
 
     /// <summary>同名重载：<paramref name="displayName"/> 显示名、<paramref name="iconFileName"/> 图标解析名。
     /// 知识对象页树显示名去后缀但图标仍按完整名解析知识对象图标时用；<paramref name="iconOverride"/> 显式指定图标
-    ///（知识对象页 <c>.md</c> 文件统一知识对象图标，不随扩展名走 markdown logo）。</summary>
-    public FileNode(string displayName, string iconFileName, string path, bool isFolder, FileIcons.Icon? iconOverride = null)
+    ///（知识对象页 <c>.md</c> 文件统一知识对象图标，不随扩展名走 markdown logo）。
+    /// <paramref name="subtitle"/> 节点描述副标题（仅类型目录入口用，其余 null）。
+    /// <paramref name="fillCardIcon"/> 入口节点的 Material filled 图标 path（仅类型目录入口用，其余 null）。</summary>
+    public FileNode(string displayName, string iconFileName, string path, bool isFolder, FileIcons.Icon? iconOverride = null, string? subtitle = null, string? fillCardIcon = null)
     {
         Name = displayName;
+        Subtitle = subtitle;
+        FillCardIcon = fillCardIcon;
         Path = path;
         IsFolder = isFolder;
         // 文件夹不显图标，但仍给占位值（HasIcon=false 时 View 两个 Path 都不显）。

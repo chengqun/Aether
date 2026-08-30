@@ -52,8 +52,14 @@ public partial class FileCardItem : ObservableObject
     /// <summary>描述/副标题（front-matter description / knowledge kind；无则空 → View 隐藏）。</summary>
     public string Description { get; init; } = string.Empty;
 
+    /// <summary>是否带描述（驱动 View 副标题行可见性）。</summary>
+    public bool HasDescription => !string.IsNullOrEmpty(Description);
+
     /// <summary>类别徽标（agent/rule/workflow 的 category；无则空 → View 隐藏）。</summary>
     public string Category { get; init; } = string.Empty;
+
+    /// <summary>是否带类别徽标（驱动 View 徽标可见性）。</summary>
+    public bool HasCategory => !string.IsNullOrEmpty(Category);
 
     public string Path { get; init; } = string.Empty;
 }
