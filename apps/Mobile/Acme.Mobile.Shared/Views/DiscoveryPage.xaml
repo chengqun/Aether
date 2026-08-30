@@ -5,54 +5,75 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
     x:DataType="vm:DiscoveryViewModel"
+    BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
     Title="{Binding Title}">
 
+    <!-- 发现页：对标微信「发现」——分组卡片列表（灰底 + 白卡 + 矢量彩色图标 + 行间分隔线）。
+         图标用矢量 Path（非 emoji）：白填充字形落在彩色圆角方块上，行尾矢量 › 箭头。
+         分组卡片间灰底留白区隔，组内行间用左缩进分隔线（WeChat 范式）。 -->
     <ScrollView>
-        <VerticalStackLayout Spacing="16" Padding="0,16,0,32">
+        <VerticalStackLayout Spacing="12" Padding="0,20,0,32">
 
-            <!-- 朋友圈 -->
-            <Frame Style="{StaticResource CardFrame}" Margin="16,0">
-                <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" RowDefinitions="Auto">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding GoToMomentsCommand}" />
-                    </Grid.GestureRecognizers>
+            <!-- 分组卡片：朋友圈 + 视频号 -->
+            <Border Margin="16,0"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                    StrokeShape="RoundRectangle 12" StrokeThickness="0"
+                    Padding="0">
+                <VerticalStackLayout Spacing="0">
 
-                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
-                            BackgroundColor="{DynamicResource Primary}" StrokeShape="RoundRectangle 8" StrokeThickness="0"
-                            HorizontalOptions="Start" VerticalOptions="Center">
-                        <Label Text="📷" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
-                    </Border>
+                    <!-- 朋友圈 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToMomentsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <!-- 矢量彩色图标：橙底 + 白相机字形（Path 填充） -->
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#FF8C42" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center"
+                                  Fill="White"
+                                  Data="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="朋友圈" FontSize="16" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <!-- 矢量 › 箭头（Path 描边） -->
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
+                    </Grid>
 
-                    <Label Grid.Column="1" Text="朋友圈"
-                           FontSize="16" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                    <!-- 行间分隔线：左缩进至文字起始（WeChat 范式，不贯穿图标下） -->
+                    <BoxView HeightRequest="0.5" Margin="66,0,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
 
-                    <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                </Grid>
-            </Frame>
+                    <!-- 视频号 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToVideoChannelsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <!-- 矢量彩色图标：蓝底 + 白播放三角形（Path 填充） -->
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#4E8CFF" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="18" HeightRequest="18"
+                                  HorizontalOptions="Center" VerticalOptions="Center"
+                                  Fill="White"
+                                  Data="M8 5v14l11-7z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="视频号" FontSize="16" VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
+                    </Grid>
 
-            <!-- 视频号 -->
-            <Frame Style="{StaticResource CardFrame}" Margin="16,0">
-                <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding GoToVideoChannelsCommand}" />
-                    </Grid.GestureRecognizers>
-
-                    <Border Grid.Column="0" WidthRequest="40" HeightRequest="40"
-                            BackgroundColor="{StaticResource Accent}" StrokeShape="RoundRectangle 8" StrokeThickness="0"
-                            HorizontalOptions="Start" VerticalOptions="Center">
-                        <Label Text="📺" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
-                    </Border>
-
-                    <Label Grid.Column="1" Text="视频号"
-                           FontSize="16" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-
-                    <Label Grid.Column="2" Text="›" FontSize="22" VerticalOptions="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
-                </Grid>
-            </Frame>
+                </VerticalStackLayout>
+            </Border>
 
             <!-- 状态消息（调试/加载状态，次级文本） -->
             <Label Text="{Binding StatusMessage}" FontSize="12" Margin="16,4"

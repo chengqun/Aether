@@ -7,6 +7,7 @@
     xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     x:DataType="vm:AiSettingsViewModel"
+    BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}"
     Title="AI 设置">
 
     <ContentPage.Resources>
@@ -14,82 +15,143 @@
         <conv:InverseBoolConverter x:Key="InverseBool" />
     </ContentPage.Resources>
 
+    <!-- AI 设置页：对标微信「发现/我」——灰底 + 白卡片分组 + 矢量彩色图标 + 行尾矢量 › 箭头。
+         labs 资产入口行用矢量 Path（彩色圆角方块 + 白填充字形），不再用 emoji。 -->
     <ScrollView>
-        <VerticalStackLayout Spacing="16" Padding="16,16,16,32">
+        <VerticalStackLayout Spacing="12" Padding="0,20,0,32">
 
             <!-- ===== labs 资产入口：5 个类型入口行，点进各类型的列表页（列表 + 新建 + 编辑） ===== -->
-            <Frame Style="{StaticResource CardFrame}" Padding="0">
+            <Border Margin="16,0"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                    StrokeShape="RoundRectangle 12" StrokeThickness="0" Padding="0">
                 <VerticalStackLayout Spacing="0">
 
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <!-- AI 助手 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToAgentListCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🤖" FontSize="20" VerticalOptions="Center" />
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#4E8CFF" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center" Fill="White"
+                                  Data="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zm-9 7H8v-2h3v2zm0-4H8v-2h3v2zm5 4h-3v-2h3v2zm0-4h-3v-2h3v2z" />
+                        </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="AI 助手" FontSize="15" FontFamily="OpenSansSemibold"
+                            <Label Text="AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
                                    TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                            <Label Text="智能体 / 规则" FontSize="11"
+                            <Label Text="智能体 / 规则" FontSize="12"
                                    TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
                         </VerticalStackLayout>
-                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+                    <BoxView HeightRequest="0.5" Margin="66,0,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
 
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <!-- 工作流 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToWorkflowListCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🔀" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="工作流" FontSize="15" VerticalOptions="Center"
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#5AC8FA" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center" Fill="White"
+                                  Data="M3 4h4v4H3zM17 4h4v4h-4zM10 16h4v4h-4zM5 10.4h14v1.2H5zM4.4 8h1.2v2.4H4.4zM18.4 8h1.2v2.4H18.4zM11.4 11h1.2v5h-1.2z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="工作流" FontSize="16" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+                    <BoxView HeightRequest="0.5" Margin="66,0,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
 
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <!-- 技能 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToSkillListCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🧩" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="技能" FontSize="15" VerticalOptions="Center"
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#FF9500" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center" Fill="White"
+                                  Data="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5A2.5 2.5 0 0010.5 1 2.5 2.5 0 008 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5a2.5 2.5 0 000-5 2.5 2.5 0 00-2.5 2.5V11z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="技能" FontSize="16" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+                    <BoxView HeightRequest="0.5" Margin="66,0,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
 
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <!-- MCP 服务器 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToMcpListCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🔌" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="MCP 服务器" FontSize="15" VerticalOptions="Center"
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#00C7BE" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center" Fill="White"
+                                  Data="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.55 5.35 8.04A5.99 5.99 0 000 14a6 6 0 006 6h13a5 5 0 005-5c0-2.64-2.05-4.78-4.65-4.96z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="MCP 服务器" FontSize="16" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
                     </Grid>
-                    <BoxView Style="{StaticResource Divider}" Margin="54,0" />
+                    <BoxView HeightRequest="0.5" Margin="66,0,0,0"
+                             BackgroundColor="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
 
-                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="14" Padding="14,12">
+                    <!-- 知识对象 -->
+                    <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="14" Padding="16,10">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding NavigateToKnowledgeListCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="📚" FontSize="20" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="知识对象" FontSize="15" VerticalOptions="Center"
+                        <Border Grid.Column="0" WidthRequest="36" HeightRequest="36"
+                                BackgroundColor="#AF52DE" StrokeShape="RoundRectangle 9" StrokeThickness="0"
+                                HorizontalOptions="Start" VerticalOptions="Center">
+                            <Path Aspect="Uniform" WidthRequest="20" HeightRequest="20"
+                                  HorizontalOptions="Center" VerticalOptions="Center" Fill="White"
+                                  Data="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" />
+                        </Border>
+                        <Label Grid.Column="1" Text="知识对象" FontSize="16" VerticalOptions="Center"
                                TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
-                        <Label Grid.Column="2" Text="›" FontSize="20" VerticalOptions="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        <Path Grid.Column="2" Aspect="Uniform" WidthRequest="10" HeightRequest="14"
+                              VerticalOptions="Center" HorizontalOptions="End"
+                              Stroke="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                              StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"
+                              Data="M9 6l6 6-6 6" />
                     </Grid>
 
                 </VerticalStackLayout>
-            </Frame>
+            </Border>
 
 
             <!-- Agent picker section（仅 Stockapp：股票模式默认 Agent 选择；Qifu 不串股票功能） -->
-            <Frame Style="{StaticResource CardFrame}" IsVisible="{Binding IsStockTenant}">
+            <Border Margin="16,0"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                    StrokeShape="RoundRectangle 12" StrokeThickness="0" Padding="14"
+                    IsVisible="{Binding IsStockTenant}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="股票模式 AI 助手" FontSize="16" FontFamily="OpenSansSemibold"
                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
@@ -105,7 +167,7 @@
                     <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
                                        Color="{DynamicResource Primary}" HorizontalOptions="Start" />
                 </VerticalStackLayout>
-            </Frame>
+            </Border>
 
             <!-- 毓数 / 云文档 / mcphub 认证卡已迁至「连接器」页（我 → 连接器）。
                  手机端 token 从服务器同步（桌面端浏览器 OAuth 后上传），见 ConnectorPage。 -->
