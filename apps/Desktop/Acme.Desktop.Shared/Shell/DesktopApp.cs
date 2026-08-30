@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -11,6 +12,22 @@ namespace Acme.Desktop.Shared.Shell;
 public static class DesktopApp
 {
     public static IServiceProvider Services { get; set; } = null!;
+
+    /// <summary>
+    /// 容错解析服务：dock Quit（右键 dock→退出 / Cmd+Q）走 <c>ShutdownRequested</c>，其
+    /// <c>await DisposeAsync()</c> 先于窗口关闭释放了 DI 容器——此后 <c>OnClosing</c> 链里的
+    /// <c>GetService</c> 会抛 <c>ObjectDisposedException</c>，未经捕获成为未处理异常 → SIGABRT 崩溃
+    ///（见 <c>~/Desktop/Aether-crash.log</c>：栈顶 WorkspaceView.OnHostClosing）。而桌宠右键退出路径
+    /// 先 <c>Close()</c> 主窗（容器仍活）再 ShutdownRequested 释放容器，故不崩——dock Quit 是次序倒置。
+    /// 关闭期 best-effort 持久化回调（WorkspaceView.OnHostClosing / KO.PersistLayout / Docs.PersistLayout /
+    /// WorkbenchWindow.PersistWindowSize / Toast DetachHost）改走本方法：容器已释放则返回 null 静默跳过，
+    /// 不抛——丢写仅是下次用上次落盘的布局。
+    /// </summary>
+    public static T? TryGetService<T>() where T : class
+    {
+        try { return Services?.GetService<T>(); }
+        catch (ObjectDisposedException) { return null; }
+    }
 
     /// <summary>
     /// 解析「当前应作为模态窗口 owner 的可见窗口」。由 WorkbenchWindow 在桌宠进入/退出时更新：

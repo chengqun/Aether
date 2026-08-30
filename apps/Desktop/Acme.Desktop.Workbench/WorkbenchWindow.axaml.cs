@@ -51,7 +51,7 @@ public partial class WorkbenchWindow : Window
         RestoreWindowSize(); // 构造期同步恢复，窗口尚未显示 → 不闪烁
     }
 
-    private static IPreferencesStore? PreferencesStore => DesktopApp.Services.GetService<IPreferencesStore>();
+    private static IPreferencesStore? PreferencesStore => DesktopApp.TryGetService<IPreferencesStore>();
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
@@ -105,7 +105,8 @@ public partial class WorkbenchWindow : Window
             return;
         }
         base.OnClosing(e);
-        (DesktopApp.Services?.GetService<IToastService>() as ToastService)?.DetachHost();
+        // dock Quit 时容器已先于关窗释放——走容错解析（TryGetService），不抛 ObjectDisposedException。
+        (DesktopApp.TryGetService<IToastService>() as ToastService)?.DetachHost();
         StopAurora();      // 取消漂移动画（免关窗后空转）
         PersistWindowSize();
         // 不再在此同步 _pet.Close()——真退出路径在 ExitApplication 里已先关桌宠（见下）。此处失序/重入

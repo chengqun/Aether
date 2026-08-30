@@ -399,12 +399,15 @@ public partial class WorkspaceView : UserControl
     /// 仅活动工作台的 view 持久化——reset 触发新 WorkspaceView，旧 view detached 后 _workspace != Active → 跳过，免覆盖重置。</summary>
     private void OnHostClosing(object? sender, EventArgs e)
     {
-        var mgr = DesktopApp.Services?.GetService<IWorkspaceManager>();
+        // dock Quit 时 ShutdownRequested 的 await DisposeAsync 先于窗口关闭释放了容器——
+        // 裸 GetService 会抛 ObjectDisposedException 成为未处理异常 → SIGABRT 崩溃。改走容错解析，
+        // 容器已释放则各步静默跳过（布局持久化本就是 best-effort）。见 DesktopApp.TryGetService。
+        var mgr = DesktopApp.TryGetService<IWorkspaceManager>();
         if (_workspace is null) return;
         if (mgr?.Active is not null && !ReferenceEquals(_workspace, mgr.Active)) return; // 非活动工作台（reset 后旧 view）
         var layout = CollectCurrentLayout();
         if (layout is null) return;
-        var store = DesktopApp.Services?.GetService<IPreferencesStore>();
+        var store = DesktopApp.TryGetService<IPreferencesStore>();
         if (store is null) return;
         var json = JsonSerializer.Serialize(layout, typeof(LayoutNode));
         try { Task.Run(async () => await store.SetAsync(LayoutPrefKey, json)).Wait(); }

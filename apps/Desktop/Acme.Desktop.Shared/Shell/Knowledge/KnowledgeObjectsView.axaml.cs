@@ -88,7 +88,8 @@ public partial class KnowledgeObjectsView : UserControl
     /// 非阻塞：写文件跑后台线程，UI 线程不 Wait（拖动结束事件里阻塞会冻住输入）。</summary>
     private void PersistLayout()
     {
-        var store = DesktopApp.Services.GetService<IPreferencesStore>();
+        // dock Quit 时容器已先于关窗释放——走容错解析，不抛 ObjectDisposedException。见 DesktopApp.TryGetService。
+        var store = DesktopApp.TryGetService<IPreferencesStore>();
         if (store is null) return;
         var (previewStar, editorStar) = CollectLayout();
         try
