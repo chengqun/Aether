@@ -84,6 +84,32 @@
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Divider}, Dark={StaticResource DividerDark}}" />
     </Style>
 
+    <!-- 药丸 chip 外壳（agent/LLM 选择器）：圆角小标签，点按弹底部 sheet。
+         Background AppThemeBinding 安全（同 BorderCardFrame）；StrokeThickness=0 不走 stroke（Border stroke AppThemeBinding 会崩）。 -->
+    <Style TargetType="Border" x:Key="ChipBorder">
+        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="HeightRequest" Value="32" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- 圆形发送按钮（输入胶囊右侧 ↑）：38×38 主题色圆。空输入时 IsEnabled=false 走平台原生禁用态（变灰/变淡）。
+         注：MAUI XAML 源生成器不支持 Style 内 VisualState.Setters 改 BackgroundColor（MAUIX2002 + 源生错误），
+         故不用 VSM；启用=主题色、禁用=平台原生灰，已是主流发送按钮观感。 -->
+    <Style TargetType="Button" x:Key="SendButton">
+        <Setter Property="WidthRequest" Value="38" />
+        <Setter Property="HeightRequest" Value="38" />
+        <Setter Property="CornerRadius" Value="19" />
+        <Setter Property="Text" Value="↑" />
+        <Setter Property="TextColor" Value="White" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource Primary}" />
+    </Style>
+
     <Style TargetType="SearchBar">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />

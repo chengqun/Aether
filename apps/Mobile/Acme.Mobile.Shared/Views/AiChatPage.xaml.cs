@@ -69,6 +69,10 @@ public partial class AiChatPage : ContentPage
         {
             await AnimateDrawerAsync(_vm.IsDrawerOpen);
         }
+        else if (e.PropertyName == nameof(AiChatViewModel.IsPickerSheetOpen))
+        {
+            await AnimatePickerSheetAsync(_vm.IsPickerSheetOpen);
+        }
     }
 
     /// <summary>抽屉滑入/滑出 + 遮罩淡入/淡出。遮罩 InputTransparent 跟随开合，避免关闭态拦截主区点击。</summary>
@@ -93,6 +97,29 @@ public partial class AiChatPage : ContentPage
         }
     }
 
+    /// <summary>底部选择器 sheet 滑入/滑出 + 遮罩淡入/淡出（镜像 <see cref="AnimateDrawerAsync"/>，Y 轴）。
+    /// 平移不改变命中测试区，故关闭态须 InputTransparent 让触摸穿透，否则挡住底下输入胶囊/chip。</summary>
+    private async Task AnimatePickerSheetAsync(bool open)
+    {
+        SheetBackdrop.InputTransparent = !open;
+        PickerSheet.InputTransparent = !open;
+        if (open)
+        {
+            PickerSheet.IsVisible = true;
+            SheetBackdrop.IsVisible = true;
+        }
+        // sheet 从底纵向平移（移出量取实测高度，未布局时回退 600）+ 遮罩透明度
+        var offset = Math.Max(PickerSheet.Height, 600);
+        await Task.WhenAll(
+            PickerSheet.TranslateTo(0, open ? 0 : offset, 220, Easing.SinOut),
+            SheetBackdrop.FadeTo(open ? 1 : 0, 220));
+        if (!open)
+        {
+            // 关闭后隐藏遮罩；sheet 保留可见（已移出屏幕）以便下次动画无闪烁
+            SheetBackdrop.IsVisible = false;
+        }
+    }
+
     private async void OnHistorySelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (e.CurrentSelection.FirstOrDefault() is not ObservableConversation item) return;
@@ -111,6 +138,13 @@ public partial class AiChatPage : ContentPage
             Backdrop.IsVisible = false;
             Backdrop.Opacity = 0;
             Backdrop.InputTransparent = true;
+        }
+        // 首次显示时同步选择器 sheet 初始位（关闭态）
+        if (!_vm.IsPickerSheetOpen)
+        {
+            SheetBackdrop.IsVisible = false;
+            SheetBackdrop.Opacity = 0;
+            SheetBackdrop.InputTransparent = true;
         }
     }
 

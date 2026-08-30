@@ -11,6 +11,7 @@ using Acme.Llm.Application;
 using Acme.Llm.Domain;
 using Acme.Mobile.Mvvm.Abstractions;
 using Acme.Mobile.Mvvm.Events;
+using Acme.Mobile.Mvvm.Models;
 using Acme.Mobile.Mvvm.Services;
 using Acme.Notes.Domain;
 using Aether.AI.Harness;
@@ -47,8 +48,10 @@ public partial class AiChatViewModel : NavigableViewModelBase
     /// <summary>桌面设备标识（32 位 DeviceId 字符串，查一次缓存；无桌面设备则为 null → 入口隐藏）。</summary>
     private string? _desktopDeviceId;
     private bool _desktopDeviceResolved = false;
-    /// <summary>可用 agent 名册（chip ActionSheet 渲染 + 新对话默认 agent 回退）。null=未加载。</summary>
+    /// <summary>可用 agent 名册（chip sheet 渲染 + 新对话默认 agent 回退）。null=未加载。</summary>
     private List<string>? _agentNames;
+    /// <summary>可用 agent 完整定义（chip sheet 副标题用 Category/Description）。null=未加载/无 catalog。</summary>
+    private List<CustomAgentDefinition>? _agentDefs;
     /// <summary>当前 surface 活动会话 Id（抽屉切换时记录；picker 新对话为 <see cref="Guid.Empty"/> 哨兵，
     /// 待 <see cref="OnNewConversation"/> 回填）。用于删除时判断是否回到空态。</summary>
     private Guid _activeConversationId = Guid.Empty;
@@ -111,6 +114,20 @@ public partial class AiChatViewModel : NavigableViewModelBase
     [ObservableProperty]
     private bool _isDesktopAssistantVisible;
 
+    /// <summary>底部选择器 sheet 是否展开（页面 code-behind 监听做 TranslateY 动画，镜像 <see cref="IsDrawerOpen"/>）。</summary>
+    [ObservableProperty]
+    private bool _isPickerSheetOpen;
+
+    /// <summary>底部选择器 sheet 标题（「选择助手」/「选择模型」）。</summary>
+    [ObservableProperty]
+    private string _pickerSheetTitle = string.Empty;
+
+    /// <summary>底部选择器 sheet 列表项（agent / LLM 共用一个 sheet，靠 <see cref="_pickerSheetIsAgent"/> 切换内容）。</summary>
+    public ObservableCollection<PickerItem> CurrentPickerItems { get; } = new();
+
+    /// <summary>sheet 模式：true=agent 选择 / false=LLM 选择（决定 SelectPickerItem 的派发目标）。</summary>
+    private bool _pickerSheetIsAgent;
+
     /// <summary>条目级「桌面助理」命令：导航进桌面助手页（顶部「选择电脑」下拉，多台 desktop 设备各自独立会话）。</summary>
     [RelayCommand]
     private async Task OpenDesktopAssistantAsync()
@@ -128,6 +145,107 @@ public partial class AiChatViewModel : NavigableViewModelBase
         // 无参跳转：DesktopAssistantPage 自行经 IDeviceService 加载 desktop 设备列表并默认打开第一台。
         NavigationRequested?.Invoke(this, NavigationRequestedEvent.To("DesktopAssistantPage"));
     }
+
+    /// <summary>打开 agent 选择 sheet：从缓存的 agent 定义建列表项（名 + 分类副标题），标记当前选中，弹起 sheet。</summary>
+    [RelayCommand]
+    private Task OpenAgentPicker()
+    {
+        CurrentPickerItems.Clear();
+        var current = ChatSurface.AgentName;
+        var defs = _agentDefs;
+        if (defs != null)
+        {
+            foreach (var a in defs)
+            {
+                var desc = !string.IsNullOrWhiteSpace(a.Category) ? a.Category
+                           : (!string.IsNullOrWhiteSpace(a.Description) ? a.Description : null);
+                CurrentPickerItems.Add(new PickerItem
+                {
+                    Name = a.Name,
+                    Description = desc,
+                    IsSelected = string.Equals(a.Name, current, StringComparison.Ordinal),
+                });
+            }
+        }
+        else if (_agentNames != null)
+        {
+            // 回退：仅有名册无定义（catalog 未返回完整定义时）
+            foreach (var n in _agentNames)
+            {
+                CurrentPickerItems.Add(new PickerItem
+                {
+                    Name = n,
+                    IsSelected = string.Equals(n, current, StringComparison.Ordinal),
+                });
+            }
+        }
+        _pickerSheetIsAgent = true;
+        PickerSheetTitle = "选择助手";
+        IsPickerSheetOpen = true;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>打开 LLM 选择 sheet：首项「默认」+ 各 LLM 配置（名 + 模型名副标题），标记当前选中，弹起 sheet。</summary>
+    [RelayCommand]
+    private Task OpenLlmPicker()
+    {
+        CurrentPickerItems.Clear();
+        var current = CurrentLlmName;
+        CurrentPickerItems.Add(new PickerItem
+        {
+            Name = "默认",
+            Description = "平台默认模型",
+            IsSelected = string.Equals("默认", current, StringComparison.Ordinal),
+        });
+        var configs = LlmConfigs ?? new List<LlmConfigDto>();
+        foreach (var c in configs)
+        {
+            CurrentPickerItems.Add(new PickerItem
+            {
+                Name = c.Name,
+                Description = string.IsNullOrWhiteSpace(c.ModelName) ? null : c.ModelName,
+                IsSelected = string.Equals(c.Name, current, StringComparison.Ordinal),
+            });
+        }
+        _pickerSheetIsAgent = false;
+        PickerSheetTitle = "选择模型";
+        IsPickerSheetOpen = true;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>sheet 列表项点击：按模式派发——agent 开新对话（<see cref="StartNewConversationWithAgentAsync"/>），
+    /// LLM 切全局默认（<see cref="SetLlm"/> + 同步索引），随后收起 sheet。</summary>
+    [RelayCommand]
+    private async Task SelectPickerItem(PickerItem? item)
+    {
+        if (item == null) return;
+        if (_pickerSheetIsAgent)
+        {
+            IsPickerSheetOpen = false;
+            await StartNewConversationWithAgentAsync(item.Name);
+        }
+        else
+        {
+            LlmConfigDto? config = null;
+            if (!string.Equals(item.Name, "默认", StringComparison.Ordinal))
+            {
+                config = (LlmConfigs ?? new List<LlmConfigDto>())
+                    .FirstOrDefault(c => string.Equals(c.Name, item.Name, StringComparison.Ordinal));
+            }
+            SetLlm(config);
+            // 同步 SelectedLlmIndex 保状态一致（_syncingPicker 抑制 OnSelectedLlmIndexChanged 重触发）
+            _syncingPicker = true;
+            SelectedLlmIndex = config == null ? 0
+                : ((LlmConfigs ?? new List<LlmConfigDto>()).ToList().IndexOf(config) + 1);
+            _syncingPicker = false;
+            IsPickerSheetOpen = false;
+        }
+    }
+
+    /// <summary>关闭底部选择器 sheet（遮罩点击 / ✕ 按钮）。</summary>
+    [RelayCommand]
+    private void ClosePickerSheet() => IsPickerSheetOpen = false;
+
 
     public AiChatViewModel(
         AiChatSurfaceViewModel chatSurface,
@@ -334,7 +452,8 @@ public partial class AiChatViewModel : NavigableViewModelBase
         try
         {
             var agents = await _agentCatalog.ListAsync();
-            _agentNames = agents.Select(a => a.Name).ToList();
+            _agentDefs = agents.ToList();
+            _agentNames = _agentDefs.Select(a => a.Name).ToList();
 
             // 填充 agent 下拉 + 同步当前选中索引（当前 surface 的 agent 名优先，否则首个）。
             _syncingPicker = true;

@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:conv="clr-namespace:Acme.Mobile.Shared.Converters"
     xmlns:vm="clr-namespace:Acme.Mobile.Mvvm.ViewModels;assembly=Acme.Mobile.Mvvm"
+    xmlns:model="clr-namespace:Acme.Mobile.Mvvm.Models;assembly=Acme.Mobile.Mvvm"
     xmlns:views="clr-namespace:Acme.Mobile.Shared.Views"
     Shell.NavBarIsVisible="False"
     Title="AI">
@@ -42,44 +43,62 @@
                 </Grid>
             </Grid>
 
-            <!-- 底部组合栏：选择条（agent ▾ / LLM ▾ / 💻桌面助理）上沿 + 输入栏，与输入框一体。
-                 选择条绑页面 VM（agent 名经 ChatSurface.AgentName、LLM 经 CurrentLlmName）；
-                 输入栏绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。
-                 选择条始终显示（空态也能进桌面助理）；输入栏仅活动对话时显示。 -->
-            <VerticalStackLayout Grid.Row="2" Spacing="0"
+            <!-- 底部组合栏：chip 行（agent ▾ / LLM ▾ + 💻桌面助理）上沿 + 输入胶囊，主流化（豆包/千问式）。
+                 chip 绑页面 VM（agent 名经 ChatSurface.AgentName、LLM 经 CurrentLlmName）；点 chip 弹底部 sheet。
+                 输入胶囊绑 ChatSurface.MessageText/SendMessageCommand/CanSendMessage。
+                 chip 行始终显示（空态也能选 agent / 进桌面助理）；输入胶囊仅活动对话时显示。 -->
+            <VerticalStackLayout Grid.Row="2" Spacing="6" Padding="8,6,8,8"
                                  BackgroundColor="{AppThemeBinding Light={StaticResource NavBackground}, Dark={StaticResource NavBackgroundDark}}">
-                <!-- 选择条：agent 下拉(左) + LLM 下拉(中) + 桌面助理(右)——对齐桌面 ComboBox 下拉选择 + 千问式「AI 旁连本地电脑」 -->
-                <Grid ColumnDefinitions="*,*,Auto" Padding="12,6,12,2" ColumnSpacing="8">
-                    <Picker Grid.Column="0" Title="选择助手"
-                            ItemsSource="{Binding AgentOptions}"
-                            SelectedIndex="{Binding SelectedAgentIndex}"
-                            FontSize="13"
-                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                            VerticalOptions="Center" />
-                    <Picker Grid.Column="1" Title="选择模型"
-                            ItemsSource="{Binding LlmOptions}"
-                            SelectedIndex="{Binding SelectedLlmIndex}"
-                            FontSize="13"
-                            TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}"
-                            VerticalOptions="Center" />
-                    <!-- 桌面助理入口：有绑定 desktop 设备才显示；点进全屏设备会话页（心跳/摘要/审批 + 离线补拉）。 -->
-                    <Button Grid.Column="2" Text="💻" FontSize="18" Padding="4,0" WidthRequest="40"
+                <!-- chip 行：agent(左) + LLM(中) + 弹性间距 + 💻桌面助理(右) -->
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+                    <!-- agent chip：药丸 + 名▾，点按弹 agent 选择 sheet -->
+                    <Border Grid.Column="0" Style="{StaticResource ChipBorder}" MaximumWidthRequest="160">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenAgentPickerCommand}" />
+                        </Border.GestureRecognizers>
+                        <HorizontalStackLayout Spacing="4">
+                            <Label Text="{Binding ChatSurface.AgentName}" FontSize="13" LineBreakMode="TailTruncation" MaxLines="1"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="▾" FontSize="10" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </HorizontalStackLayout>
+                    </Border>
+                    <!-- LLM chip：药丸 + 名▾，点按弹 LLM 选择 sheet -->
+                    <Border Grid.Column="1" Style="{StaticResource ChipBorder}" MaximumWidthRequest="160">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenLlmPickerCommand}" />
+                        </Border.GestureRecognizers>
+                        <HorizontalStackLayout Spacing="4">
+                            <Label Text="{Binding CurrentLlmName}" FontSize="13" LineBreakMode="TailTruncation" MaxLines="1"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                            <Label Text="▾" FontSize="10" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}" />
+                        </HorizontalStackLayout>
+                    </Border>
+                    <!-- 桌面助理入口：有绑定 desktop 设备才显示；点进全屏设备会话页 -->
+                    <Button Grid.Column="3" Text="💻" FontSize="18" Padding="4,0" WidthRequest="40"
                             BackgroundColor="Transparent"
                             IsVisible="{Binding IsDesktopAssistantVisible}"
                             Command="{Binding OpenDesktopAssistantCommand}"
                             VerticalOptions="Center" />
                 </Grid>
-                <!-- 输入栏（仅活动对话时显示） -->
-                <Border Padding="8" StrokeThickness="0" IsVisible="{Binding HasActiveChat}">
+                <!-- 输入胶囊：圆角 pill + 弹性 Entry + 圆形 ↑ 发送。StrokeThickness=0 不走 stroke（Border stroke
+                     AppThemeBinding 会崩），靠 Shadow 做边缘 lift。仅活动对话时显示。 -->
+                <Border StrokeShape="RoundRectangle 20" StrokeThickness="0"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackground}, Dark={StaticResource CardBackgroundDark}}"
+                        Padding="14,7" IsVisible="{Binding HasActiveChat}">
+                    <Border.Shadow>
+                        <Shadow Offset="0,2" Radius="8" Opacity="0.08" Brush="Black" />
+                    </Border.Shadow>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Entry Grid.Column="0" x:Name="MessageEntry"
                                Text="{Binding ChatSurface.MessageText}"
-                               Placeholder="输入消息…"
+                               Placeholder="给助手发消息…"
                                ReturnType="Send"
                                ReturnCommand="{Binding ChatSurface.SendMessageCommand}" />
-                        <Button Grid.Column="1" Text="发送" Style="{StaticResource PrimaryButton}"
+                        <Button Grid.Column="1" Style="{StaticResource SendButton}"
                                 Command="{Binding ChatSurface.SendMessageCommand}"
-                                IsEnabled="{Binding ChatSurface.CanSendMessage}" Padding="16,8" />
+                                IsEnabled="{Binding ChatSurface.CanSendMessage}" />
                     </Grid>
                 </Border>
             </VerticalStackLayout>
@@ -166,6 +185,59 @@
                 <Button Grid.Row="2" Text="↻ 刷新" BackgroundColor="Transparent"
                         TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
                         Command="{Binding RefreshConversationsCommand}" Margin="12,4,12,12" />
+            </Grid>
+        </Border>
+
+        <!-- ═══ 底部选择器 sheet（agent/LLM 复用，镜像抽屉 overlay 范式） ═══ -->
+
+        <!-- 半透明遮罩（覆盖整页；关闭态 InputTransparent 穿透，与 SheetBackdrop 同生死） -->
+        <BoxView x:Name="SheetBackdrop" BackgroundColor="#80000000" Opacity="0" InputTransparent="True">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ClosePickerSheetCommand}" />
+            </BoxView.GestureRecognizers>
+        </BoxView>
+
+        <!-- 底部 sheet：从下滑入。VerticalOptions=End 锚底 + TranslationY=600 移出屏幕；
+             InputTransparent=True 初始（关闭态）——平移不改变命中测试区，关闭时必须穿透，
+             否则挡住底下输入胶囊 / chip（镜像抽屉 Drawer 的 InputTransparent 翻转）。开合由 code-behind 翻转。 -->
+        <Border x:Name="PickerSheet" VerticalOptions="End" HorizontalOptions="Fill"
+                TranslationY="600" InputTransparent="True"
+                BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}"
+                StrokeShape="RoundRectangle 16,16,0,0" StrokeThickness="0">
+            <Grid RowDefinitions="Auto,*" Padding="0">
+                <!-- sheet 头：标题 + ✕ 关闭 -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,44" Padding="16,14,8,10">
+                    <Label Grid.Column="0" Text="{Binding PickerSheetTitle}" FontSize="16" FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                    <Button Grid.Column="1" Text="✕" FontSize="18" Padding="0" WidthRequest="44"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                            Command="{Binding ClosePickerSheetCommand}" />
+                </Grid>
+                <!-- 选项列表（agent / LLM 共用，按 PickerItem 渲染） -->
+                <CollectionView Grid.Row="1" ItemsSource="{Binding CurrentPickerItems}" SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="model:PickerItem">
+                            <Grid ColumnDefinitions="*,Auto" Padding="16,14" ColumnSpacing="8"
+                                  BackgroundColor="{AppThemeBinding Light={StaticResource PageBackground}, Dark={StaticResource PageBackgroundDark}}">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectPickerItemCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                    <Label Text="{Binding Name}" FontSize="15" FontFamily="OpenSansRegular"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextPrimary}, Dark={StaticResource TextPrimaryDark}}" />
+                                    <Label Text="{Binding Description}" FontSize="12" LineBreakMode="TailTruncation" MaxLines="1"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextSecondary}, Dark={StaticResource TextSecondaryDark}}"
+                                           IsVisible="{Binding HasDescription}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="✓" FontSize="16" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource Accent}, Dark={StaticResource StatusSuccessDark}}"
+                                       IsVisible="{Binding IsSelected}" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
             </Grid>
         </Border>
     </Grid>
