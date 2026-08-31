@@ -12,6 +12,8 @@ namespace Acme.Desktop.Mvvm;
 /// 文档版知识对象 link 行。与 note 版一致——表单只显示/编辑目标<b>名称</b>（targetId 路径的文件名部分 stem），
 /// 目录前缀（指针）隐藏在 <see cref="TargetDirectory"/> 不绑表单（在源码编辑）。编辑名称时保留目录、只改 stem
 /// （<see cref="DocumentKnowledgeViewModel.Build"/> 重建完整路径回写 targetId）。
+/// <para><see cref="Expand"/> = 作者标记「AI 读取此对象时内联该目标内容」（默认 false=只列引用）。
+/// 表单复选框可设；<see cref="Build"/> 回写 <see cref="KnowledgeLink.Expand"/>，避免表单编辑丢字段。</para>
 /// </summary>
 public partial class DocumentKnowledgeLinkRow : ObservableObject
 {
@@ -22,6 +24,9 @@ public partial class DocumentKnowledgeLinkRow : ObservableObject
 
     /// <summary>目标路径的目录前缀（表单不绑；Build 时与 Target 拼回完整 targetId 路径）。仅 Load/SyncFromSource 设置。</summary>
     public string TargetDirectory { get; set; } = string.Empty;
+
+    /// <summary>作者标记：AI 读取时是否内联此目标内容（默认 false=只列引用，agent 按需单独 read）。</summary>
+    [ObservableProperty] private bool _expand;
 }
 
 /// <summary>
@@ -146,7 +151,7 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
             // 与 note 版一致：表单只显示「名称」= 路径的文件名部分 stem；目录前缀保留在 TargetDirectory，
             // Build 时拼回完整路径写回 targetId。改名称只改 stem、目录不动。
             var (dir, name) = SplitPath(l.Target ?? string.Empty);
-            var row = new DocumentKnowledgeLinkRow { Role = l.Role, Target = name, TargetDirectory = dir };
+            var row = new DocumentKnowledgeLinkRow { Role = l.Role, Target = name, TargetDirectory = dir, Expand = l.Expand };
             row.PropertyChanged += OnLinkRowChanged;
             Links.Add(row);
         }
@@ -172,12 +177,18 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
     /// <summary>
     /// 把可编辑字段投影回 Domain 模型。Target = 目录前缀 + 名称拼成的完整路径（写回 targetId），
     /// TargetId(Guid?) 留空——文档版路径是字符串，note 版 Guid? TargetId 容不下，故路径存 Target。
+    /// Expand 回写 <see cref="KnowledgeLink.Expand"/>（表单复选框→源码 front-matter）。
     /// </summary>
     public KnowledgeObjectDefinition Build() => new()
     {
         Kind = Kind ?? string.Empty,
         Body = Body ?? string.Empty,
-        Links = Links.Select(l => new KnowledgeLink { Role = l.Role, Target = CombinePath(l.TargetDirectory, l.Target) }).ToList(),
+        Links = Links.Select(l => new KnowledgeLink
+        {
+            Role = l.Role,
+            Target = CombinePath(l.TargetDirectory, l.Target),
+            Expand = l.Expand,
+        }).ToList(),
     };
 
     /// <summary>拆分相对路径为（目录前缀, 文件名 stem）。无 "/" 则整体为名称、目录空。</summary>

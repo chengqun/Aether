@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Acme.Notes.Domain.Knowledge;
 using Acme.Notes.Infrastructure.Knowledge;
 
@@ -117,5 +118,51 @@ public class DocumentKnowledgeSourceParserTests
         var ok = _parser.TryParse("   ", out _, out var error);
         Assert.False(ok);
         Assert.NotEmpty(error);
+    }
+
+    /// <summary>link 标 expand:true → 解析出 KnowledgeLink.Expand=true，false 省略默认 false。</summary>
+    [Fact]
+    public void Parse_LinkExpand_True()
+    {
+        const string src = """
+            ---
+            kind: 流程
+            links:
+            - role: uses
+              targetId: Hive表/fin_dw
+              expand: true
+            - role: then
+              targetId: 规则/退款
+            ---
+            流程正文
+            """;
+        var ok = _parser.TryParse(src, out var def, out var error);
+        Assert.True(ok, $"解析应成功，错误：{error}");
+        Assert.Equal(2, def!.Links.Count);
+        Assert.True(def.Links[0].Expand);   // 标了 expand:true
+        Assert.False(def.Links[1].Expand); // 未标 → 默认 false
+    }
+
+    /// <summary>序列化：expand=true 写出、false 省略（保持文件干净），round-trip 稳定。</summary>
+    [Fact]
+    public void Serialize_Expand_OmittedWhenFalse()
+    {
+        var def = new KnowledgeObjectDefinition
+        {
+            Kind = "流程",
+            Body = "正文",
+            Links = new List<KnowledgeLink>
+            {
+                new() { Role = "uses", Target = "Hive表/fin_dw", Expand = true },
+                new() { Role = "then", Target = "规则/退款", Expand = false },
+            },
+        };
+        var src = _parser.Serialize(def);
+        Assert.Contains("expand: true", src);          // true 写出
+        Assert.DoesNotContain("expand: false", src);    // false 省略
+        // round-trip
+        _parser.TryParse(src, out var def2, out _);
+        Assert.True(def2!.Links[0].Expand);
+        Assert.False(def2.Links[1].Expand);
     }
 }

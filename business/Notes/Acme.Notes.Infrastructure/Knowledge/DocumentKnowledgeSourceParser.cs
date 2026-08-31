@@ -99,13 +99,16 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
         Target = !string.IsNullOrWhiteSpace(l.TargetId) ? l.TargetId!
               : !string.IsNullOrWhiteSpace(l.Target) ? l.Target!
               : string.Empty,
+        Expand = l.Expand ?? false,
     };
 
-    /// <summary>Domain→DTO：路径写回 targetId 字段（保持用户既有 .md 格式；target 字段留空避免冗余）。</summary>
+    /// <summary>Domain→DTO：路径写回 targetId 字段（保持用户既有 .md 格式；target 字段留空避免冗余）。
+    /// expand 仅在 true 时写出（OmitNull + bool? → 默认 false 省略，保持文件干净）。</summary>
     private static DocumentKnowledgeLinkDto ToDtoLink(KnowledgeLink l) => new()
     {
         Role = l.Role ?? string.Empty,
         TargetId = l.Target ?? string.Empty,
+        Expand = l.Expand ? true : null,
     };
 
     /// <summary>front-matter 承载 DTO（kind + links，links 的 targetId/target 均为字符串）。</summary>
@@ -115,11 +118,12 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
         public List<DocumentKnowledgeLinkDto> Links { get; set; } = new();
     }
 
-    /// <summary>文档版 link DTO：targetId=相对路径（string），非 note 版的 Guid?。</summary>
+    /// <summary>文档版 link DTO：targetId=相对路径（string），非 note 版的 Guid?。expand 可空（null=省略，true=内联）。</summary>
     private sealed class DocumentKnowledgeLinkDto
     {
         public string Role { get; set; } = string.Empty;
         public string? TargetId { get; set; }
         public string? Target { get; set; }
+        public bool? Expand { get; set; }
     }
 }

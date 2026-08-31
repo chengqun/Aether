@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -126,12 +125,17 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("按相对路径读取一个文档知识对象（.md 文件）的完整定义：kind + 正文 + links 指向的子 .md 文件内容（只展开一层）。" +
+    [Description("按相对路径读取一个文档知识对象（.md 文件）的完整定义：kind + 正文 + links 指向的子 .md 文件内容。" +
                  "仅可读取 labs knowledge/ 子树内的知识对象（路径越界指向 agents/ 等 → 拒绝，防误读非知识对象 .md）。" +
                  "name=相对路径（不含 .md；如 knowledge/业务分析/退款会员日志分析 或 业务分析/退款会员日志分析，两种写法均可解析）。先调此工具获取知识再执行任务。" +
-                 "link 解析支持三种 targetId 写法：知识库根相对（权威）/ 相对源文件目录（./b、../xx/b）/ 裸名（全局 basename 匹配）。")]
+                 "\n展开深度（expandDepth，可选 int？）：null（默认）= 作者标志模式——只内联 link 上标了 expand:true 的目标，沿标过的链递归展开多层；" +
+                 "未标 expand 的子节点只列在 links 清单（agent 按需单独 read 取内容）。这契合「当前页本身才重要」——既有知识对象无 expand 字段时默认只返回本对象。" +
+                 "传 N（0~4）= 覆盖模式——忽略作者标志，blanket 内联 N 层全部子节点（N=0 仅本对象；N=1 等价于旧行为全部直接子节点内联）。" +
+                 "硬上限 4 层 + 单目标 8000 字 / 累计 20000 字截断（超出提示单独 read 对应路径）。" +
+                 "\nlink 解析支持三种 targetId 写法：知识库根相对（权威）/ 相对源文件目录（./b、../xx/b）/ 裸名（全局 basename 匹配）。")]
     public async Task<ReadDocumentKnowledgeOutput> ReadDocumentKnowledgeObject(
         [Description("相对路径（不含 .md；如 knowledge/业务分析/退款 或 业务分析/退款；也可带 .md 后缀）")] string name,
+        [Description("展开深度（可选）：null=作者标志模式（只内联标了 expand 的边）；N=覆盖模式 blanket 内联 N 层全部子节点（0~4）")] int? expandDepth = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -170,7 +174,7 @@ public sealed class DocumentKnowledgeTool
                     Name = OkTargetResolver.StemOf(name),
                     Kind = def.Kind,
                     // link 解析仍根植 labs（与文档编辑器图解析同源，保持 page↔tool 一致）。
-                    Definition = Format(def, relPath, root),
+                    Definition = Format(def, relPath, root, full, expandDepth),
                 };
             }, cancellationToken);
         }
@@ -185,6 +189,7 @@ public sealed class DocumentKnowledgeTool
                  "links 可选 JSON 数组：" +
                  "{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}（targetId 三种写法：知识库根相对=权威；" +
                  "相对源文件目录 ./b 或 ../xx/b；裸名 b 全局匹配——推荐目录内互链用裸名/相对路径，目录迁移不断链）。" +
+                 "每条 link 可选 expand:true 标记「AI 读取此对象时内联该目标内容」（默认 false=只列引用，agent 按需单独 read）。" +
                  "已存在则失败。")]
     public async Task<CreateDocumentKnowledgeOutput> CreateDocumentKnowledgeObject(
         [Description("相对路径（不含 .md 扩展名；如 业务分析/测试KO 或 knowledge/业务分析/测试KO）")] string name,
@@ -283,7 +288,8 @@ public sealed class DocumentKnowledgeTool
     /// <summary>解析 links JSON。文档版 <c>targetId</c>=相对路径（无 notes DB 反查）。
     /// <c>targetId</c> 优先 → <see cref="KnowledgeLink.Target"/>=路径；回退 <c>target</c>（名称）。两者都无跳过。
     /// 解析失败返空列表（容错，镜像 note）。<see cref="KnowledgeLink.TargetId"/> 留 null——
-    /// 与 <see cref="DocumentKnowledgeSourceParser.ToDomainLink"/> 同构（序列化把 Target 写回 targetId 字段）。</summary>
+    /// 与 <see cref="DocumentKnowledgeSourceParser.ToDomainLink"/> 同构（序列化把 Target 写回 targetId 字段）。
+    /// <c>expand:true</c> 透传 <see cref="KnowledgeLink.Expand"/>（作者标记「该目标内容 AI 读取时内联」）。</summary>
     private static List<KnowledgeLink> ParseLinks(string? linksJson)
     {
         var result = new List<KnowledgeLink>();
@@ -302,73 +308,25 @@ public sealed class DocumentKnowledgeTool
                     target = tEl.GetString() ?? "";
 
                 if (string.IsNullOrWhiteSpace(target)) continue;
-                result.Add(new KnowledgeLink { Role = role, Target = target, TargetId = null });
+                var expand = el.TryGetProperty("expand", out var exEl) && exEl.GetBoolean();
+                result.Add(new KnowledgeLink { Role = role, Target = target, TargetId = null, Expand = expand });
             }
         }
         catch { /* 容错：links JSON 非法 → 返回空 links，仍创建/更新知识对象 */ }
         return result;
     }
 
-    /// <summary>组装：path + kind + name + 正文 + 各 link 指向子 .md 文件的原文（含 target 路径，2 格缩进，只展开一层）。
-    /// 镜像 note KnowledgeTool.FormatAsync——文档版"目标 Content"= 目标 .md 文件全文（经 <see cref="OkTargetResolver.ResolveRaw"/>）。
+    /// <summary>组装：path + kind + name + 正文 + links（标了 <see cref="KnowledgeLink.Expand"/> 的边递归内联目标内容）。
+    /// 委托 <see cref="KnowledgeExpansionBuilder"/>（纯函数，可单测），解析目标经 <see cref="OkTargetResolver.ResolveTargetWithPath"/>
+    /// （一次取齐 显示名+全路径+定义，全路径做去重防环键）。
     /// <para><b>防上下文溢出</b>：link 可能指向含完整字段表/SQL/示例的大 .md，多目标内联会撑爆 LLM 上下文窗口
-    /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标内联有上限、累计有上限，
-    /// 超出截断头部 + 标记总数并告知 agent 如何取完整内容——同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。</para></summary>
-    private const int MaxTargetInlineChars = 8000;       // 单个目标 .md 原文内联上限
-    private const int MaxLinkedInlineTotalChars = 20000; // 所有 link 原文内联累计上限（防多 link 累积撑爆）
-
-    private string Format(KnowledgeObjectDefinition def, string relPath, string root)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"path: {relPath}");
-        sb.AppendLine($"kind: {def.Kind}");
-        sb.AppendLine($"name: {OkTargetResolver.StemOf(relPath)}");
-        if (!string.IsNullOrWhiteSpace(def.Body))
-            sb.AppendLine().AppendLine(def.Body);
-
-        if (def.Links.Count > 0)
-        {
-            sb.AppendLine().AppendLine("links:");
-            var linkedTotal = 0; // 已内联的目标原文累计字符
-            // link 解析语境：currentFileDir=被读文件自身目录（与图视图打开 .md 时传 Path.GetDirectoryName(filePath) 同构）。
-            // 这使裸名（b）/同目录（./b）/上层目录（../xx/b）写法在 Read 展开时也能解析，与图口径统一；
-            // 根相对（毓数平台项目/xxx）仍是第一优先级，兼容既有 42 条根相对 links。
-            var currentFileDir = Path.GetDirectoryName(Path.Combine(root, relPath));
-            foreach (var l in def.Links)
-            {
-                var resolved = OkTargetResolver.ResolveRaw(l.Target, root, currentFileDir);
-                if (resolved is null) continue; // 空白路径，跳过
-                var (title, raw) = resolved.Value;
-                sb.AppendLine($"[{l.Role}] {title} (path:{l.Target}):");
-
-                if (linkedTotal >= MaxLinkedInlineTotalChars)
-                {
-                    // 累计已超上限：不再内联后续 link 原文，仅列名 + 提示（防多 link 累积撑爆）。
-                    sb.AppendLine("  （引用过多，已停止展开后续目标；完整内容请单独 ReadDocumentKnowledgeObject 对应路径）");
-                    continue;
-                }
-
-                if (raw is null)
-                {
-                    sb.AppendLine("  （找不到知识对象文件）");
-                }
-                else if (raw.Length > MaxTargetInlineChars)
-                {
-                    // 单个目标过大：截断头部（字段表/schema 信息密度高从头开始）+ 标记总数。
-                    var truncated = raw[..MaxTargetInlineChars]
-                        + $"\n…（已截断，原文共 {raw.Length} 字符；如需完整内容请单独 ReadDocumentKnowledgeObject \"{l.Target}\"）";
-                    sb.AppendLine(Indent(truncated, "  "));
-                    linkedTotal += MaxTargetInlineChars;
-                }
-                else
-                {
-                    sb.AppendLine(Indent(raw, "  "));
-                    linkedTotal += raw.Length;
-                }
-            }
-        }
-        return sb.ToString().TrimEnd();
-    }
+    /// （曾触发 GLM <c>ResponseEnded</c> 提前终止 → "The response ended prematurely"）。故每目标正文内联有上限、累计有上限，
+    /// 递归深度有硬上限——超出截断头部 + 标记并告知 agent 如何取完整内容，同 <c>GrepTool</c>/<c>run_in_terminal</c> 的 Truncated 范式。</para></summary>
+    private string Format(KnowledgeObjectDefinition def, string relPath, string root, string? focalFullPath, int? expandDepth)
+        => KnowledgeExpansionBuilder.BuildExpandedDefinition(
+            def, relPath, focalFullPath,
+            (t, dir) => OkTargetResolver.ResolveTargetWithPath(_parser, t, root, dir),
+            expandDepth);
 
     /// <summary>递归枚举知识对象文件（<c>.md</c>；跳过构建产物/VCS/依赖目录 + 符号链接目录，上限 200）。</summary>
     private void EnumerateOkFiles(string dir, string root, List<DocumentKnowledgeSummary> list, CancellationToken ct)
@@ -443,13 +401,6 @@ public sealed class DocumentKnowledgeTool
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
-
-    private static string Indent(string text, string prefix)
-    {
-        if (string.IsNullOrEmpty(text)) return prefix;
-        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
-        return string.Join('\n', lines.Select(l => prefix + l));
-    }
 
     // —— 知识对象目录作用域助手（labs knowledge/ 子树约束） ——
 

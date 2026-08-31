@@ -10,7 +10,7 @@ namespace Acme.Desktop.Mvvm;
 /// 知识对象文件目标解析共享助手（纯函数）。文档版知识对象的 link <c>targetId</c> 是项目内另一个
 /// <c>.md</c> 文件的相对路径（如 <c>Hive表/fin_dw.dwd_xxx</c>），此 helper 把路径解析到磁盘文件。
 /// <see cref="DocumentsViewModel"/> 图解析（「查看图」闭包构建，<c>ResolveTarget</c> 取定义跟出边）与
-/// <see cref="Acme.Desktop.Shared.Shell.DocumentKnowledgeTool"/> Read（<c>ResolveRaw</c> 取目标原文内联）共用，
+/// <see cref="Acme.Desktop.Shared.Shell.DocumentKnowledgeTool"/> Read（<c>ResolveTargetWithPath</c> 取目标定义+全路径内联）共用，
 /// 避免逻辑漂移。镜像原 DocumentsViewModel 私有 <c>ResolveOkTarget</c>/<c>StemOf</c>/<c>CandidateOkPaths</c>。
 /// </summary>
 public static class OkTargetResolver
@@ -41,6 +41,13 @@ public static class OkTargetResolver
             yield return withExt; // 兜底：绝对路径或相对 cwd
         }
     }
+
+    /// <summary>解析 link target 到首个存在的知识对象文件全路径（含裸名全局兜底）。找不到返 null。
+    /// 供 <see cref="ResolveFilePath"/>（去重防环键）与 <see cref="ResolveTargetWithPath"/>（取定义+路径）共用，
+    /// 避免 <c>ResolveTarget</c> 与 <c>ResolveRaw</c> 各自重复 find 逻辑。</summary>
+    private static string? TryResolveFile(string targetPath, string? rootPath, string? currentFileDir)
+        => TryFindOkFile(targetPath, rootPath, currentFileDir)
+           ?? (IsBareName(targetPath) ? TryFindByNameGlobal(targetPath, rootPath) : null);
 
     /// <summary>首个存在的候选知识对象文件全路径；找不到返 null。</summary>
     private static string? TryFindOkFile(string targetPath, string? rootPath, string? currentFileDir)
@@ -110,15 +117,8 @@ public static class OkTargetResolver
     public static (string Title, KnowledgeObjectDefinition? Def)? ResolveTarget(
         IDocumentKnowledgeSourceParser parser, string? targetPath, string? rootPath, string? currentFileDir)
     {
-        if (string.IsNullOrWhiteSpace(targetPath)) return null;
-        var stem = StemOf(targetPath);
-        var full = TryFindOkFile(targetPath, rootPath, currentFileDir)
-                   ?? (IsBareName(targetPath) ? TryFindByNameGlobal(targetPath, rootPath) : null);
-        if (full is null) return (stem, null);
-        KnowledgeObjectDefinition? def = null;
-        try { _ = parser.TryParse(File.ReadAllText(full), out def, out _); }
-        catch { /* 读/解析失败 → 仅名称，不跟出边（断链仍画节点显示 stem） */ }
-        return (stem, def);
+        var rt = ResolveTargetWithPath(parser, targetPath, rootPath, currentFileDir);
+        return rt is null ? null : (rt.Title, rt.Def);
     }
 
     /// <summary>解析 link target 到 (stem, 原始文件内容)。供 <c>FormatAsync</c> 内联目标知识对象原文
@@ -129,10 +129,34 @@ public static class OkTargetResolver
     {
         if (string.IsNullOrWhiteSpace(targetPath)) return null;
         var stem = StemOf(targetPath);
-        var full = TryFindOkFile(targetPath, rootPath, currentFileDir)
-                   ?? (IsBareName(targetPath) ? TryFindByNameGlobal(targetPath, rootPath) : null);
+        var full = TryResolveFile(targetPath, rootPath, currentFileDir);
         if (full is null) return (stem, null);
         try { return (stem, File.ReadAllText(full)); }
         catch { return (stem, null); }
     }
+
+    /// <summary>解析 link target 到首个存在知识对象文件的**全路径**（含裸名全局兜底）。
+    /// 供 <see cref="KnowledgeExpansionBuilder"/> 递归展开去重防环键（同一文件不二次内联，菱形依赖只展开一次）。
+    /// 找不到/空白路径 → null。</summary>
+    public static string? ResolveFilePath(string? targetPath, string? rootPath, string? currentFileDir)
+        => string.IsNullOrWhiteSpace(targetPath) ? null : TryResolveFile(targetPath, rootPath, currentFileDir);
+
+    /// <summary>解析 link target 到 (显示名=stem, 全路径, 定义)——<see cref="ResolveTarget"/> + 全路径一次取齐，
+    /// 供 <see cref="KnowledgeExpansionBuilder"/> 递归展开（需全路径做去重键 + 算子节点 currentFileDir + 需定义跟出边）。
+    /// 空白路径 → null；找不到文件 → (stem, null, null)；读/解析失败 → (stem, 全路径, null)。</summary>
+    public static ResolvedKnowledgeTarget? ResolveTargetWithPath(
+        IDocumentKnowledgeSourceParser parser, string? targetPath, string? rootPath, string? currentFileDir)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath)) return null;
+        var stem = StemOf(targetPath);
+        var full = TryResolveFile(targetPath, rootPath, currentFileDir);
+        if (full is null) return new ResolvedKnowledgeTarget(stem, null, null);
+        KnowledgeObjectDefinition? def = null;
+        try { _ = parser.TryParse(File.ReadAllText(full), out def, out _); }
+        catch { /* 读/解析失败 → 仅名称+路径，不跟出边（断链仍画节点显示 stem） */ }
+        return new ResolvedKnowledgeTarget(stem, full, def);
+    }
 }
+
+/// <summary>解析后的知识对象目标：显示名 + 磁盘全路径（去重键，可空）+ 定义（找不到/解析失败为 null）。</summary>
+public sealed record ResolvedKnowledgeTarget(string Title, string? FullPath, KnowledgeObjectDefinition? Def);
