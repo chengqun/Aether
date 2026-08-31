@@ -265,21 +265,21 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 ToolApprovalRequest? pendingApproval = null;
                 ChatMessageItem? approvalCard = null;
                 ToolApprovalDecision? autoDecision = null; // 模式自动批（Auto/AutoEdit-非Dangerous）；非 null 则跳过对话框+审批卡
-                // answerTokens 节流已由 50ms 批量 flush 替代
+                // answerTokens 节流已由 150ms 批量 flush 替代
 
                 var handlers = new StreamHandlers(
                     OnToken: (token, _) =>
                     {
                         fullText.Append(token);
                         lock (pendingLock) pendingChunks.Add((token, false));
-                        flushTimer.Change(50, Timeout.Infinite); // 50ms 后批量刷新
+                        flushTimer.Change(150, Timeout.Infinite); // 150ms 后批量刷新（节流 Content 增量→TextBlock 重排频率）
                         _petTokens?.AppendToken(token); // 桌宠专属打字机（逐字）；关键节点另走 _progressSink
                         return Task.CompletedTask;
                     },
                     OnReasoning: (text, _) =>
                     {
                         lock (pendingLock) pendingChunks.Add((text, true));
-                        flushTimer.Change(50, Timeout.Infinite);
+                        flushTimer.Change(150, Timeout.Infinite);
                         EmitProgress(new RunProgress(RunProgressKind.Reasoning));
                         return Task.CompletedTask;
                     },
@@ -1809,36 +1809,43 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 FinishedAt = now,
             };
 
-            var events = new List<AgentEvent>();
-            var seq = 1;
-            foreach (var item in runItems)
+            // 事件构建 + JSON 序列化（MakeEvent→AgentEventPayload.Serialize）移到后台线程：
+            // run 轮含多 tool/reasoning/text 段时序列化在 UI 线程会与 token flush 争线程导致卡顿。
+            // runItems 是 POCO 只读、run.Id 已是值——Task.Run 内全读取无 UI 绑定，安全。
+            var events = await Task.Run(() =>
             {
-                // 用户消息已在 run.UserMessage；审批卡运行期态不持久化；跳过空思考段。
-                if (item.IsUser || item.IsApprovalCard) continue;
-                if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue;
+                var evs = new List<AgentEvent>();
+                var seq = 1;
+                foreach (var item in runItems)
+                {
+                    // 用户消息已在 run.UserMessage；审批卡运行期态不持久化；跳过空思考段。
+                    if (item.IsUser || item.IsApprovalCard) continue;
+                    if (item.IsText && item.IsReasoning && string.IsNullOrWhiteSpace(item.Content)) continue;
 
-                if (item.IsPlanCard)
-                {
-                    var todos = item.Todos.Select(t => new TodoItemInfo(t.Title, t.Title, t.Description, t.IsComplete)).ToList();
-                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.PlanUpdated, new AgentEventPayload.PlanUpdated(todos)));
+                    if (item.IsPlanCard)
+                    {
+                        var todos = item.Todos.Select(t => new TodoItemInfo(t.Title, t.Title, t.Description, t.IsComplete)).ToList();
+                        evs.Add(MakeEvent(run.Id, ref seq, AgentEventType.PlanUpdated, new AgentEventPayload.PlanUpdated(todos)));
+                    }
+                    else if (item.IsToolStep)
+                    {
+                        evs.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolCall,
+                            new AgentEventPayload.ToolCall(item.CallId, item.ToolName ?? "tool", item.Input)));
+                        // 未完成的工具步（中断）只存 call，无 result——重建时为孤儿 call（UI 仍展示 call 卡），
+                        // LLM 历史重建时由 EventHistoryRebuilder.DropOrphanToolCalls 丢弃。
+                        if (item.IsToolCompleted)
+                            evs.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolResult,
+                                new AgentEventPayload.ToolResult(item.CallId, item.ToolName ?? "tool", item.Output)));
+                    }
+                    else if (item.IsReasoning)
+                        evs.Add(MakeEvent(run.Id, ref seq, AgentEventType.ReasoningChunk,
+                            new AgentEventPayload.ReasoningChunk(item.Content ?? string.Empty)));
+                    else
+                        evs.Add(MakeEvent(run.Id, ref seq, AgentEventType.TextChunk,
+                            new AgentEventPayload.TextChunk(item.Content ?? string.Empty)));
                 }
-                else if (item.IsToolStep)
-                {
-                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolCall,
-                        new AgentEventPayload.ToolCall(item.CallId, item.ToolName ?? "tool", item.Input)));
-                    // 未完成的工具步（中断）只存 call，无 result——重建时为孤儿 call（UI 仍展示 call 卡），
-                    // LLM 历史重建时由 EventHistoryRebuilder.DropOrphanToolCalls 丢弃。
-                    if (item.IsToolCompleted)
-                        events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ToolResult,
-                            new AgentEventPayload.ToolResult(item.CallId, item.ToolName ?? "tool", item.Output)));
-                }
-                else if (item.IsReasoning)
-                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.ReasoningChunk,
-                        new AgentEventPayload.ReasoningChunk(item.Content ?? string.Empty)));
-                else
-                    events.Add(MakeEvent(run.Id, ref seq, AgentEventType.TextChunk,
-                        new AgentEventPayload.TextChunk(item.Content ?? string.Empty)));
-            }
+                return evs;
+            });
 
             await _conversationStore.AppendRunAsync(run, events);
 

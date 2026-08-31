@@ -22,11 +22,15 @@ public partial class DocumentsViewModel : FileTreeVmBase
 {
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
 
-    /// <summary>目录树扫描时跳过的子目录（构建产物 / VCS / 依赖缓存，体积大且无编辑价值）。</summary>
+    /// <summary>目录树扫描时跳过的子目录（构建产物 / VCS / 依赖缓存 / 第三方引擎子模块，体积大且无编辑价值）。
+    /// <c>externals</c>（Lean 7670 文件 + MAF 全历史子模块 + FlaUI-MCP）整体跳过——这些是只读引用/引擎源码，
+    /// 编辑发生在 src/business/ai/apps/server，不在 externals；扫它们会让每次 watcher 触发的 BuildNode 耗时
+    /// 数百 ms 且 Roots[0]=root 时 TreeView 在 UI 线程重渲数千节点导致假死。需要查 externals 源码用 Grep 工具
+    /// 或单独打开该子目录。</summary>
     private static readonly HashSet<string> ExcludedDirs = new(StringComparer.OrdinalIgnoreCase)
     {
         "bin", "obj", ".git", ".vs", ".idea", "node_modules", ".next", "dist", "build", "target",
-        ".dart_tool", ".gradle", "__pycache__", ".venv", "venv", "publish"
+        ".dart_tool", ".gradle", "__pycache__", ".venv", "venv", "publish", "externals"
     };
 
     /// <summary>目录树扫描时跳过的文件。</summary>
@@ -34,6 +38,15 @@ public partial class DocumentsViewModel : FileTreeVmBase
     {
         ".DS_Store", "Thumbs.db"
     };
+
+    /// <summary>判定目录是否为符号链接/重解析点（跳过递归，防 macOS /etc→/private/etc、
+    /// /var→/private/var、/System/Volumes/Data 等环导致递归不终止或同一物理子树被重复扫描指数放大）。
+    /// 镜像 <see cref="KnowledgeObjectsViewModel"/> 同名守卫 + ai/SystemTools 的 FileSearchHelpers.IsSymlinkDirectory。</summary>
+    private static bool IsSymlinkDirectory(string path)
+    {
+        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        catch { return false; } // 无权限/不存在 → 当普通目录（枚举时会抛被 catch）
+    }
 
     protected override string FontSizePrefKey => "docs.editorFontSize";
     protected override string RootPathPrefKey => "docs.projectPath";
@@ -253,7 +266,7 @@ public partial class DocumentsViewModel : FileTreeVmBase
         var node = new FileNode(name, fullPath, isFolder: true);
         // 先目录后文件，各按名排序（VSCode 式：文件夹在前）。
         foreach (var dir in Directory.EnumerateDirectories(fullPath)
-                     .Where(d => !ExcludedDirs.Contains(Path.GetFileName(d)))
+                     .Where(d => !ExcludedDirs.Contains(Path.GetFileName(d)) && !IsSymlinkDirectory(d))
                      .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase))
         {
             try { node.Children.Add(BuildNode(dir, isRoot: false)); }

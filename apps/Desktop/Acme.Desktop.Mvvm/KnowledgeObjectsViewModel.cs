@@ -598,7 +598,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         Func<string?, (string Title, KnowledgeObjectDefinition? Def)?> resolveTargetDef =
             targetPath => OkTargetResolver.ResolveTarget(parser, targetPath, RootPath, currentFileDir);
 
-        var vm = new DocumentKnowledgeViewModel(parser, name, resolveTargetDef);
+        // 传 IUiDispatcher 供 ScheduleSerialize/SyncFromSource 节流（200ms 合并，避免每键击卡 UI 线程）。
+        var vm = new DocumentKnowledgeViewModel(parser, name, resolveTargetDef,
+            ServiceProvider.GetService<IUiDispatcher>());
         vm.SourceChanged += OnKnowledgeSourceChanged;
         vm.Load(content);
         return vm;

@@ -43,14 +43,23 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
     private bool _loading = true; // 构造期 + Load 期守卫，防初始填充触发 SourceChanged
     private bool _syncing;        // 源码→表单同步期守卫，防回环
 
+    // —— 节流计时器（避免每键击触发 YamlDotNet 序列化/解析，UI 线程争用致卡顿）——
+    // 无 dispatcher（测试/旧调用方）时降级为同步（旧行为，不回归）。
+    private readonly IUiDispatcher? _dispatcher;
+    private System.Threading.Timer? _serializeTimer; // F: ScheduleSerialize 节流（form→source 序列化）
+    private System.Threading.Timer? _syncTimer;      // E: SyncFromSource 重解析节流（source→form 解析）
+    private string? _pendingSource;                  // 待 flush 的最新源码（SyncFromSource 缓冲）
+
     public DocumentKnowledgeViewModel(
         IDocumentKnowledgeSourceParser parser,
         string name,
-        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?>? resolveTargetDef)
+        Func<string?, (string Title, KnowledgeObjectDefinition? Def)?>? resolveTargetDef,
+        IUiDispatcher? dispatcher = null)
     {
         _parser = parser;
         Name = name ?? string.Empty;
         _resolveTargetDef = resolveTargetDef;
+        _dispatcher = dispatcher;
         Links.CollectionChanged += OnLinksCollectionChanged;
     }
 
@@ -99,8 +108,26 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
         finally { _loading = false; }
     }
 
-    /// <summary>源码→表单（用户在下栏编辑源码后）。_syncing 守卫不发 SourceChanged（防回环）。</summary>
+    /// <summary>源码→表单（用户在下栏编辑源码后）。_syncing 守卫不发 SourceChanged（防回环）。
+    /// <b>节流</b>：每键击触发 YamlDotNet TryParse + RebuildLinks（清+重建 ObservableCollection）在 UI 线程——
+    /// 长 YAML 时每键重解析致卡顿。200ms 合并取最新源码；无 dispatcher 时降级同步（旧行为）。</summary>
     public void SyncFromSource(string source)
+    {
+        if (_dispatcher is null) { SyncFromSourceCore(source); return; }
+        _pendingSource = source;
+        _syncTimer ??= new(_ => _dispatcher.Post(FlushSyncFromSource), null, Timeout.Infinite, Timeout.Infinite);
+        _syncTimer.Change(200, Timeout.Infinite);
+    }
+
+    private void FlushSyncFromSource()
+    {
+        var src = _pendingSource;
+        if (src is null) return;
+        _pendingSource = null;
+        SyncFromSourceCore(src);
+    }
+
+    private void SyncFromSourceCore(string source)
     {
         _syncing = true;
         try { Load(source); } // Load 置 _loading=true；_syncing 叠加使 OnKindChanged/CollectionChanged 跳过 serialize
@@ -128,6 +155,17 @@ public sealed partial class DocumentKnowledgeViewModel : ObservableObject
     private void ScheduleSerialize()
     {
         if (_loading || _syncing) return;
+        // 无 dispatcher（测试/旧调用方）→ 同步序列化（旧行为，不回归）。
+        if (_dispatcher is null) { SourceChanged?.Invoke(_parser.Serialize(Build())); return; }
+        // 节流：form 字段变更（kind/link 增删/link 行编辑）频发时，200ms 合并一次序列化——
+        // 避免 YamlDotNet Serialize + SourceChanged→视图回写编辑器 每键击在 UI 线程触发卡顿。
+        _serializeTimer ??= new(_ => _dispatcher.Post(FlushSerialize), null, Timeout.Infinite, Timeout.Infinite);
+        _serializeTimer.Change(200, Timeout.Infinite);
+    }
+
+    private void FlushSerialize()
+    {
+        if (_loading || _syncing) return; // flush 期间可能已进入 _syncing（SyncFromSource flush 并发），跳过
         SourceChanged?.Invoke(_parser.Serialize(Build()));
     }
 

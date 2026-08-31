@@ -33,6 +33,12 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
     // —— P3 实时反馈镜：关键节点 → 造型 + 气泡；逐字 token → 气泡打字机 ——
     private readonly StringBuilder _answerBuf = new();     // 本轮回答累积（逐字流，节流渲染进气泡）
     private DispatcherTimer? _bubbleTimer;                  // 气泡内容节流 flush（50ms，与主窗同节奏）
+    // 批量 token 缓冲：流式线程逐字 AppendToken 攒入此表，50ms 合并一次 Post 到 UI 线程
+    // （避免逐 token Post 淹没 dispatcher + 逐 token 刷 avatar 口型相位致 Lottie 抖动）。
+    // 整表换出 drain（DrainPendingTokens 里 _pendingTokens = new()），故非 readonly。
+    private List<string> _pendingTokens = new();
+    private readonly object _pendingTokensLock = new();
+    private System.Threading.Timer? _tokenFlushTimer;
     private IDisposable? _bubbleAutoHide;                   // 气泡自动收起（工具/关键节点句 2.5s；流式回答持续到本轮结束）
     // 注：DispatcherTimer.RunOnce 返回 IDisposable（非 DispatcherTimer），故 _bubbleAutoHide 用 IDisposable。
 
@@ -196,27 +202,47 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
         Dispatcher.UIThread.Post(() => ApplyProgress(signal));
     }
 
-    /// <summary>逐字答案 token（桌宠专属打字机；关键节点另走 <see cref="Post"/>）。</summary>
+    /// <summary>逐字答案 token（桌宠专属打字机；关键节点另走 <see cref="Post"/>）。
+    /// <b>批量</b>：流式线程逐 token 攒入 <see cref="_pendingTokens"/>，50ms 合并一次 Post 到 UI 线程，
+    /// 避免逐 token Post 淹没 dispatcher + 逐 token 刷 avatar 口型相位致 Lottie 动画抖动。</summary>
     public void AppendToken(string token)
     {
-        Dispatcher.UIThread.Post(() =>
-        {
-            // 只保留「滚动尾巴」——最近 ~30 字，让气泡有「在输出」的动感，但绝不驻留整段回答原文。
-            // 全文字在气泡里既挤又无信息，用户要看正文回主窗。超过窗口即丢旧字（滚动窗口）。
-            _answerBuf.Append(token);
-            if (_answerBuf.Length > 30)
-                _answerBuf.Remove(0, _answerBuf.Length - 30);
-            StartBubbleStream();
-            // 经 IAvatarEngine 说话流 → 口型节奏。
-            _avatar?.AppendSpeakToken(token);
-        });
+        lock (_pendingTokensLock) _pendingTokens.Add(token);
+        _tokenFlushTimer ??= new(
+            _ => Dispatcher.UIThread.Post(DrainPendingTokens),
+            null, Timeout.Infinite, Timeout.Infinite);
+        _tokenFlushTimer.Change(50, Timeout.Infinite);
     }
 
-    /// <summary>本轮答案流结束（flush 残留 + 停打字机，气泡交由终态 Done/Error 收敛）。</summary>
+    /// <summary>UI 线程：排空待处理 token 缓冲 → 累积进气泡滚动尾巴 + 刷新说话态（一次/批）。</summary>
+    private void DrainPendingTokens()
+    {
+        List<string> snapshot;
+        lock (_pendingTokensLock)
+        {
+            if (_pendingTokens.Count == 0) return;
+            snapshot = _pendingTokens;          // 整表换出：流式线程继续往新表 append 不互斥
+            _pendingTokens = new List<string>();
+        }
+        if (snapshot.Count > 0)
+        {
+            // 只保留「滚动尾巴」——最近 ~30 字，让气泡有「在输出」的动感，但绝不驻留整段回答原文。
+            // 全文字在气泡里既挤又无信息，用户要看正文回主窗。批量 append 后再统一裁剪（O(1) 次）。
+            _answerBuf.Append(string.Concat(snapshot));
+            if (_answerBuf.Length > 30)
+                _answerBuf.Remove(0, _answerBuf.Length - 30);
+        }
+        StartBubbleStream();
+        // 经 IAvatarEngine 说话流 → 口型节奏（token 内容不用，仅驱动 speaking mood + 刷相位）。
+        _avatar?.AppendSpeakToken(string.Empty);
+    }
+
+    /// <summary>本轮答案流结束（flush 残留 token + 停打字机，气泡交由终态 Done/Error 收敛）。</summary>
     public void EndAnswer()
     {
         Dispatcher.UIThread.Post(() =>
         {
+            DrainPendingTokens(); // 先排空缓冲的 token，避免漏字
             FlushAnswer();
             _answerBuf.Clear();
             StopBubbleStream();
