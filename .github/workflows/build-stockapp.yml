@@ -1,8 +1,11 @@
 name: Build & Release Stockapp
 
-# 推 v* tag → 三平台构建 + 创建 GitHub Release 挂载产物；workflow_dispatch 手动触发（产物仅进 Actions artifacts，不发版）。
-# 复用 scripts/build-stockapp-*.sh/.ps1（已处理 Lean 子模块 init、CTP 原生 wrapper 现场 cmake 编译/回退入库产物、rpath、打包）。
-# 桌面端无 baked-in 密钥（server URL 运行时经登录窗口配）→ 不依赖任何 GitHub Secret 即可跑通。
+# 推 v* tag → 多平台构建（桌面 macOS/Linux/Windows + Android）+ 创建 GitHub Release 挂载产物；
+# workflow_dispatch 手动触发（产物仅进 Actions artifacts，不发版）。
+# 复用 scripts/build-stockapp-*.sh（桌面端已处理 Lean 子模块 init、CTP 原生 wrapper 现场 cmake 编译/回退入库产物、rpath、打包）
+# + scripts/build-stockapp-android.sh（手机端自包含 Debug APK，debug.keystore 自动签名，无 secret）。
+# 桌面端无 baked-in 密钥（server URL 运行时经登录窗口配）+ Android 用 MAUI 自带 debug.keystore
+# → 整个 workflow 不依赖任何 GitHub Secret 即可跑通（Release 正式签名后续可加 keystore secret）。
 
 on:
   push:
@@ -76,9 +79,49 @@ jobs:
           path: ${{ matrix.glob }}
           if-no-files-found: error   # 产物缺失即失败，不静默
 
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        # Stockapp.Mobile 不引 externals/Lean，无需 init 子模块（桌面端 job 才需要）。
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # 仅装 platform-tools + build-tools；MAUI 构建按需补 platform/api-level。
+          packages: 'platform-tools build-tools;36.0.0'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Run build script
+        shell: bash
+        run: bash scripts/build-stockapp-android.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockapp-android
+          path: dist/android-apk/Aether-Stockapp-android-*.apk
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-android]   # 桌面端三平台 + Android 全绿才发版
     if: startsWith(github.ref, 'refs/tags/')   # 仅 tag 触发；workflow_dispatch 不发版
     runs-on: ubuntu-latest
     steps:
@@ -86,7 +129,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: assets
-          merge-multiple: true   # 三平台产物平铺进 assets/，保留原文件名
+          merge-multiple: true   # 桌面三平台 + Android 产物平铺进 assets/，保留原文件名
 
       - name: Create Release & attach assets
         uses: softprops/action-gh-release@v2
