@@ -20,6 +20,11 @@
     <PackageReference Include="IconPacks.Avalonia.Codicons" Version="2.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Markdown.Avalonia.Tight" Version="12.0.0-a3" />
+    <!-- mermaid 图渲染（不换 markdown 引擎，经 IContainerBlockHandler 注入 ```mermaid fence 自定义渲染）：
+         Mermaider（纯 .NET net10，无浏览器/JS 运行时/AOT-ready）把 mermaid 源码 → SVG 字符串；
+         Avalonia.Svg.Skia 把 SVG 字符串 → SvgImage 给 Image.Source 显示。依赖 Avalonia >=11.0，兼容 12.1.1。 -->
+    <PackageReference Include="Mermaider" Version="0.12.2" />
+    <PackageReference Include="Avalonia.Svg.Skia" Version="11.0.0.12" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <!-- Roslyn 语义分析（EditSymbolTool：符号级 C# 编辑）。宿主层独有——不复用 ai/SystemTools 的轻量工具集。 -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.13.0" />
