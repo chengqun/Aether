@@ -26,6 +26,14 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<!-- 自包含 Debug APK：关闭 Fast Deployment（默认 Debug 只装壳，程序集靠 -t:Install 单独推到 .__override__，
+		     adb install 单装 APK 会因找不到程序集 SIGABRT）。改为程序集+运行时打入 APK，便于 adb install 直接安装且 APK 可移植。
+		     iOS 不受此条件影响。 -->
+		<AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<!-- App Icon + Splash（租户专属，蓝色品牌） -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#1565C0" />
