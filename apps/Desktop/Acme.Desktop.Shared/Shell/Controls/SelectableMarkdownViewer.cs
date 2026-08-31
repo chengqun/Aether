@@ -48,10 +48,11 @@ public class SelectableMarkdownViewer : MarkdownScrollViewer
         MarkdownProperty.Changed.AddClassHandler<SelectableMarkdownViewer>(static (s, e) =>
         {
             if (s._preprocessing) return;
-            if (e.NewValue is string md && md.Contains("```mermaid", StringComparison.OrdinalIgnoreCase))
+            var mdNew = e.NewValue as string;
+            if (mdNew is not null && mdNew.Contains("```mermaid", StringComparison.OrdinalIgnoreCase))
             {
                 s._preprocessing = true;
-                try { s.Markdown = PreprocessMermaidFence(md); }
+                try { s.Markdown = PreprocessMermaidFence(mdNew); }
                 finally { s._preprocessing = false; }
             }
         });

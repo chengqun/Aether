@@ -8,7 +8,7 @@ namespace Acme.Desktop.Shared.Shell.Controls;
 
 /// <summary>
 /// mermaid 容器块处理器：实现 Markdown.Avalonia 的 <see cref="IContainerBlockHandler"/> 扩展点，
-/// 拦截 <c>::: mermaid</c> 自定义容器块，把内容经 <see cref="MermaidSvgRenderer"/> 渲染成矢量 SVG 图。
+/// 拦截 <c>::: mermaid</c> 自定义容器块，把内容经 <see cref="MermaidSvgRenderer"/> 渲染成 PNG 位图图。
 /// 标准 <c>```mermaid</c> fence 由 <see cref="SelectableMarkdownViewer"/> 在喂引擎前预处理转成
 /// <c>::: mermaid</c> 容器，故两种语法都能渲染（LLM/复制的标准 mermaid 无需用户改写）。
 /// 非 mermaid 容器（<c>::: note</c> 等）返回 null → Markdown.Avalonia 回退默认渲染（实测安全）。
@@ -21,8 +21,6 @@ internal sealed class MermaidBlockHandler : IContainerBlockHandler
 
     public MermaidBlockHandler(SelectableMarkdownViewer owner) => _owner = owner;
 
-    /// <summary>拦截 <c>::: mermaid</c> 容器：blockName 含 "mermaid"（忽略大小写，容前导空格）→ 渲染图；
-    /// 否则返回 null 回退默认渲染。</summary>
     public Border? ProvideControl(string? assetPathRoot, string? blockName, string? lines)
     {
         if (string.IsNullOrWhiteSpace(blockName)
