@@ -36,14 +36,22 @@ internal static class MermaidSvgRenderer
         {
             var svg = Mermaider.MermaidRenderer.RenderSvg(mermaidSource, BuildOptions(dark));
             if (string.IsNullOrWhiteSpace(svg)) return null;
+            // 展平 CSS 变量 → 拉直折线边 → 重定位边标签 → 光栅化。
             // Mermaider SVG 用 CSS 自定义属性（var(--_xxx)）+ color-mix() 表达所有形状填色，
             // Svg.Skia 的 CSS 引擎不解析 var()/color-mix() → fill="var(--_node-fill)" 无效色 → 黑块。
             // 喂 SKSvg 前展平成具体色。失败兜底用原 SVG（最坏回退黑块→ProvideControl 返 null→默认代码块）。
             try { svg = FlattenCssVars(svg); }
             catch { /* 展平失败不阻断，SvgToImage 自会兜底 */ }
+            // dagre 对含回环边/跨秩长边的图会把本可一行连直的链路节点挤到另一行，导致相邻列节点间的边
+            // 变成「下→右」肘弯折线（用户反馈「本来能直直的过来，它非要拐一下，似乎是占位的问题」）。
+            // 这是 dagre 排序算法固有行为（非解析 bug），无法经配置消除。后处理：把满足条件的相邻列折线边
+            // 拉直成单段直线（出口点→入口点），跳过回环/跨秩长边（须绕弯）+ 跨节点边（拉直会穿节点）。
+            try { svg = StraightenEdges(svg); }
+            catch { /* 后处理失败不阻断 */ }
             // Mermaider 把边标签（edge-label）放在 bounding-box 中心而非路径弧长中点，
             // 横折/回环边的标签会浮在路径外的空白处（用户反馈「画线中间的文字跑外面去了」）。
             // 后处理：把每个 edge-label 平移到其 edge path 的弧长中点上，让标签压在线上。
+            // 在 StraightenEdges 之后跑——拉直后的 d 仍是合法 path，标签落在直线中点。
             try { svg = RepositionEdgeLabels(svg); }
             catch { /* 后处理失败不阻断 */ }
             return SvgToImage(svg, dark);
@@ -172,6 +180,147 @@ internal static class MermaidSvgRenderer
         // 实测：删 style 块后 light 文字像素 70→673、节点像素 1531→37192（dark 同样从不可见→全渲染）。
         // Svg.Skia 用默认字体渲染 <text>（Helvetica 族，实测 macOS 字体解析成功），无需补 inline font-family。
         return Regex.Replace(flattened, @"<style[^>]*>[\s\S]*?</style>", "");
+    }
+
+    /// <summary>
+    /// 把相邻列节点间的折线边（肘弯「下→右」/「上→右」）拉直成单段直线段（出口点→入口点）。
+    /// 动机：dagre 对含回环边/跨秩长边的图会把链路中间节点挤到另一行（占位问题），相邻列节点间的边
+    /// 本可一行连直却被迫肘弯（用户反馈「本来能直直的过来，它非要拐一下」）。这是 dagre 排序算法固有行为，
+    /// 无法经配置消除，故在 SVG 后处理层拉直。仅拉直满足全部条件的边，回环/跨秩长边保留 dagre 的绕弯路径。
+    /// </summary>
+    /// <remarks>
+    /// 拉直条件（全部满足才改）：
+    /// <list type="bullet">
+    /// <item>两端节点都有可解析的 <c>&lt;rect&gt;</c>（矩形节点；非矩形节点跳过——边保留 dagre 原路径，不回归）。</item>
+    /// <item>无反向边（<c>tgt→src</c> 不存在）——避免 2 节点环双向边拉成同一条直线重叠（环的一边须绕弯）。</item>
+    /// <item>相邻列：沿主轴（水平/垂直）无其它节点中心严格落在 src、tgt 之间——跳过跨秩长边（如回环 S→M，
+    /// 中间夹 R），这类边拉直会跨过中间节点或与正向流混叠，须保留绕弯。</item>
+    /// <item>直线段不穿过任何其它节点矩形（<see cref="SegHitsRect"/>）——绕过 dagre 为避让节点而设的弯。</item>
+    /// </list>
+    /// 出口/入口点按主轴方向选节点「面对面」的边中点：水平流向 src 右/左中 → tgt 左/右中；垂直流向 src 下/上中 → tgt 上/下中。
+    /// 只替换 <c>d</c> 属性，stroke/marker/dash 等不变——箭头 marker-end 的 <c>orient="auto"</c> 按新终点切线自动定向。
+    /// 之后 <see cref="RepositionEdgeLabels"/> 在新 <c>d</c> 上算弧长中点（直线中点=几何中点）定位标签。
+    /// 不改动已是直线的边（重算结果与原直线一致，无害）。任何条件不满足→该边原样保留。
+    /// </remarks>
+    private static string StraightenEdges(string svg)
+    {
+        // 节点：id → 矩形 (x,y,w,h)。只收 <rect> 节点（flowchart 主流；非矩形节点不参与，保守跳过）。
+        var nodes = new Dictionary<string, (double x, double y, double w, double h)>(StringComparer.Ordinal);
+        foreach (Match nm in Regex.Matches(svg, @"<g\b[^>]*\bclass=""node""[^>]*>[\s\S]*?</g>"))
+        {
+            var block = nm.Value;
+            var id = Regex.Match(block, @"data-id=""([^""]*)""").Groups[1].Value;
+            if (string.IsNullOrEmpty(id)) continue;
+            var rectM = Regex.Match(block, @"<rect\b[^>]*/?>");
+            if (!rectM.Success) continue;
+            var r = rectM.Value;
+            var x = ParseDouble(Regex.Match(r, @"\bx=""([0-9.]+)""").Groups[1].Value);
+            var y = ParseDouble(Regex.Match(r, @"\by=""([0-9.]+)""").Groups[1].Value);
+            var w = ParseDouble(Regex.Match(r, @"\bwidth=""([0-9.]+)""").Groups[1].Value);
+            var h = ParseDouble(Regex.Match(r, @"\bheight=""([0-9.]+)""").Groups[1].Value);
+            nodes[id] = (x, y, w, h);
+        }
+        if (nodes.Count == 0) return svg;
+
+        // 收集所有边对（data-from|data-to），供反向边检测。
+        var edgePairs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match em in Regex.Matches(svg, @"<path\b[^>]*\bclass=""edge""[^>]*>"))
+        {
+            var f = Regex.Match(em.Value, @"data-from=""([^""]*)""").Groups[1].Value;
+            var t = Regex.Match(em.Value, @"data-to=""([^""]*)""").Groups[1].Value;
+            edgePairs.Add(f + "|" + t);
+        }
+        if (edgePairs.Count == 0) return svg;
+
+        foreach (Match em in Regex.Matches(svg, @"<path\b[^>]*\bclass=""edge""[^>]*>"))
+        {
+            var pathTag = em.Value;
+            var from = Regex.Match(pathTag, @"data-from=""([^""]*)""").Groups[1].Value;
+            var to = Regex.Match(pathTag, @"data-to=""([^""]*)""").Groups[1].Value;
+            if (!nodes.TryGetValue(from, out var src) || !nodes.TryGetValue(to, out var tgt)) continue;
+            // 无反向边——2 节点环双向边拉直会重叠，须保留 dagre 的绕弯。
+            if (edgePairs.Contains(to + "|" + from)) continue;
+
+            var (sx, sy, sw, sh) = src;
+            var (tx, ty, tw, th) = tgt;
+            var scx = sx + sw / 2; var scy = sy + sh / 2;
+            var tcx = tx + tw / 2; var tcy = ty + th / 2;
+
+            double ex, ey, entryX, entryY;
+            bool horiz = Math.Abs(tcx - scx) >= Math.Abs(tcy - scy);
+            if (horiz)
+            {
+                var right = tcx > scx;
+                ex = right ? sx + sw : sx; ey = scy;            // src 右/左中
+                entryX = right ? tx : tx + tw; entryY = tcy;    // tgt 左/右中
+                if (NodeCenterBetween(nodes, from, to, scx, tcx, true)) continue;
+            }
+            else
+            {
+                var down = tcy > scy;
+                ex = scx; ey = down ? sy + sh : sy;            // src 下/上中
+                entryX = tcx; entryY = down ? ty : ty + th;    // tgt 上/下中
+                if (NodeCenterBetween(nodes, from, to, scy, tcy, false)) continue;
+            }
+
+            // 直线段不得穿过任何其它节点矩形（否则保留 dagre 为避让设的弯）。
+            bool crosses = false;
+            foreach (var kv in nodes)
+            {
+                if (kv.Key == from || kv.Key == to) continue;
+                var n = kv.Value;
+                if (SegHitsRect(ex, ey, entryX, entryY, n.x, n.y, n.x + n.w, n.y + n.h))
+                { crosses = true; break; }
+            }
+            if (crosses) continue;
+
+            var newD = "M " + ex.ToString("0.####", CultureInfo.InvariantCulture) + ","
+                              + ey.ToString("0.####", CultureInfo.InvariantCulture)
+                     + " L " + entryX.ToString("0.####", CultureInfo.InvariantCulture) + ","
+                              + entryY.ToString("0.####", CultureInfo.InvariantCulture);
+            var newPathTag = Regex.Replace(pathTag, @"\bd=""[^""]*""", "d=\"" + newD + "\"");
+            svg = svg.Replace(pathTag, newPathTag);
+        }
+        return svg;
+    }
+
+    /// <summary>沿主轴是否有其它节点中心严格落在 <paramref name="a"/>、<paramref name="b"/> 之间
+    /// （<paramref name="horizontal"/> true 比 cx，false 比 cy）。有→该边非相邻列（跨秩长边），应跳过拉直。</summary>
+    private static bool NodeCenterBetween(
+        Dictionary<string, (double x, double y, double w, double h)> nodes,
+        string from, string to, double a, double b, bool horizontal)
+    {
+        var lo = Math.Min(a, b); var hi = Math.Max(a, b);
+        foreach (var kv in nodes)
+        {
+            if (kv.Key == from || kv.Key == to) continue;
+            var c = horizontal ? kv.Value.x + kv.Value.w / 2 : kv.Value.y + kv.Value.h / 2;
+            if (c > lo + 0.5 && c < hi - 0.5) return true;
+        }
+        return false;
+    }
+
+    /// <summary>线段 (x0,y0)→(x1,y1) 是否与轴对齐矩形 [xmin,ymin,xmax,ymax] 相交（Liang-Barsky）。
+    /// 用于拉直前的穿节点守卫——直线段若穿过其它节点矩形则保留 dagre 的绕弯路径。</summary>
+    private static bool SegHitsRect(double x0, double y0, double x1, double y1,
+        double xmin, double ymin, double xmax, double ymax)
+    {
+        if (Math.Max(x0, x1) < xmin || Math.Min(x0, x1) > xmax) return false;
+        if (Math.Max(y0, y1) < ymin || Math.Min(y0, y1) > ymax) return false;
+        double dx = x1 - x0, dy = y1 - y0, t0 = 0.0, t1 = 1.0;
+        bool Clip(double p, double q)
+        {
+            if (Math.Abs(p) < 1e-9) return q >= 0;       // 平行：在外则不相交
+            var r = q / p;
+            if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+            else { if (r < t0) return false; if (r < t1) t1 = r; }
+            return true;
+        }
+        if (!Clip(-dx, x0 - xmin)) return false;
+        if (!Clip(dx, xmax - x0)) return false;
+        if (!Clip(-dy, y0 - ymin)) return false;
+        if (!Clip(dy, ymax - y0)) return false;
+        return t0 <= t1;
     }
 
     /// <summary>
