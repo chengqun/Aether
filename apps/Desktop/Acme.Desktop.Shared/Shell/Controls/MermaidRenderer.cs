@@ -155,11 +155,18 @@ internal static class MermaidSvgRenderer
         foreach (var key in allVars.Keys.ToList())
             ResolveVar(key);
 
-        return Regex.Replace(svg, @"var\(\s*--([\w-]+)\s*(?:,[^()]*)?\)", m =>
+        var flattened = Regex.Replace(svg, @"var\(\s*--([\w-]+)\s*(?:,[^()]*)?\)", m =>
         {
             var name = m.Groups[1].Value;
             return resolved.TryGetValue(name, out var v) && !string.IsNullOrEmpty(v) ? v : m.Value;
         });
+
+        // 删掉整个 <style> 块：展平后所有形状的填色/字号已是 inline 具体值（fill="#xxx" / font-size="14px"），
+        // style 块残留的 filter:drop-shadow() + color-mix()/var() 定义会让 Svg.Skia 的 CSS 解析器噎住
+        // → 文字不渲染（<text> 的 font-family 只在 style 块里、无 inline）+ 节点形状残缺（filter 破坏绘制）。
+        // 实测：删 style 块后 light 文字像素 70→673、节点像素 1531→37192（dark 同样从不可见→全渲染）。
+        // Svg.Skia 用默认字体渲染 <text>（Helvetica 族，实测 macOS 字体解析成功），无需补 inline font-family。
+        return Regex.Replace(flattened, @"<style[^>]*>[\s\S]*?</style>", "");
     }
 
     /// <summary>把 CSS 声明串（<c>--key: value;</c>，value 可含括号内分号）按括号深度切分后塞进字典。</summary>
