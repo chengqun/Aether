@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Mermaider.Models;
 using SkiaSharp;
 using Svg.Skia;
@@ -242,8 +243,14 @@ internal static class MermaidSvgRenderer
         return $"#{Mix(a.R, b.R):X2}{Mix(a.G, b.G):X2}{Mix(a.B, b.B):X2}";
     }
 
-    /// <summary>SVG 字符串 → Avalonia Image。经 SKSvg.FromSvg 解析成 SKPicture，画到 SKBitmap（光栅化），
-    /// 编码 PNG 再包成 Avalonia Bitmap（Image.Source）。用主 SkiaSharp 3.119.4，与桌宠 Lottie 同一渲染栈。</summary>
+    /// <summary>SVG 字符串 → Avalonia Image。经 SKSvg.FromSvg 解析成 SKPicture，光栅化到 SKBitmap，
+    /// 像素拷进 WriteableBitmap 显示。用主 SkiaSharp 3.119.4，与桌宠 Lottie 同一渲染栈。</summary>
+    /// <remarks>
+    /// **2x 超采样（HiDPI）**：Retina 屏上 1:1 光栅化的位图被 Avalonia 放大 2x → 文字/线条发虚。
+    /// 渲 2x 像素 + WriteableBitmap DPI=192 → DIP 尺寸不变（=SVG 自然坐标宽 w）但像素密度 2x → Retina 上
+    /// 1:1 物理像素渲染，清晰；1x 屏 Avalonia 降采样，无害。同桌宠 Lottie 的 WriteableBitmap 范式
+    ///（PixelFormat.Rgba8888/Unpremul + Marshal.Copy SKBitmap.Bytes）。
+    /// </remarks>
     private static Image? SvgToImage(string svg, bool dark)
     {
         using var sk = new SKSvg();
@@ -258,24 +265,48 @@ internal static class MermaidSvgRenderer
             var h = (int)Math.Ceiling(bounds.Height);
             if (w <= 0 || h <= 0) return null;
 
-            using var bitmap = new SKBitmap(w, h);
+            // 2x 超采样：渲染 2x 像素，DPI 设 192（=96*2）→ DIP 尺寸 = w*h（自然），像素密度 2x。
+            const int scale = 2;
+            var pw = w * scale;
+            var ph = h * scale;
+            using var bitmap = new SKBitmap(new SKImageInfo(pw, ph, SKColorType.Rgba8888, SKAlphaType.Unpremul));
             using (var canvas = new SKCanvas(bitmap))
             {
                 canvas.Clear(dark ? new SKColor(0x1e, 0x1e, 0x1e) : SKColors.White);
+                canvas.Scale(scale);
                 // 负原点 SVG（内容向左/上延伸）平移回位图原点。
                 if (bounds.Left != 0 || bounds.Top != 0)
                     canvas.Translate((float)-bounds.Left, (float)-bounds.Top);
                 canvas.DrawPicture(picture);
             }
 
-            using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-            using var ms = new MemoryStream();
-            png.SaveTo(ms);
-            ms.Position = 0;
+            var dpi = 96 * scale;
+            var display = new WriteableBitmap(
+                new PixelSize(pw, ph), new Vector(dpi, dpi), PixelFormat.Rgba8888, AlphaFormat.Unpremul);
+            // SKBitmap(Rgba8888 Unpremul) → WriteableBitmap(Rgba8888 Unpremul) 直接像素拷贝（同桌宠 CopyFrameToDisplay）。
+            using (var fb = display.Lock())
+            {
+                var dst = fb.Address;
+                var bytes = bitmap.Bytes;
+                if (fb.RowBytes == bitmap.RowBytes)
+                {
+                    Marshal.Copy(bytes, 0, dst, bytes.Length);
+                }
+                else
+                {
+                    // 行距不一致（理论上 Rgba8888 无 padding 时一致）→ 逐行拷贝兜底。
+                    var widthBytes = Math.Min(fb.RowBytes, bitmap.RowBytes);
+                    var row = new byte[widthBytes];
+                    for (var y = 0; y < ph; y++)
+                    {
+                        Marshal.Copy(bitmap.Bytes, (int)bitmap.RowBytes * y, dst + (int)(fb.RowBytes * y), (int)widthBytes);
+                    }
+                }
+            }
 
             return new Image
             {
-                Source = new Bitmap(ms),
+                Source = display,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 4),
             };
