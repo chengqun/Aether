@@ -41,6 +41,11 @@ internal static class MermaidSvgRenderer
             // 喂 SKSvg 前展平成具体色。失败兜底用原 SVG（最坏回退黑块→ProvideControl 返 null→默认代码块）。
             try { svg = FlattenCssVars(svg); }
             catch { /* 展平失败不阻断，SvgToImage 自会兜底 */ }
+            // Mermaider 把边标签（edge-label）放在 bounding-box 中心而非路径弧长中点，
+            // 横折/回环边的标签会浮在路径外的空白处（用户反馈「画线中间的文字跑外面去了」）。
+            // 后处理：把每个 edge-label 平移到其 edge path 的弧长中点上，让标签压在线上。
+            try { svg = RepositionEdgeLabels(svg); }
+            catch { /* 后处理失败不阻断 */ }
             return SvgToImage(svg, dark);
         }
         catch
@@ -168,6 +173,132 @@ internal static class MermaidSvgRenderer
         // Svg.Skia 用默认字体渲染 <text>（Helvetica 族，实测 macOS 字体解析成功），无需补 inline font-family。
         return Regex.Replace(flattened, @"<style[^>]*>[\s\S]*?</style>", "");
     }
+
+    /// <summary>
+    /// 把每个边标签（<c>&lt;g class="edge-label"&gt;</c>）平移到其对应 edge path 的弧长中点上。
+    /// Mermaider 把边标签放在边 bounding-box 的中心而非路径弧长中点，导致横折边（先横走再折下）与回环边
+    /// 的标签浮在路径外的空白处——用户反馈「画线中间的文字跑外面去了」。本方法解析每条 edge path 的 <c>d</c>
+    /// 属性（M/L 直线 + Q/C 曲线采样），算弧长中点，给标签 <c>&lt;g&gt;</c> 注入 <c>transform="translate(dx,dy)"</c>
+    /// 让标签压在线上。标签 pill 的不透明背景（<c>fill=var(--bg)</c>）会盖住线段，呈标准 mermaid 标签外观。
+    /// 已在线上的标签（直边）平移量≈0 不受影响。找不到对应 path 的标签原样保留。
+    /// </summary>
+    private static string RepositionEdgeLabels(string svg)
+    {
+        var labelBlocks = Regex.Matches(svg, @"<g class=""edge-label""[^>]*>[\s\S]*?</g>");
+        if (labelBlocks.Count == 0) return svg;
+
+        var result = svg;
+        foreach (Match label in labelBlocks)
+        {
+            var from = Regex.Match(label.Value, @"data-from=""([^""]*)""").Groups[1].Value;
+            var to = Regex.Match(label.Value, @"data-to=""([^""]*)""").Groups[1].Value;
+            // 用 data-from + data-to 定位对应 edge path（class="edge"）。\bd= 避开 data-xxx 里的 d=。
+            var pathTag = Regex.Match(svg,
+                @"<path\b[^>]*\bclass=""edge""[^>]*\bdata-from=""" + Regex.Escape(from) + @"""[^>]*\bdata-to=""" + Regex.Escape(to) + @"""[^>]*>");
+            var dMatch = Regex.Match(pathTag.Value, @"\bd=""([^""]*)""");
+            if (!pathTag.Success || !dMatch.Success) continue;
+
+            var mid = MidpointOnPath(dMatch.Groups[1].Value);
+            if (double.IsNaN(mid.x) || double.IsNaN(mid.y)) continue;
+
+            // 标签 pill 中心 = rect 的几何中心。
+            var rect = Regex.Match(label.Value, @"<rect\b[^>]*/>");
+            if (!rect.Success) continue;
+            var cx = ParseDouble(Regex.Match(rect.Value, @"\bx=""([0-9.]+)""").Groups[1].Value)
+                     + ParseDouble(Regex.Match(rect.Value, @"\bwidth=""([0-9.]+)""").Groups[1].Value) / 2;
+            var cy = ParseDouble(Regex.Match(rect.Value, @"\by=""([0-9.]+)""").Groups[1].Value)
+                     + ParseDouble(Regex.Match(rect.Value, @"\bheight=""([0-9.]+)""").Groups[1].Value) / 2;
+
+            var dx = mid.x - cx;
+            var dy = mid.y - cy;
+            // 平移量太小（<0.5px）不注入——避免无谓属性改动。
+            if (Math.Abs(dx) < 0.5 && Math.Abs(dy) < 0.5) continue;
+
+            var gOpen = Regex.Match(label.Value, @"<g class=""edge-label""[^>]*>").Value;
+            var transform = "translate(" + dx.ToString("0.####", CultureInfo.InvariantCulture)
+                            + "," + dy.ToString("0.####", CultureInfo.InvariantCulture) + ")";
+            string newOpen;
+            if (gOpen.Contains("transform="))
+                newOpen = Regex.Replace(gOpen, @"transform=""[^""]*""", "transform=\"" + transform + "\"");
+            else
+                newOpen = gOpen.Replace(">", " transform=\"" + transform + "\">");
+            var newBlock = newOpen + label.Value.Substring(gOpen.Length);
+            result = result.Replace(label.Value, newBlock);
+        }
+        return result;
+    }
+
+    /// <summary>解析 SVG path <c>d</c> 属性，返回沿弧长排列的采样点序列（含累计弧长 <c>s</c>）。
+    /// M/L 取端点；Q 二次贝塞尔/C 三次贝塞尔各采样 12/16 点逼近弧长。</summary>
+    private static List<(double x, double y, double s)> ParsePathPoints(string d)
+    {
+        var pts = new List<(double x, double y)>();
+        var curX = 0.0; var curY = 0.0;
+        foreach (Match seg in Regex.Matches(d, @"([MLQCmlqc])\s*([^MLQCmlqc]*)"))
+        {
+            var cmd = seg.Groups[1].Value;
+            var cv = Regex.Matches(seg.Groups[2].Value, @"[-+]?\d+\.?\d*")
+                .Cast<Match>().Select(x => ParseDouble(x.Value)).ToList();
+            if (cmd == "M" && cv.Count >= 2) { curX = cv[0]; curY = cv[1]; pts.Add((curX, curY)); }
+            else if (cmd == "L" && cv.Count >= 2) { curX = cv[0]; curY = cv[1]; pts.Add((curX, curY)); }
+            else if ((cmd == "Q" || cmd == "q") && cv.Count >= 4)
+            {
+                var (p0x, p0y) = (curX, curY); var (p1x, p1y) = (cv[0], cv[1]); var (p2x, p2y) = (cv[2], cv[3]);
+                for (var i = 1; i <= 12; i++)
+                {
+                    var t = (double)i / 12; var mt = 1 - t;
+                    curX = mt * mt * p0x + 2 * mt * t * p1x + t * t * p2x;
+                    curY = mt * mt * p0y + 2 * mt * t * p1y + t * t * p2y;
+                    pts.Add((curX, curY));
+                }
+            }
+            else if ((cmd == "C" || cmd == "c") && cv.Count >= 6)
+            {
+                var (p0x, p0y) = (curX, curY); var (p1x, p1y) = (cv[0], cv[1]);
+                var (p2x, p2y) = (cv[2], cv[3]); var (p3x, p3y) = (cv[4], cv[5]);
+                for (var i = 1; i <= 16; i++)
+                {
+                    var t = (double)i / 16; var mt = 1 - t;
+                    curX = mt * mt * mt * p0x + 3 * mt * mt * t * p1x + 3 * mt * t * t * p2x + t * t * t * p3x;
+                    curY = mt * mt * mt * p0y + 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t * p3y;
+                    pts.Add((curX, curY));
+                }
+            }
+        }
+        var result = new List<(double x, double y, double s)>();
+        if (pts.Count == 0) return result;
+        var s = 0.0;
+        result.Add((pts[0].x, pts[0].y, 0));
+        for (var i = 1; i < pts.Count; i++)
+        {
+            s += Math.Sqrt((pts[i].x - pts[i - 1].x) * (pts[i].x - pts[i - 1].x)
+                          + (pts[i].y - pts[i - 1].y) * (pts[i].y - pts[i - 1].y));
+            result.Add((pts[i].x, pts[i].y, s));
+        }
+        return result;
+    }
+
+    /// <summary>算 path 弧长中点坐标（总弧长一半处的点）。</summary>
+    private static (double x, double y) MidpointOnPath(string d)
+    {
+        var pts = ParsePathPoints(d);
+        if (pts.Count == 0) return (double.NaN, double.NaN);
+        if (pts.Count == 1) return (pts[0].x, pts[0].y);
+        var target = pts.Last().s / 2;
+        for (var i = 1; i < pts.Count; i++)
+        {
+            if (pts[i].s >= target)
+            {
+                var segLen = pts[i].s - pts[i - 1].s;
+                var t = segLen > 0 ? (target - pts[i - 1].s) / segLen : 0;
+                return (pts[i - 1].x + t * (pts[i].x - pts[i - 1].x),
+                        pts[i - 1].y + t * (pts[i].y - pts[i - 1].y));
+            }
+        }
+        return (pts.Last().x, pts.Last().y);
+    }
+
+    private static double ParseDouble(string s) => double.Parse(s, CultureInfo.InvariantCulture);
 
     /// <summary>把 CSS 声明串（<c>--key: value;</c>，value 可含括号内分号）按括号深度切分后塞进字典。</summary>
     private static void ParseDecls(string decls, Dictionary<string, string> sink)
