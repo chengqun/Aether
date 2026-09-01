@@ -141,6 +141,8 @@ public class LottiePetControl : Control, IAvatarEngine
     private void StartTimer()
     {
         if (_timer is not null) return;
+        if (!IsEffectivelyVisible) return; // 不可见（桌宠窗口已 Hide）不启动渲染循环——避免每 33ms 的 Skottie 光栅化
+                                           // + Marshal.Copy 与主窗 Show() 的同步布局竞抢 UI 线程（「双击桌宠回主界面转圈」根因）。
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) }; // ~30fps
         _timer.Tick += OnTick;
         _timer.Start();
@@ -152,6 +154,18 @@ public class LottiePetControl : Control, IAvatarEngine
         _timer.Stop();
         _timer.Tick -= OnTick;
         _timer = null;
+    }
+
+    /// <summary>可见性感知：桌宠窗口 Hide（回主界面）→ 停渲染循环；Show（进桌宠）→ 恢复。
+    /// <c>IsVisible</c> 是计算属性（自身 + 祖先全可见才 true），窗口 Hide/Show 会级联到此控件。</summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty)
+        {
+            if (change.NewValue is true) StartTimer();
+            else StopTimer();
+        }
     }
 
     private void OnTick(object? sender, EventArgs e)
