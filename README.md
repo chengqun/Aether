@@ -10,9 +10,9 @@ Aether 把"AI Agent 能力"沉淀成一个独立平台（`src/`），在此之�
 
 ```mermaid
 graph TD
-    subgraph Clients["客户端（apps/）"]
-        DT["Avalonia 桌面<br/>Stockapp"]
-        MB[".NET MAUI 移动<br/>Stockapp.Mobile"]
+    subgraph Clients["客户端（apps/）—— 双租户"]
+        DT["Avalonia 桌面<br/>Stockapp / Qifu"]
+        MB[".NET MAUI 移动<br/>Stockapp.Mobile / Qifu.Mobile"]
     end
     subgraph Server["服务端（server/）"]
         ABP["ABP 后端<br/>OpenIddict + SignalR + api/app/*"]
@@ -28,16 +28,17 @@ graph TD
         B1["AppAuth / Notes / Automation"]
         B2["Ctp / Quotes / Securities"]
         B3["Trading + Lean / StockTrading / AppAutomation"]
-        B4["ChatSocial / Moments / Video ..."]
+        B4["ChatSocial / Moments / DataQuery / Qifu ..."]
     end
     subgraph Adapters["AI 适配器（ai/）"]
-        A1["Ctp / Quotes / Notes / Trading<br/>StockTrading / SystemTools / ApkParser"]
+        A1["Ctp / Quotes / DataQuery / Qifu / Trading<br/>StockTrading / SystemTools / ApkParser"]
         A2["Agents 桥接（catalog + runner）"]
     end
     subgraph Ext["外部引擎（externals/）"]
         LEAN["Lean 回测/实盘引擎"]
         CTP["Ctp.Net.Core 期货"]
         FLAUI["FlaUI-MCP 桌面控制"]
+        MAF["Microsoft Agent Framework<br/>（只读参考源码）"]
     end
 
     DT --> ABP
@@ -75,7 +76,7 @@ graph TD
 
 **交互面**
 - 全流式输出：推理 / 工具调用 / 审批 / 计划 / `ask_user` 多问表单
-- Plan / Execute 双模式；工具审批协作重入循环
+- Plan / Manual / AutoEdit / Auto 四档模式（MAF plan/execute 之上 VM 层审批拦截）；工具审批协作重入循环
 - ChatGPT 式多会话持久化（SQLite，含工具调用与推理的完整转录）
 
 **领域引擎**
@@ -88,40 +89,42 @@ graph TD
 
 ## 解决方案结构
 
-单解决方案 `Aether.AI.Platform.slnx`（`.slnx`，非 `.sln`），.NET 10，共 101 个项目。
+单解决方案 `Aether.AI.Platform.slnx`（`.slnx`，非 `.sln`），.NET 10，共 107 个项目。
 
 | 目录 | 职责 |
 |------|------|
 | `src/` | **Aether.AI 平台**（独立可用）：Abstractions / Core / Harness / Workflows / Memory / Mcp / Hosting |
-| `business/` | **纯 DDD 业务上下文**：AppAuth / Notes / Automation / Ctp / Quotes / Securities / Trading(+Runtime) / StockTrading / AppAutomation / ChatSocial / Moments … |
-| `ai/` | **业务 AI 适配器**：7 工具适配器 + 1 Agent 桥接 |
+| `business/` | **纯 DDD 业务上下文**：AppAuth / Notes / Automation / Ctp / Quotes / Securities / Trading(+Runtime) / StockTrading / AppAutomation / DataQuery / ChatSocial / Moments / Qifu … |
+| `ai/` | **业务 AI 适配器**：8 工具适配器 + 1 Agent 桥接 |
 | `apps/` | 客户端：Avalonia 桌面（`Desktop/`）+ MAUI 移动（`Mobile/`）+ 租户 host |
 | `server/` | **ABP 服务端**（`Aether.Server.*`）：HttpApi.Host（:44319）+ Blazor 管理后台（:44337）+ DbMigrator |
-| `externals/` | 第三方引擎：Lean / Ctp.Net.Core / FlaUI-MCP（**Lean 与 FlaUI-MCP 为 git submodule**） |
+| `externals/` | 第三方引擎：Lean / Ctp.Net.Core / FlaUI-MCP / **MAF**（Microsoft Agent Framework 源码，只读参考；**Lean、FlaUI-MCP、MAF 均为 git submodule**） |
 | `mcp/` | 自写 MCP server 源码（范例） |
 | `tests/` | 全部测试项目 |
 
 ### 租户
 
-平台支持多租户，仓库内置 **Stockapp** 租户：
+平台支持多租户，仓库内置 **两个** 租户：
 
 | 租户 | 桌面 | 移动 | 领域 |
 |------|------|------|------|
 | **Stockapp** | CTP 期货 / 股票 / 回测+实盘 | 社交 + Quotes Agent 工具 | 期货 / A股 / 量化 |
+| **Qifu** | 毓数(Yushu) / 云文档(CloudDocs) / MySQL 数据查询 | 社交 + 数据查询 | 数据 / 文档 / SSO |
 
 ---
 
 ## 构建与运行
 
 ```bash
-# git submodules（Lean 量化引擎 / FlaUI-MCP 桌面控制，首次构建前 init）
-git submodule update --init externals/Lean externals/FlaUI-MCP
+# git submodules（Lean 量化引擎 / FlaUI-MCP 桌面控制 / MAF 只读参考源码，首次构建前 init）
+git submodule update --init externals/Lean externals/FlaUI-MCP externals/MAF
 
 dotnet build Aether.AI.Platform.slnx     # 构建全部
 dotnet test  Aether.AI.Platform.slnx     # 运行所有测试
 
-# 桌面应用（Avalonia）
+# 桌面应用（Avalonia，双租户）
 dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
+dotnet run --project apps/Qifu/Acme.Qifu.Desktop
 
 # ABP 服务端（本地直接可运行：dev 配置 + openiddict.pfx 已就位）
 dotnet run --project server/Aether.Server.HttpApi.Host   # :44319 API + OAuth2 + SignalR
@@ -136,11 +139,12 @@ dotnet run --project server/Aether.Server.Blazor         # :44337 管理后台
 
 ## 技术栈
 
-- **.NET 10** · **Microsoft Agent Framework**（`Microsoft.Agents.AI`）
+- **.NET 10** · **Microsoft Agent Framework**（`Microsoft.Agents.AI`，源码 vendored 于 `externals/MAF`）
 - **Avalonia 12**（桌面）· **.NET MAUI**（移动）· **ABP 10.4.1**（服务端）
 - **QuantConnect Lean**（量化引擎）· **Microsoft.Data.Sqlite**（客户端持久化）
 - **SQL Server + OpenIddict + SignalR**（服务端）· **Serilog / Autofac**
 - **Roslyn**（策略 / 规则动态编译）· **AvaloniaEdit**（代码编辑器）
+- **Playwright**（浏览器会话）· **RoyalTerminal + PTY**（集成终端）· **SkiaSharp.Skottie**（桌宠动画）
 
 ---
 
