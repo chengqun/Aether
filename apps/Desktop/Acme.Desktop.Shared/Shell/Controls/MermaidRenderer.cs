@@ -49,6 +49,15 @@ internal static class MermaidSvgRenderer
             // 经 StraightenEdges 的 NodeCenterBetween 守卫自动跳过，保留 dagre 绕弯路径，不受影响。
             try { svg = AlignDroppedChainNodes(svg); }
             catch { /* 对齐失败不阻断 */ }
+            // AlignDroppedChainNodes 把被 dagre 挤下行的链路中间节点拉回同行后，回环边（C→A / S→M）的路径
+            // 仍是 dagre 按旧（下行）布局路由的——其底部横段还停在原来给下行节点留纵向 lane 的深处，于是回环边
+            // 在紧凑节点簇下方远远探出一条空荡长线（用户反馈「闭环框框，里面的元素超出了一点点，就那个反馈
+            // 闭环的那根线」）。mermaid.js 用配置良好的 dagre 不会出现——其 dagre 不下行挤节点，回环边天然贴簇；
+            // 我们的 dagre port（Mermaider）无 ranker 旋钮，故在后处理层把回环边压紧成贴簇紧凑矩形回环。
+            // 必须在 Align 后、StraightenEdges 前跑：Align 后节点已紧凑、簇外缘稳定；StraightenEdges 只改正向边
+            // （其反向边守卫跳过回环边），不影响本步改的回环边 d。
+            try { svg = CompactBackEdges(svg); }
+            catch { /* 压紧失败不阻断 */ }
             // dagre 对含回环边/跨秩长边的图会把本可一行连直的链路节点挤到另一行，导致相邻列节点间的边
             // 变成「下→右」肘弯折线（用户反馈「本来能直直的过来，它非要拐一下，似乎是占位的问题」）。
             // 这是 dagre 排序算法固有行为（非解析 bug），无法经配置消除。后处理：把满足条件的相邻列折线边
@@ -312,6 +321,214 @@ internal static class MermaidSvgRenderer
         });
         return svg.Replace(block, shifted);
     }
+
+    /// <summary>
+    /// 把回环边（back-edge，如 A→B→C→A 里的 C→A、BASE→M→R→S→M 里的 S→M）dagre 为绕回而路由出的
+    /// 「下→横→上」长肘弯压紧成贴近节点簇的紧凑矩形回环。<see cref="AlignDroppedChainNodes"/> 把被 dagre
+    /// 挤下行的链路中间节点拉回同行后，回环边的路径仍是按旧（下行）布局路由的——其底部横段还停在原来给下行
+    /// 节点留纵向 lane 的深处，于是回环边在紧凑节点簇下方远远探出一条空荡长线（用户反馈「闭环框框，里面的
+    /// 元素超出了一点点，就那个反馈闭环的那根线」）。mermaid.js 用配置良好的 dagre 不会出现（其 dagre 不下行
+    /// 挤节点，回环边天然贴簇）；Mermaider 无 ranker 旋钮，故在后处理层把回环边压紧——等效于 mermaid.js 的
+    /// 紧凑回环路由。
+    /// </summary>
+    /// <remarks>
+    /// 触发条件（全部满足才压紧，保守不破坏合法布局）：
+    /// <list type="bullet">
+    /// <item>边路径某轴向极值（LR 图 maxY/minY，TB 图 maxX/minX）越过节点簇同向外缘 + 阈值（显著探出，
+    /// 阈值=max(12,0.4×簇该轴尺寸)，避免误碰正常边距）。</item>
+    /// <item>回路判定：起点与终点在连接轴上同位（|start.{connAxis} - end.{connAxis}| &lt; r+2）——回环边从某
+    /// 节点出、绕一圈回到同行/同列另一节点；正向边（到被挤下行的节点）终点在另一行/列，不满足故跳过
+    /// （其 elbow 由 <see cref="StraightenEdges"/> 拉直处理）。</item>
+    /// <item>路径呈标准 dagre 回环肘弯 M,L,Q,L,Q,L（六段），可解析出横段两端点 + 角半径 r∈[2,25]。</item>
+    /// <item>压紧后连接段仍有 ≥4px 余量（不反向）、且实际缩短 ≥8px（有意义才改）。</item>
+    /// </list>
+    /// 四向对称：below/above（LR 图回环边绕簇下/上）、right/left（TB 图回环边绕簇右/左）。只改该回环边 d，
+    /// 节点及其它边不动；正向边由 <see cref="StraightenEdges"/> 另处理。任何条件不满足→该边原样保留。
+    /// </remarks>
+    private static string CompactBackEdges(string svg)
+    {
+        var nodes = new Dictionary<string, (double x, double y, double w, double h)>(StringComparer.Ordinal);
+        foreach (Match nm in Regex.Matches(svg, @"<g\b[^>]*\bclass=""node""[^>]*>[\s\S]*?</g>"))
+        {
+            var block = nm.Value;
+            var id = Regex.Match(block, @"data-id=""([^""]*)""").Groups[1].Value;
+            if (string.IsNullOrEmpty(id)) continue;
+            var rectM = Regex.Match(block, @"<rect\b[^>]*/?>");
+            if (!rectM.Success) continue;
+            var r = rectM.Value;
+            nodes[id] = (ParseDouble(Regex.Match(r, @"\bx=""([0-9.]+)""").Groups[1].Value),
+                        ParseDouble(Regex.Match(r, @"\by=""([0-9.]+)""").Groups[1].Value),
+                        ParseDouble(Regex.Match(r, @"\bwidth=""([0-9.]+)""").Groups[1].Value),
+                        ParseDouble(Regex.Match(r, @"\bheight=""([0-9.]+)""").Groups[1].Value));
+        }
+        if (nodes.Count == 0) return svg;
+
+        var cMinX = nodes.Values.Min(n => n.x);
+        var cMaxX = nodes.Values.Max(n => n.x + n.w);
+        var cMinY = nodes.Values.Min(n => n.y);
+        var cMaxY = nodes.Values.Max(n => n.y + n.h);
+        var cW = cMaxX - cMinX;
+        var cH = cMaxY - cMinY;
+        var thrY = Math.Max(12.0, 0.4 * cH);
+        var thrX = Math.Max(12.0, 0.4 * cW);
+        // 边距：贴簇外缘 + 容纳箭头与边标签 pill（居中横段故上下/左右各 ~10px）。随簇该轴尺寸缩放（对齐后≈节点高/宽）。
+        var marginY = Math.Max(24.0, 0.5 * cH);
+        var marginX = Math.Max(24.0, 0.5 * cW);
+
+        var result = svg;
+        foreach (Match em in Regex.Matches(svg, @"<path\b[^>]*\bclass=""edge""[^>]*>"))
+        {
+            var pathTag = em.Value;
+            var dMatch = Regex.Match(pathTag, @"\bd=""([^""]*)""");
+            if (!dMatch.Success) continue;
+            var d = dMatch.Groups[1].Value;
+            var pts = ParsePathPoints(d);
+            if (pts.Count < 4) continue;
+            var xs = pts.Select(p => p.x).ToArray();
+            var ys = pts.Select(p => p.y).ToArray();
+            var pMinX = xs.Min(); var pMaxX = xs.Max();
+            var pMinY = ys.Min(); var pMaxY = ys.Max();
+
+            string? newD = null;
+            if (pMaxY - cMaxY > thrY)
+                newD = CompactBelow(d, cMaxY + marginY);
+            else if (cMinY - pMinY > thrY)
+                newD = CompactAbove(d, cMinY - marginY);
+            else if (pMaxX - cMaxX > thrX)
+                newD = CompactRight(d, cMaxX + marginX);
+            else if (cMinX - pMinX > thrX)
+                newD = CompactLeft(d, cMinX - marginX);
+
+            if (newD is null) continue;
+            var newPathTag = Regex.Replace(pathTag, @"\bd=""[^""]*""", "d=\"" + newD + "\"");
+            result = result.Replace(pathTag, newPathTag);
+        }
+        return result;
+    }
+
+    /// <summary>解析回环边路径 d 的几何结构。dagre 回环边呈 <c>M L Q L Q L</c> 形：
+    /// 起→直线段→Q 角→横/竖直段→Q 角→直线段→终。两 Q 的控制点落在 across 线上（控制点该轴坐标即横/竖段常量坐标），
+    /// Q 终点是真正的角端点。旧实现用采样点找「≈across 的最长 run」算角半径，但采样点含仍在弯曲的 Q 曲线中段
+    /// （x 还没到角端点）→ r 被低估（如 1.5 &lt; 2 守卫误杀）→ 回环边不压紧。改走结构化解析命令坐标，直接取
+    /// Q 控制点/终点，r 准确（=6）。
+    /// <para><paramref name="horizontal"/>=true（LR 图 below/above 路由，横段平行 x 轴）→ across=控制点 y、n1/n2=Q 终点/L 端点 x；</para>
+    /// <para><paramref name="horizontal"/>=false（TB 图 right/left 路由，竖段平行 y 轴）→ across=控制点 x、n1/n2=Q 终点/L 端点 y。</para>
+    /// 返回 (across, n1, n2, r, sx, sy, tx, ty) 或 null。</summary>
+    private static (double across, double n1, double n2, double r, double sx, double sy, double tx, double ty)?
+        ParseBackEdge(string d, bool horizontal)
+    {
+        var cmds = new List<(char cmd, double[] coords)>();
+        foreach (Match seg in Regex.Matches(d, @"([MLQCmlqc])\s*([^MLQCmlqc]*)"))
+        {
+            if (seg.Groups[1].Value.Length == 0) continue;
+            var cmd = seg.Groups[1].Value[0];
+            var cv = Regex.Matches(seg.Groups[2].Value, @"[-+]?\d+\.?\d*")
+                .Cast<Match>().Select(x => ParseDouble(x.Value)).ToArray();
+            cmds.Add((cmd, cv));
+        }
+        var qs = cmds.Where(c => c.cmd == 'Q' || c.cmd == 'q').ToList();
+        if (qs.Count < 2 || qs[0].coords.Length < 4 || qs[1].coords.Length < 4) return null;
+        var q1 = qs[0]; var q2 = qs[1];
+        // across = 首 Q 控制点的常量轴坐标（horiz→y=coords[1]，vert→x=coords[0]）
+        double across = horizontal ? q1.coords[1] : q1.coords[0];
+        // n1 = 首 Q 终点垂直轴坐标
+        double n1 = horizontal ? q1.coords[2] : q1.coords[3];
+        // n2 = 次 Q 起点垂直轴 = 两 Q 间 L 的端点（无 L 则退化为 n1）
+        int iq2 = cmds.IndexOf(q2);
+        double n2 = n1;
+        if (iq2 > 0)
+        {
+            var prev = cmds[iq2 - 1];
+            if ((prev.cmd == 'L' || prev.cmd == 'l') && prev.coords.Length >= 2)
+                n2 = horizontal ? prev.coords[0] : prev.coords[1];
+        }
+        // 起点（M）+ 终点（末 L 或末 Q 终点）
+        var m = cmds.FirstOrDefault(c => c.cmd == 'M' || c.cmd == 'm');
+        if (m.coords == null || m.coords.Length < 2) return null;
+        double sx = m.coords[0], sy = m.coords[1];
+        double tx, ty;
+        var last = cmds[cmds.Count - 1];
+        if (last.cmd == 'L' || last.cmd == 'l') { tx = last.coords[0]; ty = last.coords[1]; }
+        else if ((last.cmd == 'Q' || last.cmd == 'q') && last.coords.Length >= 4) { tx = last.coords[2]; ty = last.coords[3]; }
+        else { tx = sx; ty = sy; }
+        double r = horizontal ? Math.Abs(sx - n1) : Math.Abs(sy - n1);
+        return (across, n1, n2, r, sx, sy, tx, ty);
+    }
+
+    /// <summary>压紧 below 路由回环边（LR 图，绕簇下方）：横段从 across 拉到 newYb=簇底+边距，连接竖段缩短。</summary>
+    private static string? CompactBelow(string d, double newYb)
+    {
+        var g = ParseBackEdge(d, horizontal: true);
+        if (g is null) return null;
+        var (across, n1, n2, r, sx, sy, tx, ty) = g.Value;
+        if (r < 2 || r > 25) return null;
+        if (Math.Abs(sy - ty) > r + 2) return null;            // 回路：起终点同行（绕一圈回原行）
+        var nearSx = Math.Abs(sx - n1) < Math.Abs(sx - n2) ? n1 : n2;
+        var nearTx = Math.Abs(sx - n1) < Math.Abs(sx - n2) ? n2 : n1;
+        if (Math.Abs(Math.Abs(tx - nearTx) - r) > 3) return null;  // 次角半径须≈r（一致性校验）
+        if (across - newYb < 8) return null;                   // 当前横段须在目标下方且压紧≥8px
+        var newDownEnd = newYb - r;
+        if (newDownEnd - Math.Max(sy, ty) < 4) return null;    // 连接竖段不反向
+        return $"M {F(sx)},{F(sy)} L {F(sx)},{F(newDownEnd)} Q {F(sx)},{F(newYb)} {F(nearSx)},{F(newYb)} "
+             + $"L {F(nearTx)},{F(newYb)} Q {F(tx)},{F(newYb)} {F(tx)},{F(newDownEnd)} L {F(tx)},{F(ty)}";
+    }
+
+    /// <summary>压紧 above 路由回环边（LR 图，绕簇上方）：横段从 across 拉到 newYt=簇顶-边距，连接竖段缩短。</summary>
+    private static string? CompactAbove(string d, double newYt)
+    {
+        var g = ParseBackEdge(d, horizontal: true);
+        if (g is null) return null;
+        var (across, n1, n2, r, sx, sy, tx, ty) = g.Value;
+        if (r < 2 || r > 25) return null;
+        if (Math.Abs(sy - ty) > r + 2) return null;
+        var nearSx = Math.Abs(sx - n1) < Math.Abs(sx - n2) ? n1 : n2;
+        var nearTx = Math.Abs(sx - n1) < Math.Abs(sx - n2) ? n2 : n1;
+        if (Math.Abs(Math.Abs(tx - nearTx) - r) > 3) return null;
+        if (newYt - across < 8) return null;   // above 路由 across>newYt（横段在上方），须 across-newYt≥8
+        var newUpEnd = newYt + r;
+        if (Math.Min(sy, ty) - newUpEnd < 4) return null;
+        return $"M {F(sx)},{F(sy)} L {F(sx)},{F(newUpEnd)} Q {F(sx)},{F(newYt)} {F(nearSx)},{F(newYt)} "
+             + $"L {F(nearTx)},{F(newYt)} Q {F(tx)},{F(newYt)} {F(tx)},{F(newUpEnd)} L {F(tx)},{F(ty)}";
+    }
+
+    /// <summary>压紧 right 路由回环边（TB 图，绕簇右方）：竖段从 across 拉到 newX=簇右+边距，连接横段缩短。</summary>
+    private static string? CompactRight(string d, double newX)
+    {
+        var g = ParseBackEdge(d, horizontal: false);
+        if (g is null) return null;
+        var (across, n1, n2, r, sx, sy, tx, ty) = g.Value;
+        if (r < 2 || r > 25) return null;
+        if (Math.Abs(sx - tx) > r + 2) return null;            // 回路：起终点同列
+        var nearSy = Math.Abs(sy - n1) < Math.Abs(sy - n2) ? n1 : n2;
+        var nearTy = Math.Abs(sy - n1) < Math.Abs(sy - n2) ? n2 : n1;
+        if (Math.Abs(Math.Abs(ty - nearTy) - r) > 3) return null;
+        if (across - newX < 8) return null;
+        var newRightEnd = newX - r;
+        if (newRightEnd - Math.Max(sx, tx) < 4) return null;
+        return $"M {F(sx)},{F(sy)} L {F(newRightEnd)},{F(sy)} Q {F(newX)},{F(sy)} {F(newX)},{F(nearSy)} "
+             + $"L {F(newX)},{F(nearTy)} Q {F(newX)},{F(ty)} {F(newRightEnd)},{F(ty)} L {F(tx)},{F(ty)}";
+    }
+
+    /// <summary>压紧 left 路由回环边（TB 图，绕簇左方）：竖段从 across 拉到 newX=簇左-边距，连接横段缩短。</summary>
+    private static string? CompactLeft(string d, double newX)
+    {
+        var g = ParseBackEdge(d, horizontal: false);
+        if (g is null) return null;
+        var (across, n1, n2, r, sx, sy, tx, ty) = g.Value;
+        if (r < 2 || r > 25) return null;
+        if (Math.Abs(sx - tx) > r + 2) return null;
+        var nearSy = Math.Abs(sy - n1) < Math.Abs(sy - n2) ? n1 : n2;
+        var nearTy = Math.Abs(sy - n1) < Math.Abs(sy - n2) ? n2 : n1;
+        if (Math.Abs(Math.Abs(ty - nearTy) - r) > 3) return null;
+        if (newX - across < 8) return null;   // left 路由 across<newX（竖段在左方），须 newX-across≥8
+        var newLeftEnd = newX + r;
+        if (Math.Min(sx, tx) - newLeftEnd < 4) return null;
+        return $"M {F(sx)},{F(sy)} L {F(newLeftEnd)},{F(sy)} Q {F(newX)},{F(sy)} {F(newX)},{F(nearSy)} "
+             + $"L {F(newX)},{F(nearTy)} Q {F(newX)},{F(ty)} {F(newLeftEnd)},{F(ty)} L {F(tx)},{F(ty)}";
+    }
+
+    /// <summary>数字格式化（4 位小数，去尾零），与 <see cref="StraightenEdges"/> 同口径。</summary>
+    private static string F(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// 把相邻列节点间的折线边（肘弯「下→右」/「上→右」）拉直成单段直线段（出口点→入口点）。
