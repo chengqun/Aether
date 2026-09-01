@@ -44,6 +44,12 @@ public partial class WorkbenchWindow : Window
     /// <summary>真退出标志：X（关闭）被拦截为「最小化到桌宠」；只有显式「退出」路径置 true 才真正关闭。</summary>
     private bool _isReallyExiting;
 
+    /// <summary>最大化前保存的还原帧（Width/Height/Position）。macOS 的 borderless 窗口（WindowDecorations=BorderOnly）
+    /// 不干净支持 WindowState.Maximized↔Normal 往返——还原时 OS 不记录最大化前的 frame，导致窗口回到错尺寸、
+    /// 内部 Grid/DockPanel 布局按最大化边界测量后错乱。故最大化/还原改走手动 frame 快照：进最大化前存 <see cref="_restoreFrame"/>，
+    /// 还原时写回。null = 当前处于还原态（非最大化）。</summary>
+    private (double Width, double Height, PixelPoint Position)? _restoreFrame;
+
     public WorkbenchWindow()
     {
         InitializeComponent();
@@ -253,7 +259,7 @@ public partial class WorkbenchWindow : Window
     public void OnTitleBarDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (e.Source is Button) return;
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        ToggleMaximizeRestore();
     }
 
     /// <summary>最小化（自绘标题栏按钮）：进桌宠，不缩到 Dock。与 X（关闭）同语义——
@@ -282,26 +288,69 @@ public partial class WorkbenchWindow : Window
         });
     }
 
-    public void OnMaximizeRestore(object? sender, RoutedEventArgs e)
-        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    public void OnMaximizeRestore(object? sender, RoutedEventArgs e) => ToggleMaximizeRestore();
 
     public void OnClose(object? sender, RoutedEventArgs e) => Close();
 
-    /// <summary>据 WindowState 显隐最大化/还原图标（ChromeMaximize / ChromeRestore 互斥）。</summary>
+    /// <summary>最大化/还原切换。borderless 皮肤（chrome.borderless=true，含内置 light/dark/dream 全量）在 macOS 上
+    /// 用 WindowState.Maximized 走 OS 原生最大化→还原时，OS 不记录最大化前的 frame，导致还原后窗口尺寸/布局错乱
+    /// （内部 Grid/DockPanel 按最大化边界测量）。故改手动 frame 快照：进最大化前存 Width/Height/Position，还原时写回，
+    /// 最大化的目标帧取当前所在屏幕的 WorkingArea（等价 OS 最大化，但完全自控、还原可靠）。
+    /// 系统原生 chrome（borderless=false）仍走 WindowState（OS 标题栏/交通灯自己管 frame，往返正常）。</summary>
+    private void ToggleMaximizeRestore()
+    {
+        if (_vm?.IsBorderless != true)
+        {
+            // 原生 chrome：OS 自己管最大化 frame，走 WindowState 即可。
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            return;
+        }
+
+        if (_restoreFrame is null)
+        {
+            // —— 进入最大化：快照当前 frame，再铺满当前屏幕 WorkingArea ——
+            _restoreFrame = (Width, Height, Position);
+            if (Screens.ScreenFromWindow(this) is { } screen)
+            {
+                var wa = screen.WorkingArea;
+                Position = wa.Position;
+                Width = wa.Width;
+                Height = wa.Height;
+            }
+        }
+        else
+        {
+            // —— 还原：写回快照 frame ——
+            var f = _restoreFrame.Value;
+            Width = f.Width;
+            Height = f.Height;
+            Position = f.Position;
+            _restoreFrame = null;
+        }
+        UpdateMaxIcon();
+    }
+
+    /// <summary>据当前是否最大化显隐最大化/还原图标（ChromeMaximize / ChromeRestore 互斥）。
+    /// borderless 皮肤手动管 frame（不碰 WindowState，见 <see cref="ToggleMaximizeRestore"/>），最大化态由
+    /// <see cref="_restoreFrame"/> 非空判定；原生 chrome 仍读 WindowState（OS 自己管 frame）。</summary>
     private void UpdateMaxIcon()
     {
-        var maximized = WindowState == WindowState.Maximized;
+        var maximized = IsMaximized;
         if (MaxIcon is not null) MaxIcon.IsVisible = !maximized;
         if (RestoreIcon is not null) RestoreIcon.IsVisible = maximized;
         ApplyMacMaxGlyph();
     }
 
-    /// <summary>mac 交通灯绿点（最大化）hover 时显 ⤢（最大化）或 ⤡（还原）。绿点符号随 WindowState 切换，
+    /// <summary>当前是否处于最大化态。borderless 皮肤由 <see cref="_restoreFrame"/> 非空判定（手动 frame，不依赖
+    /// WindowState）；原生 chrome 读 WindowState。</summary>
+    private bool IsMaximized => _vm?.IsBorderless == true ? _restoreFrame.HasValue : WindowState == WindowState.Maximized;
+
+    /// <summary>mac 交通灯绿点（最大化）hover 时显 ⤢（最大化）或 ⤡（还原）。绿点符号随最大化态切换，
     /// 与 WinButtons 的 MaxIcon/RestoreIcon 同源。仅在 macOS 生效（MacTrafficLights 可见时）。</summary>
     private void ApplyMacMaxGlyph()
     {
         if (MaxGlyph is null) return;
-        var maximized = WindowState == WindowState.Maximized;
+        var maximized = IsMaximized;
         MaxGlyph.Data = Geometry.Parse(maximized ? Codicons.ChromeRestore : Codicons.ChromeMaximize);
     }
 
