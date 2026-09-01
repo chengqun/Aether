@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <!-- MCP 集成仍是 alpha 预发布（隔离在本项目，宿主按需 opt-in，不影响其它项目）。 -->
-    <PackageReference Include="Microsoft.Agents.AI.Mcp" Version="1.19.0-alpha.260822.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Mcp" Version="1.20.0-alpha.260831.1" />
     <!-- ILoggerFactory（McpServerRegistry/McpManagementService 用）——显式声明，不依赖传递。 -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
   </ItemGroup>

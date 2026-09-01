@@ -7,7 +7,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.19.0" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.20.0" />
     <!-- DI/Options 仍靠 Microsoft.Agents.AI.OpenAI 传递（框架 pin 版本）；Logging 改为显式声明（见下），
          统一全 src 标准，不依赖传递链。 -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
