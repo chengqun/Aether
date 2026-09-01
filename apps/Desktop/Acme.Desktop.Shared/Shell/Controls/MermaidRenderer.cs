@@ -42,6 +42,13 @@ internal static class MermaidSvgRenderer
             // 喂 SKSvg 前展平成具体色。失败兜底用原 SVG（最坏回退黑块→ProvideControl 返 null→默认代码块）。
             try { svg = FlattenCssVars(svg); }
             catch { /* 展平失败不阻断，SvgToImage 自会兜底 */ }
+            // dagre 对含回环边的图（如 A→B→C→A）为给回环边留纵向 lane，会把本可同行的链路中间节点（B）
+            // 挤到另一行 → A、C 同行而 B 独占一行 → 整图呈 V/Λ 型（用户反馈「三个节点却是 V 型」）。
+            // StraightenEdges 只改边路径 d、不动节点坐标，纠正不了这种节点错位。故先跑本步把 B 拉回 A、C
+            // 所在行，再由 StraightenEdges 把 A→B、B→C 改写成单段直线（同行即水平直线）。回环边（C→A）
+            // 经 StraightenEdges 的 NodeCenterBetween 守卫自动跳过，保留 dagre 绕弯路径，不受影响。
+            try { svg = AlignDroppedChainNodes(svg); }
+            catch { /* 对齐失败不阻断 */ }
             // dagre 对含回环边/跨秩长边的图会把本可一行连直的链路节点挤到另一行，导致相邻列节点间的边
             // 变成「下→右」肘弯折线（用户反馈「本来能直直的过来，它非要拐一下，似乎是占位的问题」）。
             // 这是 dagre 排序算法固有行为（非解析 bug），无法经配置消除。后处理：把满足条件的相邻列折线边
@@ -180,6 +187,130 @@ internal static class MermaidSvgRenderer
         // 实测：删 style 块后 light 文字像素 70→673、节点像素 1531→37192（dark 同样从不可见→全渲染）。
         // Svg.Skia 用默认字体渲染 <text>（Helvetica 族，实测 macOS 字体解析成功），无需补 inline font-family。
         return Regex.Replace(flattened, @"<style[^>]*>[\s\S]*?</style>", "");
+    }
+
+    /// <summary>
+    /// 把 dagre 因排布回环边而挤到另一行的链路中间节点拉回与前后节点同行的位置。
+    /// 动机：dagre 对含回环边的图（如 <c>A→B→C→A</c>）为给回环边留纵向 lane，会把本可同行的链路中间节点
+    /// （B）挤到另一行 → A、C 同行而 B 独占一行 → 整图呈 V/Λ 型（用户反馈「三个节点却是 V 型」）。
+    /// <see cref="StraightenEdges"/> 只改边路径 <c>d</c>、不动节点坐标，纠正不了这种节点错位。本方法在它之前跑：
+    /// 找出「恰好一进一出」的链路中间节点 B，若其前驱 A、后继 C 同行而 B 被挤下/侧，把 B 平移回 A、C 所在行；
+    /// 随后 <see cref="StraightenEdges"/> 把 A→B、B→C 改写成单段直线（同行即水平/垂直直线）。回环边（如 C→A）
+    /// 经 <see cref="StraightenEdges"/> 的 <see cref="NodeCenterBetween"/> 守卫自动跳过，保留 dagre 的绕弯路径，不受影响。
+    /// </summary>
+    /// <remarks>
+    /// 触发条件（全部满足才平移，保守不破坏合法布局）：
+    /// <list type="bullet">
+    /// <item>B 恰好一进一出（preds.Count==1 &amp;&amp; succs.Count==1）——纯链路中间节点；合并/分叉点不动。</item>
+    /// <item>前驱 A、后继 C 在垂直/水平轴上同行（|cA-cC| &lt; 2px），B 在该轴上明显错位（偏移 &gt; 半个 B 高/宽）。</item>
+    /// <item>B 沿链路方向严格夹在 A、C 之间（中心坐标单调）——确认是真链路而非巧合同行。</item>
+    /// <item>B 平移到目标行后不与任何其它节点矩形重叠（AABB 检测）——不覆盖别的节点。</item>
+    /// </list>
+    /// 水平链纠 Y 错位、垂直链纠 X 错位，两轴对称（TD 回环同理）。只改节点 <c>&lt;g&gt;</c> 内的 <c>x=</c>/<c>y=</c>
+    /// 坐标属性，不动 edge path（交给 <see cref="StraightenEdges"/> 重写）。任何条件不满足→该节点原样保留。
+    /// </remarks>
+    private static string AlignDroppedChainNodes(string svg)
+    {
+        // 节点：id → 矩形 (x,y,w,h)，只收 <rect> 节点（与 StraightenEdges 同口径）。
+        var nodes = new Dictionary<string, (double x, double y, double w, double h)>(StringComparer.Ordinal);
+        foreach (Match nm in Regex.Matches(svg, @"<g\b[^>]*\bclass=""node""[^>]*>[\s\S]*?</g>"))
+        {
+            var block = nm.Value;
+            var id = Regex.Match(block, @"data-id=""([^""]*)""").Groups[1].Value;
+            if (string.IsNullOrEmpty(id)) continue;
+            var rectM = Regex.Match(block, @"<rect\b[^>]*/?>");
+            if (!rectM.Success) continue;
+            var r = rectM.Value;
+            var x = ParseDouble(Regex.Match(r, @"\bx=""([0-9.]+)""").Groups[1].Value);
+            var y = ParseDouble(Regex.Match(r, @"\by=""([0-9.]+)""").Groups[1].Value);
+            var w = ParseDouble(Regex.Match(r, @"\bwidth=""([0-9.]+)""").Groups[1].Value);
+            var h = ParseDouble(Regex.Match(r, @"\bheight=""([0-9.]+)""").Groups[1].Value);
+            nodes[id] = (x, y, w, h);
+        }
+        if (nodes.Count == 0) return svg;
+
+        // 邻接表：每节点的一进一出边。
+        var ins = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var outs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (Match em in Regex.Matches(svg, @"<path\b[^>]*\bclass=""edge""[^>]*>"))
+        {
+            var f = Regex.Match(em.Value, @"data-from=""([^""]*)""").Groups[1].Value;
+            var t = Regex.Match(em.Value, @"data-to=""([^""]*)""").Groups[1].Value;
+            if (!outs.ContainsKey(f)) outs[f] = new List<string>();
+            if (!ins.ContainsKey(t)) ins[t] = new List<string>();
+            outs[f].Add(t);
+            ins[t].Add(f);
+        }
+
+        double Cx(string id) => nodes[id].x + nodes[id].w / 2;
+        double Cy(string id) => nodes[id].y + nodes[id].h / 2;
+
+        foreach (var kv in nodes)
+        {
+            var b = kv.Key;
+            var hasIn = ins.TryGetValue(b, out var preds) && preds.Count == 1;
+            var hasOut = outs.TryGetValue(b, out var succs) && succs.Count == 1;
+            if (!hasIn || !hasOut) continue;
+            var a = preds[0];
+            var c = succs[0];
+            if (a == b || c == b || a == c) continue;
+            if (!nodes.ContainsKey(a) || !nodes.ContainsKey(c)) continue;
+            var B = nodes[b];
+
+            // 水平链：A、C 同行（cy 近等），B 在 Y 上被挤开（偏移 > 半个 B 高），且 B 的 cx 严格夹在 A、C 之间。
+            if (Math.Abs(Cy(a) - Cy(c)) < 2.0 && Math.Abs(Cy(b) - Cy(a)) > 0.5 * B.h
+                && ((Cx(a) < Cx(b) && Cx(b) < Cx(c)) || (Cx(a) > Cx(b) && Cx(b) > Cx(c))))
+            {
+                var targetCy = (Cy(a) + Cy(c)) / 2;
+                var dy = targetCy - Cy(b);
+                if (!NodeCollidesAt(nodes, b, B.x, B.y + dy, B.w, B.h))
+                    svg = ShiftNodeCoord(svg, b, 0, dy);
+            }
+            // 垂直链：A、C 同列（cx 近等），B 在 X 上被挤开（偏移 > 半个 B 宽），且 B 的 cy 严格夹在 A、C 之间。
+            else if (Math.Abs(Cx(a) - Cx(c)) < 2.0 && Math.Abs(Cx(b) - Cx(a)) > 0.5 * B.w
+                && ((Cy(a) < Cy(b) && Cy(b) < Cy(c)) || (Cy(a) > Cy(b) && Cy(b) > Cy(c))))
+            {
+                var targetCx = (Cx(a) + Cx(c)) / 2;
+                var dx = targetCx - Cx(b);
+                if (!NodeCollidesAt(nodes, b, B.x + dx, B.y, B.w, B.h))
+                    svg = ShiftNodeCoord(svg, b, dx, 0);
+            }
+        }
+        return svg;
+    }
+
+    /// <summary>B 的矩形移到 (nx,ny,w,h) 后是否与任何其它节点矩形重叠（AABB：任一轴分离即不重叠）。</summary>
+    private static bool NodeCollidesAt(
+        Dictionary<string, (double x, double y, double w, double h)> nodes,
+        string self, double nx, double ny, double w, double h)
+    {
+        foreach (var kv in nodes)
+        {
+            if (kv.Key == self) continue;
+            var n = kv.Value;
+            if (!(nx + w <= n.x || nx >= n.x + n.w || ny + h <= n.y || ny >= n.y + n.h))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>把节点 <c>&lt;g&gt;</c> 块内所有 <c>x="num"</c>/<c>y="num"</c> 属性平移 (dx,dy)。
+    /// <c>\bx=</c>/<c>\by=</c> 的词边界避开 <c>dx/dy/rx/ry/cx/cy/width/height</c> 等；<c>dy=</c>/<c>dx=</c>
+    /// （文字基线相对偏移）不被匹配——它是相对量不该平移。只动节点块，edge path 不碰（交给 StraightenEdges）。</summary>
+    private static string ShiftNodeCoord(string svg, string id, double dx, double dy)
+    {
+        var blockM = Regex.Match(svg,
+            @"<g\b[^>]*\bclass=""node""[^>]*\bdata-id=""" + Regex.Escape(id) + @"""[^>]*>[\s\S]*?</g>");
+        if (!blockM.Success) return svg;
+        var block = blockM.Value;
+        var shifted = Regex.Replace(block, @"(\b[xy]="")(?:-?[0-9.]+)("")", m =>
+        {
+            var isX = m.Value[0] == 'x';
+            var val = ParseDouble(Regex.Match(m.Value, @"-?[0-9.]+").Value);
+            var nv = val + (isX ? dx : dy);
+            return m.Groups[1].Value + nv.ToString("0.####", CultureInfo.InvariantCulture) + m.Groups[2].Value;
+        });
+        return svg.Replace(block, shifted);
     }
 
     /// <summary>
