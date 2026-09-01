@@ -72,6 +72,13 @@ public partial class ToolOption : ObservableObject
 /// <summary>审批等级选项（值 + 中文标签）。</summary>
 public sealed record ApprovalLevelOption(string Value, string Label);
 
+/// <summary>后台 Agent 候选（目录里其他普通 LLM agent 名，供 orchestrator 勾选进白名单）。</summary>
+public partial class BackgroundAgentOption : ObservableObject
+{
+    public string Name { get; set; } = string.Empty;
+    [ObservableProperty] private bool _isSelected;
+}
+
 /// <summary>工具类别分组（UI 分组展示用，支持类别整体勾选）。</summary>
 public partial class ToolCategoryGroup : ObservableObject
 {
@@ -125,7 +132,8 @@ public class ResponseFormatOption
 public sealed partial class ExpertEditViewModel : ObservableObject
 {
     public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels,
-        IReadOnlyList<McpServerStatus>? mcpServers = null, string currentHost = "All")
+        IReadOnlyList<McpServerStatus>? mcpServers = null, string currentHost = "All",
+        IReadOnlyList<string>? backgroundAgentCandidates = null)
     {
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
@@ -191,6 +199,17 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             }
             HasMcpServers = McpServerGroups.Count > 0; // 走通知（控制整个 MCP 区 Expander 显隐）
         }
+
+        // 后台 Agent 白名单勾选区：候选 = 目录里其他普通 LLM agent 名（排除自己），已选集合由 existing.BackgroundAgents 回填。
+        var backgroundSelected = new HashSet<string>(existing?.BackgroundAgents ?? Enumerable.Empty<string>());
+        foreach (var name in (backgroundAgentCandidates ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var opt = new BackgroundAgentOption { Name = name, IsSelected = backgroundSelected.Contains(name) };
+            opt.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(BackgroundAgentOption.IsSelected)) ScheduleAutoSave(); };
+            BackgroundAgents.Add(opt);
+        }
+        HasBackgroundAgentCandidates = BackgroundAgents.Count > 0; // 驱动 UI 区显隐
 
         if (existing != null)
         {
@@ -259,6 +278,12 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     [ObservableProperty] private bool _enableFileMemory;
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
+
+    /// <summary>后台 Agent 白名单候选项（勾选即把该 agent 加入本 agent 的后台分派白名单）。</summary>
+    public ObservableCollection<BackgroundAgentOption> BackgroundAgents { get; } = new();
+
+    /// <summary>是否有可勾选的后台 Agent 候选（无 → 隐藏整块勾选区）。</summary>
+    [ObservableProperty] private bool _hasBackgroundAgentCandidates;
 
     [ObservableProperty] private string? _error;
     [ObservableProperty] private string? _autoSaveStatus;
@@ -434,6 +459,7 @@ public sealed partial class ExpertEditViewModel : ObservableObject
             EnableFileMemory = EnableFileMemory,
             EnableOpenTelemetry = EnableOpenTelemetry,
             EnableLongTermMemory = EnableLongTermMemory,
+            BackgroundAgents = BackgroundAgents.Where(b => b.IsSelected).Select(b => b.Name).ToList(),
             Engine = string.Empty,
             NodeType = NoteNodeType.Agent,
         };

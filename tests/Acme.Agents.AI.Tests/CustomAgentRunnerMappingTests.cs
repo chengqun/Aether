@@ -69,4 +69,38 @@ public class CustomAgentRunnerMappingTests
         Assert.Equal(EngineKind.Llm, platform.Engine);
         Assert.Equal("你是助手", platform.Instructions);
     }
+
+    [Fact]
+    public void BackgroundAgents_flow_through_to_platform_definition()
+    {
+        var def = new CustomAgentDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = "编排者",
+            SystemPrompt = "你是编排者",
+            BackgroundAgents = new List<string> { "分析助手", "交易助手" },
+        };
+
+        var platform = CustomAgentRunner.ToAgentDefinition(def.Id.ToString(), def);
+
+        Assert.NotNull(platform.BackgroundAgents);
+        Assert.Equal(new[] { "分析助手", "交易助手" }, platform.BackgroundAgents);
+    }
+
+    [Fact]
+    public void Empty_background_agents_maps_to_empty_list()
+    {
+        var def = new CustomAgentDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = "单 agent",
+            SystemPrompt = "你是助手",
+            BackgroundAgents = new List<string>(),
+        };
+
+        var platform = CustomAgentRunner.ToAgentDefinition(def.Id.ToString(), def);
+
+        Assert.NotNull(platform.BackgroundAgents);
+        Assert.Empty(platform.BackgroundAgents);
+    }
 }

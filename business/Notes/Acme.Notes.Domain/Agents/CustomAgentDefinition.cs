@@ -72,4 +72,11 @@ public sealed class CustomAgentDefinition
     public bool EnableOpenTelemetry { get; set; }
     /// <summary>开启后接入 IMemoryStore 长期记忆：每轮召回用户记忆注入指令 + 沉淀本轮 Q&amp;A，跨会话保留。</summary>
     public bool EnableLongTermMemory { get; set; }
+
+    /// <summary>
+    /// 后台 Agent 白名单（本 agent 可作为 orchestrator 分派任务的目标子 agent 的 Name 列表）——
+    /// 非空即启用 MAF <c>BackgroundAgentsProvider</c>，让本 agent 动态把子任务分派给这些 agent 并发跑、再收结果。
+    /// 仅允许普通 LLM agent（<c>NodeType == Agent</c>），排除规则/代码规则 agent（无真 LLM）。
+    /// </summary>
+    public List<string> BackgroundAgents { get; set; } = new();
 }

@@ -55,6 +55,9 @@ public sealed partial class ExpertItem : ObservableObject
     [ObservableProperty] private bool _enableOpenTelemetry;
     [ObservableProperty] private bool _enableLongTermMemory;
 
+    /// <summary>后台 Agent 白名单（本 agent 可并发分派子任务的目标子 agent 名列表）；仅普通 LLM agent 可入。</summary>
+    [ObservableProperty] private List<string> _backgroundAgents = new();
+
     public string DisplayIcon => NodeType switch
     {
         NoteNodeType.Rule => "⚙️",

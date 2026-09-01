@@ -120,4 +120,12 @@ public sealed class AgentDefinition
     /// 跨会话保留。区别于 <see cref="Memory"/>（会话内聊天历史窗口）。
     /// </summary>
     public bool EnableLongTermMemory { get; init; }
+
+    /// <summary>
+    /// 后台 Agent 白名单：本 agent 可动态分派后台子任务的目标子 agent 名列表。非空即启用
+    /// MAF <c>BackgroundAgentsProvider</c>（由宿主经 backgroundAgents 工厂把各名字解析成
+    /// <c>AIAgent</c> 构建 provider 注入），让本 agent 在对话里并发委派子任务并收结果。
+    /// 仅普通 LLM agent（<c>Engine == Llm</c>），规则/代码规则 agent 不可作子 agent。
+    /// </summary>
+    public IReadOnlyList<string>? BackgroundAgents { get; init; }
 }

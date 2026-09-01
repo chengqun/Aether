@@ -123,6 +123,7 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             EnableFileMemory = def.EnableFileMemory,
             EnableOpenTelemetry = def.EnableOpenTelemetry,
             EnableLongTermMemory = def.EnableLongTermMemory,
+            BackgroundAgents = def.BackgroundAgents,
         };
     }
 

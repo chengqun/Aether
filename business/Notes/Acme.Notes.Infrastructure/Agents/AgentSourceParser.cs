@@ -171,6 +171,10 @@ public sealed class AgentSourceParser : IAgentSourceParser
                     // 自动放行工具名列表（flow [a,b] 或 block - a）；与 tools 同构
                     result.AutoApprovalRules = ParseListValue(value, lines, ref i);
                     break;
+                case "backgroundagents":
+                    // 后台 Agent 白名单（子 agent 名列表，flow [a,b] 或 block - a）；与 tools 同构
+                    result.BackgroundAgents = ParseListValue(value, lines, ref i);
+                    break;
             }
             i++;
         }
@@ -237,6 +241,12 @@ public sealed class AgentSourceParser : IAgentSourceParser
             ? null
             : "auto_approval_rules: [" + string.Join(",", autoRulesList.Select(n => $"\"{n}\"")) + "]";
 
+        // background_agents: 后台 Agent 白名单（子 agent 名列表，仅非空时输出，flow [\"a\",\"b\"]）
+        var backgroundAgentsList = f.BackgroundAgents?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+        var backgroundAgentsLine = backgroundAgentsList.Count == 0
+            ? null
+            : "background_agents: [" + string.Join(",", backgroundAgentsList.Select(n => $"\"{n}\"")) + "]";
+
         return $@"---
 id: {f.Id}
 name: {f.Name}
@@ -245,6 +255,7 @@ category: {f.Category}
 {toolsLine}
 {approvalsLine}
 {autoRulesLine}
+{backgroundAgentsLine}
 memory: {f.Memory}
 max_history: {f.MaxHistory}
 model: {f.ModelId ?? string.Empty}

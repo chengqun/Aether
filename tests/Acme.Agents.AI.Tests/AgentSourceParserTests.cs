@@ -84,4 +84,55 @@ public class AgentSourceParserTests
         Assert.Equal(AgentMemoryMode.Summarize, parsed!.Memory);
         Assert.Equal(8, parsed.MaxHistory);
     }
+
+    [Fact]
+    public void BackgroundAgents_flow_round_trips()
+    {
+        var def = new CustomAgentDefinition
+        {
+            Name = "编排者",
+            SystemPrompt = "你是编排者",
+            BackgroundAgents = new List<string> { "分析助手", "交易助手" },
+        };
+
+        var source = _parser.Serialize(def);
+        Assert.Contains("background_agents: [\"分析助手\",\"交易助手\"]", source);
+
+        Assert.True(_parser.TryParse(source, out var parsed, out var error));
+        Assert.Empty(error);
+        Assert.Equal(new[] { "分析助手", "交易助手" }, parsed!.BackgroundAgents);
+    }
+
+    [Fact]
+    public void BackgroundAgents_empty_omitted_from_source()
+    {
+        var def = new CustomAgentDefinition
+        {
+            Name = "单 agent",
+            SystemPrompt = "你是助手",
+            BackgroundAgents = new List<string>(),
+        };
+
+        var source = _parser.Serialize(def);
+        Assert.DoesNotContain("background_agents", source);
+
+        Assert.True(_parser.TryParse(source, out var parsed, out _));
+        Assert.Empty(parsed!.BackgroundAgents);
+    }
+
+    [Fact]
+    public void BackgroundAgents_block_style_parsed()
+    {
+        const string source = """
+                              ---
+                              name: 块样式编排者
+                              background_agents:
+                                - 分析助手
+                                - 交易助手
+                              ---
+                              你是编排者
+                              """;
+        Assert.True(_parser.TryParse(source, out var parsed, out _));
+        Assert.Equal(new[] { "分析助手", "交易助手" }, parsed!.BackgroundAgents);
+    }
 }

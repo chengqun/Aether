@@ -88,6 +88,7 @@ public partial class ExpertsViewModel : ObservableObject
                         EnableFileMemory = def.EnableFileMemory,
                         EnableOpenTelemetry = def.EnableOpenTelemetry,
                         EnableLongTermMemory = def.EnableLongTermMemory,
+                        BackgroundAgents = def.BackgroundAgents?.ToList() ?? new List<string>(),
                         Source = def.Source,
                         MarketplaceId = def.MarketplaceId,
                     };
@@ -142,6 +143,7 @@ public partial class ExpertsViewModel : ObservableObject
                 EnableFileMemory = item.EnableFileMemory,
                 EnableOpenTelemetry = item.EnableOpenTelemetry,
                 EnableLongTermMemory = item.EnableLongTermMemory,
+                BackgroundAgents = item.BackgroundAgents?.ToList() ?? new List<string>(),
             };
 
             await _catalog.SaveAsync(def);
@@ -173,6 +175,7 @@ public partial class ExpertsViewModel : ObservableObject
                 existing.EnableFileMemory = item.EnableFileMemory;
                 existing.EnableOpenTelemetry = item.EnableOpenTelemetry;
                 existing.EnableLongTermMemory = item.EnableLongTermMemory;
+                existing.BackgroundAgents = item.BackgroundAgents?.ToList() ?? new List<string>();
             }
             else
             {
@@ -196,6 +199,14 @@ public partial class ExpertsViewModel : ObservableObject
     {
         var tools = _catalog.GetAvailableTools();
         var models = _catalog.GetAvailableModels();
-        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList(), _catalog.CurrentHost);
+        // 后台 Agent 白名单候选：目录里其他普通 LLM agent 名（排除正在编辑的自己，防 self-delegate）。
+        var selfName = existing?.Name;
+        var candidates = Experts
+            .Where(e => e.NodeType == NoteNodeType.Agent && !string.IsNullOrWhiteSpace(e.Name))
+            .Select(e => e.Name.Trim())
+            .Where(n => !string.Equals(n, selfName?.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList(), _catalog.CurrentHost, candidates);
     }
 }

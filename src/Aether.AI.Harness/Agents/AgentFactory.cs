@@ -37,6 +37,7 @@ public sealed class AgentFactory
     private readonly AgentFileSkillScriptRunner _skillScriptRunner;
     private readonly Func<AgentDefinition, AIContextProvider?>? _memoryContextProviderFactory;
     private readonly Func<AgentDefinition, ChatHistoryProvider?>? _historyProviderFactory;
+    private readonly Func<AgentDefinition, IReadOnlyList<AIAgent>?>? _backgroundAgentsFactory;
     private readonly ICodeBrainRegistry? _codeBrainRegistry;
 
     /// <summary>
@@ -65,6 +66,7 @@ public sealed class AgentFactory
     public AgentFactory(IChatClientFactory chatClientFactory, ToolRegistry toolRegistry, SkillRegistry skillRegistry, ILoggerFactory? loggerFactory = null,
         Func<AgentDefinition, AIContextProvider?>? memoryContextProviderFactory = null,
         Func<AgentDefinition, ChatHistoryProvider?>? historyProviderFactory = null,
+        Func<AgentDefinition, IReadOnlyList<AIAgent>?>? backgroundAgentsFactory = null,
         ICodeBrainRegistry? codeBrainRegistry = null)
     {
         _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
@@ -74,6 +76,7 @@ public sealed class AgentFactory
         _skillScriptRunner = RunSkillScriptAsync;
         _memoryContextProviderFactory = memoryContextProviderFactory;
         _historyProviderFactory = historyProviderFactory;
+        _backgroundAgentsFactory = backgroundAgentsFactory;
         _codeBrainRegistry = codeBrainRegistry;
     }
 
@@ -219,6 +222,24 @@ public sealed class AgentFactory
                 : new List<AIContextProvider>(options.AIContextProviders);
             combined.Add(memoryProvider);
             options.AIContextProviders = combined;
+        }
+
+        // 后台 Agent（orchestrator 分派子任务）：BackgroundAgents 非空时由宿主工厂把各名字
+        // 解析成 AIAgent 构建 BackgroundAgentsProvider 注入——让本 agent 动态并发委派子任务并收结果。
+        // NOTE: BackgroundAgentsProvider 是 MAF 的 AIAgent（非 IChatClient）级 AIContextProvider，
+        // 其 background_agents_* 工具在 HarnessAgent 运行时由 provider 注册，无需手动挂进 ToolRegistry。
+        if (definition.BackgroundAgents is { Count: > 0 } && _backgroundAgentsFactory is not null)
+        {
+            var subAgents = _backgroundAgentsFactory.Invoke(definition);
+            if (subAgents is { Count: > 0 })
+            {
+                var backgroundProvider = new BackgroundAgentsProvider(subAgents);
+                var combined = options.AIContextProviders is null
+                    ? new List<AIContextProvider>()
+                    : new List<AIContextProvider>(options.AIContextProviders);
+                combined.Add(backgroundProvider);
+                options.AIContextProviders = combined;
+            }
         }
 
         var client = _chatClientFactory.Create(definition.ModelId);
