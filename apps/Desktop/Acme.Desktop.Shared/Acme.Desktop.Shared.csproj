@@ -12,7 +12,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
     <!-- 集成终端控件（SkiaSharp/HarfBuzz 渲染；own-transport + SendInput/WriteOutput + shell integration，供 B2 run_in_terminal 捕获）。要求 Avalonia >=12.1.1，故全 app 升 12.0.4→12.1.1。 -->
-    <PackageReference Include="RoyalApps.RoyalTerminal.Avalonia" Version="0.5.1" />
+    <PackageReference Include="RoyalApps.RoyalTerminal.Avalonia" Version="0.5.2" />
     <!-- Playwright（浏览器网络面板 + browser_open/get_cookies 工具：headed Chromium 独立窗口，用户手动登录后取 cookie 给 agent curl）。与 Qifu.Infrastructure 同版本；浏览器二进制靠 playwright install 单独装。 -->
     <PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
@@ -22,19 +22,22 @@
     <PackageReference Include="Markdown.Avalonia.Tight" Version="12.0.0-a3" />
     <!-- mermaid 图渲染（不换 markdown 引擎，经 IContainerBlockHandler 注入 ```mermaid fence 自定义渲染）：
          Mermaider（纯 .NET net10，无浏览器/JS 运行时/AOT-ready）把 mermaid 源码 → SVG 字符串；
-         Svg.Skia 把 SVG 字符串 → SKPicture，用主 SkiaSharp（3.119.4）画到 SKBitmap → PNG → Avalonia Bitmap 显示。
-         不用 Avalonia.Svg.Skia 11.0.0.12（它绑 Svg.Skia 1.0.0.12，编译时绑 SkiaSharp 2.88.x 的 CropRect，
-         在 3.119.4 运行时 TypeLoadException；见 [mermaid-render-integration]）。Svg.Skia 3.7.0 无 CropRect 引用、
-         SkiaSharp 2.88.x API 在 3.119.4 稳定，>=2.88.9 被 3.119.4 满足。 -->
+         继任包 Svg.Controls.Skia.Avalonia 的 Svg 控件直显矢量（任意 DPI 清晰，免光栅）——SvgSource.LoadFromSvg 直吃
+         SVG 字符串、Svg 控件取 SKPicture 矢量渲染。取代旧光栅路（SKSvg→SKPicture→SKBitmap→PNG→Bitmap）。
+         升级链：Svg.Controls.Skia.Avalonia 12.0.0.17 → Svg.Skia>=5.2.3 → SkiaSharp>=4.148.0（4.x）；
+         SkiaSharp 4.x 经下界兼容（Avalonia.Skia 12.1.1 / RoyalTerminal 0.5.2 / Skottie 4.151.1 均 >=3.119.4 下界，4.x 满足）。
+         见 [mermaid-render-integration]。 -->
     <PackageReference Include="Mermaider" Version="0.12.2" />
-    <PackageReference Include="Svg.Skia" Version="3.7.0" />
+    <PackageReference Include="Svg.Skia" Version="5.2.3" />
+    <!-- 继任 SVG 直显控件（替代 deprecated Avalonia.Svg.Skia）：Svg 控件 + SvgSource.LoadFromSvg。矢量渲染，无光栅。 -->
+    <PackageReference Include="Svg.Controls.Skia.Avalonia" Version="12.0.0.17" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <!-- Roslyn 语义分析（EditSymbolTool：符号级 C# 编辑）。宿主层独有——不复用 ai/SystemTools 的轻量工具集。 -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.13.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.13.0" />
-    <!-- Lottie 动画（桌宠形象层）：Skia 官方 Skottie 模块的 managed 绑定。与主 SkiaSharp（3.119.4，
+    <!-- Lottie 动画（桌宠形象层）：Skia 官方 Skottie 模块的 managed 绑定。与主 SkiaSharp（4.151.1，
          经 RoyalTerminal/Avalonia 传递引入）版本同步；原生 libSkiaSharp.dylib 已内置 skottie 符号，零新增原生库。 -->
-    <PackageReference Include="SkiaSharp.Skottie" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.Skottie" Version="4.151.1" />
     <!-- Avalonia 的 Skia 渲染后端（显式引用以取 ISkiaSharpApiLeaseFeature——DrawingContext → SKCanvas 桥，
          桌宠 Lottie 自绘用）。桌面默认即 Skia 后端，本就是传递依赖，此处仅为编译期类型访问。 -->
     <PackageReference Include="Avalonia.Skia" Version="12.1.1" />

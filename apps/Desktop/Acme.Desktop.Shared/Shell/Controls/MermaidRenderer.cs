@@ -8,40 +8,41 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media.Imaging;
+using Avalonia.Svg.Skia;
 using Mermaider.Models;
 using SkiaSharp;
-using Svg.Skia;
 
 namespace Acme.Desktop.Shared.Shell.Controls;
 
 /// <summary>
 /// mermaid 图渲染器：把 mermaid 源码经 Mermaider（纯 .NET，无浏览器/JS，输出 SVG 字符串）渲染，
-/// 再经 Svg.Skia 的 SKSvg 解析成 SKPicture，用主 SkiaSharp 画到 SKBitmap → 编码 PNG → Avalonia Bitmap 显示。
-/// 经 Markdown.Avalonia 的 IContainerBlockHandler 扩展点注入：拦截 <c>::: mermaid</c> 容器块，
-/// 不换 markdown 引擎、不改 markdown 文本（标准 ```mermaid 由 SelectableMarkdownViewer 预处理转 <c>::: mermaid</c>）。
+/// 再经继任包 Svg.Controls.Skia.Avalonia 的 SvgImage（IImage）直显矢量（任意 DPI 清晰，免光栅）——SvgSource.LoadFromSvg
+/// 直吃 SVG 字符串、SvgImage 取 SKPicture 矢量渲染，喂标准 Avalonia Image 控件（Image.Source 收 IImage）。
+/// 经 Markdown.Avalonia 的 IContainerBlockHandler 扩展点注入：拦截 <c>::: mermaid</c> 容器块，不换 markdown 引擎、
+/// 不改 markdown 文本（标准 ```mermaid 由 SelectableMarkdownViewer 预处理转 <c>::: mermaid</c>）。
 /// 主题感知：按 ActualThemeVariant 选 light/dark 配色，切换后由调用方重渲染刷新。
 /// </summary>
 /// <remarks>
-/// 不用 Avalonia.Svg.Skia 11.0.0.12（SvgImage/SvgSource 矢量控件路径）：它绑 Svg.Skia 1.0.0.12，
-/// 后者编译期绑 SkiaSharp 2.88.x 的 CropRect 类型（已移到 ShimSkiaSharp），在 SkiaSharp 3.119.4 运行时
-/// TypeLoadException「Could not load type 'CropRect'」。Svg.Skia 3.7.0 重写后无 CropRect 引用，
-/// SkiaSharp 2.88.x 核心 API 在 3.119.4 稳定。光栅位图（PNG）而非矢量——mermaid 图为静态渲染，位图够用且零 SvgImage 控件坑。
+/// 用继任包 Svg.Controls.Skia.Avalonia（12.0.0.17，活跃、正对 Avalonia 12.x）的 SvgImage + SvgSource.LoadFromSvg
+/// 直显矢量，取代旧光栅路（SKSvg→SKPicture→SKBitmap→PNG→Bitmap）。升级链：Svg.Controls.Skia.Avalonia→Svg.Skia>=5.2.3→
+/// SkiaSharp>=4.148.0（4.x）；SkiaSharp 4.x 经下界兼容（Avalonia.Skia 12.1.1 / RoyalTerminal 0.5.2 / Skottie 4.151.1 均
+/// >=3.119.4 下界，4.x 满足）。旧 deprecated Avalonia.Svg.Skia 的 CropRect/TypeLoadException 故事在 Svg.Skia 5.x 重写后已不成立。
 /// </remarks>
 internal static class MermaidSvgRenderer
 {
-    /// <summary>把 mermaid 源码渲染成 Avalonia Image 控件。失败返回 null（调用方回退默认代码块渲染，不崩）。</summary>
+    /// <summary>把 mermaid 源码渲染成 Avalonia Image 控件（Source = SvgImage 矢量）。失败返回 null（调用方回退默认代码块渲染，不崩）。</summary>
     public static Image? Render(string mermaidSource, bool dark)
     {
         try
         {
             var svg = Mermaider.MermaidRenderer.RenderSvg(mermaidSource, BuildOptions(dark));
             if (string.IsNullOrWhiteSpace(svg)) return null;
-            // 展平 CSS 变量 → 拉直折线边 → 重定位边标签 → 光栅化。
+            // 展平 CSS 变量 → 拉直折线边 → 重定位边标签 → 矢量化。
             // Mermaider SVG 用 CSS 自定义属性（var(--_xxx)）+ color-mix() 表达所有形状填色，
             // Svg.Skia 的 CSS 引擎不解析 var()/color-mix() → fill="var(--_node-fill)" 无效色 → 黑块。
-            // 喂 SKSvg 前展平成具体色。失败兜底用原 SVG（最坏回退黑块→ProvideControl 返 null→默认代码块）。
+            // 喂 SvgSource 前展平成具体色。失败兜底用原 SVG（最坏回退黑块→ProvideControl 返 null→默认代码块）。
             try { svg = FlattenCssVars(svg); }
-            catch { /* 展平失败不阻断，SvgToImage 自会兜底 */ }
+            catch { /* 展平失败不阻断，BuildSvgControl 自会兜底 */ }
             // dagre 对含回环边的图（如 A→B→C→A）为给回环边留纵向 lane，会把本可同行的链路中间节点（B）
             // 挤到另一行 → A、C 同行而 B 独占一行 → 整图呈 V/Λ 型（用户反馈「三个节点却是 V 型」）。
             // StraightenEdges 只改边路径 d、不动节点坐标，纠正不了这种节点错位。故先跑本步把 B 拉回 A、C
@@ -70,11 +71,11 @@ internal static class MermaidSvgRenderer
             // 在 StraightenEdges 之后跑——拉直后的 d 仍是合法 path，标签落在直线中点。
             try { svg = RepositionEdgeLabels(svg); }
             catch { /* 后处理失败不阻断 */ }
-            return SvgToImage(svg, dark);
+            return BuildSvgControl(svg);
         }
         catch
         {
-            // 渲染失败（语法错/不支持图型/Svg.Skia 与 SkiaSharp 3.119.4 的其它 API 差异）→ null，
+            // 渲染失败（语法错/不支持图型/Svg.Skia 与 SkiaSharp 4.151.1 的其它 API 差异）→ null，
             // ProvideControl 回退默认代码块（用户看到源码，不崩）。
             return null;
         }
@@ -877,47 +878,29 @@ internal static class MermaidSvgRenderer
         return $"#{Mix(a.R, b.R):X2}{Mix(a.G, b.G):X2}{Mix(a.B, b.B):X2}";
     }
 
-    /// <summary>SVG 字符串 → Avalonia Image。经 SKSvg.FromSvg 解析成 SKPicture，画到 SKBitmap（光栅化），
-    /// 编码 PNG 再包成 Avalonia Bitmap（Image.Source）。用主 SkiaSharp 3.119.4，与桌宠 Lottie 同一渲染栈。</summary>
-    private static Image? SvgToImage(string svg, bool dark)
+    /// <summary>SVG 字符串 → Avalonia Image（Source = SvgImage 矢量）。经 SvgSource.LoadFromSvg 解析（内部建 SKPicture），
+    /// SvgImage（IImage）取矢量渲染，喂标准 Image 控件——Image 按 SvgImage.Size（=CullRect）自动定尺寸，任意 DPI
+    /// 清晰、免光栅（旧路 SKSvg→SKBitmap→PNG→Bitmap 已淘汰）。与桌宠 Lottie 同一 SkiaSharp 4.x 渲染栈。
+    /// Mermaider BuildOptions(dark) 已给 SVG 设 Bg（白/深），SvgImage 直渲含底色，无需旧 canvas.Clear 兜底。
+    /// SvgSource 持原生资源，Image 脱离视觉树时释放防泄漏（主题切换重渲染换掉旧 Image）。</summary>
+    private static Image? BuildSvgControl(string svg)
     {
-        using var sk = new SKSvg();
-        var picture = sk.FromSvg(svg);
-        if (picture is null) return null;
+        // SvgSource.LoadFromSvg 返非 null（解析失败抛异常，由 Render 的 try/catch 兜底）。
+        var source = SvgSource.LoadFromSvg(svg);
+        var picture = source.Picture;
+        if (picture is null) { source.Dispose(); return null; }
 
-        try
+        var bounds = picture.CullRect;
+        if (bounds.Width <= 0 || bounds.Height <= 0) { source.Dispose(); return null; }
+
+        var img = new Image
         {
-            // CullRect 是 SVG 的内容包围盒（含负原点时需平移让内容落进位图）。
-            var bounds = picture.CullRect;
-            var w = (int)Math.Ceiling(bounds.Width);
-            var h = (int)Math.Ceiling(bounds.Height);
-            if (w <= 0 || h <= 0) return null;
-
-            using var bitmap = new SKBitmap(w, h);
-            using (var canvas = new SKCanvas(bitmap))
-            {
-                canvas.Clear(dark ? new SKColor(0x1e, 0x1e, 0x1e) : SKColors.White);
-                // 负原点 SVG（内容向左/上延伸）平移回位图原点。
-                if (bounds.Left != 0 || bounds.Top != 0)
-                    canvas.Translate((float)-bounds.Left, (float)-bounds.Top);
-                canvas.DrawPicture(picture);
-            }
-
-            using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-            using var ms = new MemoryStream();
-            png.SaveTo(ms);
-            ms.Position = 0;
-
-            return new Image
-            {
-                Source = new Bitmap(ms),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 4),
-            };
-        }
-        finally
-        {
-            picture.Dispose();
-        }
+            Source = new SvgImage { Source = source },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4),
+        };
+        // 主题切换重渲染会换掉旧 Image → DetachedFromVisualTree 释放 SvgSource（持 SKPicture/SKSvg 原生资源）防泄漏。
+        img.DetachedFromVisualTree += (_, _) => source.Dispose();
+        return img;
     }
 }
