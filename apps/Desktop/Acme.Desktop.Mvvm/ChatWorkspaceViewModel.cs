@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using System.Threading.Channels;
 using System.Windows.Input;
 using Acme.DeviceConnect.Domain;
@@ -48,18 +50,18 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly WorkflowsViewModel _workflows;
     private readonly RulesViewModel _rules;
 
-    // 当前会话：Guid.Empty = 待新聊天（首次发送才落库）。
-    private Guid _currentConversationId = Guid.Empty;
+    // —— 多会话并发：每会话独立 runtime，背景 run 往自己的 Messages 追加，切会话只换 _current 不取消 ——
+    private readonly ConcurrentDictionary<Guid, ConversationRuntime> _runtimes = new();
+    private ConversationRuntime _current; // 当前显示的会话 runtime（永不 null：待新聊天=Guid.Empty 占位 runtime）
+    private Guid _currentConversationId = Guid.Empty; // _current.ConversationId 的镜像（30+ 读点免逐改）
+
     private bool _isInitializing;
     private bool _syncingMode; // 程序化刷新 SelectedChatMode 时置 true，避免 OnSelectedChatModeChanged 回触 SetMode
-    private CancellationTokenSource? _runCts; // 当前流式运行的取消令牌（停止生成用）
 
     // —— 历史增量加载：切换会话时只渲染最近若干轮，更早的暂存，滚到顶部再加载 ——
     // 避免长会话一次性重建全部消息 + 同步 markdown 解析导致的卡顿（全在 UI 线程）。
-    private List<ChatTurnItem>? _pendingHistoryTurns; // 暂存的更早轮（时间正序，最旧在前；尚未加入 Messages 渲染）
     private const int HistoryInitialBatch = 10;       // 切换会话时初始渲染的最近轮数
     private const int HistoryLoadBatch = 10;          // 每次滚到顶部增量加载的轮数
-    private int _nextRunSeq = 1;                      // 当前会话下一个 run 的序号（1-based；新建=1，恢复=最大 seq+1）
 
     public ChatWorkspaceViewModel(
         IServiceProvider serviceProvider,
@@ -97,11 +99,79 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         Conversations.CollectionChanged += (_, _) => HasConversations = Conversations.Count > 0;
 
-        // 当前会话是否有消息：控制 ChatPageView 全屏页空态 hero ↔ 非空态（消息流+输入），对齐 ChatGPT/WorkBuddy 每会话空态。
-        // 与 HasConversations（有无任何历史记录）区分——有历史记录的新会话仍显空态 hero（输入框垂直居中）。
-        Messages.CollectionChanged += (_, _) => HasMessages = Messages.Count > 0;
+        // 初始 runtime = 待新聊天（Guid.Empty 占位，不入 _runtimes；首次发送落库拿到真 Guid 后回填 + 注册）。
+        _current = new ConversationRuntime(Guid.Empty);
+        SetCurrentInternal(_current);
 
         SubscribeToConnectionStateChanges();
+    }
+
+    /// <summary>切换当前显示的会话 runtime：detach 旧 runtime（不停其 run——背景继续），attach 新 runtime 并
+    /// 转发其 ObservableObject 变更到 VM 代理属性。切会话不取消任何 run。</summary>
+    private void SetCurrentInternal(ConversationRuntime rt)
+    {
+        if (ReferenceEquals(_current, rt)) return;
+        if (_current is not null) _current.PropertyChanged -= OnRuntimePropertyChanged;
+        _current = rt;
+        _currentConversationId = rt.ConversationId;
+        if (rt is not null) rt.PropertyChanged += OnRuntimePropertyChanged;
+        // 代理属性全量通知：Messages/ActiveTodos 换集合实例（视图重绑），标量重读。
+        OnPropertyChanged(nameof(Messages));
+        OnPropertyChanged(nameof(ActiveTodos));
+        OnPropertyChanged(nameof(IsAgentRunning));
+        OnPropertyChanged(nameof(HasActivePlan));
+        OnPropertyChanged(nameof(PlanAwaitingAccept));
+        OnPropertyChanged(nameof(TokenInfo));
+        OnPropertyChanged(nameof(HasMessages));
+        OnPropertyChanged(nameof(HasMoreHistory));
+        OnPropertyChanged(nameof(PlanSummary));
+        OnPropertyChanged(nameof(ShowPlanAccept));
+        OnPropertyChanged(nameof(ShowPlanDismiss));
+        // 切到的会话是否在跑 → 侧栏项角标
+        UpdateConversationRunningFlag(rt);
+    }
+
+    /// <summary>转发 runtime 标量变更：当前 runtime 的变更→VM 代理属性（驱动 UI）；**任何** runtime 的
+    /// IsRunning 变更→推侧栏角标（背景 run 起/止也刷新列表项 ⏳，不只当前会话）。
+    /// 取代原 [ObservableProperty] 的 partial On*Changed 钩子（IsAgentRunning/HasActivePlan/PlanAwaitingAccept）。</summary>
+    private void OnRuntimePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not ConversationRuntime rt) return;
+        // IsRunning 变更：任何 runtime（含背景）都推侧栏角标——用户能看到其它会话在后台跑。
+        if (e.PropertyName == nameof(ConversationRuntime.IsRunning))
+            UpdateConversationRunningFlag(rt);
+        // 非当前 runtime 的标量变更不转发到 VM 代理属性——避免背景 run 的 plan/token 变更污染当前显示。
+        if (!ReferenceEquals(sender, _current)) return;
+        OnPropertyChanged(e.PropertyName!);
+        switch (e.PropertyName)
+        {
+            case nameof(ConversationRuntime.IsRunning):
+                OnPropertyChanged(nameof(ShowPlanAccept));
+                OnPropertyChanged(nameof(ShowPlanDismiss));
+                break;
+            case nameof(ConversationRuntime.HasActivePlan):
+                OnPropertyChanged(nameof(PlanSummary));
+                OnPropertyChanged(nameof(ShowPlanDismiss));
+                break;
+            case nameof(ConversationRuntime.PlanAwaitingAccept):
+                OnPropertyChanged(nameof(ShowPlanAccept));
+                OnPropertyChanged(nameof(ShowPlanDismiss));
+                break;
+        }
+    }
+
+    /// <summary>取/建 runtime：已存在复用（切回仍在跑的会话见续接流式），否则新建并注册。</summary>
+    private ConversationRuntime GetOrCreateRuntime(Guid conversationId)
+    {
+        if (conversationId == Guid.Empty) return _current; // 待新聊天：用占位 runtime
+        return _runtimes.GetOrAdd(conversationId, id => new ConversationRuntime(id));
+    }
+
+    /// <summary>把 runtime.IsRunning 同步到侧栏会话项角标（后台 run 完成/切回时刷新）。</summary>
+    private void UpdateConversationRunningFlag(ConversationRuntime rt)
+    {
+        var item = Conversations.FirstOrDefault(c => c.Id == rt.ConversationId);
+        if (item is not null) item.IsRunning = rt.IsRunning;
     }
 
     /// <summary>设置对话框服务（ChatView 头部「设备连接配置」按钮调用）。</summary>
@@ -193,7 +263,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     /// 审批请求冒出时本轮流结束 → 弹审批框 → 带 <see cref="ToolApprovalDecision"/> 再次 runAsync 恢复执行（协作循环）。
     /// 返回本轮产生的 transcript 项（按时序），供 PersistTurnAsync 持久化。
     /// </summary>
-    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(ChatTurnItem turn,
+    private async Task<List<ChatMessageItem>> RunSegmentedStreamAsync(ConversationRuntime runtime, ChatTurnItem turn,
         string senderName,
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default,
@@ -206,12 +276,12 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         // 本轮 todos 信号重置：只有本轮真的 todos_* 了才在末尾插计划快照卡，避免上一轮的计划状态
         // （HasActivePlan/ActiveTodos 跨轮保留供浮动面板显示）被误当作本轮产出 → 计划卡逐轮累积。
         // SendInputAsync 处也重置一次（留作语义注释），这里覆盖远程消息路径（不经过 SendInputAsync）。
-        _todosTouchedThisTurn = false;
+        runtime.TodosTouchedThisTurn = false;
         await _dispatcher.InvokeAsync(() =>
         {
             items.Add(cursor.Current);
             turn.Status = TurnStatus.Working;
-            IsAgentRunning = true;
+            runtime.IsRunning = true;
         });
 
         // —— Token 批量更新：不逐 token Post 到 UI 线程（会假死），攒 50ms 批量刷新一次 ——
@@ -336,7 +406,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                     },
                     OnTodoList: (list, _) =>
                     {
-                        _dispatcher.Post(() => HandleTodoList(items, list, senderName));
+                        _dispatcher.Post(() => HandleTodoList(runtime, items, list, senderName));
                         // 关键节点广播：计划更新。
                         EmitProgress(new RunProgress(RunProgressKind.PlanUpdated, PlanStepCount: list.Count, Todos: list));
                         return Task.CompletedTask;
@@ -351,7 +421,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         EmitProgress(new RunProgress(RunProgressKind.RunError, Text: text));
                         return Task.CompletedTask;
                     },
-                    OnUsage: info => _dispatcher.Post(() => TokenInfo = info));
+                    OnUsage: info => _dispatcher.Post(() => runtime.TokenInfo = info));
 
                 await runAsync(handlers, approvalResponse, cancellationToken).ConfigureAwait(false);
 
@@ -410,22 +480,22 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             await _dispatcher.InvokeAsync(() =>
             {
                 FinalizeSegment(cursor.Current, items);
-                // 每轮一快照：本轮确有 todos 更新（_todosTouchedThisTurn）且仍有活动计划时，
+                // 每轮一快照：本轮确有 todos 更新（runtime.TodosTouchedThisTurn）且仍有活动计划时，
                 // 把计划卡插到本轮首（用户消息之后、agent 工作之前），内联在对话里、出现在"制定计划"的位置
                 // （参考 Claude Code），而非堆在轮末与浮动面板叠底。借已有 kind=plan 持久化脚手架——
-                // 历史会话恢复后仍能看到每轮的计划。须用 _todosTouchedThisTurn 门控：HasActivePlan/ActiveTodos
+                // 历史会话恢复后仍能看到每轮的计划。须用 TodosTouchedThisTurn 门控：HasActivePlan/ActiveTodos
                 // 跨轮保留供浮动面板显示，若不门控则每一轮都会用陈旧计划插一张快照 → 计划卡逐轮累积。
-                if (_todosTouchedThisTurn && HasActivePlan && ActiveTodos.Count > 0)
+                if (runtime.TodosTouchedThisTurn && runtime.HasActivePlan && runtime.ActiveTodos.Count > 0)
                 {
                     var planCard = new ChatMessageItem { Side = ChatMessageSide.Left, ItemType = "plan", Sender = senderName, IsStreaming = false };
-                    foreach (var t in ActiveTodos)
+                    foreach (var t in runtime.ActiveTodos)
                         planCard.Todos.Add(new TodoItemVM { Title = t.Title, Description = t.Description, IsComplete = t.IsComplete });
                     items.Insert(1, planCard); // items[0] = 用户消息
                 }
                 turn.Finish(errored ? TurnStatus.Error : TurnStatus.Done);
-                IsAgentRunning = false;
-                _runCts?.Dispose();
-                _runCts = null;
+                runtime.IsRunning = false;
+                runtime.RunCts?.Dispose();
+                runtime.RunCts = null;
             });
 
             // 桌宠逐字流收尾（打字机 flush 后停止）。RUN 不考虑 remote——桌宠本地/远程都收逐字。
@@ -721,15 +791,15 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         catch { return null; }
     }
 
-    /// <summary>todos_* 调用后更新浮动计划面板（ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。
-    /// 计划卡随 transcript 持久化、恢复，重启后仍在。</summary>
-    private void HandleTodoList(IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
+    /// <summary>todos_* 调用后更新浮动计划面板（runtime.ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。
+    /// 计划卡随 transcript 持久化、恢复，重启后仍在。操作指定 runtime——背景会话的计划不污染当前显示会话的面板。</summary>
+    private void HandleTodoList(ConversationRuntime runtime, IList<ChatMessageItem> items, IReadOnlyList<TodoItemInfo> list, string senderName)
     {
         // 计划只显示在浮动面板（输入框上方），不在对话流里重复显示。
         // 去重：agent 跨轮重新规划时有时对同一事项重复 todos_add（旧项仍在 TodoProvider 列表里又被加一遍），
         // 致一份计划里出现两条内容相同的条目。按 Title（忽略大小写/首尾空白）去重，保留首次出现顺序；
         // 若任一副本已完成，则合并为已完成。
-        ActiveTodos.Clear();
+        runtime.ActiveTodos.Clear();
         var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var merged = new List<(string Title, string? Description, bool IsComplete)>();
         foreach (var t in list)
@@ -751,13 +821,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             }
         }
         foreach (var m in merged)
-            ActiveTodos.Add(new TodoItemVM { Title = m.Title, Description = m.Description ?? string.Empty, IsComplete = m.IsComplete });
-        HasActivePlan = ActiveTodos.Count > 0;
-        // PlanSummary（"X/Y" 计数）是计算属性，仅依赖 HasActivePlan/IsPlanExpanded 变化才上抛。
-        // 完成 todo 时 HasActivePlan 不变（仍 true）→ 计数不刷新，用户须点表头展开/收起才触发 OnIsPlanExpandedChanged
-        // 间接刷新计数。这里在集合变更后显式上抛，让计数随完成进度实时更新。
-        OnPropertyChanged(nameof(PlanSummary));
-        _todosTouchedThisTurn = true; // 本轮确有 todos 更新（SendInputAsync 末尾据此置 PlanAwaitingAccept）
+            runtime.ActiveTodos.Add(new TodoItemVM { Title = m.Title, Description = m.Description ?? string.Empty, IsComplete = m.IsComplete });
+        runtime.HasActivePlan = runtime.ActiveTodos.Count > 0;
+        // PlanSummary（"X/Y" 计数）是计算属性。仅当此 runtime 是当前显示会话时才上抛——背景会话的计划
+        // 变更不应刷新当前面板计数（OnRuntimePropertyChanged 已隔离标量通知，但 PlanSummary 是 VM 计算属性，
+        // 需显式转发）。完成 todo 时 HasActivePlan 不变（仍 true）→ 计数不刷新，这里在集合变更后显式上抛。
+        if (ReferenceEquals(_current, runtime))
+            OnPropertyChanged(nameof(PlanSummary));
+        runtime.TodosTouchedThisTurn = true; // 本轮确有 todos 更新（SendInputAsync 末尾据此置 PlanAwaitingAccept）
     }
 
     /// <summary>运行结束：末段空则移除；否则停止流式。仅 TextContent 末段翻为最终回答（markdown 气泡），
@@ -889,9 +960,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
     }
 
-    /// <summary>实际处理一条远程消息（drainer 串行调用）：显示 + 跑 agent + 回复 / 未选目标回执。</summary>
+    /// <summary>实际处理一条远程消息（drainer 串行调用）：显示 + 跑 agent + 回复 / 未选目标回执。
+    /// 操作 msg.ConversationId 对应的 runtime（可能与当前显示会话不同）——修掉旧路径写共享 Messages/
+    /// IsAgentRunning 的 latent race：远程 run 往自己的 runtime.Messages 追加，不污染当前显示会话。</summary>
     private async Task ProcessRemoteMessageAsync(DeviceMessage msg)
     {
+        // 远程会话的 runtime（按 msg.ConversationId 取/建）——可能与当前显示会话不同。
+        var runtime = GetOrCreateRuntime(msg.ConversationId);
         // 远程消息显示在右侧（与本机发送一致，参考 AlphaAgent），并起一轮
         ChatTurnItem remoteTurn = null!;
         await _dispatcher.InvokeAsync(() =>
@@ -904,7 +979,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 Sender = msg.SenderName,
                 Content = msg.Content
             });
-            Messages.Add(remoteTurn);
+            runtime.Messages.Add(remoteTurn);
         });
 
         // 选中对话目标时，用该目标流式回复（agent/规则走 _agentRunner、工作流走 _workflowRunner）
@@ -922,7 +997,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var convId = msg.ConversationId;
             var fullText = new System.Text.StringBuilder();
             var desiredMode = HasModeSupport ? SelectedChatMode.ToDesiredMode() : null;
-            await RunSegmentedStreamAsync(remoteTurn, targetName,
+            await RunSegmentedStreamAsync(runtime, remoteTurn, targetName,
                 (handlers, approvalResponse, ct) => remoteKind == ChatTargetKind.Workflow
                     ? _workflowRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct)
                     : _agentRunner.RunStreamingAsync(convId, targetId, msg.Content, handlers, approvalResponse, desiredMode, ct),
@@ -969,7 +1044,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             return;
         }
 
-        // 未选用专家时本地简单回复（单独一轮）
+        // 未选用专家时本地简单回复（单独一轮）——加到该远程会话的 runtime
         await _dispatcher.InvokeAsync(() =>
         {
             var t = new ChatTurnItem { Header = msg.Content };
@@ -982,7 +1057,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 IsStreaming = false
             });
             t.Finish(TurnStatus.Done);
-            Messages.Add(t);
+            runtime.Messages.Add(t);
         });
         // 回执手机：未选用专家目标时告知，否则老板「发了没反应」。
         if (_deviceChatClient.IsConnected)
@@ -999,37 +1074,25 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
     }
 
-    // —— 聊天消息列表 ——
-    public ObservableCollection<ChatTurnItem> Messages { get; } = new();
+    // —— 代理属性：读当前会话 runtime 的状态。切会话时 SetCurrentInternal raise 这些属性 → 视图重绑/重读 ——
+    // Messages/ActiveTodos 换集合实例（视图 ItemsControl 重绑新集合）；标量由 OnRuntimePropertyChanged 转发。
+    public ObservableCollection<ChatTurnItem> Messages => _current.Messages;
+    public ObservableCollection<TodoItemVM> ActiveTodos => _current.ActiveTodos;
+    public bool HasActivePlan { get => _current.HasActivePlan; set => _current.HasActivePlan = value; }
+    public bool PlanAwaitingAccept { get => _current.PlanAwaitingAccept; set => _current.PlanAwaitingAccept = value; }
+    public string? TokenInfo { get => _current.TokenInfo; set => _current.TokenInfo = value; }
+    public bool HasMessages => _current.HasMessages;
 
-    // —— 浮动计划面板（贴着输入框上方，实时显示最新计划，可展开/收起）——
-    public ObservableCollection<TodoItemVM> ActiveTodos { get; } = new();
-    [ObservableProperty] private bool _hasActivePlan;
     [ObservableProperty] private bool _isPlanExpanded = true;
-    /// <summary>plan 模式轮、且本轮产出计划后置 true（待用户接受）；execute 轮/接受后即 false。
-    /// 脱钩于 SelectedChatMode——避免 RefreshModeAsync 把模式回翻成 plan 时接受条误弹。</summary>
-    [ObservableProperty] private bool _planAwaitingAccept;
-    /// <summary>本轮是否调过 todos_*（区分「本轮新计划」vs「上轮残留计划」）。每轮开始重置。</summary>
-    private bool _todosTouchedThisTurn;
     public string PlanSummary => HasActivePlan ? $"📋 计划 ({ActiveTodos.Count(t => t.IsComplete)}/{ActiveTodos.Count})" : "";
-    partial void OnHasActivePlanChanged(bool value)
-    {
-        OnPropertyChanged(nameof(PlanSummary));
-        OnPropertyChanged(nameof(ShowPlanDismiss));
-    }
     partial void OnIsPlanExpandedChanged(bool value) => OnPropertyChanged(nameof(PlanSummary));
-    partial void OnPlanAwaitingAcceptChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ShowPlanAccept));
-        OnPropertyChanged(nameof(ShowPlanDismiss));
-    }
     [RelayCommand] private void TogglePlanExpanded() => IsPlanExpanded = !IsPlanExpanded;
     /// <summary>确认执行完毕：收起浮动计划面板（HasActivePlan→false）。execute 完成后用户手动点。</summary>
     [RelayCommand]
     private void DismissPlan()
     {
-        ActiveTodos.Clear();
-        HasActivePlan = false;
+        _current.ActiveTodos.Clear();
+        _current.HasActivePlan = false;
     }
 
     /// <summary>当前 agent 是否启用 AgentModeProvider（控制模式选择器/plan-accept 显隐）。</summary>
@@ -1041,9 +1104,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [ObservableProperty]
     private ChatMode _selectedChatMode = ChatMode.AutoEdit;
 
-    /// <summary>agent 是否正在流式运行（驱动 plan-accept 条显隐）。</summary>
-    [ObservableProperty]
-    private bool _isAgentRunning;
+    /// <summary>agent 是否正在流式运行（代理当前会话 runtime.IsRunning；驱动 plan-accept 条显隐）。</summary>
+    public bool IsAgentRunning => _current.IsRunning;
 
     /// <summary>plan 模式轮产出计划后（PlanAwaitingAccept）、非运行中时显示"接受计划→执行"条。
     /// 门控用「本轮是否待接受」而非「当前模式」，避免 execute 跑完 RefreshModeAsync 把模式回翻 plan 时误弹。</summary>
@@ -1057,9 +1119,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
     /// <summary>是否有最近会话（控制空状态"暂无会话"显示）。</summary>
     [ObservableProperty] private bool _hasConversations;
-
-    /// <summary>当前会话是否有消息（ChatPageView 全屏页空态 hero ↔ 非空态切换）。</summary>
-    [ObservableProperty] private bool _hasMessages;
 
     /// <summary>最近会话列表是否展开（ChatGPT 风，可收起）。</summary>
     [ObservableProperty] private bool _isRecentExpanded = true;
@@ -1084,14 +1143,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [RelayCommand]
     private void NewChat()
     {
-        // 切到新聊天前先取消进行中的流式运行，否则后台 run 孤儿化继续跑（IsAgentRunning 不归零、
-        // 工具持续重试、孤儿进程堆积 → CPU/内存耗尽）。StopGeneration 走的是同一条取消路径。
-        CancelRunningRun();
+        // 切到新聊天**不取消**进行中的流式运行——背景 run 继续往自己的 runtime.Messages 追加，
+        // 切回该会话即见流式续接。只换 _current 指针到新的 Guid.Empty 占位 runtime（SetCurrentInternal
+        // 内部设 _current/_currentConversationId + raise 全代理属性变更 → 视图重绑到空集合）。
+        SetCurrentInternal(new ConversationRuntime(Guid.Empty));
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
-        _currentConversationId = Guid.Empty;
-        Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
-        _pendingHistoryTurns = null;
         foreach (var c in Conversations) c.IsCurrent = false;
     }
 
@@ -1099,58 +1155,72 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task ResumeConversationAsync(ConversationItem item)
     {
         if (item is null) return;
-        // 切会话前先取消进行中的运行，避免后台孤儿 run 继续消耗资源（同 NewChat）。
-        CancelRunningRun();
-        try
+        // 切会话**不取消**进行中的运行——背景 run 继续往自己的 runtime.Messages 追加，切回即见续接。
+        // 取/建目标 runtime：若已有 live turns（切走再切回、或背景仍在跑）直接显，不重建（不踩流式）。
+        var runtime = GetOrCreateRuntime(item.Id);
+        var alreadyLoaded = runtime.Messages.Count > 0;
+        SetCurrentInternal(runtime);
+        foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
+
+        _isInitializing = true;
+        // 恢复时按绑定 id 在三类列表里找目标（规则/agent 都是 ExpertItem，按所在列表区分）。
+        // 静默选中（预置 key 再赋值），不触发会话重置——恢复会话本就不该清空正在恢复的 transcript。
+        if (Guid.TryParse(item.AgentId, out var aid))
         {
-            var conv = await _conversationStore.GetConversationAsync(item.Id);
-            _currentConversationId = item.Id;
-            foreach (var c in Conversations) c.IsCurrent = c.Id == item.Id;
+            ExpertItem? ei = _rules.Rules.FirstOrDefault(r => r.Id == aid)
+                          ?? _experts.Experts.FirstOrDefault(e => e.Id == aid);
+            WorkflowItem? wi = ei is null ? _workflows.Workflows.FirstOrDefault(w => w.Id == aid) : null;
+            SetSelectedTargetSilently((object?)ei ?? wi);
+        }
+        _isInitializing = false;
 
-            _isInitializing = true;
-            // 恢复时按绑定 id 在三类列表里找目标（规则/agent 都是 ExpertItem，按所在列表区分）。
-            // 静默选中（预置 key 再赋值），不触发会话重置——恢复会话本就不该清空正在恢复的 transcript。
-            if (Guid.TryParse(item.AgentId, out var aid))
+        // 首次切来（runtime 空）→ 从 typed 事件流重建 transcript 填进 runtime.Messages。
+        // 已加载过（切走再切回）→ runtime.Messages 仍是上次的内容（背景 run 可能还在追加），直接显。
+        // IsLoadingHistory：防切走又切回双重加载（Messages 仍空但上次加载 Task 未完）。
+        if (!alreadyLoaded && !runtime.IsLoadingHistory)
+        {
+            runtime.IsLoadingHistory = true;
+            try
             {
-                ExpertItem? ei = _rules.Rules.FirstOrDefault(r => r.Id == aid)
-                              ?? _experts.Experts.FirstOrDefault(e => e.Id == aid);
-                WorkflowItem? wi = ei is null ? _workflows.Workflows.FirstOrDefault(w => w.Id == aid) : null;
-                SetSelectedTargetSilently((object?)ei ?? wi);
-            }
-            _isInitializing = false;
-
-            Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
-            _pendingHistoryTurns = null;
-            if (conv is not null)
-            {
-                // 从 typed 事件流重建 transcript：每条 run 一轮（user 消息在 run.UserMessage），events 还原思考/工具/答案/计划卡。
-                // 只把最近 N 轮加入 Messages 渲染（markdown 解析仅在绑定时发生，分批避免卡顿）；更早轮暂存待上滚增量加载。
-                var runs = await _conversationStore.GetRunsAsync(item.Id);
-                var eventsByRun = new Dictionary<Guid, IReadOnlyList<AgentEvent>>();
-                foreach (var run in runs)
-                    eventsByRun[run.Id] = await _conversationStore.GetEventsAsync(run.Id);
-                _nextRunSeq = runs.Count == 0 ? 1 : runs.Max(r => r.Seq) + 1;
-
-                var all = TurnRebuilder.BuildTurnsFromRuns(runs, eventsByRun, item.AgentName ?? "专家");
-                if (all.Count <= HistoryInitialBatch)
+                // DB 读 + 轮次重建移后台线程——不阻塞 UI 线程（SQLite 读 + ChatTurnItem 构造 + 历史轮 markdown
+                // 预解析集中在 Task.Run 内完成；runtime.Messages.Add 留 UI 线程触发渲染）。
+                var built = await Task.Run(async () =>
                 {
-                    foreach (var t in all) Messages.Add(t);
+                    var conv = await _conversationStore.GetConversationAsync(item.Id);
+                    if (conv is null) return (Turns: (List<ChatTurnItem>?)null, Seq: 1);
+                    var runs = await _conversationStore.GetRunsAsync(item.Id);
+                    var eventsByRun = new Dictionary<Guid, IReadOnlyList<AgentEvent>>();
+                    foreach (var run in runs)
+                        eventsByRun[run.Id] = await _conversationStore.GetEventsAsync(run.Id);
+                    var seq = runs.Count == 0 ? 1 : runs.Max(r => r.Seq) + 1;
+                    // 从 typed 事件流重建 transcript：每条 run 一轮（user 消息在 run.UserMessage），events 还原思考/工具/答案/计划卡。
+                    var all = TurnRebuilder.BuildTurnsFromRuns(runs, eventsByRun, item.AgentName ?? "专家");
+                    return (Turns: all, Seq: seq);
+                }).ConfigureAwait(true);
+
+                if (built.Turns is { } all)
+                {
+                    runtime.NextRunSeq = built.Seq;
+                    // 只把最近 N 轮加入 Messages 渲染（markdown 解析仅在绑定时发生，分批避免卡顿）；更早轮暂存待上滚增量加载。
+                    if (all.Count <= HistoryInitialBatch)
+                    {
+                        foreach (var t in all) runtime.Messages.Add(t);
+                    }
+                    else
+                    {
+                        runtime.PendingHistoryTurns = all.Take(all.Count - HistoryInitialBatch).ToList();
+                        foreach (var t in all.Skip(all.Count - HistoryInitialBatch)) runtime.Messages.Add(t);
+                    }
                 }
                 else
                 {
-                    _pendingHistoryTurns = all.Take(all.Count - HistoryInitialBatch).ToList();
-                    foreach (var t in all.Skip(all.Count - HistoryInitialBatch)) Messages.Add(t);
+                    runtime.NextRunSeq = 1;
                 }
             }
-            else
+            finally
             {
-                _nextRunSeq = 1;
+                runtime.IsLoadingHistory = false;
             }
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"加载会话失败：{ex.Message}";
         }
     }
 
@@ -1158,8 +1228,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private async Task DeleteConversationAsync(ConversationItem item)
     {
         if (item is null) return;
-        // 删会话前先取消进行中的运行（若删的正是当前会话，后台 run 会孤立写入已删会话）。
-        CancelRunningRun();
+        // 删会话**要**取消其 run（删的会话 run 该杀），从 _runtimes 移除其 runtime。
+        if (_runtimes.TryRemove(item.Id, out var delRt))
+            CancelRunningRun(delRt);
         try
         {
             await _conversationStore.DeleteAsync(item.Id);
@@ -1168,12 +1239,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             _agentRunner.EvictConversation(item.Id);
             _workflowRunner.EvictConversation(item.Id);
             Conversations.Remove(item);
+            // 删的正是当前显示会话 → 切到新聊天占位 runtime（不取消其它会话的背景 run）。
             if (_currentConversationId == item.Id)
-            {
-                _currentConversationId = Guid.Empty;
-                Messages.Clear();
-            ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
-            }
+                SetCurrentInternal(new ConversationRuntime(Guid.Empty));
         }
         catch (Exception ex)
         {
@@ -1238,9 +1306,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [ObservableProperty]
     private string _statusText = string.Empty;
 
-    /// <summary>本轮 token 用量摘要（UsageContent），绑定到顶栏 TokenInfo 槽。</summary>
-    [ObservableProperty]
-    private string _tokenInfo = string.Empty;
+    // TokenInfo 已下沉为 runtime 代理属性（_current.TokenInfo），见上方。
 
     /// <summary>聊天头统一下拉池：已召唤的 agent/规则/工作流（混合 object，含 ExpertItem + WorkflowItem）。</summary>
     public ObservableCollection<object> ChatTargetItems { get; } = new();
@@ -1443,24 +1509,20 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         if (_isInitializing) return;
 
-        // 运行中的流式不能被中断/清空（兜底：切目标本就是用户主动动作，运行中不可能合法切换）。
-        if (IsAgentRunning) return;
-
         // 同一逻辑目标（同 Id+Kind；实例可能因 reload 被替换）→ 非用户切换，不重置会话。
         // 程序化赋值（刷新池/恢复/启动）走 SetSelectedTargetSilently——它**先预置 _selectedTargetKey 再赋值**，
         // 故此处 newKey == prevKey 恒成立、必然早退。只有用户在下拉主动选了**另一个**目标（key 真变）才落到下面。
         if (newKey == prevKey) return;
 
         // 用户主动切换目标 → 开新会话（三类一致；会话已持久化，误切可从历史找回）。
-        // 诊断日志：此清空点应是清空会话的**唯一**路径（程序赋值走 SetSelectedTargetSilently 已从机制上杜绝）。
-        // 若运行时观察到「会话被清空但用户并未主动切目标」，Trace 里的 prevKey/newKey/kind 可立即锁定触发源。
+        // 多会话并发：即便当前会话正在流式运行也允许切——SetCurrentInternal 只换 _current 指针不取消背景 run，
+        // 旧会话的 run 继续往自己的 runtime.Messages 追加，切回即见续接。旧「运行中不能切」单会话守卫已废弃。
+        // 切到新的 Guid.Empty 占位 runtime——旧会话 runtime（含可能的背景 run）不受影响、继续在后台跑。
+        // 诊断日志：此切会话点应是切到新会话的**唯一**路径（程序赋值走 SetSelectedTargetSilently 已从机制上杜绝）。
         System.Diagnostics.Trace.WriteLine(
-            $"[ChatTargetSwitch] Messages cleared: prevKey=({prevKey.Id},{prevKey.Kind}) → newKey=({newKey.Id},{newKey.Kind}) kind={kind} IsAgentRunning={IsAgentRunning} IsInitializing={_isInitializing} thread={Environment.CurrentManagedThreadId}");
+            $"[ChatTargetSwitch] new chat: prevKey=({prevKey.Id},{prevKey.Kind}) → newKey=({newKey.Id},{newKey.Kind}) kind={kind} IsAgentRunning={IsAgentRunning} IsInitializing={_isInitializing} thread={Environment.CurrentManagedThreadId}");
 
-        _currentConversationId = Guid.Empty;
-        Messages.Clear();
-        ActiveTodos.Clear(); HasActivePlan = false; PlanAwaitingAccept = false;
-        _pendingHistoryTurns = null;
+        SetCurrentInternal(new ConversationRuntime(Guid.Empty));
 
         PersistSelectedTargetAsync().SafeFireAndForget();
         RefreshModeAsync().SafeFireAndForget();
@@ -1489,11 +1551,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             SetModeOnSessionAsync(value.ToDesiredMode()).SafeFireAndForget();
     }
 
-    partial void OnIsAgentRunningChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ShowPlanAccept));
-        OnPropertyChanged(nameof(ShowPlanDismiss));
-    }
+    // OnIsAgentRunningChanged 已删——IsAgentRunning 现为 runtime 代理属性，派生通知在 OnRuntimePropertyChanged 统一转发。
     partial void OnHasModeSupportChanged(bool value) => OnPropertyChanged(nameof(ShowPlanAccept));
 
     /// <summary>刷新聊天头统一下拉池（全部 agent/规则/工作流），保留当前选中。
@@ -1534,20 +1592,32 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
     }
 
-    /// <summary>停止当前流式生成（取消 CancellationToken）。</summary>
+    /// <summary>停止当前显示会话的流式生成（取消 CancellationToken）。只影响当前会话，不影响其它并发会话。</summary>
     [RelayCommand]
     private void StopGeneration()
     {
-        _runCts?.Cancel();
+        _current.RunCts?.Cancel();
     }
 
-    /// <summary>取消进行中的流式运行（新聊天/切会话/删会话前调）。
+    /// <summary>取消指定会话的进行中流式运行（删会话前调）。
     /// 只 Cancel token，不阻塞等待——RunSegmentedStreamAsync 的 finally 会在 dispatcher 上
-    /// 清 IsAgentRunning 并 Dispose _runCts。CT 转发链路完整（→ agent.RunStreamingAsync(ct)），
-    /// 故 Cancel 会让卡住的 LLM 流/工具调用抛 OCE 而结束本轮。</summary>
-    private void CancelRunningRun()
+    /// 清 runtime.IsRunning 并 Dispose runtime.RunCts。CT 转发链路完整（→ agent.RunStreamingAsync(ct)），
+    /// 故 Cancel 会让卡住的 LLM 流/工具调用抛 OCE 而结束本轮。
+    /// 注意：新聊天/切会话**不再调此方法**——切会话只换 _current 指针不取消背景 run。仅删会话调。</summary>
+    private void CancelRunningRun(ConversationRuntime? runtime = null)
     {
-        _runCts?.Cancel();
+        var rt = runtime ?? _current;
+        rt.RunCts?.Cancel();
+    }
+
+    /// <summary>取消**所有**会话的进行中流式运行（app 真退出时调）。
+    /// 遍历 _runtimes + 当前占位 runtime，Cancel 各自 RunCts。进程即将退出，finally 的 dispatcher 清理
+    /// 可能赶不上，但 Cancel 让 agent 工具调用抛 OCE 停止——防退出瞬间背景 run 执行危险工具的孤儿副作用。</summary>
+    public void CancelAllRunning()
+    {
+        _current.RunCts?.Cancel();
+        foreach (var rt in _runtimes.Values)
+            rt.RunCts?.Cancel();
     }
 
     /// <summary>用户在输入框切模式：新会话只记 SelectedChatMode（首轮 desiredMode 应用），已存在会话立即 SetMode（plan/execute）。</summary>
@@ -1631,7 +1701,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
         var content = InputText.Trim();
         InputText = string.Empty;
-        _runCts = new CancellationTokenSource();
+        // 当前会话 runtime：待新聊天态是 Guid.Empty 占位 runtime（首次发送落库拿到真 Guid 后提升为真 runtime）。
+        var runtime = _current;
+        runtime.RunCts = new CancellationTokenSource();
 
         // 本地显示用户消息（右侧）并起一轮
         var turn = new ChatTurnItem { Header = content };
@@ -1656,12 +1728,21 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             };
 
             var justCreated = false;
-            // 待新聊天 → 首次发送才落库创建会话
+            // 待新聊天 → 首次发送才落库创建会话：把 Guid.Empty 占位 runtime 提升为真 runtime
+            // （转移刚加的 turn + 承接 RunCts），注册进 _runtimes 并切为当前显示。
             if (_currentConversationId == Guid.Empty)
             {
                 justCreated = true;
-                _currentConversationId = Guid.NewGuid();
-                _nextRunSeq = 1;
+                var newId = Guid.NewGuid();
+                var realRt = new ConversationRuntime(newId) { NextRunSeq = 1, RunCts = runtime.RunCts };
+                runtime.RunCts = null;
+                // 占位 runtime 是新聊天态（NewChat 已清空），只有刚加的这一个 turn 需转移。
+                foreach (var t in runtime.Messages) realRt.Messages.Add(t);
+                runtime.Messages.Clear();
+                _runtimes[newId] = realRt;
+                SetCurrentInternal(realRt);
+                runtime = realRt;
+                _currentConversationId = newId;
                 var conv = new Conversation
                 {
                     ConversationId = _currentConversationId,
@@ -1687,23 +1768,23 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var fullText = new System.Text.StringBuilder();
             // 规则无 mode（desiredMode 传 null）；agent/工作流传 HasModeSupport?SelectedChatMode.ToDesiredMode():null。
             var desiredMode = kind == ChatTargetKind.Rule ? null : (HasModeSupport ? SelectedChatMode.ToDesiredMode() : null);
-            _todosTouchedThisTurn = false; // 本轮 todos 信号重置（HandleTodoList 里置 true）
-            var runItems = await RunSegmentedStreamAsync(turn, targetName,
+            runtime.TodosTouchedThisTurn = false; // 本轮 todos 信号重置（HandleTodoList 里置 true）
+            var runItems = await RunSegmentedStreamAsync(runtime, turn, targetName,
                 (handlers, approvalResponse, ct) => kind == ChatTargetKind.Workflow
                     ? _workflowRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct)
                     : _agentRunner.RunStreamingAsync(_currentConversationId, targetId, content, handlers, approvalResponse, desiredMode, ct),
-                fullText, _runCts?.Token ?? default);
+                fullText, runtime.RunCts?.Token ?? default);
 
             // plan 模式轮、且本轮确实产出计划 → 待接受（驱动接受条）；execute 轮/无计划 → false。
             // 放在 RefreshModeAsync 之前：避免模式回翻干扰（门控已脱钩 SelectedMode，但语义上先定信号再读模式）。
             // 已开始执行则不再弹接受条：若本轮已有任意 todo 完成，说明 agent 在 plan 轮里已自行执行，
             // 此时再提示「计划已就绪，接受开始执行」与事实相悖（用户已看到执行结果）。
-            PlanAwaitingAccept = desiredMode == "plan" && SelectedChatMode == ChatMode.Plan
-                && _todosTouchedThisTurn && HasActivePlan
-                && !ActiveTodos.Any(t => t.IsComplete);
+            runtime.PlanAwaitingAccept = desiredMode == "plan" && SelectedChatMode == ChatMode.Plan
+                && runtime.TodosTouchedThisTurn && runtime.HasActivePlan
+                && !runtime.ActiveTodos.Any(t => t.IsComplete);
 
             // 持久化本轮为 run+events（typed 事件流，CallId 写入时即配对）并乐观 bump 侧栏项。
-            await PersistRunAsync(content, runItems, fullText.ToString());
+            await PersistRunAsync(runtime, content, runItems, fullText.ToString());
             if (kind != ChatTargetKind.Rule) await RefreshModeAsync();
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
@@ -1779,27 +1860,29 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     /// 把本轮 transcript 持久化为一个 <see cref="AgentRun"/> + 其 <see cref="AgentEvent"/> 事件流（typed、append-only，
     /// CallId 在 ToolCall/ToolResult 写入时即配对），调 <see cref="IConversationStore.AppendRunAsync"/> 原子写入并
     /// 反范式化更新会话 preview/updatedAt。乐观 bump 侧栏项。用户消息在 <see cref="AgentRun.UserMessage"/> 上，不另存。
-    /// 审批卡运行期态不持久化（与旧行为一致）。
+    /// 审批卡运行期态不持久化（与旧行为一致）。操作指定 runtime——按 runtime.ConversationId/NextRunSeq 取号，
+    /// 与当前显示会话解耦（背景会话跑完也持久化到自己的 conversation）。
     /// </summary>
-    private async Task PersistRunAsync(string userContent,
-        IReadOnlyList<ChatMessageItem> runItems, string fullText)
+    private async Task PersistRunAsync(ConversationRuntime runtime,
+        string userContent, IReadOnlyList<ChatMessageItem> runItems, string fullText)
     {
-        if (_currentConversationId == Guid.Empty) return;
+        var convId = runtime.ConversationId;
+        if (convId == Guid.Empty) return;
         try
         {
-            var conv = await _conversationStore.GetConversationAsync(_currentConversationId);
+            var conv = await _conversationStore.GetConversationAsync(convId);
             if (conv is null) return;
 
             var now = DateTimeOffset.UtcNow;
             var hasAnswer = runItems.Any(i => i.IsText && !i.IsReasoning && !string.IsNullOrWhiteSpace(i.Content));
             var status = hasAnswer ? RunStatus.Completed : RunStatus.Interrupted;
 
-            // 原子取号再构建——关闭 _nextRunSeq 跨 await AppendRunAsync 的并发窗口（两轮 persist 并发会撞 Seq）。
-            // 失败时已消耗的序号留空隙无害（seq 仅用于排序，不要求稠密）。
-            var runSeq = System.Threading.Interlocked.Increment(ref _nextRunSeq) - 1;
+            // 原子取号再构建——关闭 runtime.NextRunSeq 跨 await AppendRunAsync 的并发窗口（两轮 persist 并发会撞 Seq）。
+            // 失败时已消耗的序号留空隙无害（seq 仅用于排序，不要求稠密）。per-conversation 取号，跨会话并发不撞。
+            var runSeq = System.Threading.Interlocked.Increment(ref runtime.NextRunSeq) - 1;
             var run = new AgentRun
             {
-                ConversationId = _currentConversationId,
+                ConversationId = convId,
                 Seq = runSeq,
                 Status = status,
                 AgentId = conv.AgentId,
@@ -1851,7 +1934,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             await _dispatcher.InvokeAsync(() =>
             {
-                var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
+                var item = Conversations.FirstOrDefault(c => c.Id == convId);
                 if (item is not null)
                 {
                     var preview = string.IsNullOrWhiteSpace(fullText) ? userContent : fullText;
@@ -1874,22 +1957,24 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         return e;
     }
 
-    /// <summary>是否还有更早的历史轮未渲染（供 View 判断是否触发增量加载）。</summary>
-    public bool HasMoreHistory => _pendingHistoryTurns is { Count: > 0 };
+    /// <summary>是否还有更早的历史轮未渲染（供 View 判断是否触发增量加载）。代理当前会话 runtime。</summary>
+    public bool HasMoreHistory => _current.PendingHistoryTurns is { Count: > 0 };
 
     /// <summary>
     /// 增量加载更早的历史轮：从暂存队列取出最多 <see cref="HistoryLoadBatch"/> 轮，插入到 <see cref="Messages"/> 顶部。
     /// 返回实际加载的轮数（0 表示无更多历史）。markdown 解析仅在加入 Messages 绑定时发生，故分批可避免一次性卡顿。
+    /// 操作当前会话 runtime——历史增量加载只对当前显示的会话有意义。
     /// </summary>
     public int LoadMoreHistory()
     {
-        if (_pendingHistoryTurns is null || _pendingHistoryTurns.Count == 0) return 0;
-        int take = Math.Min(HistoryLoadBatch, _pendingHistoryTurns.Count);
+        var pending = _current.PendingHistoryTurns;
+        if (pending is null || pending.Count == 0) return 0;
+        int take = Math.Min(HistoryLoadBatch, pending.Count);
         // 暂存按时间正序（最旧在前）；取最新的待加载批次（队列尾部），倒序 Insert(0) 以保持正序。
-        int start = _pendingHistoryTurns.Count - take;
+        int start = pending.Count - take;
         for (int i = start + take - 1; i >= start; i--)
-            Messages.Insert(0, _pendingHistoryTurns[i]);
-        _pendingHistoryTurns.RemoveRange(start, take);
+            Messages.Insert(0, pending[i]);
+        pending.RemoveRange(start, take);
         return take;
     }
 }

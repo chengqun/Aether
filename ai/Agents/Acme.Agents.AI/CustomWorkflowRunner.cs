@@ -25,6 +25,11 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
     private readonly ICustomWorkflowCatalog _workflowCatalog;
     // conversationId -> (workflowId, workflowAIAgent, session)
     private readonly ConcurrentDictionary<Guid, (Guid workflowId, AIAgent agent, FrameworkAgentSession session)> _sessions = new();
+    // conversationId -> SemaphoreSlim(1,1)：同会话串行化（同 CustomAgentRunner，防两轮并发踩 session 非原子竞态）。
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _runLocks = new();
+
+    private SemaphoreSlim GetRunLock(Guid conversationId)
+        => _runLocks.GetOrAdd(conversationId, _ => new SemaphoreSlim(1, 1));
 
     public CustomWorkflowRunner(HarnessRuntime runtime, AgentFactory agentFactory, ICustomAgentCatalog agentCatalog, ICustomWorkflowCatalog workflowCatalog)
     {
@@ -45,7 +50,17 @@ public sealed class CustomWorkflowRunner : ICustomWorkflowRunner
             throw new ArgumentException("消息不能为空", nameof(message));
 
         var (agent, session) = await GetOrCreateAsync(conversationId, workflowId, cancellationToken).ConfigureAwait(false);
-        await _runtime.RunStreamingAsync(agent, session, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+        // 同会话串行化（同 CustomAgentRunner）：防本地+远程两路径同时命中同一会话的非原子竞态。
+        var sem = GetRunLock(conversationId);
+        await sem.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _runtime.RunStreamingAsync(agent, session, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            sem.Release();
+        }
     }
 
     public async Task<string?> GetModeAsync(Guid conversationId, CancellationToken cancellationToken = default)

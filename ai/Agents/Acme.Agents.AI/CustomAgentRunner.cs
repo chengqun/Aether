@@ -19,6 +19,12 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
     private readonly ICustomAgentCatalog _catalog;
     // conversationId -> (runtime sessionId, agentId)：每会话独立运行时会话，多会话记忆隔离。
     private readonly ConcurrentDictionary<Guid, (Guid sessionId, Guid agentId)> _sessionsByConversation = new();
+    // conversationId -> SemaphoreSlim(1,1)：同会话串行化（防两轮并发踩 AgentSession.Messages/
+    // GetOrCreateFrameworkSessionAsync 非原子竞态）。跨会话并发不受限（多会话可同时跑）。
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _runLocks = new();
+
+    private SemaphoreSlim GetRunLock(Guid conversationId)
+        => _runLocks.GetOrAdd(conversationId, _ => new SemaphoreSlim(1, 1));
 
     public CustomAgentRunner(HarnessRuntime runtime, ICustomAgentCatalog catalog)
     {
@@ -54,7 +60,19 @@ public sealed class CustomAgentRunner : ICustomAgentRunner
             conversationId,
             _ => (_runtime.StartSession(id).SessionId, agentId)).sessionId;
 
-        await _runtime.RunStreamingAsync(sessionId, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+        // 同会话串行化：本地路径靠 VM 的 IsAgentRunning 守卫，但本地+远程两条路径可能同时命中同一会话
+        //（手机发消息时桌面正在跑同一会话）→ 串行化避免 AgentSession.Messages/GetOrCreateFrameworkSessionAsync
+        // 非原子竞态。跨会话并发不受限（不同 conversationId 各持自己的信号量）。
+        var sem = GetRunLock(conversationId);
+        await sem.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _runtime.RunStreamingAsync(sessionId, message, handlers, approvalResponse, desiredMode, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            sem.Release();
+        }
     }
 
     public async Task<string?> GetModeAsync(Guid conversationId, CancellationToken cancellationToken = default)

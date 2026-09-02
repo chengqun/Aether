@@ -61,6 +61,10 @@
                                   <TextBlock Text="{Binding DisplayTime}" DockPanel.Dock="Right"
                                              FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
                                              VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                  <!-- 后台/前台运行角标 ⏳（会话有 agent 在跑时显） -->
+                                  <TextBlock Text="⏳" DockPanel.Dock="Right" FontSize="11"
+                                             IsVisible="{Binding IsRunning}"
+                                             VerticalAlignment="Center" Margin="4,0,0,0"/>
                                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12"
                                              TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                 </DockPanel>

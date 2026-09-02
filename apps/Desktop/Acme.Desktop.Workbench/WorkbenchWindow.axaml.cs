@@ -165,6 +165,9 @@ public partial class WorkbenchWindow : Window
     public void ExitApplication()
     {
         _isReallyExiting = true;
+        // 取消所有后台 agent run（同 PrepareForShutdown——两个真退出路径都需）。
+        try { _vm?.Chat?.CancelAllRunning(); }
+        catch { /* 退出期忽略 */ }
         Dispatcher.UIThread.Post(() =>
         {
             _pet?.Close(); // 先关桌宠（其 OnClosed 停动画定时器）
@@ -181,6 +184,10 @@ public partial class WorkbenchWindow : Window
     public void PrepareForShutdown()
     {
         _isReallyExiting = true;
+        // 取消所有会话的后台 agent run（多会话并发改造后，退出时各 runtime 可能仍在跑——
+        // Cancel 让 agent 工具调用抛 OCE，防退出瞬间背景 run 执行危险工具的孤儿副作用）。
+        try { _vm?.Chat?.CancelAllRunning(); }
+        catch { /* 退出期忽略 */ }
         try { _pet?.Close(); }
         catch { /* 退出期忽略桌宠关闭异常 */ }
     }
