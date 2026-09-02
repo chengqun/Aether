@@ -142,7 +142,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             UpdateConversationRunningFlag(rt);
         // 非当前 runtime 的标量变更不转发到 VM 代理属性——避免背景 run 的 plan/token 变更污染当前显示。
         if (!ReferenceEquals(sender, _current)) return;
-        OnPropertyChanged(e.PropertyName!);
+        // runtime 属性名→VM 代理属性名映射：IsRunning→IsAgentRunning（其余同名）。
+        // 不映射的话 XAML 绑的 !IsAgentRunning / IsAgentRunning 收不到 "IsRunning" 通知 →
+        // 当前会话 run 起/止时输入框禁用态、发送/停止键显隐不刷新（SetCurrentInternal 切会话时
+        // 显式通知了 IsAgentRunning 故切会话本身不受影响，但 run 起/止在 OnRuntimePropertyChanged 走此路径）。
+        var proxyName = e.PropertyName == nameof(ConversationRuntime.IsRunning)
+            ? nameof(IsAgentRunning)
+            : e.PropertyName;
+        OnPropertyChanged(proxyName!);
         switch (e.PropertyName)
         {
             case nameof(ConversationRuntime.IsRunning):
@@ -1146,7 +1153,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         // 切到新聊天**不取消**进行中的流式运行——背景 run 继续往自己的 runtime.Messages 追加，
         // 切回该会话即见流式续接。只换 _current 指针到新的 Guid.Empty 占位 runtime（SetCurrentInternal
         // 内部设 _current/_currentConversationId + raise 全代理属性变更 → 视图重绑到空集合）。
+        System.Diagnostics.Trace.WriteLine(
+            $"[NewChat] before: convId={_currentConversationId} IsAgentRunning={IsAgentRunning} _runtimes.Count={_runtimes.Count}");
         SetCurrentInternal(new ConversationRuntime(Guid.Empty));
+        System.Diagnostics.Trace.WriteLine(
+            $"[NewChat] after: convId={_currentConversationId} IsAgentRunning={IsAgentRunning} _current.IsRunning={_current.IsRunning}");
         // 懒创建：仅进入待新聊天态，不在此时落库（避免空会话进列表）。
         foreach (var c in Conversations) c.IsCurrent = false;
     }
@@ -1694,6 +1705,9 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     [RelayCommand]
     private async Task SendInputAsync()
     {
+        var kind0 = KindOf(SelectedChatTarget);
+        System.Diagnostics.Trace.WriteLine(
+            $"[SendInput] enter: CanSendInput={CanSendInput} InputTextLen={InputText?.Length ?? -1} IsAgentRunning={IsAgentRunning} kind={kind0} convId={_currentConversationId}");
         if (!CanSendInput || string.IsNullOrWhiteSpace(InputText)) return;
         // 防重入：UI 已靠 IsAgentRunning 隐藏发送键/禁用输入框，这里兜底——
         // 上一轮未结束时（取消尚未落地）绝不再起一轮，避免 _runCts 被覆盖、两轮并发。
