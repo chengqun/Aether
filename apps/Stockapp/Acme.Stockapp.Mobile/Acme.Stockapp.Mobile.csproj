@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net10.0-ios</TargetFrameworks>
-		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-android</TargetFrameworks>
+		<!-- android 无条件声明（2026-09-03）：GitHub CI 的 build-android job 在 ubuntu runner 上
+		     -f net10.0-android 打 APK——旧条件 !IsOSPlatform('linux') 在 linux 上不声明 android TFM，
+		     CI 的 -f 必挂（android job 从未可能成功）。本地 macOS 行为不变（原本就含 android）；
+		     本地不带 -f 的全目标 build 在 linux 上本就不可行（ios TFM）。与 Qifu.Mobile 同修。 -->
+		<TargetFrameworks>net10.0-ios;net10.0-android</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>Acme.Stockapp.Mobile</RootNamespace>

@@ -10,7 +10,9 @@ name: Build & Release Stockapp
 on:
   push:
     tags:
-      - 'v*'
+      # v + 数字（如 v0.1.0）→ 仅 Stockapp。勿用裸 'v*'——它也会匹配 Qifu 的 v-qifu* tag，
+      # 推 Qifu 版本会误触发本 workflow（用 qifu 版本号打 stockapp 包）。Qifu 走 build-qifu.yml 的 'v-qifu*'。
+      - 'v[0-9]*'
   workflow_dispatch:
 
 permissions:
