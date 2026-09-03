@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Acme.Qifu.Desktop.Views.MySqlSettingsWindow"
+        Title="MySQL 连接设置" Width="460" Height="420"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ContentBgBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
+
+    <!-- 状态条 -->
+    <Border Grid.Row="0" CornerRadius="6" Padding="12,8" Background="{DynamicResource WarningBgBrush}" Margin="0,0,0,16">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{DynamicResource SuccessBrush}"
+                 IsVisible="{Binding IsConnected}" />
+        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{DynamicResource DangerBrush}"
+                 IsVisible="{Binding !IsConnected}" />
+        <TextBlock Text="{Binding StatusText}" FontSize="12" VerticalAlignment="Center" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Row="1" Spacing="12">
+      <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="主机" FontSize="12" VerticalAlignment="Center" />
+        <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding Host}" PlaceholderText="127.0.0.1 或域名" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="端口" FontSize="12" VerticalAlignment="Center" Margin="0,10,0,0" />
+        <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding Port}" PlaceholderText="3306" Margin="0,10,0,0" />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="用户名" FontSize="12" VerticalAlignment="Center" Margin="0,10,0,0" />
+        <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding User}" PlaceholderText="root" Margin="0,10,0,0" />
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="密码" FontSize="12" VerticalAlignment="Center" Margin="0,10,0,0" />
+        <TextBox  Grid.Row="3" Grid.Column="1" Text="{Binding Password}" PasswordChar="•" PlaceholderText="可留空" Margin="0,10,0,0" />
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="数据库" FontSize="12" VerticalAlignment="Center" Margin="0,10,0,0" />
+        <TextBox  Grid.Row="4" Grid.Column="1" Text="{Binding Database}" PlaceholderText="可留空（连后 USE）" Margin="0,10,0,0" />
+      </Grid>
+      <TextBlock Text="配置保存后即时生效；AI 工具 ExecuteSql 每次查询现读此配置。"
+                 FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <!-- 操作按钮 + 关闭 -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="测试连接" Command="{Binding ConnectCommand}"
+              IsEnabled="{Binding !IsBusy}" Padding="14,6" />
+      <Button Content="关闭" Click="OnCloseClick" Padding="18,6" Margin="12,0,0,0" />
+    </StackPanel>
+  </Grid>
+</Window>

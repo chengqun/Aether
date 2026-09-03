@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 纯 HTTP 层：只依赖 Domain（IYushuService/IMcphubAuthService/Result 类型）。
+         从 Infrastructure 抽出，让桌面 + 手机（net10.0-ios）都能复用 YushuService 的
+         mcphub 网关 SQL 查询逻辑，而不拖入 Playwright。 -->
+    <ProjectReference Include="..\Acme.Qifu.Domain\Acme.Qifu.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

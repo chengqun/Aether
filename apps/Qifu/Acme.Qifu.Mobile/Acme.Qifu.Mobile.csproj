@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- android 无条件声明（2026-09-03）：GitHub CI 在 ubuntu runner 上 -f net10.0-android 打 APK——
+		     旧条件 !IsOSPlatform('linux') 在 linux 上不声明 android TFM，CI 的 -f 必挂。
+		     本地 macOS 行为不变（原本就含 android）；本地不带 -f 的全目标 build 在 linux 上本就不可行（ios TFM）。 -->
+		<TargetFrameworks>net10.0-ios;net10.0-android</TargetFrameworks>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>Acme.Qifu.Mobile</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+		<!-- 品牌（Aether 体系，非旧 alphaagent.*） -->
+		<ApplicationTitle>Aether · 毓数</ApplicationTitle>
+		<ApplicationId>com.aether.qifu</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<!-- iOS 自动签名（钥匙串仅保留一个 Apple Development 证书时自动选取） -->
+		<CodesignProvision>Automatic</CodesignProvision>
+		<ProvisioningType>automatic</ProvisioningType>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<!-- 自包含 Debug APK：关闭 Fast Deployment（默认 Debug 只装壳，程序集靠 -t:Install 单独推到 .__override__，
+		     adb install 单装 APK 会因找不到程序集 SIGABRT）。改为程序集+运行时打入 APK，便于 adb install 直接安装且 APK 可移植。
+		     iOS 不受此条件影响。 -->
+		<AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- App Icon + Splash（租户专属） -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#2E7D32" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2E7D32" BaseSize="128,128" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.71" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.9" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- 共享 MAUI 层（Views/Services/Converters/AddMobileCommon/Resources）+ 全部业务/平台契约 -->
+		<ProjectReference Include="..\..\Mobile\Acme.Mobile.Shared\Acme.Mobile.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- 毓数/云文档 移动端适配器：业务 Application（token 跨端同步，干净——无 Playwright）+ Domain 端口（IQifuConfigCache）。
+		     不引 Acme.Qifu.Infrastructure（含 Microsoft.Playwright，net10.0-ios 不支持）——手机端 IQifuConfigCache 在本项目内重实现（SqliteStoreBase）。 -->
+		<ProjectReference Include="..\..\..\business\Qifu\Acme.Qifu.Application\Acme.Qifu.Application.csproj" />
+		<!-- 纯 HTTP 层：YushuService（mcphub 网关 SQL 查询，无 Playwright）。IMcphubTokenSyncService 由 Application 提供。 -->
+		<ProjectReference Include="..\..\..\business\Qifu\Acme.Qifu.Http\Acme.Qifu.Http.csproj" />
+		<!-- AI 工具适配器：AddQifuTools（毓数 SQL/Teams/云文档工具） -->
+		<ProjectReference Include="..\..\..\ai\Qifu\Acme.Qifu.AI\Acme.Qifu.AI.csproj" />
+		<!-- 显式引 Acme.Persistence：MobileQifuConfigCache 继承 SqliteStoreBase（虽经 Mobile.Shared 传递可得，显式更清晰）。 -->
+		<ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
+
+		<!-- MySQL 直连数据查询（DataQuery 上下文，纯 net10.0 + MySqlConnector 纯 managed——手机可引）。
+		     Domain(DataQueryOptions)/Application(ISqlQueryService)/Infrastructure(MySqlSqlExecutor)/AI(ExecuteSql 工具)。 -->
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Domain\Acme.DataQuery.Domain.csproj" />
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Application\Acme.DataQuery.Application.csproj" />
+		<ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Infrastructure\Acme.DataQuery.Infrastructure.csproj" />
+		<ProjectReference Include="..\..\..\ai\DataQuery\Acme.DataQuery.AI\Acme.DataQuery.AI.csproj" />
+	</ItemGroup>
+
+</Project>

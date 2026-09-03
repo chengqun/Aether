@@ -1,0 +1,135 @@
+name: Build & Release Qifu
+
+# 推 v-qifu* tag → 多平台构建（桌面 macOS/Linux/Windows + Android）+ 创建 GitHub Release 挂载产物；
+# workflow_dispatch 手动触发（产物仅进 Actions artifacts，不发版）。
+# 镜像 build-stockapp.yml 的 Qifu 版（2026-09-03 Qifu 解除隐藏、随 CI 发布）。
+# Qifu 与 Stockapp 的差异：不引 externals/Lean 也不引 CTP —— 无 submodule init、无原生 wrapper 编译，
+# 复用 scripts/build-qifu-*.sh（仅 Playwright node 驱动可执行位兜底）。
+# 桌面端无 baked-in 密钥（server URL 运行时经登录窗口配）+ Android 用 MAUI 自带 debug.keystore
+# → 整个 workflow 不依赖任何 GitHub Secret 即可跑通（Release 正式签名后续可加 keystore secret）。
+
+on:
+  push:
+    tags:
+      - 'v-qifu*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # release job 创建 Release + 上传 assets 需要
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: qifu-macos-x64
+            glob: dist/Aether-Qifu-*-macos-x64.zip
+          - os: ubuntu-latest
+            artifact: qifu-linux-x64
+            glob: dist/Aether-Qifu-*-linux-x64.tar.gz
+          - os: windows-latest
+            artifact: qifu-win-x64
+            glob: dist/Aether-Qifu-*-win-x64.zip
+    env:
+      # 脚本用此命名产物（mac 的 Info.plist 版本、linux tar.gz、win zip 文件名）。tag 名如 v-qifu0.1.0；非 tag 为分支名（debug 可接受）。
+      APP_VERSION_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        # Qifu 不引 externals/Lean（Stockapp 才引），无需 submodule init；MAF 是 NuGet 包引用。
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # shell 字段不支持 matrix 上下文（GitHub 校验器只认字面量），故按 OS 分三步、各用字面 shell。
+      - name: Run build script (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/build-qifu-macos.sh
+
+      - name: Run build script (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/build-qifu-linux.sh
+
+      - name: Run build script (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: "& ./scripts/build-qifu-windows.ps1"
+
+      - name: Zip macOS .app bundle (Release 需单文件)
+        if: runner.os == 'macOS'
+        shell: bash
+        # ditto 保 bundle 结构/符号链接，优于 zip。脚本只产 .app 目录，这里补打包成 zip。
+        run: ditto -c -k --keepParent "dist/Aether-Qifu.app" "dist/Aether-Qifu-${APP_VERSION_NAME}-macos-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.glob }}
+          if-no-files-found: error   # 产物缺失即失败，不静默
+
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    env:
+      APP_VERSION_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        # Qifu.Mobile 不引 externals/Lean，无需 init 子模块（桌面端 job 同样不需要）。
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # 仅装 platform-tools + build-tools；MAUI 构建按需补 platform/api-level。
+          packages: 'platform-tools build-tools;36.0.0'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Run build script
+        shell: bash
+        run: bash scripts/build-qifu-android.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qifu-android
+          path: dist/android-apk/Aether-Qifu-android-*.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [build, build-android]   # 桌面端三平台 + Android 全绿才发版
+    if: startsWith(github.ref, 'refs/tags/')   # 仅 tag 触发；workflow_dispatch 不发版
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true   # 桌面三平台 + Android 产物平铺进 assets/，保留原文件名
+
+      - name: Create Release & attach assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true   # 自动从上次 release 到本 tag 的 commits 生成 changelog

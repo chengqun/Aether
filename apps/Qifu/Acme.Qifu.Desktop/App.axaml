@@ -1,0 +1,21 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wb="using:Acme.Desktop.Workbench"
+             xmlns:wsw="using:Acme.Desktop.Workbench.Workspace"
+             x:Class="Acme.Qifu.Desktop.App"
+             RequestedThemeVariant="Light">
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"/>
+        <StyleInclude Source="avares://Acme.Desktop.Shared/Themes/SharedTheme.axaml"/>
+    </Application.Styles>
+
+    <Application.DataTemplates>
+        <!-- Workspace 决定布局：ActiveWorkspace(WorkspaceViewModel) → WorkspaceView 遍历 LayoutNode 建视觉树 -->
+        <DataTemplate DataType="wsw:WorkspaceViewModel">
+            <wb:WorkspaceView />
+        </DataTemplate>
+    </Application.DataTemplates>
+
+</Application>

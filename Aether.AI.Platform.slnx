@@ -27,6 +27,9 @@
   <Folder Name="/ai/Agents/">
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>
+  <Folder Name="/ai/Qifu/">
+    <Project Path="ai/Qifu/Acme.Qifu.AI/Acme.Qifu.AI.csproj" />
+  </Folder>
   <Folder Name="/apps/">
     <Project Path="apps/Shared/Acme.Shared.HostGlue/Acme.Shared.HostGlue.csproj" />
   </Folder>
@@ -41,6 +44,10 @@
   <Folder Name="/apps/Stockapp/">
     <Project Path="apps/Stockapp/Acme.Stockapp.Desktop/Acme.Stockapp.Desktop.csproj" />
     <Project Path="apps/Stockapp/Acme.Stockapp.Mobile/Acme.Stockapp.Mobile.csproj" />
+  </Folder>
+  <Folder Name="/apps/Qifu/">
+    <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />
+    <Project Path="apps/Qifu/Acme.Qifu.Mobile/Acme.Qifu.Mobile.csproj" />
   </Folder>
   <Folder Name="/server/">
     <Project Path="server/Aether.Server.Domain.Shared/Aether.Server.Domain.Shared.csproj" />
@@ -150,6 +157,12 @@
     <Project Path="business/Trading.Runtime/Acme.Trading.Runtime.Lean/Acme.Trading.Runtime.Lean.csproj" />
     <Project Path="business/Trading.Runtime/Acme.Trading.Scripting/Acme.Trading.Scripting.csproj" />
   </Folder>
+  <Folder Name="/business/Qifu/">
+    <Project Path="business/Qifu/Acme.Qifu.Domain/Acme.Qifu.Domain.csproj" />
+    <Project Path="business/Qifu/Acme.Qifu.Application/Acme.Qifu.Application.csproj" />
+    <Project Path="business/Qifu/Acme.Qifu.Infrastructure/Acme.Qifu.Infrastructure.csproj" />
+    <Project Path="business/Qifu/Acme.Qifu.Http/Acme.Qifu.Http.csproj" />
+  </Folder>
   <Folder Name="/externals/">
     <Project Path="externals/Ctp.Net.Core/Ctp.Net.Core.csproj" />
   </Folder>
@@ -170,6 +183,7 @@
     <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Notes.Infrastructure.Tests/Acme.Notes.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Acme.Agents.AI.Tests/Acme.Agents.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />

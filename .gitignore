@@ -2,8 +2,7 @@
 ## macOS
 .DS_Store
 
-## AI assistant — 含项目内幕/服务器IP/证书密码等 prose，不入仓
-CLAUDE.md
+## CLAUDE.md 已入库（2026-09-03 起；敏感信息已脱敏——服务器 IP/证书密码只存 gitignored dev settings）
 
 
 bin/
@@ -39,14 +38,11 @@ dist/
 externals/Ctp.Net.Core/Ctp.Native/build/
 externals/Ctp.Net.Core/Ctp.Native/build-*/
 
-## Qifu 仅本地（不推 GitHub；磁盘文件保留，git 停止跟踪）
-apps/Qifu/
-business/Qifu/
-ai/Qifu/
-tests/Acme.Qifu.Infrastructure.Tests/
+## Qifu 已解除本地隐藏（2026-09-03 起：slnx 注册 + GitHub CI 打包，与 Stockapp 同等发布）。
+## Qifu 不引 externals/Lean 也不引 CTP —— build-qifu-* 脚本无 submodule/原生编译段。
 
 ## Local-only build scripts (不推 GitHub；磁盘文件保留)
-# 本地同时打 Qifu + Stockapp 的脚本；GitHub 只同步 build-stockapp-*.sh（仅 Stockapp 租户）。
+# 本地同时打 Qifu + Stockapp 的便利脚本；CI 走单租户 build-stockapp-*.sh / build-qifu-*.sh。
 scripts/build-desktop-macos.sh
 
 ## Local config / secrets

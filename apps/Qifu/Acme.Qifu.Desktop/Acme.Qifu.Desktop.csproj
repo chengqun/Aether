@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 共享 shell + 公共组合；工作台引擎；qifu 租户专属上下文 + AI 工具 -->
+    <ProjectReference Include="..\..\Desktop\Acme.Desktop.Shared\Acme.Desktop.Shared.csproj" />
+    <ProjectReference Include="..\..\Desktop\Acme.Desktop.Workbench\Acme.Desktop.Workbench.csproj" />
+    <ProjectReference Include="..\..\..\business\Qifu\Acme.Qifu.Application\Acme.Qifu.Application.csproj" />
+    <ProjectReference Include="..\..\..\business\Qifu\Acme.Qifu.Infrastructure\Acme.Qifu.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\ai\Qifu\Acme.Qifu.AI\Acme.Qifu.AI.csproj" />
+    <!-- MySQL 直连数据查询：Infrastructure(含 MySqlConnector) + AI 工具适配器 -->
+    <ProjectReference Include="..\..\..\business\DataQuery\Acme.DataQuery.Infrastructure\Acme.DataQuery.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\ai\DataQuery\Acme.DataQuery.AI\Acme.DataQuery.AI.csproj" />
+  </ItemGroup>
+
+</Project>
