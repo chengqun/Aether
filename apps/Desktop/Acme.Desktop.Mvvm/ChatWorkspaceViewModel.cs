@@ -275,7 +275,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         Func<StreamHandlers, ToolApprovalDecision?, CancellationToken, Task> runAsync,
         System.Text.StringBuilder fullText, CancellationToken cancellationToken = default,
         // 远程路径传 true：老板手机只收最终概括，过程（计划/工具/思考/审批）全不发——审批也自动放行所有工具（含 Dangerous）。
-        // 本地路径传 false（默认）→ 走 4 档模式选择器 TryAutoApprove + 桌面本地审批框 _approvalDialog。
+        // 本地路径传 false（默认）→ 走 4 档模式选择器 ChatApprovalDecider + 桌面本地审批框 _approvalDialog。
         bool autoApproveAll = false)
     {
         var items = turn.Children; // 本轮工作列表 = turn 的 Children（用户气泡为第一项，agent 产出随后）
@@ -387,7 +387,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                         // 读 SelectedChatMode 是逐工具调用即时生效——运行中切档立即影响下一个工具（解决中途切模式）。
                         autoDecision = autoApproveAll
                             ? new ToolApprovalDecision(req.RequestId, Approved: true, "远程自动批准", AlwaysApprove: false)
-                            : TryAutoApprove(req);
+                            : ChatApprovalDecider.TryDecide(SelectedChatMode, HasModeSupport, req.ToolName, _levelLookup, req.RequestId);
                         if (autoDecision is not null)
                             return Task.CompletedTask; // 自动批：不插审批卡，工具 call+result 仍经 OnToolEvent 正常渲染
                         var card = new ChatMessageItem
@@ -1511,7 +1511,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         HasModeSupport = kind == ChatTargetKind.Workflow
                       || (kind == ChatTargetKind.Agent && value is ExpertItem e && e.EnableAgentModeProvider);
         _syncingMode = true;
-        SelectedChatMode = ChatMode.AutoEdit; // 默认自动编辑档（无选择器时值无意义——TryAutoApprove 不激活）
+        SelectedChatMode = ChatMode.AutoEdit; // 默认自动编辑档（无选择器时值无意义——ChatApprovalDecider 不激活）
         _syncingMode = false;
 
         var newKey = TargetKey(value, kind);
@@ -1641,32 +1641,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             await _workflowRunner.SetModeAsync(_currentConversationId, mode);
         else
             await _agentRunner.SetModeAsync(_currentConversationId, mode);
-    }
-
-    /// <summary>按当前 <see cref="SelectedChatMode"/> 算工具审批的自动决定。
-    /// 返回非 null = 自动批准（跳过对话框+审批卡，走与用户批准相同的再调用路径恢复执行）；返回 null = 需弹框。
-    /// - Auto：全部自动批（含 Dangerous）。
-    /// - AutoEdit：自动批非 Dangerous（Safe/Confirm）；Dangerous 弹框。lookup 为 null（未注册）退化为全弹（安全降级）。
-    /// - Manual/Plan：始终弹框（Plan 轮一般不调写工具，防御性弹框）。
-    /// AlwaysApprove=false：一次性批，不设 session 级 standing rule（模式可变，不能永久放行）。</summary>
-    private ToolApprovalDecision? TryAutoApprove(ToolApprovalRequest req)
-    {
-        // 无模式选择器（RequireToolApproval-only agent 或规则）→ 不自动批，走对话框（保留旧行为）。
-        // 4 档自动批策略仅对有选择器（EnableAgentModeProvider/工作流）的会话生效。
-        if (!HasModeSupport) return null;
-        switch (SelectedChatMode)
-        {
-            case ChatMode.Auto:
-                return new ToolApprovalDecision(req.RequestId, Approved: true, "自动批准（自动模式）", AlwaysApprove: false);
-            case ChatMode.AutoEdit:
-                // lookup 缺失 → 视为 Dangerous（弹框，安全降级）。
-                var level = _levelLookup?.LevelOf(req.ToolName) ?? ToolApprovalLevel.Dangerous;
-                return level != ToolApprovalLevel.Dangerous
-                    ? new ToolApprovalDecision(req.RequestId, Approved: true, "自动批准（自动编辑模式）", AlwaysApprove: false)
-                    : null;
-            default: // Manual / Plan
-                return null;
-        }
     }
 
     /// <summary>轮后从会话读实际模式（捕获 agent 自行 set_mode 的切换），带 guard 不回触 SetMode。

@@ -179,5 +179,6 @@
     <Project Path="tests/Acme.Trading.Runtime.Tests/Acme.Trading.Runtime.Tests.csproj" />
     <Project Path="tests/Acme.AppAutomation.Tests/Acme.AppAutomation.Tests.csproj" />
     <Project Path="tests/Acme.Desktop.Mvvm.Tests/Acme.Desktop.Mvvm.Tests.csproj" />
+    <Project Path="tests/Aether.Architecture.Tests/Aether.Architecture.Tests.csproj" />
   </Folder>
 </Solution>
