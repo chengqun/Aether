@@ -302,6 +302,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 // skills 根目录 → 右栏内嵌技能卡片网格（SkillView，镜像专家页技能 tab），点树内 SKILL.md 走表单。
                 // 清旧活动文件态（防旧源码/表单残留）；SkillVm.LoadAsync 后台重扫盘刷新卡片。
                 _isReadme = false;
+                _isCsv = false;
                 ReadmeMarkdown = string.Empty;
                 _activePath = null;
                 ActiveEditVm = null;
@@ -313,6 +314,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 // mcp-servers 根目录 → 右栏内嵌 MCP 管理面板（McpView，镜像专家页 MCP tab），点树内 .json 走全宽编辑器。
                 // 清旧活动文件态（防旧源码/表单残留）；McpVm.EnsureLoadedAsync 后台重连+刷新工具列表。
                 _isReadme = false;
+                _isCsv = false;
                 ReadmeMarkdown = string.Empty;
                 _activePath = null;
                 ActiveEditVm = null;
@@ -324,6 +326,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                 // 类型目录根（agents/workflows/rules/coderules/knowledge/strategies/...）→ 右栏内嵌资产卡片网格。
                 // 清旧活动文件态（防旧源码/表单残留）；BuildFileCardsAsync 后台扫目录 + 解析 front-matter 取 name/description。
                 _isReadme = false;
+                _isCsv = false;
                 ReadmeMarkdown = string.Empty;
                 _activePath = null;
                 ActiveEditVm = null;
@@ -388,6 +391,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _fileCardsType = null;
         _fileCardsVm = null;
         _isReadme = false;
+        _isCsv = false;
         ReadmeMarkdown = string.Empty;
         _currentSource = content;
         IsDirty = false;
@@ -715,7 +719,17 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     public async Task OpenFolderReadmeAsync(string folderPath, CancellationToken ct = default)
     {
         var readme = TryFindReadme(folderPath) ?? await EnsureTypeReadmeAsync(folderPath, ct);
-        if (readme is null) return;
+        if (readme is null)
+        {
+            // 无 README（普通空目录/无说明文档）→ 仅展开/收起（TreeView 默认），不打开文件。
+            // 但须清掉旧的 csv 表格上栏，否则「从 csv 切到无 README 目录」时表格残留。
+            _isCsv = false;
+            _isReadme = false;
+            ReadmeMarkdown = string.Empty;
+            ActiveEditVm = null;
+            RaiseLayout();
+            return;
+        }
         if (IsKnowledgeSubtree(folderPath))
         {
             await OpenFileAsync(new FileNode(Path.GetFileName(readme), readme, false), ct);
@@ -905,6 +919,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _isFileCardsRoot = false;
         _fileCardsType = null;
         _fileCardsVm = null;
+        _isCsv = false;
         _isReadme = true; // markdown 上预览 + 下源码两栏
         ReadmeMarkdown = content;
         _currentSource = content;
