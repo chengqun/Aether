@@ -60,6 +60,13 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         "packages", "TestResults", "dist", "build", "target", "__pycache__", ".venv", "venv", ".next", ".nuxt",
     };
 
+    /// <summary>产物体文件扩展名（csv/sql 等）。这类文件在类型目录内与 .md 并列显示（通用文件图标），
+    /// 点击走全宽源码编辑器（纯文本，按扩展名经 SyntaxMap 高亮），不按所在目录误判为知识对象表单。</summary>
+    private static readonly HashSet<string> ArtifactExts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".csv", ".sql",
+    };
+
     protected override string FontSizePrefKey => "ko.editorFontSize";
     protected override string RootPathPrefKey => "ko.rootPath";
     protected override void WriteBackDirectory(string? path) => _knowledgeDirProvider.CurrentDirectory = path;
@@ -252,6 +259,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     {
         if (node is null || node.IsFolder) return null;
         if (string.IsNullOrEmpty(RootPath)) return null;
+        // 产物体文件（csv/sql 等）在任何类型目录下都作纯文本（Note）处理——全宽源码编辑器，无 form，
+        // 不随所在目录（如 knowledge/）误判为知识对象表单解析。
+        if (ArtifactExts.Contains(Path.GetExtension(node.Path)))
+            return NoteNodeType.Note;
         string rel;
         try { rel = Path.GetRelativePath(RootPath, node.Path); }
         catch { return null; }
@@ -1201,6 +1212,17 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
                     var stem = fileName;
                     var display = StripCompound(stem, ext);
                     node.Children.Add(new FileNode(display, stem, file, isFolder: false, iconOverride: TypeIcon(t)));
+                }
+                // 产物体文件（csv/sql 等）：类型目录（尤其 knowledge/）内与 .md 并列显示，通用文件图标，
+                // 点击走全宽源码编辑器（ResolveType 按扩展名返 Note）。列全部产物体文件（不按类型 ext filter）。
+                foreach (var file in Directory.EnumerateFiles(fullPath)
+                             .Where(f => ArtifactExts.Contains(Path.GetExtension(f)))
+                             .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (IsReadmeFile(fileName)) continue;
+                    node.Children.Add(new FileNode(fileName, fileName, file, isFolder: false,
+                        iconOverride: null)); // 通用文件图标（FileIcons.ForFile：sql 蓝图标、csv 回退默认）
                 }
             }
         }
