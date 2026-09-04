@@ -59,6 +59,10 @@
         <Border IsVisible="{Binding IsReadme}">
           <ctl:SelectableMarkdownViewer Markdown="{Binding ReadmeMarkdown}" Margin="8,6"/>
         </Border>
+        <!-- CSV 产物体文件：上栏表格预览（详情表/透视表 + ProDataGrid） + 下栏源码（见下 Grid.Row=2） -->
+        <Border IsVisible="{Binding IsCsvNode}">
+          <shell:CsvTableView DataContext="{Binding ActiveEditVm}"/>
+        </Border>
       </Grid>
 
       <!-- 中：上下分隔条（仅 form 类型）。DragCompleted 实时写盘——切页不再丢拖动后的比例（VSCode 式）。 -->

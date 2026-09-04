@@ -9,6 +9,7 @@ using Acme.Notes.Domain.Agents;
 using Acme.Notes.Domain.Catalog;
 using Acme.Notes.Domain.Knowledge;
 using Acme.Notes.Domain.Skills;
+using Acme.Desktop.Mvvm.Knowledge;
 // 仅引两个运行器接口的别名（非整命名空间）——Aether.AI.Core.Agents 与 Acme.Notes.Domain.Agents 各有一个
 // AgentMemoryMode 平行枚举，整命名空间 using 会致 CS0104 歧义。
 using ICustomAgentRunner = Aether.AI.Core.Agents.ICustomAgentRunner;
@@ -41,6 +42,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private string _currentSource = string.Empty;
     /// <summary>当前活动文件是否为目录 README（markdown 两栏：上预览 + 下源码）。普通文件 false。</summary>
     private bool _isReadme;
+    /// <summary>当前活动文件是否为 CSV 产物体文件（上栏表格 + 下栏源码两栏）。</summary>
+    private bool _isCsv;
     /// <summary>当前选中是否为 skills 根目录（右栏内嵌技能卡片网格，镜像专家页技能 tab）。</summary>
     private bool _isSkillsRoot;
     /// <summary>当前选中是否为 mcp-servers 根目录（右栏内嵌 MCP 管理面板，镜像专家页 MCP tab）。</summary>
@@ -177,6 +180,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>当前活动文件是否为目录 README（markdown 上预览 + 下源码两栏）。</summary>
     public bool IsReadme => _isReadme;
 
+    /// <summary>当前活动文件是否为 CSV 产物体文件（上栏表格预览 + 下栏源码两栏，由 <see cref="CsvTableViewModel"/> 驱动）。</summary>
+    public bool IsCsvNode => _isCsv;
+
     /// <summary>当前选中是否为 skills 根目录——右栏内嵌 SkillView 卡片网格（镜像专家页技能 tab）。
     /// 点树内 SKILL.md 走两栏表单，点兄弟 .py 走全宽代码编辑器。</summary>
     public bool IsSkillsRoot => _isSkillsRoot;
@@ -209,8 +215,8 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         }
     }
 
-    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README）；代码类型仅下栏；skills/mcp 根目录走卡片/面板。</summary>
-    public bool HasRightPane => (IsFormNode || IsReadme) && !IsSkillsRoot && !IsMcpRoot;
+    /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README 或 csv 表格）；代码类型仅下栏；skills/mcp 根目录走卡片/面板。</summary>
+    public bool HasRightPane => (IsFormNode || IsReadme || IsCsvNode) && !IsSkillsRoot && !IsMcpRoot;
 
     /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills/mcp 根目录走卡片/面板，隐藏编辑器。</summary>
     public bool EditorVisible => _activePath is not null && !IsSkillsRoot && !IsMcpRoot;
@@ -240,6 +246,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsCodeOnlyNode));
         OnPropertyChanged(nameof(IsFormNode));
         OnPropertyChanged(nameof(IsReadme));
+        OnPropertyChanged(nameof(IsCsvNode));
         OnPropertyChanged(nameof(IsSkillsRoot));
         OnPropertyChanged(nameof(IsMcpRoot));
         OnPropertyChanged(nameof(IsFileCardsRoot));
@@ -357,6 +364,13 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         try { content = await File.ReadAllTextAsync(filePath, ct); }
         catch (Exception ex) { StatusMessage = $"打开失败：{ex.Message}"; return; }
 
+        // CSV 产物体文件 → 上栏表格预览 + 下栏源码两栏（不放 full-width code editor）。
+        if (string.Equals(Path.GetExtension(filePath), ".csv", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenCsv(filePath, content);
+            return;
+        }
+
         // 切换文件前退订旧 form 表单（防其 SourceChanged 在新文件上下文误触发 _currentSource）。
         // 调用方（OnSelectedNodeChanged 文件分支 / OpenFolderReadmeAsync knowledge 分支 / OpenKnowledgeByPathAsync）
         // 可能未先退订，此处自包含兜底——非 DocumentKnowledgeViewModel/SkillEditViewModel 时 no-op。
@@ -402,6 +416,36 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             StatusMessage = $"表单加载失败：{ex.Message}";
         }
         ActiveEditVm = editVm;
+    }
+
+    /// <summary>打开 CSV 产物体文件为「上栏表格预览 + 下栏源码」两栏。
+    /// 建 <see cref="CsvTableViewModel"/>（解析 + 详情/透视图切换）放 <see cref="ActiveEditVm"/>，
+    /// 上栏 <see cref="Shared/Shell/Knowledge/CsvTableView"/> 读 <see cref="ActiveEditVm"/> 渲染。
+    /// 下栏源码仍可编辑（保存覆盖原文件）。</summary>
+    private void OpenCsv(string filePath, string content)
+    {
+        // 退订旧 form 表单（防 SourceChanged 误触发新文件上下文）。
+        if (ActiveEditVm is DocumentKnowledgeViewModel kvm)
+            kvm.SourceChanged -= OnKnowledgeSourceChanged;
+        if (ActiveEditVm is SkillEditViewModel skill)
+            skill.SourceChanged -= OnKnowledgeSourceChanged;
+
+        _activePath = filePath;
+        _activeType = null;
+        _isReadme = false;
+        _isCsv = true;
+        _isSkillsRoot = false;
+        _isMcpRoot = false;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
+        ReadmeMarkdown = string.Empty;
+        _currentSource = content;
+        IsDirty = false;
+        StatusMessage = string.Empty;
+        ActiveEditVm = new CsvTableViewModel(content);
+        RaiseLayout();
+        KnowledgeSourceUpdated?.Invoke(content);
     }
 
     /// <summary>显示名去复合扩展名（如 <c>foo.agent.md</c> → <c>foo</c>）。</summary>
@@ -1076,6 +1120,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _activePath = null;
         _activeType = null;
         _isReadme = false;
+        _isCsv = false;
         _isSkillsRoot = false;
         _isMcpRoot = false;
         _isFileCardsRoot = false;

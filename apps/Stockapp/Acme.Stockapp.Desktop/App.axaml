@@ -8,6 +8,8 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"/>
+        <!-- ProDataGrid 主题（Avalonia.Controls.DataGrid 同名程序集，drop-in 替代官方 DataGrid） -->
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.v2.xaml"/>
         <StyleInclude Source="avares://Acme.Desktop.Shared/Themes/SharedTheme.axaml"/>
     </Application.Styles>
 

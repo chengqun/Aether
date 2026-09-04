@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Acme.Desktop.Shared.Shell.CsvTableView"
+             Background="{DynamicResource CardBgBrush}">
+
+  <UserControl.Styles>
+    <!-- 切换按钮组（详情表/透视表）——复用 Button.primary/默认样式，按 IsPivot 状态着色 -->
+    <Style Selector="Button.csv-mode">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,3"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="Button.csv-mode:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
+  <!-- 上栏：顶部工具条（详情/透视切换 + 透视列/值列选择） + 下方表格 -->
+  <Grid RowDefinitions="Auto,*">
+    <Border Grid.Row="0" Padding="8,4" BorderThickness="0,0,0,1"
+            BorderBrush="{DynamicResource BorderBrush}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="0">
+          <Button Classes="csv-mode" Content="详情表"
+                  Command="{Binding SwitchToDetailCommand}" />
+          <Button Classes="csv-mode" Content="透视表"
+                  Command="{Binding SwitchToPivotCommand}"
+                  IsVisible="{Binding CanPivot}" />
+        </StackPanel>
+        <!-- 透视表才显示：透视列 + 值列选择 -->
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsPivot}">
+          <TextBlock Text="透视列" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <ComboBox ItemsSource="{Binding PivotColumnOptions}"
+                    SelectedItem="{Binding SelectedPivotColumn}" MinWidth="120"/>
+          <TextBlock Text="值列" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"/>
+          <ComboBox ItemsSource="{Binding ValueColumnOptions}"
+                    SelectedItem="{Binding SelectedValueColumn}" MinWidth="120"/>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ProDataGrid：动态列 + 虚拟化；单元格文本 CsvColumn.GenerateElement 零绑定直接赋值 -->
+    <DataGrid Grid.Row="1" x:Name="DataGrid"
+              AutoGenerateColumns="False"
+              CanUserSortColumns="True"
+              CanUserReorderColumns="False"
+              CanUserResizeColumns="True"
+              UseLogicalScrollable="True"
+              IsReadOnly="True"
+              GridLinesVisibility="All"
+              HeadersVisibility="Column"
+              HorizontalScrollBarVisibility="Auto"
+              VerticalScrollBarVisibility="Auto"/>
+  </Grid>
+</UserControl>
