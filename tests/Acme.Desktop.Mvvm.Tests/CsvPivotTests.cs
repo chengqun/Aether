@@ -13,17 +13,18 @@ public class CsvPivotTests
         "202501,B,fpd1,0.30\n" +
         "202501,B,fpd10,0.40\n");
 
+    private static CsvValueSpec Single(int col, string name) => CsvValueSpec.Single(col, name);
+
     [Fact]
     public void Pivot_Basic_TransposesObsPointToHeaders()
     {
         var table = SampleTable();
-        var result = CsvPivot.Pivot(table, new[] { 0, 1 }, pivotColumnIndex: 2, CsvValueSpec.Single(3));
+        var result = CsvPivot.Pivot(table, new[] { 0, 1 }, 2, new[] { Single(3, "od_yi") }, asPercent: false);
 
         Assert.Equal(new[] { "m", "grp" }, result.RowHeaders);
         Assert.Equal(new[] { "fpd1", "fpd10" }, result.PivotHeaders);
-        Assert.Equal("od_yi", result.ValueHeader);
         Assert.Equal(2, result.Rows.Count);
-        var rowA = result.Rows[0];
+        var rowA = result.Rows[0]; // A 行：fpd1=0.10, fpd10=0.20
         Assert.Equal("A", rowA[1]);
         Assert.Equal("0.1", rowA[2]);
         Assert.Equal("0.2", rowA[3]);
@@ -34,7 +35,7 @@ public class CsvPivotTests
     {
         var table = CsvParser.Parse(
             "grp,obs,val\nA,x,1\nA,x,2\nA,y,5\n");
-        var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Single(2));
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { Single(2, "val") }, asPercent: false);
         Assert.Single(result.Rows);
         var row = result.Rows[0];
         Assert.Equal("3", row[1]);  // x: 1+2
@@ -46,7 +47,7 @@ public class CsvPivotTests
     {
         var table = CsvParser.Parse(
             "grp,obs,val\nA,x,1\nB,y,2\n");
-        var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Single(2));
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { Single(2, "val") }, asPercent: false);
         var rowA = result.Rows[0]; // A: x=1, y 缺失 → ""
         Assert.Equal("", rowA[2]);
     }
@@ -55,7 +56,7 @@ public class CsvPivotTests
     public void Pivot_ExcludesPivotAndValueFromRowDimensions()
     {
         var table = SampleTable();
-        var result = CsvPivot.Pivot(table, new[] { 0, 1, 2, 3 }, pivotColumnIndex: 2, CsvValueSpec.Single(3));
+        var result = CsvPivot.Pivot(table, new[] { 0, 1, 2, 3 }, 2, new[] { Single(3, "od_yi") }, asPercent: false);
         Assert.Equal(new[] { "m", "grp" }, result.RowHeaders);
     }
 
@@ -63,31 +64,46 @@ public class CsvPivotTests
     public void Pivot_SubsetRowDimensions_OnlySelectedGroup()
     {
         var table = SampleTable();
-        var result = CsvPivot.Pivot(table, new[] { 1 }, pivotColumnIndex: 2, CsvValueSpec.Single(3));
+        var result = CsvPivot.Pivot(table, new[] { 1 }, 2, new[] { Single(3, "od_yi") }, asPercent: false);
         Assert.Equal(new[] { "grp" }, result.RowHeaders);
         Assert.Equal(2, result.Rows.Count);
     }
 
     [Fact]
-    public void Pivot_RatioValue_DividesAfterSumming_AsPercent()
+    public void Pivot_FormulaValue_DividesAfterSumming()
     {
-        // 比值模式：值 = 分子求和 ÷ 分母求和，格式化为百分比。4/30=0.1333 → 13.333%。
+        // 公式 [od]/[obs_yi]：聚合后相除（Σod ÷ Σobs），默认原值（非百分比）。4/30=0.133333。
         var table = CsvParser.Parse(
             "grp,obs,od,obs_yi\nA,x,1,10\nA,x,3,20\n");
-        var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Ratio(2, 3));
-        Assert.Equal("od/obs_yi", result.ValueHeader);
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1,
+            new[] { CsvValueSpec.Formula_("逾期率", "[od] / [obs_yi]") }, asPercent: false);
+        Assert.Equal(new[] { "逾期率" }, result.ValueHeaders);
         Assert.Single(result.Rows);
+        Assert.Equal("0.133333", result.Rows[0][1]);
+    }
+
+    [Fact]
+    public void Pivot_FormulaValue_AsPercent()
+    {
+        // 百分比开关：0.133333 → 13.333%。
+        var table = CsvParser.Parse(
+            "grp,obs,od,obs_yi\nA,x,1,10\nA,x,3,20\n");
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1,
+            new[] { CsvValueSpec.Formula_("逾期率", "[od] / [obs_yi]") }, asPercent: true);
         Assert.Equal("13.333%", result.Rows[0][1]);
     }
 
     [Fact]
-    public void Pivot_SingleValue_KeepsRawNumber()
+    public void Pivot_MultipleValueFields_ProduceMultipleColumns()
     {
-        // 单列（非比值）：原值显示（不减尾零过度、不加 %）。
+        // 两个值字段：单列 od + 公式 [od]/[obs_yi] → 每个观测点两组列。
         var table = CsvParser.Parse(
-            "grp,obs,val\nA,x,0.5\n");
-        var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Single(2));
-        Assert.Equal("0.5", result.Rows[0][1]);
+            "grp,obs,od,obs_yi\nA,x,1,10\nA,y,2,20\n");
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1,
+            new[] { Single(2, "od"), CsvValueSpec.Formula_("rate", "[od] / [obs_yi]") },
+            asPercent: false);
+        // 多观测点(x,y)：值头 = 名 · 观测点
+        Assert.Equal(new[] { "od · x", "od · y", "rate · x", "rate · y" }, result.ValueHeaders);
     }
 
     [Fact]
@@ -96,7 +112,7 @@ public class CsvPivotTests
         // fpd1 < fpd10 < fpd3 < fpd30 的字母序应被数值序取代：fpd1 < fpd3 < fpd10 < fpd30，mob2 < mob10。
         var table = CsvParser.Parse(
             "obs,val\nfpd1,1\nfpd10,2\nfpd3,3\nfpd30,4\nmob10,5\nmob2,6\n");
-        var result = CsvPivot.Pivot(table, Array.Empty<int>(), pivotColumnIndex: 0, CsvValueSpec.Single(1));
+        var result = CsvPivot.Pivot(table, Array.Empty<int>(), 0, new[] { Single(1, "val") }, asPercent: false);
         Assert.Equal(new[] { "fpd1", "fpd3", "fpd10", "fpd30", "mob2", "mob10" }, result.PivotHeaders);
     }
 }

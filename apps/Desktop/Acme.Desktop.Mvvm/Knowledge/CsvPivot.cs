@@ -1,8 +1,8 @@
 namespace Acme.Desktop.Mvvm.Knowledge;
 
 /// <summary>
-/// 透视结果：行维度列头（<see cref="RowHeaders"/>）+ 观测点列的去重值作为列头（<see cref="PivotHeaders"/>）
-/// + 每行 = 行维度值数组 + 每个观测点头对应的聚合值。纯数据容器（零 Avalonia），由 <see cref="CsvPivot.Pivot"/> 产出。
+/// 透视结果：行维度列头（<see cref="RowHeaders"/>）+ 值列头（每个值字段 × 每个观测点，<see cref="ValueHeaders"/>）
+/// + 每行 = 行维度值数组 + 各值列的聚合值。纯数据容器（零 Avalonia），由 <see cref="CsvPivot.Pivot"/> 产出。
 /// </summary>
 public sealed class PivotResult
 {
@@ -12,120 +12,200 @@ public sealed class PivotResult
     /// <summary>观测点列的去重值（转成列头，按数值自然序）。</summary>
     public IReadOnlyList<string> PivotHeaders { get; }
 
-    /// <summary>透视行：每一行 = 行维度值数组 + 每个观测点头对应的值（与 <see cref="PivotHeaders"/> 对齐）。</summary>
-    public IReadOnlyList<IReadOnlyList<string>> Rows { get; }
+    /// <summary>值列头（每个值字段 × 每个观测点；单值字段单观测点时 = 值字段名）。</summary>
+    public IReadOnlyList<string> ValueHeaders { get; }
 
-    /// <summary>值列名（单列模式 = 列名；比值模式 = "分子/分母"）。</summary>
-    public string ValueHeader { get; }
+    /// <summary>透视行：每行 = 行维度值数组 + 各值列值（与 <see cref="ValueHeaders"/> 对齐）。</summary>
+    public IReadOnlyList<IReadOnlyList<string>> Rows { get; }
 
     public PivotResult(
         IReadOnlyList<string> rowHeaders,
         IReadOnlyList<string> pivotHeaders,
-        IReadOnlyList<IReadOnlyList<string>> rows,
-        string valueHeader)
+        IReadOnlyList<string> valueHeaders,
+        IReadOnlyList<IReadOnlyList<string>> rows)
     {
         RowHeaders = rowHeaders;
         PivotHeaders = pivotHeaders;
+        ValueHeaders = valueHeaders;
         Rows = rows;
-        ValueHeader = valueHeader;
     }
 
-    /// <summary>完整列头（行维度 + 观测点），供表格渲染。</summary>
-    public IReadOnlyList<string> AllHeaders => RowHeaders.Concat(PivotHeaders).ToArray();
+    /// <summary>完整列头（行维度 + 值列），供表格渲染。</summary>
+    public IReadOnlyList<string> AllHeaders => RowHeaders.Concat(ValueHeaders).ToArray();
 }
 
 /// <summary>
-/// 值规格：透视单元格填什么。单列（<see cref="Single"/>=直接用某列聚合）或比值（<see cref="Ratio"/>=分子/分母，
-/// 先各自求和再相除，得正确的比率聚合）。
+/// 值字段规格：单列（<see cref="Single"/>=聚合某列）或计算字段公式（<see cref="Formula"/>=字段表达式。
+/// 聚合后求值：公式引用的各字段先在该格子求和，再代入公式，保证比率正确）。
+/// 用「判别字段」而非 record 继承（避免派生 positional 属性与基类手写属性同名遮蔽 → 递归）。
 /// </summary>
-public readonly record struct CsvValueSpec(int NumeratorIndex, int? DenominatorIndex)
+public sealed class CsvValueSpec
 {
-    /// <summary>单列：直接用该列（求和聚合）。</summary>
-    public static CsvValueSpec Single(int columnIndex) => new(columnIndex, null);
+    /// <summary>值字段显示名（列头）。</summary>
+    public string Name { get; }
 
-    /// <summary>比值：分子列 ÷ 分母列（各求和后相除）。</summary>
-    public static CsvValueSpec Ratio(int numeratorIndex, int denominatorIndex) => new(numeratorIndex, denominatorIndex);
+    /// <summary>单列：列索引；公式：-1。</summary>
+    public int ColumnIndex { get; }
 
-    public bool IsRatio => DenominatorIndex is not null;
+    /// <summary>公式表达式；单列 null。</summary>
+    public string? Formula { get; }
+
+    /// <summary>是否为公式（false = 单列）。</summary>
+    public bool IsFormula => Formula is not null;
+
+    private CsvValueSpec(string name, int columnIndex, string? formula)
+    {
+        Name = name;
+        ColumnIndex = columnIndex;
+        Formula = formula;
+    }
+
+    /// <summary>单列：聚合该列（求和）。</summary>
+    public static CsvValueSpec Single(int columnIndex, string columnName) => new(columnName, columnIndex, null);
+
+    /// <summary>计算字段公式：命名 + 表达式（如 <c>[od_yi] / [obs_yi]</c>）。</summary>
+    public static CsvValueSpec Formula_(string name, string formula) => new(name, -1, formula);
 }
 
 /// <summary>
 /// CSV 透视（长表 → 宽表）：<paramref name="rowDimensionIndexes"/> 列去重组合成行，
-/// <paramref name="pivotColumnIndex"/>（观测点列，如 obs_point 的 fpd1/fpd30/mob2）值去重转成列头（按数值自然序），
-/// 单元格按 <paramref name="valueSpec"/> 聚合（单列求和 / 比值 = 分子求和 ÷ 分母求和）。
-/// 纯函数、零依赖，可单测。用于 labs 知识对象页 csv 产物体文件的「透视表」视图。
+/// <paramref name="pivotColumnIndex"/>（观测点列）值去重转成列头（按数值自然序），
+/// 每个 <paramref name="valueSpecs"/> 值字段产出一组值列（单列求和 / 公式聚合后求值）。
+/// <paramref name="asPercent"/> 为 true 时值列 ×100 加 %（比率展示）。纯函数、零依赖，可单测。
 /// </summary>
 public static class CsvPivot
 {
-    public static PivotResult Pivot(CsvTable table, IReadOnlyList<int> rowDimensionIndexes, int pivotColumnIndex, CsvValueSpec valueSpec)
+    public static PivotResult Pivot(
+        CsvTable table,
+        IReadOnlyList<int> rowDimensionIndexes,
+        int pivotColumnIndex,
+        IReadOnlyList<CsvValueSpec> valueSpecs,
+        bool asPercent)
     {
         var colCount = table.ColumnCount;
         if (colCount == 0)
-            return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), string.Empty);
+            return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>());
 
         pivotColumnIndex = Clamp(pivotColumnIndex, 0, colCount - 1);
-        var numIdx = Clamp(valueSpec.NumeratorIndex, 0, colCount - 1);
-        var denIdx = valueSpec.DenominatorIndex is { } d ? Clamp(d, 0, colCount - 1) : (int?)null;
+        valueSpecs = valueSpecs.Where(v => v != null).ToArray();
+        if (valueSpecs.Count == 0)
+            return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>());
 
-        // 行维度（排除 pivot/value 列，保序）。
+        // 行维度（排除 pivot 列 + 所有值字段引用的列，保序）。
+        var valueColumnIndexes = valueSpecs.SelectMany(v => v.IsFormula ? Array.Empty<int>() : new[] { v.ColumnIndex })
+            .Where(i => i >= 0).ToHashSet();
         var dims = rowDimensionIndexes
-            .Where(i => i >= 0 && i < colCount && i != pivotColumnIndex && i != numIdx && i != denIdx)
+            .Where(i => i >= 0 && i < colCount && i != pivotColumnIndex && !valueColumnIndexes.Contains(i))
             .Distinct()
             .ToArray();
         var rowHeaders = dims.Select(i => table.Headers[i]).ToArray();
 
-        // 观测点列去重值（保首次出现序），按数值自然序排列（fpd1 < fpd3 < fpd10 < mob2 < mob12）。
+        // 观测点列去重值（保首次序），数值自然序。
         var pivotHeaders = table.Rows.Select(r => r[pivotColumnIndex]).Where(v => !string.IsNullOrWhiteSpace(v))
             .Distinct(StringComparer.Ordinal).ToList();
         NaturalSort(pivotHeaders);
+        var multiPivot = pivotHeaders.Count > 1;
 
-        // 值列名。
-        var valueHeader = valueSpec.IsRatio
-            ? $"{table.Headers[numIdx]}/{table.Headers[denIdx!.Value]}"
-            : table.Headers[numIdx];
+        // 每个值字段：解析一次 AST + 引用字段（公式）。
+        var specMeta = new List<(CsvValueSpec Spec, CsvFormula.Node? Ast, string[] RefFields, int NumIdx, Dictionary<string, int> HeaderToIdx)>();
+        foreach (var spec in valueSpecs)
+        {
+            string[] refFields = Array.Empty<string>();
+            CsvFormula.Node? ast = null;
+            if (spec.IsFormula && spec.Formula is { } formula)
+            {
+                ast = CsvFormula.Parse(formula);
+                refFields = CsvFormula.ReferencedFields(ast).ToArray();
+            }
+            var headerToIdx = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < table.Headers.Count; i++) headerToIdx[table.Headers[i]] = i;
+            specMeta.Add((spec, ast, refFields, spec.ColumnIndex, headerToIdx));
+        }
 
-        // 行维度组合 → 每观测点的聚合（求和）。
-        var groups = new Dictionary<string, (string[] Dims, Dictionary<int, CellAggregate> ByPivot)>(StringComparer.Ordinal);
+        // 值列头：每个值字段 × 每个观测点。
+        var valueHeaders = new List<string>();
+        foreach (var (spec, _, _, _, _) in specMeta)
+        {
+            if (!multiPivot) { valueHeaders.Add(spec.Name); }
+            else { foreach (var ph in pivotHeaders) valueHeaders.Add($"{spec.Name} · {ph}"); }
+        }
+
+        // 分组：行维度组合 → 每 (值字段, 观测点) 的聚合。
+        // 对公式字段，需对每个引用字段分别求和 → 用 Dictionary<string, decimal> per cell。
+        var groups = new Dictionary<string, CellGroup>(StringComparer.Ordinal);
         foreach (var row in table.Rows)
         {
             var dimValues = dims.Select(i => row[i]).ToArray();
             var key = string.Join("", dimValues);
             if (!groups.TryGetValue(key, out var group))
             {
-                group = (dimValues, new Dictionary<int, CellAggregate>());
+                group = new CellGroup(dimValues, specMeta.Count, pivotHeaders.Count);
                 groups[key] = group;
             }
             var pivotValue = row[pivotColumnIndex];
             var pivotIdx = pivotHeaders.IndexOf(pivotValue);
             if (pivotIdx < 0) continue;
-            if (!group.ByPivot.TryGetValue(pivotIdx, out var agg))
+            for (var si = 0; si < specMeta.Count; si++)
             {
-                agg = new CellAggregate();
-                group.ByPivot[pivotIdx] = agg;
+                var (spec, _, refFields, numIdx, headerToIdx) = specMeta[si];
+                var cell = group.Cells[si, pivotIdx] ??= new CellAggregate(headerToIdx);
+                if (spec.IsFormula)
+                {
+                    foreach (var rf in refFields)
+                    {
+                        if (headerToIdx.TryGetValue(rf, out var ci) && ci < row.Count)
+                            cell.AddField(rf, row[ci]);
+                    }
+                }
+                else
+                {
+                    cell.AddField(spec.Name, numIdx >= 0 && numIdx < row.Count ? row[numIdx] : string.Empty);
+                }
             }
-            agg.AddNumerator(row[numIdx]);
-            if (denIdx is { } di) agg.AddDenominator(row[di]);
         }
 
+        // 输出行。
         var resultRows = new List<IReadOnlyList<string>>();
-        foreach (var (dimValues, byPivot) in groups.Values)
+        foreach (var group in groups.Values)
         {
-            var rowOut = new string[rowHeaders.Length + pivotHeaders.Count];
-            for (var i = 0; i < dimValues.Length; i++) rowOut[i] = dimValues[i];
-            foreach (var (pivotIdx, agg) in byPivot)
-                rowOut[rowHeaders.Length + pivotIdx] = agg.Result(denIdx is not null);
-            for (var i = 0; i < pivotHeaders.Count; i++)
-                rowOut[rowHeaders.Length + i] ??= string.Empty;
+            var rowOut = new string[rowHeaders.Length + valueHeaders.Count];
+            for (var i = 0; i < group.Dims.Length; i++) rowOut[i] = group.Dims[i];
+            var colOffset = rowHeaders.Length;
+            for (var si = 0; si < specMeta.Count; si++)
+            {
+                var (spec, ast, _, _, _) = specMeta[si];
+                for (var pi = 0; pi < pivotHeaders.Count; pi++)
+                {
+                    var cell = group.Cells[si, pi];
+                    string text;
+                    if (cell is null) text = string.Empty;
+                    else if (spec.IsFormula && ast is not null)
+                    {
+                        var v = CsvFormula.Evaluate(ast, name => cell.GetField(name));
+                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent);
+                    }
+                    else
+                    {
+                        var v = cell.GetField(spec.Name);
+                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent);
+                    }
+                    rowOut[colOffset] = text;
+                    colOffset++;
+                }
+            }
             resultRows.Add(rowOut);
         }
 
-        return new PivotResult(rowHeaders, pivotHeaders, resultRows, valueHeader);
+        return new PivotResult(rowHeaders, pivotHeaders, valueHeaders, resultRows);
     }
 
-    /// <summary>智能分类整表，返回各分类列（供 VM 默认选 + UI 分组展示）。</summary>
+    private static string FormatValue(decimal v, bool asPercent)
+        => asPercent ? (v * 100m).ToString("0.###") + "%" : v.ToString("0.######");
+
+    /// <summary>智能分类整表。</summary>
     public static CsvFieldInfo[] Fields(CsvTable table) => CsvFieldClassifier.Classify(table).ToArray();
 
-    /// <summary>观测点值自然排序：前缀（fpd/mob/字母）+ 数字，按「数字」升序；同数字稳定。就地排序。</summary>
+    /// <summary>观测点值自然排序：前缀 + 数字，按数字升序。就地排序。</summary>
     internal static void NaturalSort(List<string> values)
     {
         values.Sort((a, b) =>
@@ -138,7 +218,6 @@ public static class CsvPivot
         });
     }
 
-    /// <summary>把 "fpd10"/"mob2" 拆成 (前缀 "fpd", 数字 10)；无数字则 (原串, 0)。</summary>
     private static (string Prefix, int Number) SplitPrefixNumber(string value)
     {
         var t = value.Trim();
@@ -152,38 +231,46 @@ public static class CsvPivot
 
     private static int Clamp(int v, int min, int max) => v < min ? min : v > max ? max : v;
 
-    /// <summary>单元格聚合：单列=求和；比值=分子求和 ÷ 分母求和。</summary>
+    // —— 内部聚合容器 ——
+
+    /// <summary>一个行维度组合：保存行维度值 + 每个 (值字段, 观测点) 的聚合 cell。</summary>
+    private sealed class CellGroup
+    {
+        public string[] Dims { get; }
+        public CellAggregate?[,] Cells { get; }
+
+        public CellGroup(string[] dims, int specCount, int pivotCount)
+        {
+            Dims = dims;
+            Cells = new CellAggregate?[specCount, pivotCount];
+        }
+    }
+
+    /// <summary>一个格的聚合：对公式字段的各引用字段分别求和（正确比率）后，供公式求值。</summary>
     private sealed class CellAggregate
     {
-        private decimal _num;
-        private decimal _den;
-        private bool _hasNum;
-        private bool _hasDen;
-        private string _first = string.Empty;
+        private readonly Dictionary<string, decimal> _sums = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _firstNonNumeric = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _hasNumeric = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _headerToIdx;
 
-        public void AddNumerator(string value)
+        public CellAggregate(Dictionary<string, int> headerToIdx) => _headerToIdx = headerToIdx;
+
+        public void AddField(string fieldName, string value)
         {
             var t = value?.Trim() ?? string.Empty;
-            if (decimal.TryParse(t, out var d)) { _num += d; _hasNum = true; }
-            else if (!_hasNum && _first.Length == 0) _first = t;
-        }
-
-        public void AddDenominator(string value)
-        {
-            var t = value?.Trim() ?? string.Empty;
-            if (decimal.TryParse(t, out var d)) { _den += d; _hasDen = true; }
-        }
-
-        public string Result(bool isRatio)
-        {
-            if (isRatio)
+            if (decimal.TryParse(t, out var d))
             {
-                // 比值 = 比率：格式化为百分比（如 0.01497 → 1.497%）。分母 0/空 → 空。
-                if (!_hasDen || _den == 0) return string.Empty;
-                return (_num / _den * 100m).ToString("0.###") + "%";
+                _sums[fieldName] = _sums.TryGetValue(fieldName, out var s) ? s + d : d;
+                _hasNumeric.Add(fieldName);
+                return;
             }
-            // 单列 = 原值：数值去尾部零显示，非数值取首值。
-            return _hasNum ? _num.ToString("0.######") : _first;
+            if (!_hasNumeric.Contains(fieldName) && !_firstNonNumeric.ContainsKey(fieldName))
+                _firstNonNumeric[fieldName] = t;
         }
+
+        /// <summary>取某字段的聚合值（求和值；无则 null）。</summary>
+        public decimal? GetField(string fieldName)
+            => _sums.TryGetValue(fieldName, out var v) ? v : null;
     }
 }

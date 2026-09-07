@@ -4,15 +4,14 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Acme.Desktop.Mvvm.Knowledge;
 
-/// <summary>字段引用（拖拽数据载体）：名字 + 列索引 + 分类。可用于 Avalonia 拖拽数据（DataFormat&lt;CsvFieldRef&gt;）。</summary>
+/// <summary>字段引用（拖拽数据载体）：名字 + 列索引 + 分类。可用于 Avalonia 拖拽数据。</summary>
 public sealed record CsvFieldRef(string Name, int ColumnIndex, CsvFieldKind Kind);
 
 /// <summary>
 /// CSV 产物体文件的表格 VM（UI-agnostic，零 Avalonia，但字段槽位模型可被拖拽 View 直接驱动）。
 /// 解析 CSV 原文 → <see cref="CsvTable"/>，提供「详情表（原样）/ 透视表（长表转宽表）」两种视图切换。
-/// 透视表字段用「槽位」分配（拖拽视图驱动）：行维度（多字段）、列维度/观测点（单字段）、值（分子/分母两槽）。
-/// 智能字段分类（<see cref="CsvFieldClassifier"/>）设默认槽位：行维度=类目/日期列，观测点=obs_point，
-/// 值=od_yi/obs_yi（逾期率）。
+/// 透视表字段用「槽位」分配（拖拽视图驱动）：行维度（多字段）、列维度/观测点（单字段）、
+/// 值（多值字段：普通字段单列求和 或 计算字段公式）。百分比开关控制值列 ×100 加 %。
 /// 数据以「<see cref="Headers"/> + <see cref="Rows"/>」扁平结构暴露给 view（ProDataGrid 经 LoadingRow 直接赋值）。
 /// </summary>
 public sealed partial class CsvTableViewModel : ObservableObject
@@ -29,8 +28,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>是否透视表视图（false=详情表）。</summary>
     [ObservableProperty] private bool _isPivot;
 
-    /// <summary>是否比值值列（true=两列相除，false=单列聚合）。</summary>
-    [ObservableProperty] private bool _isRatioValue = true;
+    /// <summary>值列是否按百分比显示（×100 加 %）；false = 原值。</summary>
+    [ObservableProperty] private bool _isPercentValue = true;
 
     /// <summary>左侧字段列表（未放置到任何槽位的字段）。</summary>
     public ObservableCollection<CsvFieldRef> Fields { get; } = new();
@@ -41,11 +40,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>已放置到「列维度/观测点」槽位的字段（单选，可空）。</summary>
     [ObservableProperty] private CsvFieldRef? _columnDimension;
 
-    /// <summary>值区「分子」槽位。</summary>
-    [ObservableProperty] private CsvFieldRef? _valueNumerator;
-
-    /// <summary>值区「分母」槽位（比值模式用）。</summary>
-    [ObservableProperty] private CsvFieldRef? _valueDenominator;
+    /// <summary>值区的值字段（多槽：普通字段 或 计算字段公式）。</summary>
+    public ObservableCollection<CsvValueSpec> ValueFields { get; } = new();
 
     /// <summary>源 CSV 行数/列数。</summary>
     public int SourceRowCount => _table.RowCount;
@@ -57,10 +53,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
         var classified = CsvPivot.Fields(_table);
         _allFields = classified.Select(f => new CsvFieldRef(f.Header, f.ColumnIndex, f.Kind)).ToArray();
 
-        // 初始：全部字段进字段列表；然后按分类归位到默认槽位。
         foreach (var f in _allFields) Fields.Add(f);
 
-        // 分类归位。
         var dimensionFields = _allFields.Where(f => f.Kind == CsvFieldKind.Dimension).ToArray();
         var pivotFields = _allFields.Where(f => f.Kind == CsvFieldKind.Pivot).ToArray();
         var measureFields = _allFields.Where(f => f.Kind == CsvFieldKind.Measure).ToArray();
@@ -71,37 +65,36 @@ public sealed partial class CsvTableViewModel : ObservableObject
         // 列维度 = 第一个观测点字段。
         if (pivotFields.Length > 0) ColumnDimension = TakeFieldFromList(pivotFields[0]);
 
-        // 值 = od_yi / obs_yi（逾期率）。
-        ValueNumerator = TakeFieldFromList(Prefer(measureFields, m =>
-            string.Equals(m.Name, "od_yi", StringComparison.OrdinalIgnoreCase)
-            || m.Name.ToLowerInvariant().Contains("od")
-            || m.Name.Contains("逾期") || m.Name.Contains("坏账")));
-        ValueDenominator = TakeFieldFromList(Prefer(measureFields, m =>
-            string.Equals(m.Name, "obs_yi", StringComparison.OrdinalIgnoreCase)
-            || m.Name.ToLowerInvariant().Contains("obs")
-            || m.Name.Contains("观测")));
+        // 值 = 默认计算字段「逾期率」= [od_yi] / [obs_yi]（若两字段都在）。
+        var od = measureFields.FirstOrDefault(m => m.Name.Equals("od_yi", StringComparison.OrdinalIgnoreCase)
+            || m.Name.Contains("od") || m.Name.Contains("逾期") || m.Name.Contains("坏账"));
+        var obs = measureFields.FirstOrDefault(m => m.Name.Equals("obs_yi", StringComparison.OrdinalIgnoreCase)
+            || m.Name.Contains("obs") || m.Name.Contains("观测"));
+        if (od is not null && obs is not null && !ReferenceEquals(od, obs))
+        {
+            TakeFieldFromList(od);
+            TakeFieldFromList(obs);
+            ValueFields.Add(CsvValueSpec.Formula_("逾期率", $"[{od.Name}] / [{obs.Name}]"));
+        }
+        else if (measureFields.Length > 0)
+        {
+            // 无 od/obs 两列 → 退回单列（第一个指标）。
+            TakeFieldFromList(measureFields[0]);
+            ValueFields.Add(CsvValueSpec.Single(measureFields[0].ColumnIndex, measureFields[0].Name));
+        }
 
         // 初始 = 详情表。
         _headers = _table.Headers;
         _rows = _table.Rows;
     }
 
-    private static CsvFieldRef Prefer(IReadOnlyList<CsvFieldRef> fields, Func<CsvFieldRef, bool> predicate)
-    {
-        foreach (var f in fields)
-            if (predicate(f)) return f;
-        return fields.Count > 0 ? fields[0] : null!;
-    }
-
-    /// <summary>把字段从字段列表取出（用于默认归位）；若该字段已在列表，移除。不在列表返回 null。</summary>
+    /// <summary>把字段从字段列表取出（默认归位用）。不在列表则直接返回。</summary>
     private CsvFieldRef? TakeFieldFromList(CsvFieldRef field)
     {
         if (field is null) return null;
-        if (Fields.Remove(field)) return field;
-        return field; // 已在目标槽位（罕见），直接返回
+        Fields.Remove(field);
+        return field;
     }
-
-    // —— 拖拽移动（View 经这些方法把字段放入/移出槽位）——
 
     /// <summary>把字段从所有槽位（含字段列表）移除——移动前的清理。</summary>
     private void DetachField(CsvFieldRef field)
@@ -109,11 +102,11 @@ public sealed partial class CsvTableViewModel : ObservableObject
         Fields.Remove(field);
         RowDimensions.Remove(field);
         if (ReferenceEquals(ColumnDimension, field)) ColumnDimension = null;
-        if (ReferenceEquals(ValueNumerator, field)) ValueNumerator = null;
-        if (ReferenceEquals(ValueDenominator, field)) ValueDenominator = null;
     }
 
-    /// <summary>拖到「行维度」（多放，不可重复）。</summary>
+    // —— 拖拽移动（View 经这些方法把字段放入/移出槽位）——
+
+    /// <summary>拖到「行维度」（多放）。</summary>
     public void AssignToRowDimension(CsvFieldRef field)
     {
         if (field is null) return;
@@ -122,7 +115,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
         AfterSlotChange();
     }
 
-    /// <summary>拖到「列维度/观测点」（单放，替换旧值，旧值弹回列表）。</summary>
+    /// <summary>拖到「列维度/观测点」（单放替换，旧值弹回列表）。</summary>
     public void AssignToColumn(CsvFieldRef field)
     {
         if (field is null) return;
@@ -132,23 +125,40 @@ public sealed partial class CsvTableViewModel : ObservableObject
         AfterSlotChange();
     }
 
-    /// <summary>拖到值「分子」。</summary>
-    public void AssignToNumerator(CsvFieldRef field) { AssignSingleValue(field, numerator: true); }
-
-    /// <summary>拖到值「分母」。</summary>
-    public void AssignToDenominator(CsvFieldRef field) { AssignSingleValue(field, numerator: false); }
-
-    private void AssignSingleValue(CsvFieldRef field, bool numerator)
+    /// <summary>拖到「值」区（普通字段 → 加一个单列值字段）。</summary>
+    public void AssignToValue(CsvFieldRef field)
     {
         if (field is null) return;
-        if (numerator && ValueNumerator is { } oldN && !ReferenceEquals(oldN, field)) Fields.Add(oldN);
-        if (!numerator && ValueDenominator is { } oldD && !ReferenceEquals(oldD, field)) Fields.Add(oldD);
-        DetachField(field);
-        if (numerator) ValueNumerator = field; else ValueDenominator = field;
+        Fields.Remove(field);
+        ValueFields.Add(CsvValueSpec.Single(field.ColumnIndex, field.Name));
         AfterSlotChange();
     }
 
-    /// <summary>把字段从槽位移回字段列表（胶囊上的 × 或拖回列表）。</summary>
+    /// <summary>新建计算字段（命名 + 公式）加入值区。</summary>
+    public void AddCalculatedField(string name, string formula)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(formula)) return;
+        // 解析验证（失败则不添加，状态留空）。
+        try { CsvFormula.Parse(formula); }
+        catch { return; }
+        ValueFields.Add(CsvValueSpec.Formula_(name.Trim(), formula.Trim()));
+        AfterSlotChange();
+    }
+
+    /// <summary>从值区移除一个值字段（普通字段弹回字段列表；计算字段直接丢弃）。</summary>
+    public void RemoveValueField(CsvValueSpec spec)
+    {
+        if (spec is null) return;
+        ValueFields.Remove(spec);
+        if (!spec.IsFormula)
+        {
+            var ref_ = _allFields.FirstOrDefault(f => f.ColumnIndex == spec.ColumnIndex);
+            if (ref_ is not null && !Fields.Contains(ref_)) Fields.Add(ref_);
+        }
+        AfterSlotChange();
+    }
+
+    /// <summary>把字段从行/列槽位移回字段列表（胶囊拖回列表）。</summary>
     public void RemoveField(CsvFieldRef field)
     {
         if (field is null) return;
@@ -176,21 +186,15 @@ public sealed partial class CsvTableViewModel : ObservableObject
         RebuildPivot();
     }
 
-    partial void OnIsRatioValueChanged(bool value) { if (IsPivot) RebuildPivot(); }
+    partial void OnIsPercentValueChanged(bool value) { if (IsPivot) RebuildPivot(); }
 
     private void RebuildPivot()
     {
         var rowDimIndexes = RowDimensions.Select(f => f.ColumnIndex).ToArray();
         var pivotIdx = ColumnDimension?.ColumnIndex ?? -1;
-        var numIdx = ValueNumerator?.ColumnIndex ?? -1;
-        if (pivotIdx < 0 || numIdx < 0) return;
+        if (pivotIdx < 0 || ValueFields.Count == 0) return;
 
-        var denIdx = ValueDenominator?.ColumnIndex ?? -1;
-        var valueSpec = IsRatioValue && denIdx >= 0
-            ? CsvValueSpec.Ratio(numIdx, denIdx)
-            : CsvValueSpec.Single(numIdx);
-
-        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, valueSpec);
+        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), IsPercentValue);
         Headers = result.AllHeaders;
         Rows = result.Rows;
     }

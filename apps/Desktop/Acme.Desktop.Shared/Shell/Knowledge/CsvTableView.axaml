@@ -121,30 +121,36 @@
           </Border>
         </StackPanel>
 
-        <!-- 值（分子 / 分母） -->
+        <!-- 值（多槽：普通字段单列 或 计算字段公式；可拖字段进入 + 新建计算字段） -->
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <CheckBox Classes="csv-label" Content="比值" IsChecked="{Binding IsRatioValue}" Width="52"/>
-          <TextBlock Classes="csv-label" Text="分子"/>
-          <Border x:Name="NumeratorDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
-            <ContentControl Content="{Binding ValueNumerator}">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="know:CsvFieldRef">
-                  <local:CsvFieldChip/>
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
+          <TextBlock Classes="csv-label" Text="值" Width="52"/>
+          <Border x:Name="ValueDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <ItemsControl ItemsSource="{Binding ValueFields}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="know:CsvValueSpec">
+                    <Border Classes="csv-chip" Background="#330A7A0A" BorderBrush="#B45F06"
+                            BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="0,0,6,0">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="{Binding Name}" FontSize="12"/>
+                        <Button Content="×" FontSize="11" Padding="2,0" Background="Transparent"
+                                BorderThickness="0"
+                                Click="OnValueRemoveClick"
+                                Tag="{Binding}"/>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"/>
+            </StackPanel>
           </Border>
-          <TextBlock Classes="csv-label" Text="分母" IsVisible="{Binding IsRatioValue}"/>
-          <Border x:Name="DenominatorDropZone" Classes="drop-zone" HorizontalAlignment="Stretch"
-                  IsVisible="{Binding IsRatioValue}">
-            <ContentControl Content="{Binding ValueDenominator}">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="know:CsvFieldRef">
-                  <local:CsvFieldChip/>
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
-          </Border>
+          <CheckBox Classes="csv-label" Content="百分比" IsChecked="{Binding IsPercentValue}"/>
         </StackPanel>
       </StackPanel>
     </Grid>

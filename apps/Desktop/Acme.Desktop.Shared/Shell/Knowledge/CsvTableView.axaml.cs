@@ -103,13 +103,30 @@ public partial class CsvTableView : UserControl
         // 详情/透视切换
         DetailButton.Click += (_, _) => _vm?.SwitchToDetailCommand.Execute(null);
         PivotButton.Click += (_, _) => _vm?.SwitchToPivotCommand.Execute(null);
+        // 新建计算字段
+        AddCalcButton.Click += OnAddCalculatedField;
 
-        // 四个投放区挂 drop 事件 + 字段列表（拖回移除）。
+        // 投放区挂 drop 事件 + 字段列表（拖回移除）。
         WireDropZone(RowDropZone);
         WireDropZone(ColumnDropZone);
-        WireDropZone(NumeratorDropZone);
-        WireDropZone(DenominatorDropZone);
+        WireDropZone(ValueDropZone);
         WireDropZone(FieldsDropZone);
+    }
+
+    private async void OnAddCalculatedField(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        var win = new CalculatedFieldDialog();
+        var (name, formula) = await win.ShowDialogAsync(owner);
+        if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(formula))
+            _vm.AddCalculatedField(name, formula);
+    }
+
+    private void OnValueRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: CsvValueSpec spec })
+            _vm?.RemoveValueField(spec);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -174,8 +191,7 @@ public partial class CsvTableView : UserControl
         if (_vm is null) return;
         if (ReferenceEquals(zone, RowDropZone)) _vm.AssignToRowDimension(field);
         else if (ReferenceEquals(zone, ColumnDropZone)) _vm.AssignToColumn(field);
-        else if (ReferenceEquals(zone, NumeratorDropZone)) _vm.AssignToNumerator(field);
-        else if (ReferenceEquals(zone, DenominatorDropZone)) _vm.AssignToDenominator(field);
+        else if (ReferenceEquals(zone, ValueDropZone)) _vm.AssignToValue(field);
         else if (ReferenceEquals(zone, FieldsDropZone)) _vm.RemoveField(field);
     }
 }

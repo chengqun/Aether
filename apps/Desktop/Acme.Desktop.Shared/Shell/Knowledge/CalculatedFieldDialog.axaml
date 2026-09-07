@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        x:Class="Acme.Desktop.Shared.Shell.CalculatedFieldDialog"
+        x:DataType="shell:CalculatedFieldDialog"
+        Width="420" Height="260"
+        Title="新建计算字段"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource CardBgBrush}">
+
+  <StackPanel Margin="16" Spacing="10">
+    <TextBlock Text="新建计算字段" FontSize="16" FontWeight="SemiBold"/>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="字段名" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+      <TextBox x:Name="NameBox" Watermark="如：逾期率" FontSize="13"/>
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="公式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+      <TextBox x:Name="FormulaBox" Watermark="如：[od_yi] / [obs_yi]" FontSize="13"/>
+      <TextBlock Text="字段名用 [列名] 引用 CSV 列；支持 + - * / 和括号。"
+                 FontSize="11" Opacity="0.7"
+                 Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button Content="取消" Click="OnCancel"/>
+      <Button Classes="primary" Content="确定" Click="OnOk"/>
+    </StackPanel>
+  </StackPanel>
+</Window>
