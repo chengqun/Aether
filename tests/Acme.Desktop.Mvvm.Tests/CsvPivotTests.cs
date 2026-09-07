@@ -115,6 +115,30 @@ public class CsvPivotTests
         var result = CsvPivot.Pivot(table, Array.Empty<int>(), 0, new[] { Single(1, "val") }, asPercent: false);
         Assert.Equal(new[] { "fpd1", "fpd3", "fpd10", "fpd30", "mob2", "mob10" }, result.PivotHeaders);
     }
+
+    [Fact]
+    public void Pivot_Filter_RemovesNonAllowedRows()
+    {
+        // 筛选 grp 只保留 "A"：B 行被过滤。
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,10\nB,x,20\n");
+        var filters = new[] { (ColumnIndex: 0, (IReadOnlySet<string>)new HashSet<string> { "A" }) };
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { Single(2, "val") }, asPercent: false, filters);
+        // 只有 A 一行，值 = 10。
+        Assert.Single(result.Rows);
+        Assert.Equal("10", result.Rows[0][1]);
+    }
+
+    [Fact]
+    public void Pivot_Filter_EmptyAllowed_NoFilter()
+    {
+        // 空集合 = 全选不过滤。
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,10\nB,x,20\n");
+        var filters = new[] { (ColumnIndex: 0, (IReadOnlySet<string>)new HashSet<string>()) };
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { Single(2, "val") }, asPercent: false, filters);
+        Assert.Equal(2, result.Rows.Count);
+    }
 }
 
 public class CsvFieldClassifierTests

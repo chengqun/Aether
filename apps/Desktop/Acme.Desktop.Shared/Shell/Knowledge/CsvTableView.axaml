@@ -152,6 +152,38 @@
           </Border>
           <CheckBox Classes="csv-label" Content="百分比" IsChecked="{Binding IsPercentValue}"/>
         </StackPanel>
+
+        <!-- 筛选（多字段，每个字段可勾选保留哪些值过滤） -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="csv-label" Text="筛选" Width="52"/>
+          <Border x:Name="FilterDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
+            <ItemsControl ItemsSource="{Binding FilterFields}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="know:CsvFilterField">
+                  <Border Classes="csv-chip" Background="#33333333" BorderBrush="#888888"
+                          BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="0,0,6,0">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="{Binding Field.Name}" FontSize="12"/>
+                      <Button Content="值▾" FontSize="11" Padding="3,0" Background="Transparent"
+                              BorderThickness="0"
+                              Click="OnFilterValuesClick"
+                              Tag="{Binding}"/>
+                      <Button Content="×" FontSize="11" Padding="2,0" Background="Transparent"
+                              BorderThickness="0"
+                              Click="OnFilterRemoveClick"
+                              Tag="{Binding}"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+        </StackPanel>
       </StackPanel>
     </Grid>
 

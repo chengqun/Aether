@@ -80,7 +80,8 @@ public static class CsvPivot
         IReadOnlyList<int> rowDimensionIndexes,
         int pivotColumnIndex,
         IReadOnlyList<CsvValueSpec> valueSpecs,
-        bool asPercent)
+        bool asPercent,
+        IReadOnlyList<(int ColumnIndex, IReadOnlySet<string> Allowed)>? filters = null)
     {
         var colCount = table.ColumnCount;
         if (colCount == 0)
@@ -90,6 +91,13 @@ public static class CsvPivot
         valueSpecs = valueSpecs.Where(v => v != null).ToArray();
         if (valueSpecs.Count == 0)
             return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>());
+
+        // 筛选谓词：行的筛选字段值必须都在允许集合内（空集合 = 全选，不过滤）。
+        var filterList = filters?.Where(f => f.Allowed != null && f.Allowed.Count > 0)
+            .Select(f => (ColumnIndex: f.ColumnIndex, Allowed: f.Allowed))
+            .ToArray() ?? Array.Empty<(int ColumnIndex, IReadOnlySet<string> Allowed)>();
+
+        // 行维度（排除 pivot 列 + 所有值字段引用的列，保序）。
 
         // 行维度（排除 pivot 列 + 所有值字段引用的列，保序）。
         var valueColumnIndexes = valueSpecs.SelectMany(v => v.IsFormula ? Array.Empty<int>() : new[] { v.ColumnIndex })
@@ -135,6 +143,15 @@ public static class CsvPivot
         var groups = new Dictionary<string, CellGroup>(StringComparer.Ordinal);
         foreach (var row in table.Rows)
         {
+            // 筛选：任一筛选字段的值不在允许集合 → 丢弃该行。
+            var filtered = false;
+            foreach (var (fcol, allowed) in filterList)
+            {
+                if (fcol < 0 || fcol >= row.Count) continue;
+                if (!allowed.Contains(row[fcol])) { filtered = true; break; }
+            }
+            if (filtered) continue;
+
             var dimValues = dims.Select(i => row[i]).ToArray();
             var key = string.Join("", dimValues);
             if (!groups.TryGetValue(key, out var group))

@@ -110,6 +110,7 @@ public partial class CsvTableView : UserControl
         WireDropZone(RowDropZone);
         WireDropZone(ColumnDropZone);
         WireDropZone(ValueDropZone);
+        WireDropZone(FilterDropZone);
         WireDropZone(FieldsDropZone);
     }
 
@@ -127,6 +128,22 @@ public partial class CsvTableView : UserControl
     {
         if (sender is Button { Tag: CsvValueSpec spec })
             _vm?.RemoveValueField(spec);
+    }
+
+    private void OnFilterRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: CsvFilterField filter })
+            _vm?.RemoveFilter(filter.Field);
+    }
+
+    private async void OnFilterValuesClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+        if (sender is not Button { Tag: CsvFilterField filter }) return;
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        var win = new FilterValuesDialog(filter);
+        await win.ShowDialogAsync(owner);
+        _vm.ToggleFilterValue(filter);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -192,6 +209,7 @@ public partial class CsvTableView : UserControl
         if (ReferenceEquals(zone, RowDropZone)) _vm.AssignToRowDimension(field);
         else if (ReferenceEquals(zone, ColumnDropZone)) _vm.AssignToColumn(field);
         else if (ReferenceEquals(zone, ValueDropZone)) _vm.AssignToValue(field);
+        else if (ReferenceEquals(zone, FilterDropZone)) _vm.AssignToFilter(field);
         else if (ReferenceEquals(zone, FieldsDropZone)) _vm.RemoveField(field);
     }
 }

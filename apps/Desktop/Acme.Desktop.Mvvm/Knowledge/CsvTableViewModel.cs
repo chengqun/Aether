@@ -7,6 +7,55 @@ namespace Acme.Desktop.Mvvm.Knowledge;
 /// <summary>字段引用（拖拽数据载体）：名字 + 列索引 + 分类。可用于 Avalonia 拖拽数据。</summary>
 public sealed record CsvFieldRef(string Name, int ColumnIndex, CsvFieldKind Kind);
 
+/// <summary>筛选字段：字段 + 该字段的可选值列表（勾选保留哪些值）。全部值去重后生成；
+/// <see cref="Allowed"/> 为当前勾选的值（空集合 = 全选不过滤）。</summary>
+public sealed partial class CsvFilterField : ObservableObject
+{
+    public CsvFieldRef Field { get; }
+
+    /// <summary>该字段的全部去重值（勾选项候选）。</summary>
+    public IReadOnlyList<string> AllValues { get; }
+
+    /// <summary>值 → 是否勾选（保留）。</summary>
+    public ObservableCollection<CsvFilterValueOption> ValueOptions { get; } = new();
+
+    /// <summary>当前勾选的值集合（过滤用；空 = 全选不过滤）。供 Pivot 直接读。</summary>
+    public HashSet<string> Allowed { get; } = new(StringComparer.Ordinal);
+
+    public CsvFilterField(CsvFieldRef field, IReadOnlyList<string> allValues)
+    {
+        Field = field;
+        AllValues = allValues;
+        foreach (var v in allValues)
+        {
+            Allowed.Add(v);
+            ValueOptions.Add(new CsvFilterValueOption(v, isSelected: true));
+        }
+    }
+
+    /// <summary>勾选变化 → 重算 <see cref="Allowed"/>。由 view/选项触发。</summary>
+    public void RecomputeAllowed()
+    {
+        Allowed.Clear();
+        foreach (var o in ValueOptions)
+            if (o.IsSelected) Allowed.Add(o.Value);
+    }
+}
+
+/// <summary>筛选字段的一个值选项（勾选 = 保留该值）。</summary>
+public sealed partial class CsvFilterValueOption : ObservableObject
+{
+    public string Value { get; }
+
+    [ObservableProperty] private bool _isSelected;
+
+    public CsvFilterValueOption(string value, bool isSelected)
+    {
+        Value = value;
+        _isSelected = isSelected;
+    }
+}
+
 /// <summary>
 /// CSV 产物体文件的表格 VM（UI-agnostic，零 Avalonia，但字段槽位模型可被拖拽 View 直接驱动）。
 /// 解析 CSV 原文 → <see cref="CsvTable"/>，提供「详情表（原样）/ 透视表（长表转宽表）」两种视图切换。
@@ -42,6 +91,9 @@ public sealed partial class CsvTableViewModel : ObservableObject
 
     /// <summary>值区的值字段（多槽：普通字段 或 计算字段公式）。</summary>
     public ObservableCollection<CsvValueSpec> ValueFields { get; } = new();
+
+    /// <summary>筛选区的筛选字段（多字段，每个字段可勾选保留哪些值）。</summary>
+    public ObservableCollection<CsvFilterField> FilterFields { get; } = new();
 
     /// <summary>源 CSV 行数/列数。</summary>
     public int SourceRowCount => _table.RowCount;
@@ -102,6 +154,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
         Fields.Remove(field);
         RowDimensions.Remove(field);
         if (ReferenceEquals(ColumnDimension, field)) ColumnDimension = null;
+        RemoveFilter(field, rebuild: false);
     }
 
     // —— 拖拽移动（View 经这些方法把字段放入/移出槽位）——
@@ -112,6 +165,36 @@ public sealed partial class CsvTableViewModel : ObservableObject
         if (field is null) return;
         DetachField(field);
         RowDimensions.Add(field);
+        AfterSlotChange();
+    }
+
+    /// <summary>拖到「筛选」区（该字段作为过滤条件，初始全选其全部值）。</summary>
+    public void AssignToFilter(CsvFieldRef field)
+    {
+        if (field is null) return;
+        DetachField(field);
+        // 取该字段全部去重值（保序）。
+        var values = _table.Rows.Select(r => r[field.ColumnIndex])
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        FilterFields.Add(new CsvFilterField(field, values));
+        AfterSlotChange();
+    }
+
+    /// <summary>从筛选区移除筛选字段（字段弹回列表）。</summary>
+    public void RemoveFilter(CsvFieldRef field, bool rebuild = true)
+    {
+        var existing = FilterFields.FirstOrDefault(f => ReferenceEquals(f.Field, field));
+        if (existing is null) return;
+        FilterFields.Remove(existing);
+        if (!Fields.Contains(field)) Fields.Add(field);
+        if (rebuild) AfterSlotChange();
+    }
+
+    /// <summary>切换筛选字段的某值勾选 → 重算允许集合 + 重建。</summary>
+    public void ToggleFilterValue(CsvFilterField filter)
+    {
+        filter.RecomputeAllowed();
         AfterSlotChange();
     }
 
@@ -194,7 +277,12 @@ public sealed partial class CsvTableViewModel : ObservableObject
         var pivotIdx = ColumnDimension?.ColumnIndex ?? -1;
         if (pivotIdx < 0 || ValueFields.Count == 0) return;
 
-        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), IsPercentValue);
+        // 筛选：每个筛选字段 → (列索引, 允许值集合)。空集合 = 不过滤该字段。
+        var filters = FilterFields
+            .Select(f => (f.Field.ColumnIndex, (IReadOnlySet<string>)f.Allowed))
+            .ToArray();
+
+        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), IsPercentValue, filters);
         Headers = result.AllHeaders;
         Rows = result.Rows;
     }

@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        x:Class="Acme.Desktop.Shared.Shell.FilterValuesDialog"
+        x:DataType="shell:FilterValuesDialog"
+        Width="320" Height="420"
+        Title="筛选值"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True"
+        Background="{DynamicResource CardBgBrush}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="14">
+    <TextBlock Grid.Row="0" x:Name="TitleText" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+      <Button Content="全选" Click="OnSelectAll" FontSize="12"/>
+      <Button Content="全不选" Click="OnSelectNone" FontSize="12"/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+      <ItemsControl x:Name="ValuesList">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <CheckBox Content="{Binding Value}" IsChecked="{Binding IsSelected}" Margin="0,2"/>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,10,0,0">
+      <Button Content="取消" Click="OnCancel"/>
+      <Button Classes="primary" Content="确定" Click="OnOk"/>
+    </StackPanel>
+  </Grid>
+</Window>
