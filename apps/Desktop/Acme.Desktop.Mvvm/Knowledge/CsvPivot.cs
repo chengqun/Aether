@@ -176,7 +176,13 @@ public static class CsvPivot
 
         public string Result(bool isRatio)
         {
-            if (isRatio) return _hasDen && _den != 0 ? (_num / _den).ToString("0.######") : string.Empty;
+            if (isRatio)
+            {
+                // 比值 = 比率：格式化为百分比（如 0.01497 → 1.497%）。分母 0/空 → 空。
+                if (!_hasDen || _den == 0) return string.Empty;
+                return (_num / _den * 100m).ToString("0.###") + "%";
+            }
+            // 单列 = 原值：数值去尾部零显示，非数值取首值。
             return _hasNum ? _num.ToString("0.######") : _first;
         }
     }

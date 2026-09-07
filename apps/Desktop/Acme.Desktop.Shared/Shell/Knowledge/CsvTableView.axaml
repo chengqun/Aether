@@ -107,9 +107,9 @@
           </Border>
         </StackPanel>
 
-        <!-- 观测点（列维度，单放） -->
+        <!-- 列维度（单放；vintage 场景下即观测点 obs_point） -->
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock Classes="csv-label" Text="观测点" Width="52"/>
+          <TextBlock Classes="csv-label" Text="列维度" Width="52"/>
           <Border x:Name="ColumnDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
             <ContentControl Content="{Binding ColumnDimension}">
               <ContentControl.ContentTemplate>

@@ -69,15 +69,25 @@ public class CsvPivotTests
     }
 
     [Fact]
-    public void Pivot_RatioValue_DividesAfterSumming()
+    public void Pivot_RatioValue_DividesAfterSumming_AsPercent()
     {
-        // 比值模式：值 = 分子求和 ÷ 分母求和（不是逐行相除再求平均）。
+        // 比值模式：值 = 分子求和 ÷ 分母求和，格式化为百分比。4/30=0.1333 → 13.333%。
         var table = CsvParser.Parse(
-            "grp,obs,od,obs_yi\nA,x,1,10\nA,x,3,20\n"); // 同格重复：分子求和=4，分母求和=30 → 4/30=0.1333
+            "grp,obs,od,obs_yi\nA,x,1,10\nA,x,3,20\n");
         var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Ratio(2, 3));
         Assert.Equal("od/obs_yi", result.ValueHeader);
         Assert.Single(result.Rows);
-        Assert.Equal("0.133333", result.Rows[0][1]);
+        Assert.Equal("13.333%", result.Rows[0][1]);
+    }
+
+    [Fact]
+    public void Pivot_SingleValue_KeepsRawNumber()
+    {
+        // 单列（非比值）：原值显示（不减尾零过度、不加 %）。
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,0.5\n");
+        var result = CsvPivot.Pivot(table, new[] { 0 }, pivotColumnIndex: 1, CsvValueSpec.Single(2));
+        Assert.Equal("0.5", result.Rows[0][1]);
     }
 
     [Fact]
