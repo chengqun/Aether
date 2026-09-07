@@ -7,6 +7,27 @@ namespace Acme.Desktop.Mvvm.Knowledge;
 /// <summary>字段引用（拖拽数据载体）：名字 + 列索引 + 分类。可用于 Avalonia 拖拽数据。</summary>
 public sealed record CsvFieldRef(string Name, int ColumnIndex, CsvFieldKind Kind);
 
+/// <summary>字段列表里的可拖拽条目：普通字段（<see cref="Field"/> 非 null）或计算字段（<see cref="Formula"/> 非 null）。
+/// 计算字段是用户新建的公式（如 [od_yi]/[obs_yi]），只能拖进「值」区。</summary>
+public sealed record CsvFieldItem
+{
+    public string Name { get; }
+    public CsvFieldRef? Field { get; }
+    public string? Formula { get; }
+
+    public bool IsCalculated => Formula is not null;
+
+    private CsvFieldItem(string name, CsvFieldRef? field, string? formula)
+    {
+        Name = name;
+        Field = field;
+        Formula = formula;
+    }
+
+    public static CsvFieldItem Plain(CsvFieldRef field) => new(field.Name, field, null);
+    public static CsvFieldItem Calculated(string name, string formula) => new(name, null, formula);
+}
+
 /// <summary>筛选字段：字段 + 该字段的可选值列表（勾选保留哪些值）。全部值去重后生成；
 /// <see cref="Allowed"/> 为当前勾选的值（空集合 = 全选不过滤）。</summary>
 public sealed partial class CsvFilterField : ObservableObject
@@ -80,8 +101,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>值列是否按百分比显示（×100 加 %）；false = 原值。</summary>
     [ObservableProperty] private bool _isPercentValue = true;
 
-    /// <summary>左侧字段列表（未放置到任何槽位的字段）。</summary>
-    public ObservableCollection<CsvFieldRef> Fields { get; } = new();
+    /// <summary>左侧字段列表（未放置到任何槽位的字段 + 新建的计算字段）。</summary>
+    public ObservableCollection<CsvFieldItem> Fields { get; } = new();
 
     /// <summary>已放置到「行维度」槽位的字段（多选）。</summary>
     public ObservableCollection<CsvFieldRef> RowDimensions { get; } = new();
@@ -105,7 +126,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
         var classified = CsvPivot.Fields(_table);
         _allFields = classified.Select(f => new CsvFieldRef(f.Header, f.ColumnIndex, f.Kind)).ToArray();
 
-        foreach (var f in _allFields) Fields.Add(f);
+        foreach (var f in _allFields) Fields.Add(CsvFieldItem.Plain(f));
 
         var dimensionFields = _allFields.Where(f => f.Kind == CsvFieldKind.Dimension).ToArray();
         var pivotFields = _allFields.Where(f => f.Kind == CsvFieldKind.Pivot).ToArray();
@@ -140,18 +161,30 @@ public sealed partial class CsvTableViewModel : ObservableObject
         _rows = _table.Rows;
     }
 
-    /// <summary>把字段从字段列表取出（默认归位用）。不在列表则直接返回。</summary>
+    /// <summary>把普通字段从字段列表取出（默认归位用）。不在列表则直接返回。</summary>
     private CsvFieldRef? TakeFieldFromList(CsvFieldRef field)
     {
         if (field is null) return null;
-        Fields.Remove(field);
+        RemovePlainFromFields(field);
         return field;
+    }
+
+    private void RemovePlainFromFields(CsvFieldRef field)
+    {
+        var item = Fields.FirstOrDefault(i => i.Field is { } f && ReferenceEquals(f, field));
+        if (item is not null) Fields.Remove(item);
+    }
+
+    private void AddPlainToFields(CsvFieldRef field)
+    {
+        if (!Fields.Any(i => i.Field is { } f && ReferenceEquals(f, field)))
+            Fields.Add(CsvFieldItem.Plain(field));
     }
 
     /// <summary>把字段从所有槽位（含字段列表）移除——移动前的清理。</summary>
     private void DetachField(CsvFieldRef field)
     {
-        Fields.Remove(field);
+        RemovePlainFromFields(field);
         RowDimensions.Remove(field);
         if (ReferenceEquals(ColumnDimension, field)) ColumnDimension = null;
         RemoveFilter(field, rebuild: false);
@@ -187,7 +220,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
         var existing = FilterFields.FirstOrDefault(f => ReferenceEquals(f.Field, field));
         if (existing is null) return;
         FilterFields.Remove(existing);
-        if (!Fields.Contains(field)) Fields.Add(field);
+        AddPlainToFields(field);
         if (rebuild) AfterSlotChange();
     }
 
@@ -202,7 +235,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
     public void AssignToColumn(CsvFieldRef field)
     {
         if (field is null) return;
-        if (ColumnDimension is { } old && !ReferenceEquals(old, field)) Fields.Add(old);
+        if (ColumnDimension is { } old && !ReferenceEquals(old, field)) AddPlainToFields(old);
         DetachField(field);
         ColumnDimension = field;
         AfterSlotChange();
@@ -212,31 +245,45 @@ public sealed partial class CsvTableViewModel : ObservableObject
     public void AssignToValue(CsvFieldRef field)
     {
         if (field is null) return;
-        Fields.Remove(field);
+        RemovePlainFromFields(field);
         ValueFields.Add(CsvValueSpec.Single(field.ColumnIndex, field.Name));
         AfterSlotChange();
     }
 
-    /// <summary>新建计算字段（命名 + 公式）加入值区。</summary>
-    public void AddCalculatedField(string name, string formula)
+    /// <summary>拖计算字段到「值」区（计算字段只能进值区）。</summary>
+    public void AssignCalculatedToValue(CsvFieldItem item)
     {
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(formula)) return;
-        // 解析验证（失败则不添加，状态留空）。
-        try { CsvFormula.Parse(formula); }
-        catch { return; }
-        ValueFields.Add(CsvValueSpec.Formula_(name.Trim(), formula.Trim()));
+        if (item is null || !item.IsCalculated || item.Formula is null) return;
+        Fields.Remove(item);
+        ValueFields.Add(CsvValueSpec.Formula_(item.Name, item.Formula));
         AfterSlotChange();
     }
 
-    /// <summary>从值区移除一个值字段（普通字段弹回字段列表；计算字段直接丢弃）。</summary>
+    /// <summary>新建计算字段（命名 + 公式）→ 加进字段列表（像普通字段一样，之后可拖进值区）。</summary>
+    public void AddCalculatedField(string name, string formula)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(formula)) return;
+        // 解析验证（失败则不添加）。
+        try { CsvFormula.Parse(formula); }
+        catch { return; }
+        Fields.Add(CsvFieldItem.Calculated(name.Trim(), formula.Trim()));
+        AfterSlotChange();
+    }
+
+    /// <summary>从值区移除一个值字段（普通字段弹回字段列表；计算字段弹回字段列表的计算字段）。</summary>
     public void RemoveValueField(CsvValueSpec spec)
     {
         if (spec is null) return;
         ValueFields.Remove(spec);
-        if (!spec.IsFormula)
+        if (spec.IsFormula)
+        {
+            if (!Fields.Any(i => i.IsCalculated && i.Name == spec.Name))
+                Fields.Add(CsvFieldItem.Calculated(spec.Name, spec.Formula!));
+        }
+        else
         {
             var ref_ = _allFields.FirstOrDefault(f => f.ColumnIndex == spec.ColumnIndex);
-            if (ref_ is not null && !Fields.Contains(ref_)) Fields.Add(ref_);
+            if (ref_ is not null) AddPlainToFields(ref_);
         }
         AfterSlotChange();
     }
@@ -246,7 +293,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
     {
         if (field is null) return;
         DetachField(field);
-        if (!Fields.Contains(field)) Fields.Add(field);
+        AddPlainToFields(field);
         AfterSlotChange();
     }
 

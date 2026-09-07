@@ -43,6 +43,11 @@
       <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     </Style>
+    <!-- 计算字段胶囊：紫色虚线边框，区分普通字段 -->
+    <Style Selector="local|CsvFieldChip.chip-calculated">
+      <Setter Property="Background" Value="#337C3AED"/>
+      <Setter Property="BorderBrush" Value="#7C3AED"/>
+    </Style>
     <!-- 投放区 -->
     <Style Selector="Border.drop-zone">
       <Setter Property="MinHeight" Value="30"/>
@@ -67,22 +72,26 @@
 
     <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区 -->
     <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
-      <!-- 左：字段列表（可拖拽源 + 拖回移除目标） -->
+      <!-- 左：字段列表（可拖拽源 + 拖回移除目标；含新建的计算字段 + 「＋计算字段」按钮） -->
       <StackPanel Grid.Column="0" MinWidth="200" Margin="0,0,12,0">
         <TextBlock Classes="csv-label" Text="字段" Margin="0,0,0,4"/>
         <Border x:Name="FieldsDropZone" Classes="drop-zone" VerticalAlignment="Top">
-          <ItemsControl ItemsSource="{Binding Fields}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel Orientation="Horizontal"/>
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate DataType="know:CsvFieldRef">
-                <local:CsvFieldChip/>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <StackPanel Spacing="4">
+            <ItemsControl ItemsSource="{Binding Fields}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="know:CsvFieldItem">
+                  <local:CsvFieldChip/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"
+                    HorizontalAlignment="Left"/>
+          </StackPanel>
         </Border>
       </StackPanel>
 
@@ -147,7 +156,6 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"/>
             </StackPanel>
           </Border>
           <CheckBox Classes="csv-label" Content="百分比" IsChecked="{Binding IsPercentValue}"/>

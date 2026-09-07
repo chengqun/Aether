@@ -33,11 +33,12 @@ public sealed class CsvColumn : DataGridTextColumn
     }
 }
 
-/// <summary>字段胶囊：一个可拖拽的字段标签。数据源（<see cref="CsvFieldRef"/>）经 DataContext 绑定；
-/// 按下左键启动 Avalonia 拖拽携带该字段。拖拽源=字段列表胶囊 + 已放置槽位胶囊（可拖回列表或拖到其它区）。</summary>
+/// <summary>字段胶囊：一个可拖拽的字段标签。数据源经 DataContext 绑定（<see cref="CsvFieldItem"/> 或
+/// <see cref="CsvFieldRef"/>）；按下左键启动 Avalonia 拖拽，携带统一的 <see cref="CsvFieldItem"/>。
+/// 字段列表胶囊 DataContext 是 <see cref="CsvFieldItem"/>（可含计算字段）；行/列区胶囊是 <see cref="CsvFieldRef"/>。</summary>
 public sealed class CsvFieldChip : Border
 {
-    private static readonly DataFormat<CsvFieldRef> Format = DataFormat.CreateInProcessFormat<CsvFieldRef>("csv-field");
+    private static readonly DataFormat<CsvFieldItem> Format = DataFormat.CreateInProcessFormat<CsvFieldItem>("csv-field");
 
     public CsvFieldChip()
     {
@@ -47,40 +48,53 @@ public sealed class CsvFieldChip : Border
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (DataContext is CsvFieldRef field)
+        var item = ToItem(DataContext);
+        if (item is null) return;
+        if (item.Field is { } f)
         {
-            Classes.Set("chip-pivot", field.Kind == CsvFieldKind.Pivot);
-            Classes.Set("chip-measure", field.Kind == CsvFieldKind.Measure);
-            Classes.Set("chip-dimension", field.Kind == CsvFieldKind.Dimension);
-            Child = new TextBlock { Text = field.Name, FontSize = 12 };
+            Classes.Set("chip-pivot", f.Kind == CsvFieldKind.Pivot);
+            Classes.Set("chip-measure", f.Kind == CsvFieldKind.Measure);
+            Classes.Set("chip-dimension", f.Kind == CsvFieldKind.Dimension);
+            Classes.Set("chip-calculated", false);
         }
+        else
+        {
+            Classes.Set("chip-calculated", true);
+        }
+        Child = new TextBlock { Text = item.Name, FontSize = 12 };
     }
+
+    private static CsvFieldItem? ToItem(object? dc) => dc switch
+    {
+        CsvFieldItem i => i,
+        CsvFieldRef f => CsvFieldItem.Plain(f),
+        _ => null,
+    };
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (DataContext is not CsvFieldRef field || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var item = DataTransferItem.Create(Format, field);
-        // macOS 原生拖拽（NSCoreDragManager）要求 pasteboard 里至少有系统可序列化格式（文本/文件），
-        // 纯进程内 InProcessFormat 的 .NET 对象引用无法进系统 pasteboard → beginDraggingSession 抛 NSException。
-        // 附带 SetText 使拖拽能在 macOS 正常启动；drop 时仍用 TryGetRaw(InProcessFormat) 取回 .NET 对象。
-        item.SetText(field.Name);
+        var item = ToItem(DataContext);
+        if (item is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        var transferItem = DataTransferItem.Create(Format, item);
+        // macOS 原生拖拽要求 pasteboard 至少有系统可序列化格式 → 附带 SetText。
+        transferItem.SetText(item.Name);
         var transfer = new DataTransfer();
-        transfer.Add(item);
+        transfer.Add(transferItem);
         _ = DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Move);
     }
 }
 
-/// <summary>从拖拽事件取字段引用（进程内 DataFormat）。无则 null。</summary>
+/// <summary>从拖拽事件取字段条目（进程内 DataFormat）。无则 null。</summary>
 internal static class CsvDragData
 {
-    private static readonly DataFormat<CsvFieldRef> Format = DataFormat.CreateInProcessFormat<CsvFieldRef>("csv-field");
+    private static readonly DataFormat<CsvFieldItem> Format = DataFormat.CreateInProcessFormat<CsvFieldItem>("csv-field");
 
-    internal static CsvFieldRef? GetField(IDataTransfer transfer)
+    internal static CsvFieldItem? GetItem(IDataTransfer transfer)
     {
         foreach (var item in transfer.Items)
         {
-            if (item.Formats.Contains(Format) && item.TryGetRaw(Format) is CsvFieldRef field)
+            if (item.Formats.Contains(Format) && item.TryGetRaw(Format) is CsvFieldItem field)
                 return field;
         }
         return null;
@@ -107,11 +121,11 @@ public partial class CsvTableView : UserControl
         AddCalcButton.Click += OnAddCalculatedField;
 
         // 投放区挂 drop 事件 + 字段列表（拖回移除）。
-        WireDropZone(RowDropZone);
-        WireDropZone(ColumnDropZone);
-        WireDropZone(ValueDropZone);
-        WireDropZone(FilterDropZone);
-        WireDropZone(FieldsDropZone);
+        WireDropZone(RowDropZone, acceptCalculated: false);
+        WireDropZone(ColumnDropZone, acceptCalculated: false);
+        WireDropZone(ValueDropZone, acceptCalculated: true);
+        WireDropZone(FilterDropZone, acceptCalculated: false);
+        WireDropZone(FieldsDropZone, acceptCalculated: false);
     }
 
     private async void OnAddCalculatedField(object? sender, RoutedEventArgs e)
@@ -184,13 +198,15 @@ public partial class CsvTableView : UserControl
 
     // —— 拖拽投放区 ——
 
-    /// <summary>给一个投放区挂 drag-over/drop/leave 事件。</summary>
-    private void WireDropZone(Border zone)
+    /// <summary>给一个投放区挂 drag-over/drop/leave 事件。<paramref name="acceptCalculated"/> 为 true 才接受计算字段（仅值区）。</summary>
+    private void WireDropZone(Border zone, bool acceptCalculated)
     {
         DragDrop.SetAllowDrop(zone, true);
         DragDrop.AddDragOverHandler(zone, (_, e) =>
         {
-            var ok = CsvDragData.GetField(e.DataTransfer) is not null;
+            var item = CsvDragData.GetItem(e.DataTransfer);
+            // 计算字段只进值区（acceptCalculated）；普通字段全部区接受。
+            var ok = item is not null && (acceptCalculated || !item.IsCalculated);
             e.DragEffects = ok ? DragDropEffects.Move : DragDropEffects.None;
             zone.Classes.Set("drop-over", ok);
         });
@@ -198,14 +214,22 @@ public partial class CsvTableView : UserControl
         DragDrop.AddDropHandler(zone, (_, e) =>
         {
             zone.Classes.Set("drop-over", false);
-            if (CsvDragData.GetField(e.DataTransfer) is CsvFieldRef field)
-                OnFieldDropped(zone, field);
+            if (CsvDragData.GetItem(e.DataTransfer) is { } item)
+                OnFieldDropped(zone, item);
         });
     }
 
-    private void OnFieldDropped(Border zone, CsvFieldRef field)
+    private void OnFieldDropped(Border zone, CsvFieldItem item)
     {
         if (_vm is null) return;
+        // 计算字段：只进值区。
+        if (item.IsCalculated)
+        {
+            if (ReferenceEquals(zone, ValueDropZone)) _vm.AssignCalculatedToValue(item);
+            return;
+        }
+        var field = item.Field;
+        if (field is null) return;
         if (ReferenceEquals(zone, RowDropZone)) _vm.AssignToRowDimension(field);
         else if (ReferenceEquals(zone, ColumnDropZone)) _vm.AssignToColumn(field);
         else if (ReferenceEquals(zone, ValueDropZone)) _vm.AssignToValue(field);
