@@ -98,9 +98,6 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>是否透视表视图（false=详情表）。</summary>
     [ObservableProperty] private bool _isPivot;
 
-    /// <summary>值列是否按百分比显示（×100 加 %）；false = 原值。</summary>
-    [ObservableProperty] private bool _isPercentValue = true;
-
     /// <summary>左侧字段列表（未放置到任何槽位的字段 + 新建的计算字段）。</summary>
     public ObservableCollection<CsvFieldItem> Fields { get; } = new();
 
@@ -147,7 +144,9 @@ public sealed partial class CsvTableViewModel : ObservableObject
         {
             TakeFieldFromList(od);
             TakeFieldFromList(obs);
-            ValueFields.Add(CsvValueSpec.Formula_("逾期率", $"[{od.Name}] / [{obs.Name}]"));
+            var rate = CsvValueSpec.Formula_("逾期率", $"[{od.Name}] / [{obs.Name}]");
+            rate.AsPercent = true; // 逾期率默认百分比显示
+            ValueFields.Add(rate);
         }
         else if (measureFields.Length > 0)
         {
@@ -316,8 +315,6 @@ public sealed partial class CsvTableViewModel : ObservableObject
         RebuildPivot();
     }
 
-    partial void OnIsPercentValueChanged(bool value) { if (IsPivot) RebuildPivot(); }
-
     private void RebuildPivot()
     {
         var rowDimIndexes = RowDimensions.Select(f => f.ColumnIndex).ToArray();
@@ -329,8 +326,11 @@ public sealed partial class CsvTableViewModel : ObservableObject
             .Select(f => (f.Field.ColumnIndex, (IReadOnlySet<string>)f.Allowed))
             .ToArray();
 
-        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), IsPercentValue, filters);
+        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), filters);
         Headers = result.AllHeaders;
         Rows = result.Rows;
     }
+
+    /// <summary>切换某值字段「显示为百分比」→ 重建。由 view（值字段设置弹窗）调用。</summary>
+    public void ToggleValuePercent(CsvValueSpec spec) { if (IsPivot) RebuildPivot(); }
 }

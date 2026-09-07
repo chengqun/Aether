@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Acme.Desktop.Shared.Shell"
+        x:Class="Acme.Desktop.Shared.Shell.ValueFieldDialog"
+        x:DataType="shell:ValueFieldDialog"
+        Width="300" Height="180"
+        Title="值字段设置"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource CardBgBrush}">
+
+  <StackPanel Margin="14" Spacing="10">
+    <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold"/>
+
+    <CheckBox x:Name="PercentCheck" Content="显示为百分比（×100 加 %）" FontSize="13"/>
+
+    <TextBlock x:Name="FormulaText" FontSize="12" Opacity="0.7"
+               Foreground="{DynamicResource TextSecondaryBrush}" IsVisible="False" TextWrapping="Wrap"/>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button Content="取消" Click="OnCancel"/>
+      <Button Classes="primary" Content="确定" Click="OnOk"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

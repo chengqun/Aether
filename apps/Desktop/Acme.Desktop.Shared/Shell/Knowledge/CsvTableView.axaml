@@ -130,7 +130,7 @@
           </Border>
         </StackPanel>
 
-        <!-- 值（多槽：普通字段单列 或 计算字段公式；可拖字段进入 + 新建计算字段） -->
+        <!-- 值（多槽：普通字段单列 或 计算字段公式；可拖字段进入；每个值字段带自己的「▾设置」含百分比） -->
         <StackPanel Orientation="Horizontal" Spacing="8">
           <TextBlock Classes="csv-label" Text="值" Width="52"/>
           <Border x:Name="ValueDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
@@ -147,6 +147,12 @@
                             BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="0,0,6,0">
                       <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock Text="{Binding Name}" FontSize="12"/>
+                        <TextBlock Text="%" FontSize="11" Foreground="{DynamicResource AccentBrush}"
+                                   IsVisible="{Binding AsPercent}"/>
+                        <Button Content="▾" FontSize="11" Padding="3,0" Background="Transparent"
+                                BorderThickness="0"
+                                Click="OnValueSettingsClick"
+                                Tag="{Binding}"/>
                         <Button Content="×" FontSize="11" Padding="2,0" Background="Transparent"
                                 BorderThickness="0"
                                 Click="OnValueRemoveClick"
@@ -158,7 +164,6 @@
               </ItemsControl>
             </StackPanel>
           </Border>
-          <CheckBox Classes="csv-label" Content="百分比" IsChecked="{Binding IsPercentValue}"/>
         </StackPanel>
 
         <!-- 筛选（多字段，每个字段可勾选保留哪些值过滤） -->

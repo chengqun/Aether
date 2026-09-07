@@ -39,7 +39,7 @@ public sealed class PivotResult
 /// 聚合后求值：公式引用的各字段先在该格子求和，再代入公式，保证比率正确）。
 /// 用「判别字段」而非 record 继承（避免派生 positional 属性与基类手写属性同名遮蔽 → 递归）。
 /// </summary>
-public sealed class CsvValueSpec
+public sealed partial class CsvValueSpec : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
     /// <summary>值字段显示名（列头）。</summary>
     public string Name { get; }
@@ -52,6 +52,10 @@ public sealed class CsvValueSpec
 
     /// <summary>是否为公式（false = 单列）。</summary>
     public bool IsFormula => Formula is not null;
+
+    /// <summary>该值字段是否按百分比显示（×100 加 %）。默认 false（原值）。</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private bool _asPercent;
 
     private CsvValueSpec(string name, int columnIndex, string? formula)
     {
@@ -80,7 +84,6 @@ public static class CsvPivot
         IReadOnlyList<int> rowDimensionIndexes,
         int pivotColumnIndex,
         IReadOnlyList<CsvValueSpec> valueSpecs,
-        bool asPercent,
         IReadOnlyList<(int ColumnIndex, IReadOnlySet<string> Allowed)>? filters = null)
     {
         var colCount = table.ColumnCount;
@@ -191,6 +194,7 @@ public static class CsvPivot
             for (var si = 0; si < specMeta.Count; si++)
             {
                 var (spec, ast, _, _, _) = specMeta[si];
+                var asPercent = spec.AsPercent;
                 for (var pi = 0; pi < pivotHeaders.Count; pi++)
                 {
                     var cell = group.Cells[si, pi];

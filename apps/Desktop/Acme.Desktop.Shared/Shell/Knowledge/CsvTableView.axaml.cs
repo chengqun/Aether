@@ -144,6 +144,16 @@ public partial class CsvTableView : UserControl
             _vm?.RemoveValueField(spec);
     }
 
+    private async void OnValueSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+        if (sender is not Button { Tag: CsvValueSpec spec }) return;
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        var win = new ValueFieldDialog(spec);
+        await win.ShowDialogAsync(owner);
+        _vm.ToggleValuePercent(spec);
+    }
+
     private void OnFilterRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: CsvFilterField filter })
