@@ -113,6 +113,12 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>筛选区的筛选字段（多字段，每个字段可勾选保留哪些值）。</summary>
     public ObservableCollection<CsvFilterField> FilterFields { get; } = new();
 
+    /// <summary>布局变化（拖拽/百分比/筛选/计算字段增删）时触发——宿主经此自动保存布局。</summary>
+    public event Action? LayoutChanged;
+
+    /// <summary>是否正在应用布局（恢复时置 true，抑制 LayoutChanged 回写）。</summary>
+    private bool _applyingLayout;
+
     /// <summary>源 CSV 行数/列数。</summary>
     public int SourceRowCount => _table.RowCount;
     public int SourceColumnCount => _table.ColumnCount;
@@ -277,7 +283,118 @@ public sealed partial class CsvTableViewModel : ObservableObject
         AfterSlotChange();
     }
 
-    private void AfterSlotChange() { if (IsPivot) RebuildPivot(); }
+    /// <summary>槽位变化后重建透视 + 触发布局变更（自动保存）。恢复布局期间（<see cref="_applyingLayout"/>）不触发。</summary>
+    private void AfterSlotChange()
+    {
+        if (IsPivot) RebuildPivot();
+        if (!_applyingLayout) LayoutChanged?.Invoke();
+    }
+
+    /// <summary>捕获当前布局快照（供持久化）。</summary>
+    public CsvPivotLayout CaptureLayout()
+    {
+        var layout = new CsvPivotLayout
+        {
+            Rows = RowDimensions.Select(f => f.Name).ToList(),
+            Column = ColumnDimension?.Name,
+            Values = ValueFields.Select(v => new CsvValueLayout
+            {
+                Name = v.Name,
+                Formula = v.Formula,
+                AsPercent = v.AsPercent,
+            }).ToList(),
+            Filters = FilterFields.Select(f => new CsvFilterLayout
+            {
+                Field = f.Field.Name,
+                Values = f.Allowed.Count == f.AllValues.Count ? null : f.Allowed.ToList(),
+            }).ToList(),
+            Calculated = Fields.Where(i => i.IsCalculated).Select(i => new CsvCalcLayout
+            {
+                Name = i.Name,
+                Formula = i.Formula!,
+            }).ToList(),
+        };
+        return layout;
+    }
+
+    /// <summary>应用布局快照（按字段名匹配；匹配不到的名字跳过）。清空当前槽位后套用。</summary>
+    public void ApplyLayout(CsvPivotLayout? layout)
+    {
+        if (layout is null) return;
+        _applyingLayout = true;
+        try
+        {
+            // 清空所有槽位 + 字段列表，重填原始字段。
+            RowDimensions.Clear();
+            ColumnDimension = null;
+            ValueFields.Clear();
+            FilterFields.Clear();
+            Fields.Clear();
+            foreach (var f in _allFields) Fields.Add(CsvFieldItem.Plain(f));
+
+            // 行维度（名字匹配）。
+            foreach (var name in layout.Rows)
+            {
+                var f = FindField(name);
+                if (f is not null) AssignToRowDimension(f);
+            }
+            // 列维度。
+            if (layout.Column is not null && FindField(layout.Column) is { } col)
+                ColumnDimension = TakeFieldFromList(col);
+            // 值字段。
+            foreach (var v in layout.Values)
+            {
+                if (v.Formula is { Length: > 0 } f)
+                {
+                    var spec = CsvValueSpec.Formula_(v.Name, f);
+                    spec.AsPercent = v.AsPercent;
+                    ValueFields.Add(spec);
+                }
+                else
+                {
+                    var field = FindField(v.Name);
+                    if (field is not null)
+                    {
+                        RemovePlainFromFields(field);
+                        var spec = CsvValueSpec.Single(field.ColumnIndex, field.Name);
+                        spec.AsPercent = v.AsPercent;
+                        ValueFields.Add(spec);
+                    }
+                }
+            }
+            // 筛选字段（勾选值）。
+            foreach (var fl in layout.Filters)
+            {
+                var field = FindField(fl.Field);
+                if (field is null) continue;
+                RemovePlainFromFields(field);
+                var values = _table.Rows.Select(r => r[field.ColumnIndex])
+                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToArray();
+                var filter = new CsvFilterField(field, values);
+                if (fl.Values is { Count: > 0 } allowed)
+                {
+                    filter.Allowed.Clear();
+                    foreach (var v in filter.ValueOptions)
+                        v.IsSelected = allowed.Contains(v.Value);
+                    filter.RecomputeAllowed();
+                    foreach (var v in allowed) if (values.Contains(v)) filter.Allowed.Add(v);
+                }
+                FilterFields.Add(filter);
+            }
+            // 字段列表里的计算字段（未拖进值的）。
+            foreach (var c in layout.Calculated)
+                Fields.Add(CsvFieldItem.Calculated(c.Name, c.Formula));
+        }
+        finally
+        {
+            _applyingLayout = false;
+        }
+        if (IsPivot) RebuildPivot();
+    }
+
+    /// <summary>按名字找字段（大小写不敏感，去 BOM）。</summary>
+    private CsvFieldRef? FindField(string name)
+        => _allFields.FirstOrDefault(f => string.Equals(f.Name.Trim('﻿'), name.Trim('﻿'), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>切到详情表（原样展示）。</summary>
     [RelayCommand]

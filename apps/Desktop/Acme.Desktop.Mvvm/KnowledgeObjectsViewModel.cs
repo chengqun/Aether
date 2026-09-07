@@ -44,6 +44,10 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     private bool _isReadme;
     /// <summary>当前活动文件是否为 CSV 产物体文件（上栏表格 + 下栏源码两栏）。</summary>
     private bool _isCsv;
+    /// <summary>CSV 布局自动保存防抖 timer（拖拽/字段变化后 300ms 写 store）。</summary>
+    private System.Threading.Timer? _csvLayoutSaveTimer;
+    /// <summary>当前 CSV 活动文件的绝对路径（布局持久化 key 用）。</summary>
+    private string? _csvActivePath;
     /// <summary>当前选中是否为 skills 根目录（右栏内嵌技能卡片网格，镜像专家页技能 tab）。</summary>
     private bool _isSkillsRoot;
     /// <summary>当前选中是否为 mcp-servers 根目录（右栏内嵌 MCP 管理面板，镜像专家页 MCP tab）。</summary>
@@ -447,9 +451,46 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _currentSource = content;
         IsDirty = false;
         StatusMessage = string.Empty;
-        ActiveEditVm = new CsvTableViewModel(content);
+        var vm = new CsvTableViewModel(content);
+        // 恢复该 CSV 的持久化布局（按文件路径 key；无则默认）。
+        RestoreCsvLayout(vm, filePath);
+        // 订阅布局变化 → 防抖自动保存。
+        vm.LayoutChanged += () => ScheduleCsvLayoutSave(vm, filePath);
+        ActiveEditVm = vm;
         RaiseLayout();
         KnowledgeSourceUpdated?.Invoke(content);
+    }
+
+    /// <summary>恢复 CSV 布局（读 <see cref="IPreferencesStore"/>，按文件路径 key）。无持久化 → 默认布局。</summary>
+    private void RestoreCsvLayout(CsvTableViewModel vm, string filePath)
+    {
+        var store = ServiceProvider.GetService<IPreferencesStore>();
+        if (store is null) return;
+        var json = store.GetAsync(LayoutKey(filePath)).GetAwaiter().GetResult(); // GetAsync 同步完成（Task.FromResult）
+        vm.ApplyLayout(CsvPivotLayout.Deserialize(json));
+    }
+
+    /// <summary>防抖（300ms）保存 CSV 布局到 store。</summary>
+    private void ScheduleCsvLayoutSave(CsvTableViewModel vm, string filePath)
+    {
+        _csvActivePath = filePath;
+        _csvLayoutSaveTimer?.Dispose();
+        _csvLayoutSaveTimer = new System.Threading.Timer(_ =>
+        {
+            var store = ServiceProvider.GetService<IPreferencesStore>();
+            if (store is null) return;
+            var json = vm.CaptureLayout().Serialize();
+            // SetAsync 真异步（File.WriteAllTextAsync），UI 线程须 Task.Run 包裹避免 sync-over-async 死锁。
+            _ = Task.Run(async () => await store.SetAsync(LayoutKey(filePath), json));
+        }, null, 300, System.Threading.Timeout.Infinite);
+    }
+
+    /// <summary>布局持久化 key（按文件路径 SHA256 前 16 hex——路径可能很长）。</summary>
+    private static string LayoutKey(string filePath)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(filePath));
+        var hex = Convert.ToHexString(hash.AsSpan(0, 8));
+        return $"csvpivot.layout.{hex}";
     }
 
     /// <summary>显示名去复合扩展名（如 <c>foo.agent.md</c> → <c>foo</c>）。</summary>
