@@ -70,10 +70,11 @@
       <Button Classes="csv-mode" x:Name="PivotButton" Content="透视表" />
     </StackPanel>
 
-    <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区 -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
+    <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区。
+         左列固定宽（220px），使字段列表 WrapPanel 在固定宽度内换行（Auto 列会给无限宽度导致不换行溢出）。 -->
+    <Grid Grid.Row="1" ColumnDefinitions="220,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
       <!-- 左：字段列表（可拖拽源 + 拖回移除目标；含新建的计算字段 + 「＋计算字段」按钮） -->
-      <StackPanel Grid.Column="0" MinWidth="200" Margin="0,0,12,0">
+      <StackPanel Grid.Column="0" Margin="0,0,12,0">
         <TextBlock Classes="csv-label" Text="字段" Margin="0,0,0,4"/>
         <Border x:Name="FieldsDropZone" Classes="drop-zone" VerticalAlignment="Top">
           <StackPanel Spacing="4">

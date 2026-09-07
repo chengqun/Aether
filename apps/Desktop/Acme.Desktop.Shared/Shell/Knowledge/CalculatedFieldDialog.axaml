@@ -14,12 +14,12 @@
 
     <StackPanel Spacing="4">
       <TextBlock Text="字段名" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-      <TextBox x:Name="NameBox" Watermark="如：逾期率" FontSize="13"/>
+      <TextBox x:Name="NameBox" PlaceholderText="如：逾期率" FontSize="13"/>
     </StackPanel>
 
     <StackPanel Spacing="4">
       <TextBlock Text="公式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-      <TextBox x:Name="FormulaBox" Watermark="如：[od_yi] / [obs_yi]" FontSize="13"/>
+      <TextBox x:Name="FormulaBox" PlaceholderText="如：[od] / [obs]" FontSize="13"/>
       <TextBlock Text="字段名用 [列名] 引用 CSV 列；支持 + - * / 和括号。"
                  FontSize="11" Opacity="0.7"
                  Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
