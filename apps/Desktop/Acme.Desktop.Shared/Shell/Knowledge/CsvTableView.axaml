@@ -1,10 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Acme.Desktop.Shared.Shell"
+             xmlns:know="using:Acme.Desktop.Mvvm.Knowledge"
              x:Class="Acme.Desktop.Shared.Shell.CsvTableView"
              Background="{DynamicResource CardBgBrush}">
 
   <UserControl.Styles>
-    <!-- 切换按钮组（详情表/透视表）——复用 Button.primary/默认样式，按 IsPivot 状态着色 -->
     <Style Selector="Button.csv-mode">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
@@ -15,36 +16,141 @@
       <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     </Style>
+    <Style Selector="TextBlock.csv-label">
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+    <!-- 字段胶囊 -->
+    <Style Selector="local|CsvFieldChip.csv-chip">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="8,2"/>
+      <Setter Property="Margin" Value="0,0,6,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="local|CsvFieldChip.chip-pivot">
+      <Setter Property="Background" Value="#330895B2"/>
+      <Setter Property="BorderBrush" Value="#0895B2"/>
+    </Style>
+    <Style Selector="local|CsvFieldChip.chip-measure">
+      <Setter Property="Background" Value="#330A7A0A"/>
+      <Setter Property="BorderBrush" Value="#B45F06"/>
+    </Style>
+    <Style Selector="local|CsvFieldChip.chip-dimension">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    </Style>
+    <!-- 投放区 -->
+    <Style Selector="Border.drop-zone">
+      <Setter Property="MinHeight" Value="30"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="4"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.drop-zone.drop-over">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+    </Style>
   </UserControl.Styles>
 
-  <!-- 上栏：顶部工具条（详情/透视切换 + 透视列/值列选择） + 下方表格 -->
-  <Grid RowDefinitions="Auto,*">
-    <Border Grid.Row="0" Padding="8,4" BorderThickness="0,0,0,1"
-            BorderBrush="{DynamicResource BorderBrush}">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <StackPanel Orientation="Horizontal" Spacing="0">
-          <Button Classes="csv-mode" Content="详情表"
-                  Command="{Binding SwitchToDetailCommand}" />
-          <Button Classes="csv-mode" Content="透视表"
-                  Command="{Binding SwitchToPivotCommand}"
-                  IsVisible="{Binding CanPivot}" />
+  <Grid RowDefinitions="Auto,Auto,*">
+    <!-- 第一行：详情表/透视表切换 -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="0" Margin="8,6,8,0">
+      <Button Classes="csv-mode" x:Name="DetailButton" Content="详情表" />
+      <Button Classes="csv-mode" x:Name="PivotButton" Content="透视表" />
+    </StackPanel>
+
+    <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区 -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
+      <!-- 左：字段列表（可拖拽源 + 拖回移除目标） -->
+      <StackPanel Grid.Column="0" MinWidth="200" Margin="0,0,12,0">
+        <TextBlock Classes="csv-label" Text="字段" Margin="0,0,0,4"/>
+        <Border x:Name="FieldsDropZone" Classes="drop-zone" VerticalAlignment="Top">
+          <ItemsControl ItemsSource="{Binding Fields}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="know:CsvFieldRef">
+                <local:CsvFieldChip/>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+
+      <!-- 右：投放区（行维度 / 观测点 / 值） -->
+      <StackPanel Grid.Column="1" Spacing="6">
+        <!-- 行维度（多放） -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="csv-label" Text="行维度" Width="52"/>
+          <Border x:Name="RowDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
+            <ItemsControl ItemsSource="{Binding RowDimensions}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="know:CsvFieldRef">
+                  <local:CsvFieldChip/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
         </StackPanel>
-        <!-- 透视表才显示：透视列 + 值列选择 -->
-        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsPivot}">
-          <TextBlock Text="透视列" VerticalAlignment="Center"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <ComboBox ItemsSource="{Binding PivotColumnOptions}"
-                    SelectedItem="{Binding SelectedPivotColumn}" MinWidth="120"/>
-          <TextBlock Text="值列" VerticalAlignment="Center"
-                     Foreground="{DynamicResource TextSecondaryBrush}"/>
-          <ComboBox ItemsSource="{Binding ValueColumnOptions}"
-                    SelectedItem="{Binding SelectedValueColumn}" MinWidth="120"/>
+
+        <!-- 观测点（列维度，单放） -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="csv-label" Text="观测点" Width="52"/>
+          <Border x:Name="ColumnDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
+            <ContentControl Content="{Binding ColumnDimension}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate DataType="know:CsvFieldRef">
+                  <local:CsvFieldChip/>
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+          </Border>
+        </StackPanel>
+
+        <!-- 值（分子 / 分母） -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <CheckBox Classes="csv-label" Content="比值" IsChecked="{Binding IsRatioValue}" Width="52"/>
+          <TextBlock Classes="csv-label" Text="分子"/>
+          <Border x:Name="NumeratorDropZone" Classes="drop-zone" HorizontalAlignment="Stretch">
+            <ContentControl Content="{Binding ValueNumerator}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate DataType="know:CsvFieldRef">
+                  <local:CsvFieldChip/>
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+          </Border>
+          <TextBlock Classes="csv-label" Text="分母" IsVisible="{Binding IsRatioValue}"/>
+          <Border x:Name="DenominatorDropZone" Classes="drop-zone" HorizontalAlignment="Stretch"
+                  IsVisible="{Binding IsRatioValue}">
+            <ContentControl Content="{Binding ValueDenominator}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate DataType="know:CsvFieldRef">
+                  <local:CsvFieldChip/>
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+          </Border>
         </StackPanel>
       </StackPanel>
-    </Border>
+    </Grid>
 
     <!-- ProDataGrid：动态列 + 虚拟化；单元格文本 CsvColumn.GenerateElement 零绑定直接赋值 -->
-    <DataGrid Grid.Row="1" x:Name="DataGrid"
+    <DataGrid Grid.Row="2" x:Name="DataGrid"
               AutoGenerateColumns="False"
               CanUserSortColumns="True"
               CanUserReorderColumns="False"
