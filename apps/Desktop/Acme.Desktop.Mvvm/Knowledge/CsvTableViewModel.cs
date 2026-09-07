@@ -127,7 +127,6 @@ public sealed partial class CsvTableViewModel : ObservableObject
 
         var dimensionFields = _allFields.Where(f => f.Kind == CsvFieldKind.Dimension).ToArray();
         var pivotFields = _allFields.Where(f => f.Kind == CsvFieldKind.Pivot).ToArray();
-        var measureFields = _allFields.Where(f => f.Kind == CsvFieldKind.Measure).ToArray();
 
         // 行维度 = 全部维度字段。
         foreach (var f in dimensionFields) AssignToRowDimension(f);
@@ -135,25 +134,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
         // 列维度 = 第一个观测点字段。
         if (pivotFields.Length > 0) ColumnDimension = TakeFieldFromList(pivotFields[0]);
 
-        // 值 = 默认计算字段「逾期率」= [od_yi] / [obs_yi]（若两字段都在）。
-        var od = measureFields.FirstOrDefault(m => m.Name.Equals("od_yi", StringComparison.OrdinalIgnoreCase)
-            || m.Name.Contains("od") || m.Name.Contains("逾期") || m.Name.Contains("坏账"));
-        var obs = measureFields.FirstOrDefault(m => m.Name.Equals("obs_yi", StringComparison.OrdinalIgnoreCase)
-            || m.Name.Contains("obs") || m.Name.Contains("观测"));
-        if (od is not null && obs is not null && !ReferenceEquals(od, obs))
-        {
-            TakeFieldFromList(od);
-            TakeFieldFromList(obs);
-            var rate = CsvValueSpec.Formula_("逾期率", $"[{od.Name}] / [{obs.Name}]");
-            rate.AsPercent = true; // 逾期率默认百分比显示
-            ValueFields.Add(rate);
-        }
-        else if (measureFields.Length > 0)
-        {
-            // 无 od/obs 两列 → 退回单列（第一个指标）。
-            TakeFieldFromList(measureFields[0]);
-            ValueFields.Add(CsvValueSpec.Single(measureFields[0].ColumnIndex, measureFields[0].Name));
-        }
+        // 值区默认留空——原始字段全在字段列表，用户自己拖字段 + 新建计算字段。
 
         // 初始 = 详情表。
         _headers = _table.Headers;
