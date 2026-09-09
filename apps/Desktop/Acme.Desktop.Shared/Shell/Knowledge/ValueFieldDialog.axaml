@@ -3,7 +3,7 @@
         xmlns:shell="using:Acme.Desktop.Shared.Shell"
         x:Class="Acme.Desktop.Shared.Shell.ValueFieldDialog"
         x:DataType="shell:ValueFieldDialog"
-        Width="300" Height="180"
+        Width="320" Height="260"
         Title="值字段设置"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
@@ -13,6 +13,27 @@
     <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold"/>
 
     <CheckBox x:Name="PercentCheck" Content="显示为百分比（×100 加 %）" FontSize="13"/>
+
+    <!-- 汇总方式（仅普通字段可切换；公式字段固定「聚合后求值」） -->
+    <StackPanel Orientation="Horizontal" Spacing="6" x:Name="AggregationRow">
+      <TextBlock Text="汇总方式" FontSize="12" VerticalAlignment="Center"
+                 Foreground="{DynamicResource TextSecondaryBrush}" Width="60"/>
+      <ComboBox x:Name="AggregationBox" MinWidth="100">
+        <ComboBoxItem Content="求和"/>
+        <ComboBoxItem Content="计数"/>
+        <ComboBoxItem Content="平均"/>
+        <ComboBoxItem Content="最大"/>
+        <ComboBoxItem Content="最小"/>
+      </ComboBox>
+    </StackPanel>
+
+    <!-- 小数位数（留空 = 原样） -->
+    <StackPanel Orientation="Horizontal" Spacing="6">
+      <TextBlock Text="小数位数" FontSize="12" VerticalAlignment="Center"
+                 Foreground="{DynamicResource TextSecondaryBrush}" Width="60"/>
+      <TextBox x:Name="DecimalsBox" Width="80" FontSize="13"
+               PlaceholderText="留空=原样"/>
+    </StackPanel>
 
     <TextBlock x:Name="FormulaText" FontSize="12" Opacity="0.7"
                Foreground="{DynamicResource TextSecondaryBrush}" IsVisible="False" TextWrapping="Wrap"/>

@@ -86,8 +86,8 @@ public sealed partial class CsvFilterValueOption : ObservableObject
 /// </summary>
 public sealed partial class CsvTableViewModel : ObservableObject
 {
-    private readonly CsvTable _table;
-    private readonly CsvFieldRef[] _allFields;
+    private CsvTable _table;
+    private CsvFieldRef[] _allFields;
 
     /// <summary>当前视图的表头。</summary>
     [ObservableProperty] private IReadOnlyList<string> _headers = Array.Empty<string>();
@@ -97,6 +97,9 @@ public sealed partial class CsvTableViewModel : ObservableObject
 
     /// <summary>是否透视表视图（false=详情表）。</summary>
     [ObservableProperty] private bool _isPivot;
+
+    /// <summary>是否显示「总计」行（每个值列跨所有行的合计）。默认 false。</summary>
+    [ObservableProperty] private bool _showTotals;
 
     /// <summary>左侧字段列表（未放置到任何槽位的普通字段；不含计算字段——见 <see cref="CalculatedFields"/>）。</summary>
     public ObservableCollection<CsvFieldItem> Fields { get; } = new();
@@ -126,8 +129,12 @@ public sealed partial class CsvTableViewModel : ObservableObject
     public int SourceRowCount => _table.RowCount;
     public int SourceColumnCount => _table.ColumnCount;
 
-    public CsvTableViewModel(string csvContent)
+    /// <summary>源 CSV 内容重读回调（刷新用；宿主注入，读当前文件路径取最新内容）。null = 不支持刷新。</summary>
+    private readonly Func<string>? _reloadContent;
+
+    public CsvTableViewModel(string csvContent, Func<string>? reloadContent = null)
     {
+        _reloadContent = reloadContent;
         _table = CsvParser.Parse(csvContent);
         var classified = CsvPivot.Fields(_table);
         _allFields = classified.Select(f => new CsvFieldRef(f.Header, f.ColumnIndex, f.Kind)).ToArray();
@@ -305,6 +312,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
                 Name = v.Name,
                 Formula = v.Formula,
                 AsPercent = v.AsPercent,
+                Aggregation = (int)v.Aggregation,
+                Decimals = v.Decimals,
             }).ToList(),
             Filters = FilterFields.Select(f => new CsvFilterLayout
             {
@@ -352,6 +361,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
                 {
                     var spec = CsvValueSpec.Formula_(v.Name, f);
                     spec.AsPercent = v.AsPercent;
+                    spec.Aggregation = (CsvAggregation)v.Aggregation;
+                    spec.Decimals = v.Decimals;
                     ValueFields.Add(spec);
                 }
                 else
@@ -362,6 +373,8 @@ public sealed partial class CsvTableViewModel : ObservableObject
                         RemovePlainFromFields(field);
                         var spec = CsvValueSpec.Single(field.ColumnIndex, field.Name);
                         spec.AsPercent = v.AsPercent;
+                        spec.Aggregation = (CsvAggregation)v.Aggregation;
+                        spec.Decimals = v.Decimals;
                         ValueFields.Add(spec);
                     }
                 }
@@ -428,11 +441,32 @@ public sealed partial class CsvTableViewModel : ObservableObject
             .Select(f => (f.Field.ColumnIndex, (IReadOnlySet<string>)f.Allowed))
             .ToArray();
 
-        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), filters);
+        var result = CsvPivot.Pivot(_table, rowDimIndexes, pivotIdx, ValueFields.ToArray(), filters, ShowTotals);
         Headers = result.AllHeaders;
         Rows = result.Rows;
     }
 
     /// <summary>切换某值字段「显示为百分比」→ 重建。由 view（值字段设置弹窗）调用。</summary>
     public void ToggleValuePercent(CsvValueSpec spec) { if (IsPivot) RebuildPivot(); }
+
+    /// <summary>值字段的汇总方式/小数位/百分比变化后重建（view 弹窗确定后调）。</summary>
+    public void ValueFieldSettingsChanged(CsvValueSpec spec) { if (IsPivot) RebuildPivot(); }
+
+    partial void OnShowTotalsChanged(bool value) { if (IsPivot) RebuildPivot(); }
+
+    /// <summary>刷新：源 CSV 文件内容变化后重新解析 + 重跑透视（保留字段布局）。
+    /// 经 <see cref="_reloadContent"/> 回调重读源文件内容；无回调则 no-op。</summary>
+    public void Refresh()
+    {
+        if (_reloadContent is null) return;
+        string newContent;
+        try { newContent = _reloadContent(); }
+        catch { return; }
+        // 重新解析源表 + 重分类（列结构可能变）。
+        var newTable = CsvParser.Parse(newContent);
+        _table = newTable;
+        _allFields = CsvPivot.Fields(newTable).Select(f => new CsvFieldRef(f.Header, f.ColumnIndex, f.Kind)).ToArray();
+        if (IsPivot) RebuildPivot();
+        else { Headers = _table.Headers; Rows = _table.Rows; }
+    }
 }

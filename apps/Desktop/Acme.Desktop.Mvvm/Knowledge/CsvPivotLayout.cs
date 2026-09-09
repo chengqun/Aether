@@ -8,6 +8,10 @@ public sealed class CsvValueLayout
     public string Name { get; set; } = string.Empty;
     public string? Formula { get; set; }
     public bool AsPercent { get; set; }
+    /// <summary>汇总方式（<see cref="CsvAggregation"/> 数值）。</summary>
+    public int Aggregation { get; set; }
+    /// <summary>小数位数（null = 原样）。</summary>
+    public int? Decimals { get; set; }
 }
 
 /// <summary>筛选字段布局项——字段名 + 勾选的值列表（null/空 = 全选）。</summary>

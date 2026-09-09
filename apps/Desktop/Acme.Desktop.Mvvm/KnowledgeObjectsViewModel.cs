@@ -451,7 +451,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _currentSource = content;
         IsDirty = false;
         StatusMessage = string.Empty;
-        var vm = new CsvTableViewModel(content);
+        var vm = new CsvTableViewModel(content, () => File.Exists(filePath) ? File.ReadAllText(filePath) : content);
         // 恢复该 CSV 的持久化布局（按文件路径 key；无则默认）。
         RestoreCsvLayout(vm, filePath);
         // 订阅布局变化 → 防抖自动保存。

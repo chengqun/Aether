@@ -151,8 +151,10 @@ public partial class CsvTableView : UserControl
         if (TopLevel.GetTopLevel(this) is not Window owner) return;
         var win = new ValueFieldDialog(spec);
         await win.ShowDialogAsync(owner);
-        _vm.ToggleValuePercent(spec);
+        _vm.ValueFieldSettingsChanged(spec);
     }
+
+    private void OnRefreshClick(object? sender, RoutedEventArgs e) => _vm?.Refresh();
 
     private void OnFilterRemoveClick(object? sender, RoutedEventArgs e)
     {

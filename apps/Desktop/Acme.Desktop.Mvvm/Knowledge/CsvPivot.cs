@@ -1,5 +1,15 @@
 namespace Acme.Desktop.Mvvm.Knowledge;
 
+/// <summary>值字段的汇总方式（Excel 透视表「值字段设置 → 汇总方式」）。</summary>
+public enum CsvAggregation
+{
+    Sum = 0,
+    Count = 1,
+    Average = 2,
+    Max = 3,
+    Min = 4,
+}
+
 /// <summary>
 /// 透视结果：行维度列头（<see cref="RowHeaders"/>）+ 值列头（每个值字段 × 每个观测点，<see cref="ValueHeaders"/>）
 /// + 每行 = 行维度值数组 + 各值列的聚合值。纯数据容器（零 Avalonia），由 <see cref="CsvPivot.Pivot"/> 产出。
@@ -57,6 +67,15 @@ public sealed partial class CsvValueSpec : CommunityToolkit.Mvvm.ComponentModel.
     [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
     private bool _asPercent;
 
+    /// <summary>汇总方式（求和/计数/平均/最大/最小）。默认 Sum。仅单列值字段生效；
+    /// 公式字段（聚合后求值）忽略此设置。</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private CsvAggregation _aggregation = CsvAggregation.Sum;
+
+    /// <summary>小数位数（null = 原样不截断；否则 Round 到该位数）。</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private int? _decimals;
+
     private CsvValueSpec(string name, int columnIndex, string? formula)
     {
         Name = name;
@@ -84,7 +103,8 @@ public static class CsvPivot
         IReadOnlyList<int> rowDimensionIndexes,
         int pivotColumnIndex,
         IReadOnlyList<CsvValueSpec> valueSpecs,
-        IReadOnlyList<(int ColumnIndex, IReadOnlySet<string> Allowed)>? filters = null)
+        IReadOnlyList<(int ColumnIndex, IReadOnlySet<string> Allowed)>? filters = null,
+        bool showTotals = false)
     {
         var colCount = table.ColumnCount;
         if (colCount == 0)
@@ -143,7 +163,9 @@ public static class CsvPivot
 
         // 分组：行维度组合 → 每 (值字段, 观测点) 的聚合。
         // 对公式字段，需对每个引用字段分别求和 → 用 Dictionary<string, decimal> per cell。
+        // 同时维护「列总计」聚合（跨所有行维度组合），供总计行精确求和/计数/比率。
         var groups = new Dictionary<string, CellGroup>(StringComparer.Ordinal);
+        var totals = new CellAggregate?[specMeta.Count, pivotHeaders.Count];
         foreach (var row in table.Rows)
         {
             // 筛选：任一筛选字段的值不在允许集合 → 丢弃该行。
@@ -168,18 +190,23 @@ public static class CsvPivot
             for (var si = 0; si < specMeta.Count; si++)
             {
                 var (spec, _, refFields, numIdx, headerToIdx) = specMeta[si];
-                var cell = group.Cells[si, pivotIdx] ??= new CellAggregate(headerToIdx);
+                var cell = group.Cells[si, pivotIdx] ??= new CellAggregate();
+                var total = totals[si, pivotIdx] ??= new CellAggregate();
                 if (spec.IsFormula)
                 {
                     foreach (var rf in refFields)
                     {
                         if (headerToIdx.TryGetValue(rf, out var ci) && ci < row.Count)
+                        {
                             cell.AddField(rf, row[ci]);
+                            total.AddField(rf, row[ci]);
+                        }
                     }
                 }
                 else
                 {
                     cell.AddField(spec.Name, numIdx >= 0 && numIdx < row.Count ? row[numIdx] : string.Empty);
+                    total.AddField(spec.Name, numIdx >= 0 && numIdx < row.Count ? row[numIdx] : string.Empty);
                 }
             }
         }
@@ -195,6 +222,7 @@ public static class CsvPivot
             {
                 var (spec, ast, _, _, _) = specMeta[si];
                 var asPercent = spec.AsPercent;
+                var decimals = spec.Decimals;
                 for (var pi = 0; pi < pivotHeaders.Count; pi++)
                 {
                     var cell = group.Cells[si, pi];
@@ -203,12 +231,12 @@ public static class CsvPivot
                     else if (spec.IsFormula && ast is not null)
                     {
                         var v = CsvFormula.Evaluate(ast, name => cell.GetField(name));
-                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent);
+                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent, decimals);
                     }
                     else
                     {
-                        var v = cell.GetField(spec.Name);
-                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent);
+                        var v = cell.Aggregate(spec.Name, spec.Aggregation);
+                        text = v is null ? string.Empty : FormatValue(v.Value, asPercent, decimals);
                     }
                     rowOut[colOffset] = text;
                     colOffset++;
@@ -217,11 +245,51 @@ public static class CsvPivot
             resultRows.Add(rowOut);
         }
 
+        // 总计行：第一列填「总计」，其余行维度列空；值列用 totals 按同逻辑精确聚合（比率全局重算）。
+        if (showTotals && resultRows.Count > 0)
+        {
+            var totalRow = new string[rowHeaders.Length + valueHeaders.Count];
+            totalRow[0] = "总计";
+            var tOffset = rowHeaders.Length;
+            for (var si = 0; si < specMeta.Count; si++)
+            {
+                var (spec, ast, _, _, _) = specMeta[si];
+                for (var pi = 0; pi < pivotHeaders.Count; pi++)
+                {
+                    var total = totals[si, pi];
+                    string text;
+                    if (total is null) text = string.Empty;
+                    else if (spec.IsFormula && ast is not null)
+                    {
+                        var v = CsvFormula.Evaluate(ast, name => total.GetField(name));
+                        text = v is null ? string.Empty : FormatValue(v.Value, spec.AsPercent, spec.Decimals);
+                    }
+                    else
+                    {
+                        var v = total.Aggregate(spec.Name, spec.Aggregation);
+                        text = v is null ? string.Empty : FormatValue(v.Value, spec.AsPercent, spec.Decimals);
+                    }
+                    totalRow[tOffset] = text;
+                    tOffset++;
+                }
+            }
+            resultRows.Add(totalRow);
+        }
+
         return new PivotResult(rowHeaders, pivotHeaders, valueHeaders, resultRows);
     }
 
-    private static string FormatValue(decimal v, bool asPercent)
-        => asPercent ? (v * 100m).ToString("0.###") + "%" : v.ToString("0.######");
+    private static string FormatValue(decimal v, bool asPercent, int? decimals)
+    {
+        var value = asPercent ? v * 100m : v;
+        if (decimals is { } d)
+        {
+            value = Math.Round(value, d, MidpointRounding.AwayFromZero);
+            return asPercent ? value.ToString("0." + new string('0', d)) + "%"
+                             : value.ToString("0." + new string('0', d));
+        }
+        return asPercent ? value.ToString("0.###") + "%" : value.ToString("0.######");
+    }
 
     /// <summary>智能分类整表。</summary>
     public static CsvFieldInfo[] Fields(CsvTable table) => CsvFieldClassifier.Classify(table).ToArray();
@@ -267,15 +335,15 @@ public static class CsvPivot
         }
     }
 
-    /// <summary>一个格的聚合：对公式字段的各引用字段分别求和（正确比率）后，供公式求值。</summary>
+    /// <summary>一个格的聚合：对公式字段的各引用字段分别累加（正确比率）后，供公式求值。
+    /// 同时保留 sum/count/max/min，供单列值字段按 <see cref="CsvAggregation"/> 取聚合结果。</summary>
     private sealed class CellAggregate
     {
         private readonly Dictionary<string, decimal> _sums = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, string> _firstNonNumeric = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, decimal> _max = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, decimal> _min = new(StringComparer.Ordinal);
         private readonly HashSet<string> _hasNumeric = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, int> _headerToIdx;
-
-        public CellAggregate(Dictionary<string, int> headerToIdx) => _headerToIdx = headerToIdx;
 
         public void AddField(string fieldName, string value)
         {
@@ -283,15 +351,37 @@ public static class CsvPivot
             if (decimal.TryParse(t, out var d))
             {
                 _sums[fieldName] = _sums.TryGetValue(fieldName, out var s) ? s + d : d;
+                _counts[fieldName] = _counts.TryGetValue(fieldName, out var c) ? c + 1 : 1;
+                _max[fieldName] = _max.TryGetValue(fieldName, out var mx) ? Math.Max(mx, d) : d;
+                _min[fieldName] = _min.TryGetValue(fieldName, out var mn) ? Math.Min(mn, d) : d;
                 _hasNumeric.Add(fieldName);
                 return;
             }
-            if (!_hasNumeric.Contains(fieldName) && !_firstNonNumeric.ContainsKey(fieldName))
-                _firstNonNumeric[fieldName] = t;
+            // 非数值：计数（Count 聚合对文本也计数）；sum/max/min 不参与。
+            _counts[fieldName] = _counts.TryGetValue(fieldName, out var c2) ? c2 + 1 : 1;
         }
 
-        /// <summary>取某字段的聚合值（求和值；无则 null）。</summary>
+        /// <summary>取某字段的求和值（无则 null）。公式求值用。</summary>
         public decimal? GetField(string fieldName)
             => _sums.TryGetValue(fieldName, out var v) ? v : null;
+
+        /// <summary>按汇总方式取聚合结果。Count 对数值+文本都计数；其余仅数值（无数值返回 null）。</summary>
+        public decimal? Aggregate(string fieldName, CsvAggregation agg)
+        {
+            switch (agg)
+            {
+                case CsvAggregation.Count:
+                    return _counts.TryGetValue(fieldName, out var c) ? c : null;
+                case CsvAggregation.Average:
+                    return _sums.TryGetValue(fieldName, out var s) && _counts.TryGetValue(fieldName, out var ac) && ac > 0
+                        ? s / ac : null;
+                case CsvAggregation.Max:
+                    return _max.TryGetValue(fieldName, out var mx2) ? mx2 : null;
+                case CsvAggregation.Min:
+                    return _min.TryGetValue(fieldName, out var mn2) ? mn2 : null;
+                default: // Sum
+                    return _sums.TryGetValue(fieldName, out var s2) ? s2 : null;
+            }
+        }
     }
 }

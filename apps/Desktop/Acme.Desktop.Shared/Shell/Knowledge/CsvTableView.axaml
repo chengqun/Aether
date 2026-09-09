@@ -64,10 +64,14 @@
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,Auto,*">
-    <!-- 第一行：详情表/透视表切换 -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="0" Margin="8,6,8,0">
-      <Button Classes="csv-mode" x:Name="DetailButton" Content="详情表" />
-      <Button Classes="csv-mode" x:Name="PivotButton" Content="透视表" />
+    <!-- 第一行：详情表/透视表切换 + 总计开关 + 刷新按钮 -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="8,6,8,0">
+      <StackPanel Orientation="Horizontal" Spacing="0">
+        <Button Classes="csv-mode" x:Name="DetailButton" Content="详情表" />
+        <Button Classes="csv-mode" x:Name="PivotButton" Content="透视表" />
+      </StackPanel>
+      <CheckBox Classes="csv-label" Content="总计" IsChecked="{Binding ShowTotals}" Margin="8,0,0,0"/>
+      <Button Classes="csv-mode" x:Name="RefreshButton" Content="刷新" Click="OnRefreshClick"/>
     </StackPanel>
 
     <!-- 第二块：字段面板（仅透视视图显示）——顶部字段区两行（原始字段 + 计算字段，各横向滚动）+ 下方投放区。 -->

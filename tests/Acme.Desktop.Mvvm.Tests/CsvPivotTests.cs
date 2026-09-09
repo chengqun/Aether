@@ -139,6 +139,79 @@ public class CsvPivotTests
         var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { Single(2, "val") }, filters);
         Assert.Equal(2, result.Rows.Count);
     }
+
+    [Fact]
+    public void Pivot_Aggregation_Count()
+    {
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,10\nA,x,20\nA,y,5\n");
+        var spec = Single(2, "val");
+        spec.Aggregation = CsvAggregation.Count;
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { spec });
+        var row = result.Rows[0]; // A 行：x 列计数=2，y 列计数=1
+        Assert.Equal("2", row[1]);
+        Assert.Equal("1", row[2]);
+    }
+
+    [Fact]
+    public void Pivot_Aggregation_Average_Max_Min()
+    {
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,10\nA,x,20\n");
+        var avg = Single(2, "val"); avg.Aggregation = CsvAggregation.Average;
+        var max = Single(2, "val"); max.Aggregation = CsvAggregation.Max;
+        var min = Single(2, "val"); min.Aggregation = CsvAggregation.Min;
+        Assert.Equal("15", CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { avg }).Rows[0][1]);
+        Assert.Equal("20", CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { max }).Rows[0][1]);
+        Assert.Equal("10", CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { min }).Rows[0][1]);
+    }
+
+    [Fact]
+    public void Pivot_ShowTotals_AppendsTotalRow()
+    {
+        var table = SampleTable();
+        var result = CsvPivot.Pivot(table, new[] { 0, 1 }, 2, new[] { Single(3, "od_yi") }, showTotals: true);
+        // 2 行数据 + 1 总计行 = 3 行。
+        Assert.Equal(3, result.Rows.Count);
+        var total = result.Rows[^1];
+        Assert.Equal("总计", total[0]); // 第一列填「总计」
+    }
+
+    [Fact]
+    public void Pivot_ShowTotals_SumsValues()
+    {
+        var table = SampleTable(); // od_yi: A fpd1=0.10 fpd10=0.20; B fpd1=0.30 fpd10=0.40
+        var result = CsvPivot.Pivot(table, new[] { 0, 1 }, 2, new[] { Single(3, "od_yi") }, showTotals: true);
+        var total = result.Rows[^1];
+        // 总计行的值列 = 各观测点求和。fpd1 列 = 0.10+0.30=0.40；fpd10 列 = 0.20+0.40=0.60
+        // 值列从 rowHeaders(2) 开始。
+        Assert.Equal("0.4", total[2]);
+        Assert.Equal("0.6", total[3]);
+    }
+
+    [Fact]
+    public void Pivot_Decimals_Rounds()
+    {
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,1.23456\n");
+        var spec = Single(2, "val");
+        spec.Decimals = 2;
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { spec });
+        Assert.Equal("1.23", result.Rows[0][1]);
+    }
+
+    [Fact]
+    public void Pivot_Decimals_Percent()
+    {
+        var table = CsvParser.Parse(
+            "grp,obs,val\nA,x,0.12345\n");
+        var spec = Single(2, "val");
+        spec.AsPercent = true;
+        spec.Decimals = 2;
+        var result = CsvPivot.Pivot(table, new[] { 0 }, 1, new[] { spec });
+        // 0.12345 * 100 = 12.345 → 12.35%
+        Assert.Equal("12.35%", result.Rows[0][1]);
+    }
 }
 
 public class CsvFieldClassifierTests
