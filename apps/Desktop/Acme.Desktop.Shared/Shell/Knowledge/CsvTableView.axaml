@@ -70,20 +70,19 @@
       <Button Classes="csv-mode" x:Name="PivotButton" Content="透视表" />
     </StackPanel>
 
-    <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区。
-         左列固定宽（220px），使字段列表 WrapPanel 在固定宽度内换行（Auto 列会给无限宽度导致不换行溢出）。 -->
-    <Grid Grid.Row="1" ColumnDefinitions="220,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
-      <!-- 左：字段列表（可拖拽源 + 拖回移除目标）+ 独立的「计算字段」区；整列可滚动（字段多时滚动显示）。 -->
-      <StackPanel Grid.Column="0" Margin="0,0,12,0" MaxHeight="300">
-        <TextBlock Classes="csv-label" Text="字段" Margin="0,0,0,4"/>
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel Spacing="8">
-            <!-- 普通字段（原始字段） -->
-            <Border x:Name="FieldsDropZone" Classes="drop-zone">
+    <!-- 第二块：字段面板（仅透视视图显示）——顶部字段区两行（原始字段 + 计算字段，各横向滚动）+ 下方投放区。 -->
+    <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
+      <!-- 顶部：字段区两行横滑（字段多时左右滑动）。 -->
+      <StackPanel Grid.Row="0" Spacing="3" Margin="0,0,0,6">
+        <!-- 第一行：原始字段（原始 CSV 列，横向单行，可左右滑动） -->
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Classes="csv-label" Text="字段" Width="52" VerticalAlignment="Center"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <Border x:Name="FieldsDropZone" Classes="drop-zone" Padding="2">
               <ItemsControl ItemsSource="{Binding Fields}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal"/>
+                    <StackPanel Orientation="Horizontal"/>
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -93,13 +92,17 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </Border>
-            <!-- 计算字段（用户新建的公式字段，单独分区显示） -->
-            <TextBlock Classes="csv-label" Text="计算字段" Margin="0,0,0,2"/>
-            <StackPanel Spacing="4">
+          </ScrollViewer>
+        </StackPanel>
+        <!-- 第二行：计算字段（用户新建的公式字段，另起一行，横向单行，可左右滑动） -->
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Classes="csv-label" Text="计算字段" Width="52" VerticalAlignment="Center"/>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <StackPanel Orientation="Horizontal" Spacing="4">
               <ItemsControl ItemsSource="{Binding CalculatedFields}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal"/>
+                    <StackPanel Orientation="Horizontal"/>
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -109,14 +112,14 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
               <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"
-                      HorizontalAlignment="Left"/>
+                      VerticalAlignment="Center"/>
             </StackPanel>
-          </StackPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+        </StackPanel>
       </StackPanel>
 
-      <!-- 右：投放区（行维度 / 观测点 / 值） -->
-      <StackPanel Grid.Column="1" Spacing="6">
+      <!-- 投放区（行维度 / 列维度 / 值 / 筛选） -->
+      <StackPanel Grid.Row="1" Spacing="6">
         <!-- 行维度（多放） -->
         <StackPanel Orientation="Horizontal" Spacing="8">
           <TextBlock Classes="csv-label" Text="行维度" Width="52"/>
