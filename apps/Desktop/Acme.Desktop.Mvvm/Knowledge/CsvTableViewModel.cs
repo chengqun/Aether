@@ -98,8 +98,11 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>是否透视表视图（false=详情表）。</summary>
     [ObservableProperty] private bool _isPivot;
 
-    /// <summary>左侧字段列表（未放置到任何槽位的字段 + 新建的计算字段）。</summary>
+    /// <summary>左侧字段列表（未放置到任何槽位的普通字段；不含计算字段——见 <see cref="CalculatedFields"/>）。</summary>
     public ObservableCollection<CsvFieldItem> Fields { get; } = new();
+
+    /// <summary>左侧「计算字段」区（用户新建的公式字段，如 [od_yi]/[obs_yi]；与普通字段分区显示）。</summary>
+    public ObservableCollection<CsvFieldItem> CalculatedFields { get; } = new();
 
     /// <summary>已放置到「行维度」槽位的字段（多选）。</summary>
     public ObservableCollection<CsvFieldRef> RowDimensions { get; } = new();
@@ -240,31 +243,31 @@ public sealed partial class CsvTableViewModel : ObservableObject
     public void AssignCalculatedToValue(CsvFieldItem item)
     {
         if (item is null || !item.IsCalculated || item.Formula is null) return;
-        Fields.Remove(item);
+        CalculatedFields.Remove(item);
         ValueFields.Add(CsvValueSpec.Formula_(item.Name, item.Formula));
         AfterSlotChange();
     }
 
-    /// <summary>新建计算字段（命名 + 公式）→ 加进字段列表（像普通字段一样，之后可拖进值区）。</summary>
+    /// <summary>新建计算字段（命名 + 公式）→ 加进「计算字段」区（像普通字段一样，之后可拖进值区）。</summary>
     public void AddCalculatedField(string name, string formula)
     {
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(formula)) return;
         // 解析验证（失败则不添加）。
         try { CsvFormula.Parse(formula); }
         catch { return; }
-        Fields.Add(CsvFieldItem.Calculated(name.Trim(), formula.Trim()));
+        CalculatedFields.Add(CsvFieldItem.Calculated(name.Trim(), formula.Trim()));
         AfterSlotChange();
     }
 
-    /// <summary>从值区移除一个值字段（普通字段弹回字段列表；计算字段弹回字段列表的计算字段）。</summary>
+    /// <summary>从值区移除一个值字段（普通字段弹回字段列表；计算字段弹回「计算字段」区）。</summary>
     public void RemoveValueField(CsvValueSpec spec)
     {
         if (spec is null) return;
         ValueFields.Remove(spec);
         if (spec.IsFormula)
         {
-            if (!Fields.Any(i => i.IsCalculated && i.Name == spec.Name))
-                Fields.Add(CsvFieldItem.Calculated(spec.Name, spec.Formula!));
+            if (!CalculatedFields.Any(i => i.Name == spec.Name))
+                CalculatedFields.Add(CsvFieldItem.Calculated(spec.Name, spec.Formula!));
         }
         else
         {
@@ -308,7 +311,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
                 Field = f.Field.Name,
                 Values = f.Allowed.Count == f.AllValues.Count ? null : f.Allowed.ToList(),
             }).ToList(),
-            Calculated = Fields.Where(i => i.IsCalculated).Select(i => new CsvCalcLayout
+            Calculated = CalculatedFields.Select(i => new CsvCalcLayout
             {
                 Name = i.Name,
                 Formula = i.Formula!,
@@ -330,6 +333,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
             ValueFields.Clear();
             FilterFields.Clear();
             Fields.Clear();
+            CalculatedFields.Clear();
             foreach (var f in _allFields) Fields.Add(CsvFieldItem.Plain(f));
 
             // 行维度（名字匹配）。
@@ -381,9 +385,9 @@ public sealed partial class CsvTableViewModel : ObservableObject
                 }
                 FilterFields.Add(filter);
             }
-            // 字段列表里的计算字段（未拖进值的）。
+            // 计算字段区的字段（未拖进值的）。
             foreach (var c in layout.Calculated)
-                Fields.Add(CsvFieldItem.Calculated(c.Name, c.Formula));
+                CalculatedFields.Add(CsvFieldItem.Calculated(c.Name, c.Formula));
         }
         finally
         {

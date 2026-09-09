@@ -73,27 +73,46 @@
     <!-- 第二块：字段面板（仅透视视图显示）——左字段列表 + 右投放区。
          左列固定宽（220px），使字段列表 WrapPanel 在固定宽度内换行（Auto 列会给无限宽度导致不换行溢出）。 -->
     <Grid Grid.Row="1" ColumnDefinitions="220,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
-      <!-- 左：字段列表（可拖拽源 + 拖回移除目标；含新建的计算字段 + 「＋计算字段」按钮） -->
-      <StackPanel Grid.Column="0" Margin="0,0,12,0">
+      <!-- 左：字段列表（可拖拽源 + 拖回移除目标）+ 独立的「计算字段」区；整列可滚动（字段多时滚动显示）。 -->
+      <StackPanel Grid.Column="0" Margin="0,0,12,0" MaxHeight="300">
         <TextBlock Classes="csv-label" Text="字段" Margin="0,0,0,4"/>
-        <Border x:Name="FieldsDropZone" Classes="drop-zone" VerticalAlignment="Top">
-          <StackPanel Spacing="4">
-            <ItemsControl ItemsSource="{Binding Fields}">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel Orientation="Horizontal"/>
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="know:CsvFieldItem">
-                  <local:CsvFieldChip/>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"
-                    HorizontalAlignment="Left"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8">
+            <!-- 普通字段（原始字段） -->
+            <Border x:Name="FieldsDropZone" Classes="drop-zone">
+              <ItemsControl ItemsSource="{Binding Fields}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="know:CsvFieldItem">
+                    <local:CsvFieldChip/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <!-- 计算字段（用户新建的公式字段，单独分区显示） -->
+            <TextBlock Classes="csv-label" Text="计算字段" Margin="0,0,0,2"/>
+            <StackPanel Spacing="4">
+              <ItemsControl ItemsSource="{Binding CalculatedFields}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="know:CsvFieldItem">
+                    <local:CsvFieldChip/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"
+                      HorizontalAlignment="Left"/>
+            </StackPanel>
           </StackPanel>
-        </Border>
+        </ScrollViewer>
       </StackPanel>
 
       <!-- 右：投放区（行维度 / 观测点 / 值） -->
