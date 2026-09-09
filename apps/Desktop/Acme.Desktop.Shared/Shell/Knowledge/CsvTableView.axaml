@@ -78,15 +78,15 @@
     <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
       <!-- 顶部：字段区两行横滑（字段多时左右滑动）。 -->
       <StackPanel Grid.Row="0" Spacing="3" Margin="0,0,0,6">
-        <!-- 第一行：原始字段（原始 CSV 列，横向单行，可左右滑动） -->
+        <!-- 第一行：原始字段（原始 CSV 列，字段多时自动换行，超高时垂直滚动） -->
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <TextBlock Classes="csv-label" Text="字段" Width="52" VerticalAlignment="Center"/>
-          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <TextBlock Classes="csv-label" Text="字段" Width="52" VerticalAlignment="Top" Margin="0,6,0,0"/>
+          <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <Border x:Name="FieldsDropZone" Classes="drop-zone" Padding="2">
               <ItemsControl ItemsSource="{Binding Fields}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal"/>
+                    <WrapPanel Orientation="Horizontal"/>
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -98,15 +98,15 @@
             </Border>
           </ScrollViewer>
         </StackPanel>
-        <!-- 第二行：计算字段（用户新建的公式字段，另起一行，横向单行，可左右滑动） -->
+        <!-- 第二行：计算字段（用户新建的公式字段，另起一行，自动换行，超高时垂直滚动） -->
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <TextBlock Classes="csv-label" Text="计算字段" Width="52" VerticalAlignment="Center"/>
-          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-            <StackPanel Orientation="Horizontal" Spacing="4">
+          <TextBlock Classes="csv-label" Text="计算字段" Width="52" VerticalAlignment="Top" Margin="0,6,0,0"/>
+          <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <WrapPanel Orientation="Horizontal">
               <ItemsControl ItemsSource="{Binding CalculatedFields}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal"/>
+                    <WrapPanel Orientation="Horizontal"/>
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -117,7 +117,7 @@
               </ItemsControl>
               <Button x:Name="AddCalcButton" Content="＋计算字段" FontSize="11" Padding="6,2"
                       VerticalAlignment="Center"/>
-            </StackPanel>
+            </WrapPanel>
           </ScrollViewer>
         </StackPanel>
       </StackPanel>
