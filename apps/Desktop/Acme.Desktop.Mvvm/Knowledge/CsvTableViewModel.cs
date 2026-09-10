@@ -129,6 +129,19 @@ public sealed partial class CsvTableViewModel : ObservableObject
     public int SourceRowCount => _table.RowCount;
     public int SourceColumnCount => _table.ColumnCount;
 
+    /// <summary>字段配置概览（折叠头部显示）：行维度 / 列维度 / 值 / 筛选 的字段名摘要。</summary>
+    public string FieldConfigSummary
+    {
+        get
+        {
+            var row = RowDimensions.Count > 0 ? string.Join("、", RowDimensions.Select(f => f.Name)) : "无";
+            var col = ColumnDimension?.Name ?? "无";
+            var val = ValueFields.Count > 0 ? string.Join("、", ValueFields.Select(v => v.Name)) : "无";
+            var flt = FilterFields.Count > 0 ? string.Join("、", FilterFields.Select(f => f.Field.Name)) : "无";
+            return $"行[{row}] · 列[{col}] · 值[{val}] · 筛选[{flt}]";
+        }
+    }
+
     /// <summary>源 CSV 内容重读回调（刷新用；宿主注入，读当前文件路径取最新内容）。null = 不支持刷新。</summary>
     private readonly Func<string>? _reloadContent;
 
@@ -296,6 +309,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
     /// <summary>槽位变化后重建透视 + 触发布局变更（自动保存）。恢复布局期间（<see cref="_applyingLayout"/>）不触发。</summary>
     private void AfterSlotChange()
     {
+        OnPropertyChanged(nameof(FieldConfigSummary));
         if (IsPivot) RebuildPivot();
         if (!_applyingLayout) LayoutChanged?.Invoke();
     }

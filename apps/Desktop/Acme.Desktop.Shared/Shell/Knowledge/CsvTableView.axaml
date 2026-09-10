@@ -74,9 +74,20 @@
       <Button Classes="csv-mode" x:Name="RefreshButton" Content="刷新" Click="OnRefreshClick"/>
     </StackPanel>
 
-    <!-- 第二块：字段面板（仅透视视图显示）——字段区（多行换行）+ 投放区，整体超高时垂直滚动。 -->
+    <!-- 第二块：字段面板（仅透视视图显示）——折叠为 Expander（⚙ 字段配置），配置好后收起占位更小，表格更多空间。 -->
     <Grid Grid.Row="1" Margin="8,4,8,6" IsVisible="{Binding IsPivot}">
-      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <Expander IsExpanded="True">
+        <Expander.Header>
+          <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+            <TextBlock Grid.Column="0" Text="⚙ 字段配置" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="11"
+                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Text="{Binding FieldConfigSummary}"/>
+          </Grid>
+        </Expander.Header>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" MaxHeight="320">
         <StackPanel Spacing="6">
           <!-- 顶部：字段区两行（原始字段 + 计算字段），各占满整宽、字段多时自动换行（多行铺开，不裁剪）。 -->
           <StackPanel Spacing="3">
@@ -225,6 +236,7 @@
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
+      </Expander>
     </Grid>
 
     <!-- ProDataGrid：动态列 + 虚拟化；单元格文本 CsvColumn.GenerateElement 零绑定直接赋值 -->
