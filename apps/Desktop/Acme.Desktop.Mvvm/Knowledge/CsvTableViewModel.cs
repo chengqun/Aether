@@ -434,7 +434,7 @@ public sealed partial class CsvTableViewModel : ObservableObject
     {
         var rowDimIndexes = RowDimensions.Select(f => f.ColumnIndex).ToArray();
         var pivotIdx = ColumnDimension?.ColumnIndex ?? -1;
-        if (pivotIdx < 0 || ValueFields.Count == 0) return;
+        if (ValueFields.Count == 0) return;
 
         // 筛选：每个筛选字段 → (列索引, 允许值集合)。空集合 = 不过滤该字段。
         var filters = FilterFields

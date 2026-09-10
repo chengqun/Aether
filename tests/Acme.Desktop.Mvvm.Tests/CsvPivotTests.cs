@@ -212,6 +212,37 @@ public class CsvPivotTests
         // 0.12345 * 100 = 12.345 → 12.35%
         Assert.Equal("12.35%", result.Rows[0][1]);
     }
+
+    [Fact]
+    public void Pivot_NoColumnDimension_DegradesToRowGroupOnly()
+    {
+        // 无观测点列（pivotColumnIndex = -1）→ 退化为仅按行维度分组，每个值字段一列。
+        var table = CsvParser.Parse(
+            "grp,val\nA,1\nA,2\nB,5\n");
+        var result = CsvPivot.Pivot(table, new[] { 0 }, -1, new[] { Single(1, "val") });
+        // 值头 = 值字段名（无「名 · 观测点」后缀）。
+        Assert.Equal(new[] { "val" }, result.ValueHeaders);
+        Assert.Equal(new[] { "grp" }, result.RowHeaders);
+        Assert.Empty(result.PivotHeaders);
+        // 2 行（A、B），值列聚合：A=3，B=5。
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("3", result.Rows[0][1]);
+        Assert.Equal("5", result.Rows[1][1]);
+    }
+
+    [Fact]
+    public void Pivot_NoColumnDimension_MultipleValueFields()
+    {
+        // 无观测点 + 多值字段 → 每个值字段一列（无观测点展开）。
+        var table = CsvParser.Parse(
+            "grp,od,obs_yi\nA,1,10\nA,3,20\n");
+        var result = CsvPivot.Pivot(table, new[] { 0 }, -1,
+            new[] { Single(1, "od"), Single(2, "obs_yi") });
+        Assert.Equal(new[] { "od", "obs_yi" }, result.ValueHeaders);
+        Assert.Single(result.Rows);
+        Assert.Equal("4", result.Rows[0][1]);   // od: 1+3
+        Assert.Equal("30", result.Rows[0][2]);  // obs_yi: 10+20
+    }
 }
 
 public class CsvFieldClassifierTests

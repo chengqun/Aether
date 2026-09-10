@@ -110,7 +110,10 @@ public static class CsvPivot
         if (colCount == 0)
             return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>());
 
-        pivotColumnIndex = Clamp(pivotColumnIndex, 0, colCount - 1);
+        // 列维度（观测点）可选：无观测点列时退化为「仅按行维度分组」的普通聚合（每个值字段一列）。
+        var hasPivot = pivotColumnIndex >= 0 && pivotColumnIndex < colCount;
+        if (hasPivot)
+            pivotColumnIndex = Clamp(pivotColumnIndex, 0, colCount - 1);
         valueSpecs = valueSpecs.Where(v => v != null).ToArray();
         if (valueSpecs.Count == 0)
             return new PivotResult(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>());
@@ -131,11 +134,13 @@ public static class CsvPivot
             .ToArray();
         var rowHeaders = dims.Select(i => table.Headers[i]).ToArray();
 
-        // 观测点列去重值（保首次序），数值自然序。
-        var pivotHeaders = table.Rows.Select(r => r[pivotColumnIndex]).Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.Ordinal).ToList();
-        NaturalSort(pivotHeaders);
-        var multiPivot = pivotHeaders.Count > 1;
+        // 观测点列去重值（保首次序），数值自然序。无观测点列时退化为单占位槽（每值字段一列，不按观测点分列）。
+        var pivotHeaders = hasPivot
+            ? table.Rows.Select(r => r[pivotColumnIndex]).Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.Ordinal).ToList()
+            : new List<string> { string.Empty };
+        if (hasPivot) NaturalSort(pivotHeaders);
+        var multiPivot = hasPivot && pivotHeaders.Count > 1;
 
         // 每个值字段：解析一次 AST + 引用字段（公式）。
         var specMeta = new List<(CsvValueSpec Spec, CsvFormula.Node? Ast, string[] RefFields, int NumIdx, Dictionary<string, int> HeaderToIdx)>();
@@ -184,8 +189,8 @@ public static class CsvPivot
                 group = new CellGroup(dimValues, specMeta.Count, pivotHeaders.Count);
                 groups[key] = group;
             }
-            var pivotValue = row[pivotColumnIndex];
-            var pivotIdx = pivotHeaders.IndexOf(pivotValue);
+            // 无观测点列时恒取槽位 0（每值字段一列）；有观测点列则按其值定位槽位。
+            var pivotIdx = hasPivot ? pivotHeaders.IndexOf(row[pivotColumnIndex]) : 0;
             if (pivotIdx < 0) continue;
             for (var si = 0; si < specMeta.Count; si++)
             {
@@ -276,7 +281,9 @@ public static class CsvPivot
             resultRows.Add(totalRow);
         }
 
-        return new PivotResult(rowHeaders, pivotHeaders, valueHeaders, resultRows);
+        // 无观测点列时 PivotHeaders 对外为空（内部 pivotHeaders 含单占位槽仅作聚合用）。
+        var publicPivotHeaders = hasPivot ? pivotHeaders : (IReadOnlyList<string>)Array.Empty<string>();
+        return new PivotResult(rowHeaders, publicPivotHeaders, valueHeaders, resultRows);
     }
 
     private static string FormatValue(decimal v, bool asPercent, int? decimals)
