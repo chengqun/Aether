@@ -89,12 +89,12 @@ graph TD
 
 ## 解决方案结构
 
-单解决方案 `Aether.AI.Platform.slnx`（`.slnx`，非 `.sln`），.NET 10，共 107 个项目。
+单解决方案 `Aether.AI.Platform.slnx`（`.slnx`，非 `.sln`），.NET 10，共 116 个项目（`src/` 10 · `business/` 61 · `ai/` 9 · `apps/` 10 · `server/` 10 · `tests/` 15 · `mcp/` 1）。
 
 | 目录 | 职责 |
 |------|------|
 | `src/` | **Aether.AI 平台**（独立可用）：Abstractions / Core / Harness / Workflows / Memory / Mcp / Hosting |
-| `business/` | **纯 DDD 业务上下文**：AppAuth / Notes / Automation / Ctp / Quotes / Securities / Trading(+Runtime) / StockTrading / AppAutomation / DataQuery / ChatSocial / Moments / Qifu … |
+| `business/` | **纯 DDD 业务上下文**：AppAuth / AppUpdate / Notes / Automation / Ctp / Quotes / Securities / Trading(+Runtime.Scripting) / StockTrading / AppAutomation / DataQuery / ChatSocial / Moments / DeviceConnect / DeviceManagement / Llm / ServiceAccount / Qifu / Video … |
 | `ai/` | **业务 AI 适配器**：8 工具适配器 + 1 Agent 桥接 |
 | `apps/` | 客户端：Avalonia 桌面（`Desktop/`）+ MAUI 移动（`Mobile/`）+ 租户 host |
 | `server/` | **ABP 服务端**（`Aether.Server.*`）：HttpApi.Host（:44319）+ Blazor 管理后台（:44337）+ DbMigrator |
