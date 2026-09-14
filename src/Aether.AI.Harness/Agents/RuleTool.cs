@@ -24,14 +24,18 @@ public static class RuleTool
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(toolResolver);
 
-        Func<string, string?, Task<string>> invoke = async (name, input) =>
+        // MEAI AIFunctionFactory 把 CancellationToken 末参识别为注入参数——不暴露进 JSON schema，
+        // 挂 agent 运行时的取消令牌（对齐全仓其它工具）。旧实现传 CancellationToken.None：规则内部跑的
+        // 业务工具（executor 侧 InvokeToolAsync → AIFunction.InvokeAsync）也全部拿到 None，
+        // agent 中断/超时后规则链仍继续跑业务工具。
+        Func<string, string?, CancellationToken, Task<string>> invoke = async (name, input, cancellationToken) =>
         {
             if (!registry.TryGet(name, out var entry))
             {
                 return $"规则不存在: {name}";
             }
             var executor = new RuleToolExecutor(new RuleProgramBrain(entry.Program), toolResolver);
-            return await executor.RunAsync(input, CancellationToken.None).ConfigureAwait(false);
+            return await executor.RunAsync(input, cancellationToken).ConfigureAwait(false);
         };
 
         return AIFunctionFactory.Create(invoke, ToolName, BuildDescription(registry));

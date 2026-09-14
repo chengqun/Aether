@@ -350,17 +350,31 @@ public sealed class SqliteConversationStore : SqliteStoreBase, IConversationStor
     /// <summary>
     /// 迁移：检测旧 flat <c>conversation_message</c> 表（旧 schema 签名）→ 整库重置（DROP 旧表 + 重建新 schema）。
     /// 用户已决定旧 <c>conversations.db</c> 历史作废。全新库无 <c>conversation_message</c> → 无操作。
+    /// <para>
+    /// 另补 <c>UNIQUE(conversation_id, seq)</c>（唯一索引）——seq TOCTOU 守卫：并发 <see cref="AppendRunAsync"/>
+    /// （桌面/手机多路径同时落库）各自算 max+1 可能拿到同一 seq 写重序。唯一定位索引而非表级约束，
+    /// 老库无需重建表即可补上；建前先清可能已存在的重复（并发窗口曾写入），保留每个 (conv,seq) 最新一行。
+    /// </para>
     /// </summary>
     protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
     {
-        if (!await TableExistsAsync(connection, OldMsgTable, ct)) return;
+        if (await TableExistsAsync(connection, OldMsgTable, ct))
+        {
+            // 旧 flat-message schema → 整库重置。
+            await ExecAsync(connection, "DROP TABLE IF EXISTS " + OldMsgTable, ct);
+            await ExecAsync(connection, "DROP TABLE IF EXISTS " + EventTable, ct);
+            await ExecAsync(connection, "DROP TABLE IF EXISTS " + RunTable, ct);
+            await ExecAsync(connection, "DROP TABLE IF EXISTS " + ConvTable, ct);
+            await ExecAsync(connection, CreateSchemaSql, ct);
+        }
 
-        // 旧 flat-message schema → 整库重置。
-        await ExecAsync(connection, "DROP TABLE IF EXISTS " + OldMsgTable, ct);
-        await ExecAsync(connection, "DROP TABLE IF EXISTS " + EventTable, ct);
-        await ExecAsync(connection, "DROP TABLE IF EXISTS " + RunTable, ct);
-        await ExecAsync(connection, "DROP TABLE IF EXISTS " + ConvTable, ct);
-        await ExecAsync(connection, CreateSchemaSql, ct);
+        // seq TOCTOU 守卫：先清重复（保留每 (conv,seq) 最后插入的一行，rowid 是插入序）、再建唯一
+        // 索引——两条都幂等，新库（含上方整库重置后的新 schema）与既有库同路径。
+        await ExecAsync(connection,
+            "DELETE FROM " + RunTable + " WHERE rowid NOT IN " +
+            "(SELECT MAX(rowid) FROM " + RunTable + " GROUP BY conversation_id, seq)", ct);
+        await ExecAsync(connection,
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_run_conv_seq ON " + RunTable + "(conversation_id, seq)", ct);
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection c, string name, CancellationToken ct)

@@ -51,7 +51,13 @@ public class GlobTool
 
             await Task.Run(() =>
             {
-                SearchFiles(searchPath, pattern, files, maxResults, cancellationToken);
+                // 匹配目标按模式是否含路径分隔符分流：含 `/`（**/*.cs、src/**/x.cs）按
+                // 「相对搜索根的全路径」匹配；不含 `/`（*.cs）保持既有「递归每层按文件名」语义。
+                // 旧实现只用 Path.GetFileName 对含 `/` 的正则匹配 → **/ 前的 `/` 永远匹不上 → 返 0。
+                var normalized = pattern.Replace('\\', '/').TrimStart('/');
+                var regex = BuildRegex(normalized);
+                var matchFullPath = normalized.Contains('/');
+                SearchFiles(searchPath, searchPath, regex, matchFullPath, files, maxResults, cancellationToken);
             }, cancellationToken);
 
             return new Output
@@ -65,7 +71,7 @@ public class GlobTool
         }
     }
 
-    private void SearchFiles(string directory, string pattern, List<string> results, int maxResults, CancellationToken cancellationToken)
+    private void SearchFiles(string searchRoot, string directory, Regex regex, bool matchFullPath, List<string> results, int maxResults, CancellationToken cancellationToken)
     {
         if (results.Count >= maxResults)
             return;
@@ -73,8 +79,6 @@ public class GlobTool
         try
         {
             var files = Directory.GetFiles(directory);
-            var regexPattern = ConvertGlobToRegex(pattern);
-            var regex = new Regex(regexPattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
             foreach (var file in files)
             {
@@ -84,8 +88,10 @@ public class GlobTool
                 if (results.Count >= maxResults)
                     return;
 
-                var fileName = Path.GetFileName(file);
-                if (regex.IsMatch(fileName))
+                var matchTarget = matchFullPath
+                    ? Path.GetRelativePath(searchRoot, file).Replace('\\', '/')
+                    : Path.GetFileName(file);
+                if (regex.IsMatch(matchTarget))
                 {
                     results.Add(file);
                 }
@@ -105,7 +111,7 @@ public class GlobTool
                 if (FileSearchHelpers.IsSymlinkDirectory(subdir))
                     continue;
 
-                SearchFiles(subdir, pattern, results, maxResults, cancellationToken);
+                SearchFiles(searchRoot, subdir, regex, matchFullPath, results, maxResults, cancellationToken);
             }
         }
         catch (UnauthorizedAccessException)
@@ -113,13 +119,18 @@ public class GlobTool
         }
     }
 
-    private string ConvertGlobToRegex(string globPattern)
+    private Regex BuildRegex(string normalizedGlob)
     {
-        var regexPattern = Regex.Escape(globPattern);
-        regexPattern = regexPattern
+        // **/ = 零个或多个目录段 + 尾部斜杠（`**/*.cs` 命中根文件，`src/**/x.cs` 命中 src/x.cs）；
+        // ** = 任意字符（跨段）；* = 单路径段内任意；? = 单路径段内单字符。
+        // 段分隔符固定 /（传入时已把 \ 规整为 /，Windows 相对路径同样转 /）。
+        // 替换顺序：先最长 `\*\*/`（含尾随斜杠），再孤立 `\*\*`，再单 `\*`，最后 `\?`。
+        var escaped = Regex.Escape(normalizedGlob)
+            .Replace("\\*\\*/", "(?:.*/)?")
             .Replace("\\*\\*", ".*")
-            .Replace("\\*", "[^\\\\/]*")
-            .Replace("\\?", "[^\\\\/]");
-        return "^" + regexPattern + "$";
+            .Replace("\\*", "[^/]*")
+            .Replace("\\?", "[^/]");
+
+        return new Regex("^" + escaped + "$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     }
 }

@@ -1,6 +1,7 @@
 using Aether.AI.Core.Conversations;
 using Aether.AI.Core.Conversations.Runs;
 using Aether.AI.Memory.Stores;
+using Microsoft.Data.Sqlite;
 
 namespace Aether.AI.Memory.Tests;
 
@@ -138,6 +139,79 @@ public class SqliteConversationStoreTests : IDisposable
         Assert.Equal("first", runs[0].UserMessage);
         Assert.Equal(2, runs[1].Seq);
         Assert.Equal("second", runs[1].UserMessage);
+    }
+
+    [Fact]
+    public async Task AppendRun_same_seq_within_conversation_is_rejected()
+    {
+        // seq TOCTOU 守卫：并发两路 AppendRunAsync 各算 max+1 可能拿到同一 seq 写重序——
+        // UNIQUE(conversation_id, seq) 必须让第二个落库失败（而不是静默覆盖/双行）。
+        var conv = new Conversation { ConversationId = Guid.NewGuid(), UserId = "", AgentId = "a", AgentName = "A", Title = "t" };
+        await _store.SaveConversationAsync(conv);
+
+        await AppendTextRunAsync(conv.ConversationId, 1, "first");
+        await Assert.ThrowsAsync<SqliteException>(() => AppendTextRunAsync(conv.ConversationId, 1, "dup"));
+    }
+
+    [Fact]
+    public async Task Migrate_dedups_preexisting_duplicate_seq_rows()
+    {
+        // 手工造「旧库」：事件流 schema 但无唯一索引 + 同 (conv, seq) 两行（TOCTOU 窗口曾发生）。
+        // 新 store 首次打开时 MigrateAsync 清重复（保留最后插入的一行）+ 建唯一索引。
+        var path = Path.Combine(Path.GetTempPath(), $"conv-mig-{Guid.NewGuid():N}.db");
+        try
+        {
+            var convId = Guid.NewGuid();
+            await using (var conn = new SqliteConnection($"Data Source={path}"))
+            {
+                await conn.OpenAsync();
+                await ExecRaw(conn,
+                    "CREATE TABLE conversation (id TEXT NOT NULL PRIMARY KEY, user_id TEXT, agent_id TEXT NOT NULL, agent_name TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_message_preview TEXT, last_message_at TEXT); " +
+                    "CREATE TABLE agent_run (id TEXT NOT NULL PRIMARY KEY, conversation_id TEXT NOT NULL, seq INTEGER NOT NULL, status INTEGER NOT NULL, agent_id TEXT NOT NULL, agent_name TEXT NOT NULL, model_id TEXT, user_message TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT); " +
+                    "CREATE TABLE agent_event (id TEXT NOT NULL PRIMARY KEY, run_id TEXT NOT NULL, seq INTEGER NOT NULL, event_type INTEGER NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL)");
+                for (var i = 0; i < 2; i++)
+                {
+                    await ExecRaw(conn,
+                        "INSERT INTO agent_run (id, conversation_id, seq, status, agent_id, agent_name, model_id, user_message, started_at, finished_at) " +
+                        $"VALUES ('{Guid.NewGuid():N}', '{convId}', 1, 3, 'a', 'A', NULL, 'fire-{i}', '2026-01-0{i + 1}T00:00:00.0000000+00:00', NULL)");
+                    // conversation_id 用默认 ToString()（连字符 D 格式）——store 读写各处一致；N 格式会匹配不上。
+                }
+            }
+
+            // 首次打开触发 EnsureSchemaAsync → MigrateAsync（dedup + 唯一索引）。
+            var store = SqliteConversationStore.ForFile(path);
+            var runs = await store.GetRunsAsync(convId);
+            Assert.Single(runs);
+            Assert.Equal("fire-1", runs[0].UserMessage); // 按 rowid 保留最后插入的那行
+
+            // 唯一索引已生效：同 (conv, seq) 再落库被拒。
+            var run = new AgentRun
+            {
+                ConversationId = convId,
+                Seq = 1,
+                Status = RunStatus.Completed,
+                AgentId = "a",
+                AgentName = "A",
+                UserMessage = "dup",
+                StartedAt = DateTimeOffset.UtcNow,
+                FinishedAt = DateTimeOffset.UtcNow,
+            };
+            await Assert.ThrowsAsync<SqliteException>(() =>
+                store.AppendRunAsync(run, Array.Empty<AgentEvent>()));
+        }
+        finally
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+            try { if (File.Exists(path + "-wal")) File.Delete(path + "-wal"); } catch { }
+            try { if (File.Exists(path + "-shm")) File.Delete(path + "-shm"); } catch { }
+        }
+    }
+
+    private static async Task ExecRaw(SqliteConnection conn, string sql)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private async Task AppendTextRunAsync(Guid conversationId, int seq, string text, DateTimeOffset? startedAt = null)

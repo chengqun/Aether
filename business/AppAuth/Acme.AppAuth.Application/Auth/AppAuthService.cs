@@ -22,6 +22,10 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
+    // 刷新令牌轮换的 single-flight 守卫（见 SingleFlightRefreshAsync 注释）。
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private Task<bool>? _inFlightRefresh;
+
     public AppAuthService(HttpClient http, IAppTokenStore store, AppServerOptions options)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -82,9 +86,58 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
     }
 
     /// <inheritdoc/>
-    public async Task<bool> RefreshAsync(CancellationToken ct = default)
+    public Task<bool> RefreshAsync(CancellationToken ct = default) => SingleFlightRefreshAsync(ct);
+
+    /// <summary>single-flight 刷新：并发 401（启动时证券同步+聊天+动态并行全 401）若各自发刷新 →
+    /// N 个并发 refresh_token grant，OpenIddict 轮换后首个成功、余者失败 → 败者 ClearAsync 抹掉
+    /// 胜者刚存的 token → 会话有效却被登出。leader 独占刷新，followers 等同一个 in-flight Task。</summary>
+    private async Task<bool> SingleFlightRefreshAsync(CancellationToken ct)
     {
-        var refresh = await _store.GetRefreshTokenAsync(ct);
+        Task<bool> shared;
+        var leader = false;
+        await _refreshLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_inFlightRefresh is null)
+            {
+                // 核心刷新与任一调用者的 CT 解耦——发起者取消不应让并行等待者陪葬。
+                _inFlightRefresh = RefreshCoreAsync();
+                leader = true;
+            }
+            shared = _inFlightRefresh;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+
+        try
+        {
+            return await shared.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (leader)
+            {
+                // 维护清位不受调用者取消干扰（WaitAsync(None)），否则缓存的任务永久残留。
+                await _refreshLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    if (ReferenceEquals(_inFlightRefresh, shared))
+                        _inFlightRefresh = null;
+                }
+                finally
+                {
+                    _refreshLock.Release();
+                }
+            }
+        }
+    }
+
+    /// <summary>单次刷新核心（被 single-flight 独占调用，无 CT——见 <see cref="SingleFlightRefreshAsync"/>）。</summary>
+    private async Task<bool> RefreshCoreAsync()
+    {
+        var refresh = await _store.GetRefreshTokenAsync();
         if (string.IsNullOrEmpty(refresh)) return false;
 
         var form = new Dictionary<string, string>
@@ -98,29 +151,29 @@ public sealed class AppAuthService : IAppAuthService, IAppTokenRefresher
 
         if (string.IsNullOrWhiteSpace(_options.BaseUrl))
         {
-            await _store.ClearAsync(ct);
+            await _store.ClearAsync();
             return false;
         }
 
         HttpResponseMessage response;
         try
         {
-            response = await PostFormAsync("connect/token", form, ct);
+            response = await PostFormAsync("connect/token", form, CancellationToken.None);
         }
         catch
         {
-            await _store.ClearAsync(ct);
+            await _store.ClearAsync();
             return false;
         }
         if (!response.IsSuccessStatusCode)
         {
-            await _store.ClearAsync(ct);
+            await _store.ClearAsync();
             return false;
         }
 
-        var username = await _store.GetUsernameAsync(ct) ?? "";
-        var token = await ParseTokenAsync(response, username, ct);
-        await _store.SaveAsync(token, ct);
+        var username = await _store.GetUsernameAsync() ?? "";
+        var token = await ParseTokenAsync(response, username, CancellationToken.None);
+        await _store.SaveAsync(token);
         return true;
     }
 

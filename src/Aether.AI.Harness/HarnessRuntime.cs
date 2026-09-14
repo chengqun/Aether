@@ -160,9 +160,22 @@ public sealed class HarnessRuntime
         session.State = SessionState.Active;
         session.Touch();
 
-        var fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
-            name => session.ToolCalls.Add(name),
-            emitTelemetry: definition.EnableOpenTelemetry, agentId: definition.Id, conversationId: sessionId.ToString(), mode: desiredMode);
+        string fullText;
+        try
+        {
+            fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
+                name => session.ToolCalls.Add(name),
+                emitTelemetry: definition.EnableOpenTelemetry, agentId: definition.Id, conversationId: sessionId.ToString(), mode: desiredMode);
+        }
+        catch (Exception ex)
+        {
+            // 镜像 RunAsync 的 Faulted 分支：流式 run 里 provider 网络错误/内部异常若不兜住，
+            // 状态永远停在 Active（Idle 只在正常路径赋值）→ 后续轮次/UI 误判会话仍在跑。
+            session.State = SessionState.Faulted;
+            session.Properties["lastError"] = ex.Message;
+            session.Touch();
+            throw;
+        }
 
         session.Messages.Add(Message.Assistant(fullText));
         session.State = SessionState.Idle;

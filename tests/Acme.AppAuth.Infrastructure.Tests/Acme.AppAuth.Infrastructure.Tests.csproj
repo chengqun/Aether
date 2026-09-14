@@ -21,6 +21,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Domain\Acme.AppAuth.Domain.csproj" />
     <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Infrastructure\Acme.AppAuth.Infrastructure.csproj" />
+    <!-- AppAuthService（Application）single-flight 刷新回归测试 -->
+    <ProjectReference Include="..\..\business\AppAuth\Acme.AppAuth.Application\Acme.AppAuth.Application.csproj" />
   </ItemGroup>
 
 </Project>

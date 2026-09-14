@@ -142,6 +142,43 @@ public class RuleToolTests
         Assert.Contains("规则不存在", resultObj?.ToString());
     }
 
+    [Fact]
+    public async Task RuleTool_injects_runtime_cancellation_token_into_inner_tools()
+    {
+        // 规则：任何输入 → Abort。Abort 检查它拿到的 CT——若 RuleTool 的 invoke 仍传
+        // CancellationToken.None（修复前），agent 中断/超时后规则链内部业务工具照跑。
+        var program = new RuleProgram
+        {
+            Steps = new()
+            {
+                new RuleStep { Match = new() { MaxToolCalls = 0 }, Action = new() { Tool = "Abort", Args = new() { ["input"] = "x" } } },
+                new RuleStep { Match = new() { MinToolCalls = 1 }, Action = new() { ReplyText = "ok" } },
+            },
+        };
+        var reg = new RuleRegistry();
+        reg.Register("abort_rule", program, "取消检查");
+        var sawCanceledCt = false;
+        var runRule = RuleTool.Create(reg, n => n == "Abort"
+            // 内层工具也要用惯例名 cancellationToken —— MEAI 按「参名==cancellationToken」识别注入参数、
+            // 排除出 JSON schema（不按类型）：旧写法 (_, ct) 让 ct 成了普通 schema 参，取不到运行时 CT。
+            ? AIFunctionFactory.Create((Func<string, CancellationToken, string>)((input, cancellationToken) =>
+              {
+                  sawCanceledCt = cancellationToken.IsCancellationRequested;
+                  return "aborted";
+              }), "Abort")
+            : null);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel(); // 模拟 agent 运行已在取消
+
+        // 调用方 CT 经 AIFunctionFactory 注入 invoke 的 CancellationToken 末参（MEAI 约定），
+        // 再透传给 executor 内部业务工具。旧实现此处是 CancellationToken.None → 断言失败。
+        await runRule.InvokeAsync(
+            new AIFunctionArguments { ["name"] = "abort_rule", ["input"] = "x" }, cts.Token);
+
+        Assert.True(sawCanceledCt); // 内部工具收到的 CT == 调用 run_rule 的 CT（非 None）
+    }
+
     // —— 端到端：模拟 LLM agent 调 run_rule,业务工具对 LLM 隐藏 ——
 
     [Fact]
