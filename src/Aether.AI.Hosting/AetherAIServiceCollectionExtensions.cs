@@ -141,12 +141,18 @@ public static class AetherAIServiceCollectionExtensions
             return factory;
         });
         services.AddSingleton<SessionManager>();
+        // 运行关键节点信号出口：HarnessRuntime 经构造参数注入，Harness 内每轮 run 直接广播
+        // （不再依赖聊天 VM 在场——Automation 定时任务/工作流同样拿到）。宿主（桌面/手机）可
+        // 往这个 fanout 上 Add 自己的消费者（如桌宠路由器）后覆盖注册 IRunProgressSink。
+        services.AddSingleton<RunProgressFanout>();
+        services.AddSingleton<IRunProgressSink>(sp => sp.GetRequiredService<RunProgressFanout>());
         services.AddSingleton<HarnessRuntime>(sp =>
         {
             var runtime = new HarnessRuntime(
                 sp.GetRequiredService<AgentFactory>(),
                 sp.GetRequiredService<SessionManager>(),
-                sp.GetService<SessionConversationMap>());
+                sp.GetService<SessionConversationMap>(),
+                sp.GetService<IRunProgressSink>());
             // Register every agent definition contributed via the builder.
             foreach (var definition in sp.GetServices<AgentDefinition>())
             {

@@ -13,6 +13,8 @@ namespace Aether.AI.Core.Agents;
 ///   <item><see cref="OnTodoList"/>：当前待办列表快照（<c>todos_*</c> 调用后读 live 状态）。</item>
 ///   <item><see cref="OnError"/>：非致命错误（<c>ErrorContent</c>）文本。</item>
 ///   <item><see cref="OnUsage"/>：token 用量摘要（<c>UsageContent</c>）。</item>
+///   <item><see cref="OnProgress"/>：本轮运行的关键节点信号（<see cref="RunProgress"/>）——工具起止/审批/计划/
+///     推理/完成/错误。由 Harness 从与其余回调**同一事件源**构造，粒度比逐字 token 粗（见 <see cref="RunProgressKind"/>）。</item>
 /// </list>
 /// </para>
 /// 所有回调均可空，未提供则该类事件被忽略。
@@ -24,4 +26,5 @@ public sealed record StreamHandlers(
     Func<ToolApprovalRequest, CancellationToken, Task>? OnApprovalRequest = null,
     Func<IReadOnlyList<TodoItemInfo>, CancellationToken, Task>? OnTodoList = null,
     Func<string, CancellationToken, Task>? OnError = null,
-    Action<string>? OnUsage = null);
+    Action<string>? OnUsage = null,
+    Action<RunProgress>? OnProgress = null);

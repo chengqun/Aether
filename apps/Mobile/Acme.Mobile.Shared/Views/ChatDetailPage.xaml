@@ -14,26 +14,31 @@
         <conv:StringToBoolConverter x:Key="StringToBool" />
         <conv:MarkdownTableFillConverter x:Key="MarkdownTableFill" />
 
-        <!-- 我的消息：右侧绿色气泡 -->
+        <!-- 我的消息：右侧绿色气泡。
+             根元素必须是 Grid（占满 cell 全宽）而非 HorizontalStackLayout（按内容收缩）——
+             iOS CollectionView + LinearItemsLayout 下 StackLayout 根会让 cell 只分配内容宽度，
+             End 无多余空间可推 → 短消息贴左、长消息测量不一致被裁。内层 Border 负责右对齐。 -->
         <DataTemplate x:Key="MineTemplate" x:DataType="domain:ChatMessage">
-            <HorizontalStackLayout Margin="12,4" HorizontalOptions="End">
+            <Grid Margin="12,4" HorizontalOptions="Fill">
                 <Border BackgroundColor="{StaticResource BubbleMine}"
+                        HorizontalOptions="End"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
                         Padding="12,8" MaximumWidthRequest="280">
                     <Label Text="{Binding Content}" TextColor="{StaticResource TextPrimary}" FontSize="15" LineBreakMode="WordWrap" />
                 </Border>
-            </HorizontalStackLayout>
+            </Grid>
         </DataTemplate>
 
-        <!-- 对方消息：左侧白色气泡 + Markdown -->
+        <!-- 对方消息：左侧白色气泡 + Markdown（同上：Grid 根 + 内层 Start） -->
         <DataTemplate x:Key="OtherTemplate" x:DataType="domain:ChatMessage">
-            <HorizontalStackLayout Margin="12,4" HorizontalOptions="Start">
+            <Grid Margin="12,4" HorizontalOptions="Fill">
                 <Border BackgroundColor="{AppThemeBinding Light={StaticResource BubbleOther}, Dark={StaticResource BubbleOtherDark}}"
+                        HorizontalOptions="Start"
                         StrokeShape="RoundRectangle 14" StrokeThickness="0"
                         Padding="12,8" MaximumWidthRequest="300">
                     <md:MarkdownView MarkdownText="{Binding Content, Converter={StaticResource MarkdownTableFill}}" Theme="{StaticResource AppMarkdownTheme}" UseAppTheme="True" />
                 </Border>
-            </HorizontalStackLayout>
+            </Grid>
         </DataTemplate>
 
         <!-- 人类聊天选择器：按 SenderId == 当前用户 区分我的/对方（ChatMessage 域类型无 Role） -->

@@ -291,11 +291,19 @@ public static class DesktopCompositionExtensions
         // 提交消息生成（SCM 页 ✨ 按钮 → 取当前 git 变更 diff 摘要 → LLM 生成提交消息填入输入框）
         services.AddSingleton<ICommitMessageService, CommitMessageService>();
 
-        // 运行关键节点信号 + 桌宠逐字流路由器：ChatWorkspaceViewModel 解析 IRunProgressSink/IPetTokenStream（常驻），
-        // 桌宠懒建后 WorkbenchWindow 经 PetStatusFeedRouter.SetTarget 指向活的 PetWindow；未建宠物时静默丢弃。
+        // 运行关键节点信号 + 桌宠逐字流：信号源已下沉 Harness（RunProgressFanout 由 AddAetherAI 注册、
+        // 注入 HarnessRuntime），此处把桌宠路由器挂进该 fanout 作消费者。桌宠懒建（首次最小化才实例化），
+        // 故路由器常驻、由 WorkbenchWindow 经 SetTarget 指向活的 PetWindow；未建宠物时 Post 静默丢弃。
         services.AddSingleton<PetStatusFeedRouter>();
-        services.AddSingleton<IRunProgressSink>(sp => sp.GetRequiredService<PetStatusFeedRouter>());
         services.AddSingleton<IPetTokenStream>(sp => sp.GetRequiredService<PetStatusFeedRouter>());
+        // 覆盖 AddAetherAI 的默认 IRunProgressSink 注册（同为 fanout 单例，额外挂上桌宠路由器）——
+        // 最后注册者胜，故 HarnessRuntime 构造时解析到的即此已挂载的 fanout。
+        services.AddSingleton<IRunProgressSink>(sp =>
+        {
+            var fanout = sp.GetRequiredService<RunProgressFanout>();
+            fanout.Add(sp.GetRequiredService<PetStatusFeedRouter>());
+            return fanout;
+        });
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;

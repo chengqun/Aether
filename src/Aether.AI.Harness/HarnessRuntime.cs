@@ -35,15 +35,18 @@ public sealed class HarnessRuntime
     private readonly AgentFactory _factory;
     private readonly SessionManager _sessions;
     private readonly SessionConversationMap _sessionConversationMap;
+    private readonly IRunProgressSink? _progressSink;
     private readonly ConcurrentDictionary<string, AgentDefinition> _definitions = new();
     private readonly ConcurrentDictionary<string, AIAgent> _agents = new();
     private readonly ConcurrentDictionary<Guid, FrameworkAgentSession> _frameworkSessions = new();
 
-    public HarnessRuntime(AgentFactory factory, SessionManager sessions, SessionConversationMap? sessionConversationMap = null)
+    public HarnessRuntime(AgentFactory factory, SessionManager sessions,
+        SessionConversationMap? sessionConversationMap = null, IRunProgressSink? progressSink = null)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sessionConversationMap = sessionConversationMap ?? new SessionConversationMap();
+        _progressSink = progressSink;
     }
 
     public SessionManager Sessions => _sessions;
@@ -164,7 +167,7 @@ public sealed class HarnessRuntime
         try
         {
             fullText = await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
-                name => session.ToolCalls.Add(name),
+                name => session.ToolCalls.Add(name), _progressSink,
                 emitTelemetry: definition.EnableOpenTelemetry, agentId: definition.Id, conversationId: sessionId.ToString(), mode: desiredMode);
         }
         catch (Exception ex)
@@ -174,12 +177,17 @@ public sealed class HarnessRuntime
             session.State = SessionState.Faulted;
             session.Properties["lastError"] = ex.Message;
             session.Touch();
+            // 本轮以异常收敛（未走到核心的正常返回）→ 进度消费者须收到 RunError，
+            // 否则桌宠等形态会永远停在「工作」态。信号源下沉后此处由 Harness 统一兜底。
+            _progressSink?.Post(new RunProgress(RunProgressKind.RunError, Text: ex.Message));
             throw;
         }
 
         session.Messages.Add(Message.Assistant(fullText));
         session.State = SessionState.Idle;
         session.Touch();
+        // RunDone 不在此处发射——RunStreamingCoreAsync 在流正常跑完时已统一发射（对所有消费者
+        // 一致：聊天/工作流/Automation），此处再发会双发。
         return fullText;
     }
 
@@ -200,7 +208,18 @@ public sealed class HarnessRuntime
     {
         if (desiredMode is not null)
             await TrySetModeAsync(agent, frameworkSession, desiredMode, cancellationToken).ConfigureAwait(false);
-        return await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken, onToolCallName: null);
+        try
+        {
+            // RunDone 由 RunStreamingCoreAsync 在流正常跑完时发射（两重载共用，见该处注释）。
+            return await RunStreamingCoreAsync(agent, frameworkSession, userMessage, handlers, approvalResponse, cancellationToken,
+                onToolCallName: null, _progressSink);
+        }
+        catch (Exception ex)
+        {
+            // 同 AetherSession 重载：异常收敛也要让进度消费者收到 RunError（无簿记场景亦如此）。
+            _progressSink?.Post(new RunProgress(RunProgressKind.RunError, Text: ex.Message));
+            throw;
+        }
     }
 
     /// <summary>读取当前会话的 AgentMode（plan/execute…）；agent 未启用 AgentModeProvider 返回 null。</summary>
@@ -254,6 +273,7 @@ public sealed class HarnessRuntime
         StreamHandlers? handlers, ToolApprovalDecision? approvalResponse,
         CancellationToken cancellationToken,
         Action<string>? onToolCallName,
+        IRunProgressSink? progressSink = null,
         bool emitTelemetry = false, string? agentId = null, string? conversationId = null, string? mode = null)
     {
         // 每轮 run 把「当前 agent / conversation」写入 ambient 上下文（AsyncLocal），供宿主层工具
@@ -265,8 +285,7 @@ public sealed class HarnessRuntime
         AgentExecutionContext.CurrentConversationId.Value = conversationId;
         try
         {
-        var sb = new System.Text.StringBuilder();
-        // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
+        var sb = new System.Text.StringBuilder();        // callId -> 工具名：FunctionResultContent 无 Name 字段，靠 CallId 回查调用时记录的名称。
         var toolNamesByCallId = new Dictionary<string, string>();
 
         // OpenTelemetry：EnableOpenTelemetry 时围本轮 run 起 Activity（无 listener 时 StartActivity 返回 null，cheap）。
@@ -288,6 +307,8 @@ public sealed class HarnessRuntime
             if (req is null)
             {
                 // 无对应待审请求（可能已被 always-approve 规则自动消化）→ 本轮无内容。
+                // 仍发 RunDone：这是本轮的正常收敛，否则消费者会因「既无 Done 也无 Error」停在工作中。
+                progressSink?.Post(new RunProgress(RunProgressKind.RunDone));
                 return string.Empty;
             }
             // 防御：原请求必须带可绑定的 tool_use（FunctionCallContent + CallId）。否则构造出的
@@ -299,6 +320,8 @@ public sealed class HarnessRuntime
                 RemovePendingApproval(frameworkSession, approvalResponse.RequestId);
                 if (handlers?.OnError is not null)
                     await handlers.OnError("审批请求已失效（缺少对应的工具调用），请重试。", cancellationToken).ConfigureAwait(false);
+                // 本轮无法收敛为正常结果 → 发 RunError 而非 RunDone，消费者显错态而不是误报「搞定」。
+                progressSink?.Post(new RunProgress(RunProgressKind.RunError, Text: "审批请求已失效（缺少对应的工具调用）。"));
                 return string.Empty;
             }
             var reason = approvalResponse.Reason ?? string.Empty;
@@ -344,6 +367,9 @@ public sealed class HarnessRuntime
                                     ToInputDict(call.Arguments), null),
                                 cancellationToken).ConfigureAwait(false);
                         }
+                        // 关键节点：工具开始（与 OnToolEvent 同一事件源，粒度更粗；轮询去重在 Fanout 里）。
+                        EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.ToolStarted,
+                            ToolName: call.Name!, ToolArgument: FirstArgSummary(call.Arguments)));
                         break;
 
                     case FunctionResultContent result:
@@ -361,11 +387,21 @@ public sealed class HarnessRuntime
                         }
                         // todos_* 调用后读 live 待办列表上抛（计划 UI）。
                         // 放宽匹配：MAF 版本不同工具名可能为 todos_add / todos / todo_add 等。
-                        if ((name.StartsWith("todo", StringComparison.OrdinalIgnoreCase))
-                            && handlers?.OnTodoList is not null)
+                        if (name.StartsWith("todo", StringComparison.OrdinalIgnoreCase) && handlers is not null)
                         {
-                            await RaiseTodoListAsync(agent, frameworkSession, handlers.OnTodoList, cancellationToken).ConfigureAwait(false);
+                            var todos = await ReadTodoListAsync(agent, frameworkSession, cancellationToken).ConfigureAwait(false);
+                            if (todos is not null)
+                            {
+                                if (handlers.OnTodoList is not null)
+                                    await handlers.OnTodoList(todos, cancellationToken).ConfigureAwait(false);
+                                // 关键节点：计划更新（带步骤数 + 全量快照供消费者渲染 ✅/⏳）。
+                                // 与 OnTodoList 同一事件源，但独立于它——未订阅 OnTodoList 的消费者（Automation 等）也收得到。
+                                EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.PlanUpdated,
+                                    PlanStepCount: todos.Count, Todos: todos));
+                            }
                         }
+                        // 关键节点：工具结束。
+                        EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.ToolFinished, ToolName: name));
                         break;
                     }
 
@@ -410,6 +446,8 @@ public sealed class HarnessRuntime
                     case TextReasoningContent tr when !string.IsNullOrEmpty(tr.Text):
                         if (handlers?.OnReasoning is not null)
                             await handlers.OnReasoning(tr.Text!, cancellationToken).ConfigureAwait(false);
+                        // 关键节点：进入思考（逐字 token 不走此处，见 RunProgressKind 粒度约定）。
+                        EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.Reasoning));
                         break;
 
                     case ToolApprovalRequestContent approvalReq:
@@ -428,6 +466,9 @@ public sealed class HarnessRuntime
                                     fc is not null ? ToInputDict(fc.Arguments) : null),
                                 cancellationToken).ConfigureAwait(false);
                         }
+                        // 关键节点：审批请求（危险操作需确认）。
+                        EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.ApprovalRequested,
+                            ToolName: (approvalReq.ToolCall as FunctionCallContent)?.Name));
                         break;
 
                     case ErrorContent err when !string.IsNullOrEmpty(err.Message):
@@ -435,6 +476,8 @@ public sealed class HarnessRuntime
                             tags: new ActivityTagsCollection(new[] { new KeyValuePair<string, object?>("message", err.Message) })));
                         if (handlers?.OnError is not null)
                             await handlers.OnError(err.Message!, cancellationToken).ConfigureAwait(false);
+                        // 关键节点：本轮出错（非致命 ErrorContent）。
+                        EmitProgress(handlers, progressSink, new RunProgress(RunProgressKind.RunError, Text: err.Message));
                         break;
 
                     case UsageContent usage:
@@ -446,6 +489,11 @@ public sealed class HarnessRuntime
             }
         }
         if (activity is not null) activity.SetTag(Aether.AI.Harness.Telemetry.AetherActivitySource.TagStatus, "ok");
+        // 关键节点：本轮流正常跑完 → RunDone。**终态归属统一在此**（两个 RunStreamingAsync 重载都经由本方法，
+        // 故聊天/工作流/Automation 三条路径、以及带簿记与不带簿记两种调用者拿到完全一致的终态；重载层不再发射
+        // 以免双发）。审批打断是**本轮的正常结束**（工具待确认，非出错），故亦发 RunDone——消费者落到 Idle，
+        // 恢复轮跑完再发一次 RunDone，桌宠可再冒一次「搞定啦」，不必为审批单独造信号。
+        progressSink?.Post(new RunProgress(RunProgressKind.RunDone));
         return sb.ToString();
         }
         finally
@@ -455,18 +503,46 @@ public sealed class HarnessRuntime
         }
     }
 
-    /// <summary>读 TodoProvider 当前 live 待办列表并映射为 <see cref="TodoItemInfo"/> 上抛。</summary>
-    private static async Task RaiseTodoListAsync(
-        AIAgent agent, FrameworkAgentSession session,
-        Func<IReadOnlyList<TodoItemInfo>, CancellationToken, Task> onTodoList, CancellationToken ct)
+    /// <summary>读 TodoProvider 当前 live 待办列表并映射为 <see cref="TodoItemInfo"/>。
+    /// agent 未启用 TodoProvider 时返回 null（调用方据此跳过上抛）。</summary>
+    private static async Task<IReadOnlyList<TodoItemInfo>?> ReadTodoListAsync(
+        AIAgent agent, FrameworkAgentSession session, CancellationToken ct)
     {
         var provider = agent.GetService<TodoProvider>();
-        if (provider is null) return;
+        if (provider is null) return null;
         var items = await provider.GetAllTodosAsync(session, ct).ConfigureAwait(false);
-        var list = items
+        return items
             .Select(i => new TodoItemInfo(i.Id.ToString(), i.Title ?? string.Empty, i.Description, i.IsComplete))
             .ToList();
-        await onTodoList(list, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>把一条关键节点信号同时送进本轮 run 的 <see cref="StreamHandlers.OnProgress"/>（在场消费者，
+    /// 如聊天 VM）与 HarnessRuntime 的 <see cref="IRunProgressSink"/>（全局出口，如桌宠路由器）。
+    /// <para>**两条通道缺一不可**：只在 <c>handlers</c> 里发，则 Automation 定时任务/工作流这类
+    /// 不传 handlers（或只传 OnToken）的调用方什么都收不到，Step2「信号下沉 Harness」即落空；
+    /// 只在 sink 里发，则未来按 round 订阅的消费者拿不到本轮节点。</para>
+    /// <para>去重由 <see cref="RunProgressFanout"/> 在 sink 侧统一处理（两道通道最终多汇到同一 fanout，
+    /// 连续同节点会被折叠一次），故此处不做判断。</para></summary>
+    private static void EmitProgress(StreamHandlers? handlers, IRunProgressSink? sink, RunProgress signal)
+    {
+        handlers?.OnProgress?.Invoke(signal);
+        sink?.Post(signal);
+    }
+
+    /// <summary>从工具入参提取主参数摘要（第一个非空字符串/数值，截断 ~20 字符），供关键节点信号展示。
+    /// 拿不到返回 null（消费方退化为只显工具名）。</summary>
+    private static string? FirstArgSummary(IDictionary<string, object?>? arguments)
+    {
+        if (arguments is null) return null;
+        foreach (var v in arguments.Values)
+        {
+            if (v is null) continue;
+            var s = v.ToString();
+            if (string.IsNullOrWhiteSpace(s)) continue;
+            s = s.Trim();
+            return s.Length > 20 ? s[..20] + "…" : s;
+        }
+        return null;
     }
 
     /// <summary>把 <see cref="UsageContent"/> 摘要为一行可展示文本。</summary>

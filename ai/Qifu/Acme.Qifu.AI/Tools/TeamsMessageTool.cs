@@ -178,10 +178,12 @@ public class TeamsMessageTool
     private static async Task<JsonElement> ParseMcpResponseAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+        JsonElement envelope;
 
         if (contentType.Contains("event-stream"))
         {
-            // SSE：取最后一条有效 data
+            // SSE：取最后一条有效 data。每条 data: 是一整条 JSON-RPC envelope
+            // （{"result":{content,isError},"jsonrpc","id"}），与普通 JSON 同形。
             var stream = await response.Content.ReadAsStreamAsync(ct);
             using var reader = new StreamReader(stream);
             JsonElement? lastObj = null;
@@ -206,31 +208,33 @@ public class TeamsMessageTool
                 }
             }
 
-            if (lastObj.HasValue)
+            if (!lastObj.HasValue)
             {
-                return lastObj.Value;
+                throw new McpException("SSE 响应中未找到有效数据");
             }
-
-            throw new McpException("SSE 响应中未找到有效数据");
+            envelope = lastObj.Value;
         }
         else
         {
             // 普通 JSON
             var json = await response.Content.ReadAsStringAsync(ct);
-            var envelope = JsonSerializer.Deserialize<JsonElement>(json, JsonOptions);
-
-            // JSON-RPC 错误
-            if (envelope.TryGetProperty("error", out var error)
-                && error.ValueKind != JsonValueKind.Null
-                && error.ValueKind != JsonValueKind.False)
-            {
-                var message = error.TryGetProperty("message", out var m) ? m.GetString() ?? "未知错误" : "未知错误";
-                var code = error.TryGetProperty("code", out var c) ? c.GetInt32() : (int?)null;
-                throw new McpException(message, code);
-            }
-
-            return envelope.TryGetProperty("result", out var result) ? result : envelope;
+            envelope = JsonSerializer.Deserialize<JsonElement>(json, JsonOptions);
         }
+
+        // 统一处理 JSON-RPC envelope（SSE 与 JSON 同形）。此前 SSE 分支直接返回整条 envelope：
+        // ① 服务端以 error 应答时不查 → ExtractResultText 在顶层找不到 content → 返回 null →
+        //    `?? ""` → 失败仍回「已通知 X」；② 未取 .result → 顶层找不到 content → 结果文本丢失。
+        // 两条分支合流后统一查 error / 取 result，与 YushuService.ParseMcpResponseAsync 同构。
+        if (envelope.TryGetProperty("error", out var error)
+            && error.ValueKind != JsonValueKind.Null
+            && error.ValueKind != JsonValueKind.False)
+        {
+            var message = error.TryGetProperty("message", out var m) ? m.GetString() ?? "未知错误" : "未知错误";
+            var code = error.TryGetProperty("code", out var c) ? c.GetInt32() : (int?)null;
+            throw new McpException(message, code);
+        }
+
+        return envelope.TryGetProperty("result", out var result) ? result : envelope;
     }
 
     private static string? ExtractResultText(JsonElement result)

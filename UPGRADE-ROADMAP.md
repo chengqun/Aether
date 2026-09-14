@@ -43,8 +43,7 @@
 | 2 | **`CurrentUserResolver` 不认 base64url → JWT `sub` 从未被提取** | `CurrentUserResolver.cs:32,50-51`：JWT payload 是 base64url（`-`/`_`），旧 `PadBase64` 只补 `=` 不换字符 → `FormatException` 被吞 → 恒回退 MD5(username) | `CurrentUserResolverTests`（4 例，含 fixture 前置断言） |
 | 3 | **`ApplyPatchTool` lineEdit insert 差一** | `ApplyPatchTool.cs:275` 将 1-based `start` 当 0-based 索引用（delete/replace 均 `start - 1`）→ 插到下一行 | `ApplyPatchToolTests` +3 例 |
 | 4 | **Ctp 下单/撤单工具 `requireConfirmation=true` 默认参数 + 无 try/catch** | `OrderInsertTool.cs:20` / `OrderActionTool.cs:19`：审批闸门本就在注册层（Dangerous），工具内再默认「待确认」→ 通过审批后仍只回一句 no-op；改默认执行 + 显式 `dryRun` 开关 + try/catch 结构化错误 | `tests/Acme.Ctp.AI.Tests/OrderToolTests.cs`（6 例） |
-
-**仍在案（低优先级，未修）**：`TeamsMessageTool` SSE 分支不检查 JSON-RPC `error` 字段 → 失败时仍返回「已通知」。
+| 5 | **`TeamsMessageTool` SSE 分支无视 JSON-RPC `error`** | SSE 响应体带 `{"error":{...}}` 时旧代码只看 HTTP 状态码 → 通知未送达仍返回「已通知」。改为解析后优先判 `error` 字段并上抛 | `tests/Acme.Qifu.AI.Tests/TeamsMessageToolTests.cs`（新建） |
 
 
 ---
@@ -74,11 +73,14 @@
 - P3 面板 pop-out（聊天/终端/浏览器面板拖出成独立窗口）
 - P4 插件系统（`IViewRegistryContributor` 已是轻量插件缝，升级为运行时外部 DLL 加载）
 
-### RunProgress Step2：信号下沉 Harness
-- 现状：`RunProgress`/`StreamHandlers` 在 Core，但 `EmitProgress` 构造点在 `ChatWorkspaceViewModel`（VM 层）。下沉到 `HarnessRuntime.RunStreamingCoreAsync` 让所有消费者（含 Automation 定时任务执行路径）免费获得进度信号，桌宠/未来 UI 不再依赖聊天 VM 在场。
+### ~~RunProgress Step2：信号下沉 Harness~~ ✅ 已完成
+- **原状**：`RunProgress`/`StreamHandlers` 在 Core，但构造点在 `ChatWorkspaceViewModel`（VM 层）→ 只有聊天路径拿得到进度信号。
+- **落地**：`IRunProgressSink` + `RunProgressFanout`（含轮询/连续同节点折叠）下沉 `Aether.AI.Core.Agents`（纯 BCL，Harness 可引不触层化红线）；`HarnessRuntime` 加第 4 个可选构造参 `IRunProgressSink`，`RunStreamingCoreAsync` 逐节点经 `EmitProgress(handlers, sink, …)` **双通道**发射（handlers 给在场消费者、sink 给全局出口）；终态 `RunDone`/`RunError` 归属统一收到核心（两重载共用 → 聊天/工作流/Automation 三路径一致，重载层不再发射以免双发）。
+- **收益**：Automation 定时任务执行路径（`ConversationBackedAgentExecutor`，只传 `OnToken`）现在免费拿到全部关键节点；桌宠经 `PetStatusFeedRouter` 挂到 Hosting 注册的 fanout 单例上（Desktop 后注册覆盖，last-wins），不再依赖聊天 VM 在场。VM 侧退为纯消费者（删 `EmitProgress`/`ExtractToolArgument`/`_progressSink` 及 7 处调用），`RunProgressSink.cs`（Mvvm 重复接口）删除。
+- **测试**：`RunProgressFanoutTests`（9 例，纯 Core 去重语义）+ `RunProgressSignalTests`（5 例，真跑 HarnessRuntime→MAF FICC，断言 ToolStarted/ToolFinished/Reasoning/RunError/RunDone 确实由 Harness 发射且经 fanout 抵达消费者）。
 
 ### 手机端待办
-- **ChatDetailPage 气泡根元素隐患**（`apps/Mobile/Acme.Mobile.Shared/Views/ChatDetailPage.xaml:19,30`）：MineTemplate/OtherTemplate 仍是 `HorizontalStackLayout` 根——iOS CollectionView 右对齐跑版/长消息被裁（`maui-chat-bubble-alignment` 记录在案）。改法照 `DesktopAssistantPage` 的 Grid Fill + 内层 Border End。**低成本高收益**。
+- **ChatDetailPage 气泡根元素隐患**（`apps/Mobile/Acme.Mobile.Shared/Views/ChatDetailPage.xaml:19,30`）：MineTemplate/OtherTemplate 仍是 `HorizontalStackLayout` 根——iOS CollectionView 右对齐跑版/长消息被裁（`maui-chat-bubble-alignment` 记录在案）。改法照 `DesktopAssistantPage` 的 Grid Fill + 内层 Border End。
 - **功能补齐**（移植非新建）：skill 管理 / MCP 配置 / 知识对象编辑 / agent 自举工具——桌面端 `DocumentKnowledgeTool`/`McpManagementTool`/`AgentManagementTool` 镜像到 `Mobile.Shared.HostGlue`（部分已有：`MobileDocumentKnowledgeTool` 存在，查缺补漏）。
 
 ### 知识对象 link 选择器
