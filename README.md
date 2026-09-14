@@ -101,6 +101,7 @@ graph TD
 | `externals/` | 第三方引擎：Lean / Ctp.Net.Core / FlaUI-MCP / **MAF**（Microsoft Agent Framework 源码，只读参考；**Lean、FlaUI-MCP、MAF 均为 git submodule**） |
 | `mcp/` | 自写 MCP server 源码（范例） |
 | `tests/` | 全部测试项目 |
+| 根配置文件 | `Directory.Packages.props`（CPM 中央包版本，133 包唯一权威，csproj 不带 Version）+ `Directory.Build.props`（CPM 开关）+ `nuget.config`（仓库级单源）；`externals/` 下守卫 props 隔离 submodule |
 
 ### 租户
 
