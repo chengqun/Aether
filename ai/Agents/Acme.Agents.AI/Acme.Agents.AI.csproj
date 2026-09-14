@@ -21,7 +21,7 @@
   <ItemGroup>
     <!-- YAML 规则程序解析（仅此桥接适配器引 YamlDotNet；src/ 平台层不引）。
          规则 agent 的 body 是 YAML 程序，这里解析成 RuleProgram（Core DTO），再序列化 JSON 串喂平台 seam。 -->
-    <PackageReference Include="YamlDotNet" Version="13.7.1" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
 </Project>

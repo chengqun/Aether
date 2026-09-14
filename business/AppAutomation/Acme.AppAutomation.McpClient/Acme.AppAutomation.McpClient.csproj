@@ -11,10 +11,10 @@
 
   <ItemGroup>
     <!-- 版本与 Aether.AI.Mcp → Microsoft.Agents.AI.Mcp 的传递依赖一致（nuspec 确认 1.2.0），避免版本冲突。 -->
-    <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
+    <PackageReference Include="ModelContextProtocol" />
     <!-- AIFunction / AIFunctionArguments（复用 McpServerRegistry 的工具调用）；Abstractions 稳定包。 -->
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

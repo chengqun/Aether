@@ -1,0 +1,3 @@
+<!-- 守卫文件：拦截 NuGet 向上查找 Directory.Packages.props，防止 externals/ 子模块（Lean/MAF/FlaUI-MCP）
+     吃到仓库根的中央包版本清单。与 externals/Directory.Build.props 成对。 -->
+<Project />

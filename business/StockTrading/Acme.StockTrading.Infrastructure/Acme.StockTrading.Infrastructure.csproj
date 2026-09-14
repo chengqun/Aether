@@ -24,9 +24,9 @@
 
   <ItemGroup>
     <!-- 与参考项目 AiTrade.csproj 一致：FlaUI.UIA3 5.0.0。5.0 版本 STA/UIA3 行为与 4.0 不同，勿降级。 -->
-    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="FlaUI.UIA3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <!-- 把 FlaUI 及其传递依赖 dll 输出到本 bin，供 Stockapp 宿主运行时反射加载时一并拷贝。

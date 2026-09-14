@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- 根级构建属性（全局）。刻意只放 CPM 一项：
+       - TargetFramework/Nullable 各项目已 100% 自持（MAUI/多目标项目须本地声明），全局强制反增干扰；
+       - ImplicitUsings 有 10 个 server 项目未声明（= 禁用），全局 enable 会翻转其编译行为；
+       - LangVersion 由 server/common.props（latest）与 SDK 默认（net10.0 → C# latest）覆盖，无需重复。
+       包版本唯一权威见 Directory.Packages.props；externals/ 见 externals/Directory.Build.props 守卫。 -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

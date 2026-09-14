@@ -1,0 +1,5 @@
+<!-- 守卫文件：拦截 MSBuild 向上查找 Directory.Build.props。
+     externals/ 下的项目（Lean / MAF / FlaUI-MCP 三个 submodule + 自有 Ctp.Net.Core）不继承仓库根的
+     ManagePackageVersionsCentrally 与任何全局属性 —— Lean 被 Trading.Runtime.Lean 以 ProjectReference
+     构建，其 csproj 带内联 Version 的 PackageReference，若 CPM 生效会 NU1008。保持原样构建。 -->
+<Project />
