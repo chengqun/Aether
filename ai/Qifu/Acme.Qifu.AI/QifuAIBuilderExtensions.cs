@@ -41,8 +41,11 @@ public static class QifuAIBuilderExtensions
         const string cat = "企服平台";
         builder.ConfigureToolRegistry(reg =>
         {
+            // AsyncSqlQuery 提交任意 SQL 到毓数平台执行（可含 DROP/DELETE/UPDATE 等不可逆语句，
+            // 同 ai/DataQuery 的 ExecuteSql 风险面）——必须显式标 Dangerous，否则 ToolRegistry 默认
+            // Safe → 自动放行。（读结果/查状态的工具保持 Safe。）
             reg.Register("AsyncSqlQuery", "毓数异步 SQL 查询", cat,
-                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.AsyncSqlQuery)));
+                sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.AsyncSqlQuery)), ToolApprovalLevel.Dangerous);
             reg.Register("FetchSqlTaskStatus", "获取 SQL 任务状态", cat,
                 sp => CreateTool<YushuSqlQueryTool>(sp, nameof(YushuSqlQueryTool.FetchSqlTaskStatus)));
             reg.Register("PollSqlTaskStatus", "轮询 SQL 任务状态", cat,

@@ -271,8 +271,10 @@ public class ApplyPatchTool
         switch (lineOp)
         {
             case "insert":
+                // StartLine 是 1-based（同 delete/replace 的 `start - 1`），插入到该行**之前**。
+                // start-1 == total（StartLine = 总行数+1）→ 追加到文件末尾，List.InsertRange 允许 index == Count。
                 var ins = p.LineContent!.Split('\n');
-                newLines.InsertRange(start, ins);
+                newLines.InsertRange(start - 1, ins);
                 affected = ins.Length;
                 break;
             case "delete":

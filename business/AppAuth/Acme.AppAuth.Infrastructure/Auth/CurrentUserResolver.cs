@@ -29,7 +29,7 @@ public sealed class CurrentUserResolver : ICurrentUser
             try
             {
                 var payload = token.Split('.')[1];
-                var jsonBytes = Convert.FromBase64String(PadBase64(payload));
+                var jsonBytes = Convert.FromBase64String(ToStandardBase64(payload));
                 using var doc = JsonDocument.Parse(jsonBytes);
                 if (doc.RootElement.TryGetProperty("sub", out var sub) && sub.ValueKind == JsonValueKind.String)
                 {
@@ -47,8 +47,17 @@ public sealed class CurrentUserResolver : ICurrentUser
         return string.IsNullOrEmpty(username) ? null : Md5String(username);
     }
 
-    private static string PadBase64(string base64)
-        => base64.PadRight(base64.Length + (4 - base64.Length % 4) % 4, '=');
+    /// <summary>
+    /// JWT payload 是 **base64url**（RFC 7515：`-`/`_` 替代 `+`/`/`，且省略 `=` 填充），而
+    /// <see cref="Convert.FromBase64String"/> 只认标准 base64——故须先换回 `+`/`/` 再补 `=`。
+    /// 旧实现只补 `=` 不换字符，payload 含 `-`/`_` 时抛 <see cref="FormatException"/> 被
+    /// catch 吞掉 → 永远回退 MD5(username)，JWT 的 <c>sub</c> 从未被提取。
+    /// </summary>
+    private static string ToStandardBase64(string base64Url)
+    {
+        var s = base64Url.Replace('-', '+').Replace('_', '/');
+        return s.PadRight(s.Length + (4 - s.Length % 4) % 4, '=');
+    }
 
     private static string Md5String(string input)
     {

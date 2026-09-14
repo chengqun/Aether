@@ -209,4 +209,78 @@ public class ApplyPatchToolTests
         }
         finally { if (File.Exists(f)) File.Delete(f); }
     }
+
+    [Fact]
+    public async Task ApplyPatch_LineEditInsert_InsertsBeforeStartLine()
+    {
+        // StartLine 是 1-based（与 delete/replace 的 `start - 1` 同语义）——旧实现误把它当 0-based 索引
+        // 传给 InsertRange，插到了「下一行」之前。回归守卫。
+        var f = TempFile("a\nb\nc");
+        try
+        {
+            var patches = new[]
+            {
+                new ApplyPatchTool.PatchEntry
+                {
+                    FilePath = f, Operation = "lineEdit",
+                    LineOperation = "insert", StartLine = 2, LineContent = "X",
+                },
+            };
+
+            var r = await _tool.ApplyPatch(patches, CancellationToken.None);
+
+            Assert.True(r.Success, r.Results.FirstOrDefault()?.Error ?? r.Error);
+            Assert.Equal("a\nX\nb\nc\n", await File.ReadAllTextAsync(f));
+        }
+        finally { if (File.Exists(f)) File.Delete(f); }
+    }
+
+    [Fact]
+    public async Task ApplyPatch_LineEditInsert_AtStartLine1_Prepends()
+    {
+        var f = TempFile("a\nb");
+        try
+        {
+            var patches = new[]
+            {
+                new ApplyPatchTool.PatchEntry
+                {
+                    FilePath = f, Operation = "lineEdit",
+                    LineOperation = "insert", StartLine = 1, LineContent = "head",
+                },
+            };
+
+            var r = await _tool.ApplyPatch(patches, CancellationToken.None);
+
+            Assert.True(r.Success, r.Results.FirstOrDefault()?.Error ?? r.Error);
+            Assert.Equal("head\na\nb\n", await File.ReadAllTextAsync(f));
+        }
+        finally { if (File.Exists(f)) File.Delete(f); }
+    }
+
+    [Fact]
+    public async Task ApplyPatch_LineEditInsert_PastEndAppendsInsteadOfThrowing()
+    {
+        // StartLine = 总行数+1 是合法「追加到末尾」（校验上限 `total + 1` 允许），
+        // 旧实现 `InsertRange(total, …)` 对 List<string> 合法——但配合 1-based 语义须为 `total`
+        // 即 `start - 1`。同时保证多行 LineContent 拆分后整体落尾。
+        var f = TempFile("a\nb\nc");
+        try
+        {
+            var patches = new[]
+            {
+                new ApplyPatchTool.PatchEntry
+                {
+                    FilePath = f, Operation = "lineEdit",
+                    LineOperation = "insert", StartLine = 4, LineContent = "tail1\ntail2",
+                },
+            };
+
+            var r = await _tool.ApplyPatch(patches, CancellationToken.None);
+
+            Assert.True(r.Success, r.Results.FirstOrDefault()?.Error ?? r.Error);
+            Assert.Equal("a\nb\nc\ntail1\ntail2\n", await File.ReadAllTextAsync(f));
+        }
+        finally { if (File.Exists(f)) File.Delete(f); }
+    }
 }

@@ -184,6 +184,7 @@
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Notes.Infrastructure.Tests/Acme.Notes.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Qifu.Infrastructure.Tests/Acme.Qifu.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Acme.Qifu.AI.Tests/Acme.Qifu.AI.Tests.csproj" />
     <Project Path="tests/Acme.Quotes.AI.Tests/Acme.Quotes.AI.Tests.csproj" />
     <Project Path="tests/Acme.Agents.AI.Tests/Acme.Agents.AI.Tests.csproj" />
     <Project Path="tests/Aether.AI.Harness.Tests/Aether.AI.Harness.Tests.csproj" />

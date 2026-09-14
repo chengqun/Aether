@@ -22,23 +22,30 @@
 
 ---
 
-## 二、已知技术债（项目审计在案，优先级最高）
+## 二、已知技术债 —— 已全部结清（2026-09-14 逐项核验）
 
-> 来源：`non-apps-audit-findings` 与 `avalonia-perf-audit` 两轮审计记录。动手前需复核现状（部分可能已随后续开发修掉——Browser 内存封顶本次已核实为已修）。
+> 来源：`non-apps-audit-findings` 与 `avalonia-perf-audit` 两轮审计记录。**本节已于 2026-09-14 逐项对照当前代码核验——原列的 P0/P1 全部已修**，故从「待办」降级为「已完成」归档，下表保留证据锚点备查。
 
-### P0：Lean 全局静态无运行时互斥
-- **现状**：回测与实盘共享 Lean `Config`/`Globals`/`Composer` 全局静态，靠 VM 层互斥守卫（`CanRun`/`CanStartLive` 互相检查）防并发——非运行时强制，任何旁路调用（AI 工具、Automation 调度）同时触发即状态污染。
-- **改造**：`Trading.Application` 层加 `SemaphoreSlim` 运行时互斥（回测/实盘共用一把锁），失败返回「引擎忙」。**进程内止血方案**，与「Lean 出进程」（第七节）互补。
-- **影响面**：`Trading.Application` + 两处调用方；小改动。
+| 原列项 | 核验结论 | 证据 |
+|--------|---------|------|
+| **P0 Lean 全局静态无运行时互斥** | ✅ 已修 | `LeanGlobalLock`（`SemaphoreSlim(1,1)`）由三个入口点共享，UI 层 `CanRun`/`CanStartLive` 交叉检查退为兜底 |
+| P1 会话泄漏链 | ✅ 已修 | `HarnessRuntime.EvictSession` + `ICustomAgentRunner/ICustomWorkflowRunner.EvictConversation` + `ConditionalWeakTable` 弱键自动回收 |
+| P1 Roslyn 可卸载 ALC 残余 | ✅ 已修 | `ConcurrentDictionary<hash,(Assembly,CollectibleAlc)>` + `UnloadStale`；Strategy/Rule/Lean 三套编译器各自处理（Lean 因 `LoadFrom` 类型身份约束只能磁盘清理，已随带） |
+| P1 并发竞态点（审计清单） | ✅ 已修 | 含 `UNIQUE(conversation_id, seq)` 事件流 TOCTOU 守卫 + rowid 去重（`SqliteConversationStore.MigrateAsync`） |
+| P1 流式 markdown 重解析卡顿 | ✅ 已修 | 流式期纯文本 `TextBlock`（不解析 markdown），`FinalizeSegment` 一次性渲染；VM 侧 150ms `flushTimer` 排空有序块队列 |
+| P1 SettingsVM 事件泄漏 | ✅ 已修 | `SettingsViewModel.Cleanup` 退订 |
 
-### P1：审计记录的其余项（逐项复核后修）
-- 会话泄漏链（多会话并发改造后的残留强引用）
-- Roslyn 可卸载 ALC 残余（Strategy/Rule 已做 hash 缓存 + UnloadStale，审计提示仍有边角）
-- 并发竞态点（`non-apps-audit-findings` 记录，需按清单复核）
+**本批（2026-09-14）新发现并修复的真剩余项**（均不在原审计清单内，本轮验证式排查发现，各带回归测试）：
 
-### P1：Avalonia 性能审计两项
-- **流式 markdown 重解析卡顿**：流式 token 逐段触发整段 markdown 重解析（~6 token 节流已有，但长回复仍卡）
-- **SettingsVM 事件泄漏**：SettingsViewModel 订阅未退订
+| # | 项 | 证据 / 修法 | 测试 |
+|---|----|-----------|------|
+| 1 | **`AsyncSqlQuery` 未标审批级别 → 任意 SQL 自动放行** | `ai/Qifu/.../QifuAIBuilderExtensions.cs:44` 缺 `ToolApprovalLevel` → 默认 `Safe`；对齐同级 Dangerous 工具显式声明 | `tests/Acme.Qifu.AI.Tests`（新建，3 例） |
+| 2 | **`CurrentUserResolver` 不认 base64url → JWT `sub` 从未被提取** | `CurrentUserResolver.cs:32,50-51`：JWT payload 是 base64url（`-`/`_`），旧 `PadBase64` 只补 `=` 不换字符 → `FormatException` 被吞 → 恒回退 MD5(username) | `CurrentUserResolverTests`（4 例，含 fixture 前置断言） |
+| 3 | **`ApplyPatchTool` lineEdit insert 差一** | `ApplyPatchTool.cs:275` 将 1-based `start` 当 0-based 索引用（delete/replace 均 `start - 1`）→ 插到下一行 | `ApplyPatchToolTests` +3 例 |
+| 4 | **Ctp 下单/撤单工具 `requireConfirmation=true` 默认参数 + 无 try/catch** | `OrderInsertTool.cs:20` / `OrderActionTool.cs:19`：审批闸门本就在注册层（Dangerous），工具内再默认「待确认」→ 通过审批后仍只回一句 no-op；改默认执行 + 显式 `dryRun` 开关 + try/catch 结构化错误 | `tests/Acme.Ctp.AI.Tests/OrderToolTests.cs`（6 例） |
+
+**仍在案（低优先级，未修）**：`TeamsMessageTool` SSE 分支不检查 JSON-RPC `error` 字段 → 失败时仍返回「已通知」。
+
 
 ---
 
@@ -61,7 +68,7 @@
 ### 交易 P2：真实 CTP 委托 ★ 有完整设计
 - **现状**：`CtpBrokerage.PlaceOrder`（`business/Trading.Runtime/Acme.Trading.Runtime.Lean/Brokerage/CtpBrokerage.cs:106`）拦截下单返回 false，tick→bar→信号链路已通。
 - **改造**（CLAUDE.md「Trading + Lean」节 P2 段有完整方案）：`PlaceOrder` 映射 Lean Order→`CtpOrderRequest` 调 `_session.OrderInsertAsync`（与期货页手动交易同一端口）；`OrderReceived`/`TradeReceived` 事件回译 Lean Order/Trade。零新增依赖、零环（`Ctp.*` 不引 `Trading.*`）。
-- **前置**：第二节的 P0 互斥先做。
+- **前置**：第二节的 P0 互斥**已落地**（`LeanGlobalLock`），可直接开工。
 
 ### Workbench P3/P4（Deferred 项）
 - P3 面板 pop-out（聊天/终端/浏览器面板拖出成独立窗口）
@@ -105,7 +112,7 @@
 
 | 方向 | 说明 | 状态 |
 |------|------|------|
-| **Lean 出进程** | 回测/实盘引擎移出主进程（gRPC/stdio），根治全局静态共享，解锁并发回测 | 已拍板暂缓，锚 P2 启动（先做第二节 P0 止血） |
+| **Lean 出进程** | 回测/实盘引擎移出主进程（gRPC/stdio），根治全局静态共享，解锁并发回测 | 已拍板暂缓，锚 P2 启动（P0 进程内互斥已落地，见第二节） |
 | **server/ 模块化瘦身** | ABP 模板 ~109k 行，可评估无前端调用的 AppService/Entity 剥离 | 中风险，无痛点不动 |
 | **ChatVM 拆分** | 第三节首项 | 锚「下轮大功能」（P2 交易或手机补齐时顺路做） |
 
