@@ -18,15 +18,21 @@ public partial class ExpertsViewModel : ObservableObject
     private readonly ICustomAgentCatalog _catalog;
     private readonly ICustomAgentRunner _runner;
     private readonly IUiDispatcher _dispatcher;
+    private readonly ICustomAgentEvalRunner? _evalRunner;
+    private readonly IReportDialogService? _reportDialog;
 
     public ExpertsViewModel(ICustomAgentCatalog catalog, ICustomAgentRunner runner, IUiDispatcher dispatcher,
-        McpViewModel mcp, IConnectorViewModel? connector = null)
+        McpViewModel mcp, IConnectorViewModel? connector = null,
+        ICustomAgentEvalRunner? evalRunner = null, IReportDialogService? reportDialog = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         Mcp = mcp ?? throw new ArgumentNullException(nameof(mcp));
         Connector = connector;
+        // 评测可选注入（手机宿主不注册 → 编辑器隐藏评测按钮）
+        _evalRunner = evalRunner;
+        _reportDialog = reportDialog;
     }
 
     public ObservableCollection<ExpertItem> Experts { get; } = new();
@@ -207,6 +213,7 @@ public partial class ExpertsViewModel : ObservableObject
             .Where(n => !string.Equals(n, selfName?.Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList(), _catalog.CurrentHost, candidates);
+        return new ExpertEditViewModel(existing, tools, models, Mcp.Servers.ToList(), _catalog.CurrentHost, candidates,
+            _evalRunner, _reportDialog);
     }
 }

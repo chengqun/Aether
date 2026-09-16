@@ -6,9 +6,11 @@ namespace Aether.AI.Memory;
 /// Persistence abstraction for long-term memory. This is the single contract
 /// every Memory implementation (InMemory, SQLite, Redis, Vector) must satisfy.
 /// <para>
-/// Phase 1 ships only <see cref="Stores.InMemoryMemoryStore"/>. SQLite, Redis
-/// and Vector backends are deferred to Phase 3 — SQLite in particular is just
-/// one implementation of this interface, not a platform core.
+/// Ships with <see cref="Stores.InMemoryMemoryStore"/> (platform default in
+/// <c>AddAetherAI</c>) and <c>SqliteMemoryStore</c> (opt-in
+/// <c>Aether.AI.Memory.Sqlite</c> package — the desktop host swaps it in).
+/// Redis / vector backends remain future implementations of this interface,
+/// not platform core.
 /// </para>
 /// </summary>
 public interface IMemoryStore

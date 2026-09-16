@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text.Json;
 using Aether.AI.Core.Agents;
 using Aether.AI.Harness.Skills;
 using Aether.AI.Harness.Tools;
@@ -13,9 +11,18 @@ namespace Aether.AI.Harness.Agents;
 /// Builds a runnable Microsoft Agent Framework <see cref="AIAgent"/> from an
 /// <see cref="AgentDefinition"/>. By default the agent is a
 /// <see cref="HarnessAgent"/> — the batteries-included agent from
-/// <c>Microsoft.Agents.AI.Harness</c> — with the heavyweight default providers
-/// (web search, todos, file memory, skills, OpenTelemetry) disabled so that
-/// Phase 1 runs as a clean, dependency-light runtime.
+/// <c>Microsoft.Agents.AI.Harness</c> — with the heavyweight providers
+/// (web search, todos, agent-mode, file memory, OpenTelemetry) **opt-in per
+/// definition** (all default off → lightweight runtime; the definition's
+/// <c>Enable*</c> flags switch them on). Skills are on-demand for every agent
+/// when <see cref="SkillsDirectory"/> is configured (MAF
+/// <c>AgentFileSkillsSource</c>, script-capable); without it, agents fall back
+/// to the <see cref="SkillRegistry"/> prompt-only set.
+/// <para>
+/// <see cref="AgentDefinition.Engine"/> == <see cref="EngineKind.Rule"/> swaps
+/// the brain: <see cref="RuleChatClient"/> (deterministic rules, no LLM) drives
+/// the same tool/streaming/approval ecosystem — see <c>BuildRuleAgent</c>.
+/// </para>
 /// <para>
 /// Set <see cref="UseChatClientAgent"/> to use the lighter
 /// <see cref="ChatClientAgent"/> instead, which skips the Harness pipeline
@@ -25,7 +32,16 @@ namespace Aether.AI.Harness.Agents;
 /// The agent's <see cref="AgentDefinition.ModelId"/> is resolved to an
 /// <see cref="IChatClient"/> via <see cref="IChatClientFactory"/>, and its
 /// <see cref="AgentDefinition.Memory"/> policy is enforced by configuring the
-/// framework's chat-history provider at build time.
+/// framework's chat-history provider at build time. Non-Safe tools are wrapped
+/// (<c>ApprovalRequiredAIFunction</c>) when the definition opts into approval
+/// or the mode selector, so the 4-mode gating can intercept them.
+/// </para>
+/// <para>
+/// Three optional <c>Func&lt;AgentDefinition,…&gt;</c> ctor hooks keep this class
+/// decoupled from its consumers: <c>memoryContextProviderFactory</c> (long-term
+/// memory recall/store), <c>historyProviderFactory</c> (custom chat history,
+/// e.g. restore-from-store), <c>backgroundAgentsFactory</c> (dynamic
+/// multi-agent parallelism whitelist → <c>BackgroundAgentsProvider</c>).
 /// </para>
 /// </summary>
 public sealed class AgentFactory
@@ -34,6 +50,7 @@ public sealed class AgentFactory
     private readonly ToolRegistry _toolRegistry;
     private readonly SkillRegistry _skillRegistry;
     private readonly ILoggerFactory? _loggerFactory;
+    private readonly SkillScriptRunner _scriptRunner;
     private readonly AgentFileSkillScriptRunner _skillScriptRunner;
     private readonly Func<AgentDefinition, AIContextProvider?>? _memoryContextProviderFactory;
     private readonly Func<AgentDefinition, ChatHistoryProvider?>? _historyProviderFactory;
@@ -56,8 +73,15 @@ public sealed class AgentFactory
     /// <summary>skills 目录。配置后用 MAF AgentFileSkillsSource 加载（支持脚本）；否则退回 SkillRegistry 纯提示词。</summary>
     public string? SkillsDirectory { get; set; }
 
-    /// <summary>执行 .py 脚本的解释器（默认 python3）。由宿主通过 AetherAIOptions.PythonExecutable 设置。</summary>
-    public string? PythonExecutable { get; set; }
+    /// <summary>
+    /// 执行 .py 脚本的解释器（默认 python3）。由宿主通过 AetherAIOptions.PythonExecutable 在构造后设置，
+    /// 转发给 <see cref="SkillScriptRunner"/>（实际执行件）。
+    /// </summary>
+    public string? PythonExecutable
+    {
+        get => _scriptRunner.PythonExecutable;
+        set => _scriptRunner.PythonExecutable = value;
+    }
 
     /// <param name="chatClientFactory">
     /// Resolves the <see cref="IChatClient"/> for a given agent model id.
@@ -73,7 +97,9 @@ public sealed class AgentFactory
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _skillRegistry = skillRegistry ?? throw new ArgumentNullException(nameof(skillRegistry));
         _loggerFactory = loggerFactory;
-        _skillScriptRunner = RunSkillScriptAsync;
+        // skill 脚本子进程执行件（原内嵌于本类约 230 行，拆为 SkillScriptRunner；经 MAF 委托注入 AgentFileSkillsSource）。
+        _scriptRunner = new SkillScriptRunner(loggerFactory);
+        _skillScriptRunner = _scriptRunner.RunAsync;
         _memoryContextProviderFactory = memoryContextProviderFactory;
         _historyProviderFactory = historyProviderFactory;
         _backgroundAgentsFactory = backgroundAgentsFactory;
@@ -193,7 +219,7 @@ public sealed class AgentFactory
             Name = definition.Name,
             Description = $"Aether.AI agent '{definition.Id}'.",
             // Provider 开关由 AgentDefinition 的 Enable* 字段驱动（默认全 false = 全部禁用），
-            // 保持 Phase 1 的轻量运行时行为；需要 web search / file memory / OTel 等能力的
+            // 保持轻量运行时；需要 web search / file memory / OTel 等能力的
             // agent 在定义里把对应 Enable* 置 true 即可。(Compaction 在未设 token 上限时自动禁用，无需开关。)
             DisableWebSearch = !definition.EnableWebSearch,
             DisableTodoProvider = !definition.EnableTodoProvider,
@@ -215,14 +241,7 @@ public sealed class AgentFactory
         // 长期记忆 provider：EnableLongTermMemory 时由宿主工厂构造 MemoryContextProvider 注入。
         // 与 skills provider 累加（ConfigureSkillsProvider 可能已设置 AIContextProviders）。
         var memoryProvider = _memoryContextProviderFactory?.Invoke(definition);
-        if (memoryProvider is not null)
-        {
-            var combined = options.AIContextProviders is null
-                ? new List<AIContextProvider>()
-                : new List<AIContextProvider>(options.AIContextProviders);
-            combined.Add(memoryProvider);
-            options.AIContextProviders = combined;
-        }
+        if (memoryProvider is not null) AddContextProvider(options, memoryProvider);
 
         // 后台 Agent（orchestrator 分派子任务）：BackgroundAgents 非空时由宿主工厂把各名字
         // 解析成 AIAgent 构建 BackgroundAgentsProvider 注入——让本 agent 动态并发委派子任务并收结果。
@@ -232,14 +251,7 @@ public sealed class AgentFactory
         {
             var subAgents = _backgroundAgentsFactory.Invoke(definition);
             if (subAgents is { Count: > 0 })
-            {
-                var backgroundProvider = new BackgroundAgentsProvider(subAgents);
-                var combined = options.AIContextProviders is null
-                    ? new List<AIContextProvider>()
-                    : new List<AIContextProvider>(options.AIContextProviders);
-                combined.Add(backgroundProvider);
-                options.AIContextProviders = combined;
-            }
+                AddContextProvider(options, new BackgroundAgentsProvider(subAgents));
         }
 
         var client = _chatClientFactory.Create(definition.ModelId);
@@ -253,6 +265,17 @@ public sealed class AgentFactory
 
         return client.AsHarnessAgent(options, _loggerFactory);
     }
+
+    /// <summary>把 context provider 累加进 <c>options.AIContextProviders</c>（null 则新建；保序，可多次调用）。</summary>
+    private static void AddContextProvider(HarnessAgentOptions options, AIContextProvider provider)
+    {
+        var combined = options.AIContextProviders is null
+            ? new List<AIContextProvider>()
+            : new List<AIContextProvider>(options.AIContextProviders);
+        combined.Add(provider);
+        options.AIContextProviders = combined;
+    }
+
     private void ConfigureSkillsProvider(HarnessAgentOptions options)
     {
         // skill 全量按需加载（镜像 Claude Code / knowledge object 理念）：所有 skill 索引常驻
@@ -314,11 +337,6 @@ public sealed class AgentFactory
         return new ChatClientAgent(client, agentOptions, _loggerFactory);
     }
 
-    /// <summary>
-    /// Builds the framework chat-history provider that enforces the agent's
-    /// memory policy. <c>null</c> (Full) lets the framework use its default
-    /// unbounded in-memory provider.
-    /// </summary>
     /// <summary>解析工具审批等级：专家 ToolApprovals 覆盖优先，否则取 ToolRegistry 声明等级。</summary>
     private ToolApprovalLevel ResolveApprovalLevel(string toolName, AgentDefinition definition)
     {
@@ -422,240 +440,4 @@ public sealed class AgentFactory
         return chatOptions;
     }
 
-    /// <summary>
-    /// skill 脚本运行器：按扩展名选解释器（.py→python3，.sh→sh，.js→node），
-    /// 以子进程执行脚本并传入 CLI 参数，返回 stdout。失败时返回含退出码/ stderr 的字符串。
-    /// </summary>
-    private async Task<object?> RunSkillScriptAsync(
-        AgentSkill skill, AgentFileSkillScript script, JsonElement? rawArguments,
-        IServiceProvider serviceProvider, CancellationToken cancellationToken)
-    {
-        var args = ParseCliArgs(rawArguments);
-        var log = _loggerFactory?.CreateLogger<AgentFactory>();
-        log?.LogDebug("run_skill_script {Script} raw={Raw} → args={Args}", script.FullPath, rawArguments, string.Join(" ", args));
-        if (rawArguments is not null && args.Count == 0)
-            log?.LogWarning("run_skill_script 收到的参数未能解析出 CLI 参数（raw={Raw}），脚本将以无参数运行。", rawArguments);
-        var interpreter = ResolveInterpreter(script.FullPath);
-        var allArgs = new List<string> { script.FullPath };
-        allArgs.AddRange(args);
-
-        // 和 MCP 一样：相对解释器（python3/sh/node）经登录 shell 跑（解 GUI 受限 PATH）；
-        // 绝对路径（PythonExecutable）直接跑。CWD 默认用户主目录（避 .app CWD=/）。
-        ProcessStartInfo psi;
-        if (Path.IsPathRooted(interpreter))
-        {
-            psi = new ProcessStartInfo
-            {
-                FileName = interpreter,
-                RedirectStandardOutput = true, RedirectStandardError = true,
-                UseShellExecute = false, CreateNoWindow = true,
-            };
-            foreach (var a in allArgs) psi.ArgumentList.Add(a);
-        }
-        else
-        {
-            var shell = Environment.GetEnvironmentVariable("SHELL");
-            if (!string.IsNullOrEmpty(shell))
-            {
-                var cmd = ShellQuote(interpreter) + " " + string.Join(" ", allArgs.Select(ShellQuote));
-                psi = new ProcessStartInfo
-                {
-                    FileName = shell,
-                    RedirectStandardOutput = true, RedirectStandardError = true,
-                    UseShellExecute = false, CreateNoWindow = true,
-                };
-                psi.ArgumentList.Add("-l");
-                psi.ArgumentList.Add("-c");
-                psi.ArgumentList.Add(cmd);
-            }
-            else
-            {
-                psi = new ProcessStartInfo
-                {
-                    FileName = interpreter,
-                    RedirectStandardOutput = true, RedirectStandardError = true,
-                    UseShellExecute = false, CreateNoWindow = true,
-                };
-                foreach (var a in allArgs) psi.ArgumentList.Add(a);
-            }
-        }
-
-        Process? process = null;
-        try
-        {
-            process = new Process { StartInfo = psi };
-            // 重定向并立即关闭 stdin：脚本若读 stdin 拿到 EOF 而非永久阻塞（.app 下 stdin 可能不可读）。
-            process.StartInfo.RedirectStandardInput = true;
-            if (!process.Start()) return $"无法启动脚本进程：{interpreter}";
-            try { process.StandardInput.Close(); } catch { }
-
-            // 必须在 WaitForExit 之前并发读 stdout/stderr：脚本输出超 ~64KB 管道缓冲会写阻塞、
-            // 永不退出 → WaitForExit 死锁卡死。不带取消令牌——取消时应返回残留输出而非抛出。
-            var stdoutTask = process.StandardOutput.ReadToEndAsync();
-            var stderrTask = process.StandardError.ReadToEndAsync();
-
-            // 超时兜底（脚本可能死循环 / 起服务不退）。用户取消经 cancellationToken 即时取消。
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-            try
-            {
-                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // 超时：先杀进程树（关管道 EOF）再读残留 stderr，避免 ReadToEndAsync 死锁。
-                KillProcessTree(process);
-                var partialErr = await stderrTask.ConfigureAwait(false);
-                return $"脚本执行超时（120s），已终止进程。\n{TruncateScript(partialErr)}";
-            }
-
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            if (process.ExitCode != 0)
-            {
-                var stderr = await stderrTask.ConfigureAwait(false);
-                return $"脚本退出码 {process.ExitCode}：{TruncateScript(stderr)}";
-            }
-            return stdout;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // 用户取消：finally 已杀进程。返回取消说明（保持工具返回字符串契约；ct 已取消，本轮随即结束）。
-            return "脚本执行已被取消（用户停止）。";
-        }
-        catch (Exception ex)
-        {
-            return $"脚本执行失败：{ex.Message}";
-        }
-        finally
-        {
-            // 任何路径（取消/超时/异常/正常）都杀进程树，避免孤儿脚本进程继续吃 CPU。
-            if (process is not null)
-            {
-                KillProcessTree(process);
-                process.Dispose();
-            }
-        }
-    }
-
-    /// <summary>尽力杀掉脚本进程树：先 Kill(true)（含子进程），再 Kill() 单进程兜底。</summary>
-    private static void KillProcessTree(Process process)
-    {
-        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-        catch { /* 落到下面兜底 */ }
-        try { if (!process.HasExited) process.Kill(); }
-        catch { /* 进程可能已退出 */ }
-    }
-
-    /// <summary>截断脚本输出到 10000 字符，避免超长 stderr 撑爆工具结果。</summary>
-    private static string TruncateScript(string text, int max = 10000)
-    {
-        if (string.IsNullOrEmpty(text) || text.Length <= max) return text;
-        return text[..max] + $"\n... (已截断，总长度 {text.Length} 字符)";
-    }
-
-    private static List<string> ParseCliArgs(JsonElement? raw)
-    {
-        var list = new List<string>();
-        if (raw is not { } el) return list;
-
-        switch (el.ValueKind)
-        {
-            case JsonValueKind.Array:
-                foreach (var item in el.EnumerateArray()) list.Add(ToArg(item));
-                break;
-            case JsonValueKind.String:
-                var s = el.GetString();
-                if (!string.IsNullOrEmpty(s)) list.AddRange(ShellSplit(s));
-                break;
-            case JsonValueKind.Object:
-                // {key: value} → --key value（bool true → 仅 --key 标志，false → 跳过）
-                foreach (var prop in el.EnumerateObject())
-                {
-                    if (prop.Value.ValueKind == JsonValueKind.False) continue;
-                    list.Add("--" + prop.Name);
-                    if (prop.Value.ValueKind == JsonValueKind.True) continue;
-                    list.Add(ToArg(prop.Value));
-                }
-                break;
-        }
-        return StripLeadingPrefix(list);
-    }
-
-    private static string ToArg(JsonElement item)
-    {
-        if (item.ValueKind == JsonValueKind.String) return item.GetString() ?? "";
-        if (item.ValueKind == JsonValueKind.Number) return item.GetRawText();
-        if (item.ValueKind == JsonValueKind.True) return "true";
-        if (item.ValueKind == JsonValueKind.False) return "false";
-        return item.ToString();
-    }
-
-    /// <summary>
-    /// 剥掉 agent 可能带进来的前缀：SKILL.md 里写的是 <c>python "&lt;SQLQ&gt;" asyncSqlQuery ...</c>（Bash 写法），
-    /// agent 可能把 <c>python</c> 解释器和 <c>&lt;SQLQ&gt;</c> 占位符 / 脚本路径也塞进参数。run_skill_script 已自带
-    /// 解释器 + 脚本路径，这里把它们剥掉，只留真正的子命令 + 参数。
-    /// </summary>
-    private static List<string> StripLeadingPrefix(List<string> args)
-    {
-        int i = 0;
-        if (i < args.Count && IsPython(args[i])) i++;
-        if (i < args.Count && IsScriptRef(args[i])) i++;
-        return i == 0 ? args : args.Skip(i).ToList();
-    }
-
-    private static bool IsPython(string s)
-        => s is "python" or "python3" or "py"
-           || s.EndsWith("/python", StringComparison.OrdinalIgnoreCase)
-           || s.EndsWith("/python3", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsScriptRef(string s)
-        => !string.IsNullOrEmpty(s)
-           && (s.EndsWith(".py", StringComparison.OrdinalIgnoreCase)
-               || (s.StartsWith('<') && s.EndsWith('>'))            // <SQLQ> 占位符
-               || s.Contains("sql_query", StringComparison.OrdinalIgnoreCase)
-               || s.Contains('/') || s.Contains('\\'));
-
-    /// <summary>简单 shell 分词（支持单/双引号 + 反斜杠转义），用于 agent 传整条命令串的情况。</summary>
-    private static List<string> ShellSplit(string s)
-    {
-        var list = new List<string>();
-        var sb = new System.Text.StringBuilder();
-        char? quote = null;
-        bool inTok = false;
-        for (int i = 0; i < s.Length; i++)
-        {
-            var c = s[i];
-            if (quote is not null)
-            {
-                if (c == quote.Value) quote = null;
-                else if (c == '\\' && i + 1 < s.Length) sb.Append(s[++i]);
-                else sb.Append(c);
-            }
-            else if (c == '"' || c == '\'') { quote = c; inTok = true; }
-            else if (char.IsWhiteSpace(c)) { if (inTok) { list.Add(sb.ToString()); sb.Clear(); inTok = false; } }
-            else { sb.Append(c); inTok = true; }
-        }
-        if (inTok) list.Add(sb.ToString());
-        return list;
-    }
-
-    private string ResolveInterpreter(string scriptPath)
-    {
-        var ext = Path.GetExtension(scriptPath).ToLowerInvariant();
-        return ext switch
-        {
-            ".py" => string.IsNullOrWhiteSpace(PythonExecutable) ? "python3" : PythonExecutable,
-            ".sh" => "sh",
-            ".js" => "node",
-            _ => "sh",
-        };
-    }
-
-    /// <summary>POSIX 单引号转义：把参数包成 '…'，内部 ' 转义为 '\''。</summary>
-    private static string ShellQuote(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return "''";
-        return "'" + s.Replace("'", "'\\''") + "'";
-    }
 }

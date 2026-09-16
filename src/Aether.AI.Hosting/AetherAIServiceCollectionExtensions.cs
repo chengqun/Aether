@@ -161,7 +161,7 @@ public static class AetherAIServiceCollectionExtensions
             return runtime;
         });
 
-        // Memory (Phase 1 ships InMemory backends only)
+        // Memory（平台默认 InMemory；宿主可覆盖为 SqliteMemoryStore——桌面即如此，memory.db）
         services.AddSingleton<IMemoryStore, InMemoryMemoryStore>();
         services.AddSingleton<IConversationStore, InMemoryConversationStore>();
         services.AddSingleton<MemoryService>();

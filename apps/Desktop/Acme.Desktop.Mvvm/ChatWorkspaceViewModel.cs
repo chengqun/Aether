@@ -1,8 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Threading;
-using System.Threading.Channels;
 using System.Windows.Input;
 using Acme.DeviceConnect.Domain;
 using Acme.Llm.Application;
@@ -33,17 +31,19 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private readonly IUiDispatcher _dispatcher;
     private readonly IConversationStore _conversationStore;
     private readonly IPreferencesStore _preferences;
-    private readonly IConversationTitleService _titleService;
+    private readonly ConversationTitleApplier _titleApplier; // 会话标题生成+应用（持久化+侧栏项）——见 ConversationTitleApplier.cs
     private readonly IConversationSummaryService _summaryService; // 手机远程回复摘要（agent 跑完把 fullText 压成概览）
     private readonly IDeviceAutoConnectService _autoConnect;
     private readonly IApprovalDialogService? _approvalDialog;
     private readonly IToolApprovalLevelLookup? _levelLookup; // AutoEdit 模式按工具等级区分自动批/弹框；null 退化为全弹（Manual 语义）
     private readonly IPetTokenStream? _petTokens;    // 桌宠专属逐字答案流（可空：未注册则桌宠无打字机）；关键节点信号已下沉 Harness，VM 不再自己发射
+    private readonly AgentFileEditTracker _fileEdits; // 文件编辑闭环（快照/diff/撤销）——自持小类，见 AgentFileEditTracker.cs
 
     private readonly IDeviceChatClient _deviceChatClient;
     private readonly ILlmConfigService _llmService;
     private readonly IServiceProvider _serviceProvider;
     private readonly ISettingsDialogService _settingsDialog;
+    private readonly RemoteMessagePump _remotePump; // 远程消息并发管线（Progress 过滤/去重/每会话串行）——见 RemoteMessagePump.cs
 
     private readonly ExpertsViewModel _experts;
     private readonly WorkflowsViewModel _workflows;
@@ -80,7 +80,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _dispatcher = serviceProvider.GetRequiredService<IUiDispatcher>();
         _conversationStore = serviceProvider.GetRequiredService<IConversationStore>();
         _preferences = serviceProvider.GetRequiredService<IPreferencesStore>();
-        _titleService = serviceProvider.GetRequiredService<IConversationTitleService>();
+        _titleApplier = new ConversationTitleApplier(
+            serviceProvider.GetRequiredService<IConversationTitleService>(), _conversationStore, _dispatcher);
         _summaryService = serviceProvider.GetRequiredService<IConversationSummaryService>();
         _autoConnect = serviceProvider.GetRequiredService<IDeviceAutoConnectService>();
         _approvalDialog = serviceProvider.GetService<IApprovalDialogService>();
@@ -89,6 +90,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         _experts = experts;
         _workflows = workflows;
         _rules = rules;
+
+        _fileEdits = new AgentFileEditTracker(_dispatcher);
+        // processor 委托指向 ProcessRemoteMessageAsync（跑 agent/摘要/回复的编排，留本 VM）；
+        // 泵只管过滤/去重/入队/串行调度。
+        _remotePump = new RemoteMessagePump(ProcessRemoteMessageAsync);
 
         // 三类目标的可选集合变更（新建/删除/catalog reload）：刷新统一下拉池。选中是下拉选择的独立动作。
         _experts.TargetsChanged += OnChatTargetsChanged;
@@ -606,42 +612,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
                 cursor.PollCount = 0;
             }
 
-            // 文件编辑工具：call 阶段读盘快照 old（供事后算 diff + 一键撤销写回）。后台读盘避免大文件阻塞 UI。
-            // 撤销按钮建卡即注入（点按 → UndoFileEdit 写回 old）。
-            if (AgentEditPreview.IsFileEditTool(ev.Name))
-            {
-                var input = ev.Input;
-                var cardRef = tool;
-                cardRef.UndoCommand = new RelayCommand(() => UndoFileEdit(cardRef));
-                _ = Task.Run(() =>
-                {
-                    var fp = AgentEditPreview.TryGetFilePath(input);
-                    if (fp is null) return;
-                    bool existed = File.Exists(fp);
-                    string? old = existed ? TryReadAllText(fp) : null;
-                    _dispatcher.Post(() => cardRef.FileEdit = new FileEditSnapshot(fp, old, existed));
-                });
-            }
-            // 多文件批量编辑工具：call 阶段对每个 patch path 读盘快照 old。撤销逆序写回全部。
-            else if (AgentEditPreview.IsApplyPatchTool(ev.Name))
-            {
-                var input = ev.Input;
-                var cardRef = tool;
-                cardRef.UndoCommand = new RelayCommand(() => UndoFileEdit(cardRef));
-                _ = Task.Run(() =>
-                {
-                    var paths = AgentEditPreview.TryGetFilePaths(input);
-                    if (paths.Count == 0) return;
-                    var snaps = new List<FileEditSnapshot>(paths.Count);
-                    foreach (var fp in paths)
-                    {
-                        bool existed = File.Exists(fp);
-                        string? old = existed ? TryReadAllText(fp) : null;
-                        snaps.Add(new FileEditSnapshot(fp, old, existed));
-                    }
-                    _dispatcher.Post(() => cardRef.FileEdits = snaps);
-                });
-            }
+            // 文件编辑闭环（快照注入 + 撤销按钮）：守卫在 tracker 内部，非编辑工具 no-op。
+            _fileEdits.OnToolCall(tool, ev.Name, ev.Input);
         }
         else // Result：回填到对应工具步（合并为一条），再开新答案段
         {
@@ -660,45 +632,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             tool.Output = ev.Output;
             tool.IsToolCompleted = true;
 
-            // 文件编辑工具：result 阶段读盘 new + 快照 old 算事后并排 diff 挂卡。后台读盘。
-            if (tool.FileEdit is { } snap)
-            {
-                var cardRef = tool;
-                _ = Task.Run(() =>
-                {
-                    bool newExists = File.Exists(snap.FilePath);
-                    string? newText = newExists ? TryReadAllText(snap.FilePath) : null;
-                    DiffModel? diff = null;
-                    // old 或 new 任一存在即有可展示 diff（新建文件 old="" → 全增；删除结果 new="" → 全删）。
-                    if (snap.OldExisted || newExists)
-                    {
-                        var syntax = GitService.SyntaxForExtension(Path.GetExtension(snap.FilePath));
-                        diff = LineDiffBuilder.Build(snap.OldContent ?? "", newText ?? "", snap.FilePath, syntax);
-                    }
-                    _dispatcher.Post(() => cardRef.DiffPreview = diff);
-                });
-            }
-            // 多文件批量编辑：result 阶段对每个 path 读盘 new + 快照 old 算 diff，列表挂卡。
-            else if (tool.FileEdits is { Count: > 0 } snaps)
-            {
-                var cardRef = tool;
-                _ = Task.Run(() =>
-                {
-                    var diffs = new List<DiffModel>(snaps.Count);
-                    foreach (var s in snaps)
-                    {
-                        bool newExists = File.Exists(s.FilePath);
-                        string? newText = newExists ? TryReadAllText(s.FilePath) : null;
-                        // old 或 new 任一存在即算 diff（新建→全增；删除→全删）。
-                        if (s.OldExisted || newExists)
-                        {
-                            var syntax = GitService.SyntaxForExtension(Path.GetExtension(s.FilePath));
-                            diffs.Add(LineDiffBuilder.Build(s.OldContent ?? "", newText ?? "", s.FilePath, syntax));
-                        }
-                    }
-                    _dispatcher.Post(() => cardRef.DiffPreviews = diffs);
-                });
-            }
+            // 文件编辑闭环：读盘 new + 快照 old 算事后并排 diff 挂卡（后台读盘）。无快照的卡 no-op。
+            _fileEdits.OnToolResult(tool);
 
             var idx = items.IndexOf(tool);
             if (idx < 0) idx = items.Count - 1;
@@ -706,60 +641,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             items.Insert(idx + 1, next);
             cursor.Current = next;
         }
-    }
-
-    /// <summary>撤销一步文件编辑：写回 call 阶段快照的 old 内容（工具新建的文件 → 撤销 = 删除）。
-    /// 写盘后 <c>DocumentsViewModel</c> 的 FileSystemWatcher 自动重载编辑器。朴素单步语义——写回该步 old；
-    /// 多步同文件撤销中间步会破坏后续步基准（边缘情况，用户多半撤销最后一步或整体重来）。
-    /// 多文件批量编辑（ApplyPatch）：逆序写回所有快照（后改的先恢复，尽量还原中间状态）。</summary>
-    private void UndoFileEdit(ChatMessageItem card)
-    {
-        if (card.IsUndone) return;
-
-        // 多文件批量编辑：逆序写回全部快照
-        if (card.FileEdits is { Count: > 0 } snaps)
-        {
-            for (int i = snaps.Count - 1; i >= 0; i--)
-            {
-                var snap = snaps[i];
-                try
-                {
-                    if (snap.OldExisted)
-                        File.WriteAllText(snap.FilePath, snap.OldContent ?? "");
-                    else if (File.Exists(snap.FilePath))
-                        File.Delete(snap.FilePath);
-                }
-                catch
-                {
-                    // 单文件撤销失败不中断后续（用户可去 SCM 页手动恢复）。
-                }
-            }
-            card.IsUndone = true;
-            return;
-        }
-
-        // 单文件编辑
-        var single = card.FileEdit;
-        if (single is null) return;
-        try
-        {
-            if (single.OldExisted)
-                File.WriteAllText(single.FilePath, single.OldContent ?? "");
-            else if (File.Exists(single.FilePath))
-                File.Delete(single.FilePath); // 工具新建的文件 → 撤销 = 删除
-            card.IsUndone = true;
-        }
-        catch
-        {
-            // 撤销失败（文件锁定/权限）忽略，用户可去 SCM 页手动恢复。
-        }
-    }
-
-    /// <summary>读文本文件全文，失败返回 null（二进制/锁定/权限）。</summary>
-    private static string? TryReadAllText(string path)
-    {
-        try { return File.ReadAllText(path); }
-        catch { return null; }
     }
 
     /// <summary>todos_* 调用后更新浮动计划面板（runtime.ActiveTodos）。快照（每轮一卡、入对话流持久化）在 RunSegmentedStreamAsync 末尾插入。
@@ -824,33 +705,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
     }
 
+    // 最近一次远程消息/设备发送所在会话 id：SendInputAsync 设备发送分支据此把消息续进同一设备会话。
     private Guid _recentConversationId;
 
-    // —— 远程消息去重（补拉 vs 实时收到的同一条不重复处理）——
-    // 重连补拉可能在实时收到某条消息后再次取回它（连接瞬断→重连→服务端见最新一条仍「未回复」→补拉回放），
-    // 用有界集合记录已处理的消息 Id 防重复跑 agent。上限 200，超限丢最旧（远超任何合理 burst）。
-    private readonly object _processedRemoteLock = new();
-    private readonly HashSet<Guid> _processedRemoteIds = new();
-    private readonly Queue<Guid> _processedRemoteQueue = new();
-    private const int MaxProcessedRemoteIds = 200;
-
-    /// <summary>声明一条远程消息已处理。返回 false=已处理过（重复，跳过）；true=首次（继续）。
-    /// Id 为空（不应发生）时返回 true 放行且不入集合（无法去重）。</summary>
-    private bool TryClaimRemoteId(Guid id)
-    {
-        if (id == Guid.Empty) return true;
-        lock (_processedRemoteLock)
-        {
-            if (!_processedRemoteIds.Add(id)) return false;
-            _processedRemoteQueue.Enqueue(id);
-            while (_processedRemoteQueue.Count > MaxProcessedRemoteIds)
-                _processedRemoteIds.Remove(_processedRemoteQueue.Dequeue());
-            return true;
-        }
-    }
-
     /// <summary>重连/冷启动后补拉离线期间手机发的消息：取回每会话最后一条未回复的用户消息并回放。
-    /// 回放走同一 HandleMessageReceived（含去重），已实时收到过的会被 TryClaimRemoteId 跳过。
+    /// 回放走同一 HandleMessageReceived（含去重），已实时收到过的会被消息泵跳过。
     /// 仅在初始化完成后运行（目标已恢复）——否则会在 boot 期对未选目标的旧消息发「未选用专家」回执。</summary>
     private async Task RunCatchUpAsync()
     {
@@ -868,67 +727,14 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         }
     }
 
-    // —— 远程消息按会话串行处理（长 agent run 不阻塞 SignalR 消息泵）——
-    // SignalR On 处理器 await HandleMessageReceived；若该方法直接跑 agent（秒级），会阻塞泵使后续消息
-    // 排队乃至超时。故入口只做去重+入队（微秒级返回），实际处理在每会话独占的 drainer 里串行跑——
-    // 既不阻塞泵，又保证同一会话消息 FIFO（共享 convId 会话，并发写会竞态）。
-    private readonly Dictionary<Guid, Channel<DeviceMessage>> _remoteQueues = new();
-    private readonly object _remoteQueuesLock = new();
-    private const int MaxRemoteQueueDepth = 500;
-
-    /// <summary>收到远程 SignalR 消息回调（SignalR 线程）。仅去重+入队，实际处理见
+    /// <summary>收到远程 SignalR 消息回调（SignalR 线程，须微秒级返回）。仅记录最近会话 id + 交消息泵
+    /// （<see cref="RemoteMessagePump"/>：Progress 过滤/去重/按会话入队），实际处理见
     /// <see cref="ProcessRemoteMessageAsync"/>（每会话 drainer 串行调用）。</summary>
-    private async Task HandleMessageReceived(DeviceMessage msg)
+    private Task HandleMessageReceived(DeviceMessage msg)
     {
         _recentConversationId = msg.ConversationId;
-
-        // 控制消息按 messageType 路由（不建可见 turn）：
-        // Progress = 桌面是发送方，不消费自己发出的心跳。
-        var mt = msg.MessageType;
-        if (string.Equals(mt, "Progress", StringComparison.OrdinalIgnoreCase)) return;
-
-        // 去重：补拉回放的消息若已实时处理过则跳过（连接瞬断→重连竞态）。
-        if (!TryClaimRemoteId(msg.Id)) return;
-
-        EnqueueRemote(msg);
-    }
-
-    /// <summary>按会话入队并（首次时）启动独占 drainer。FIFO 保证同会话消息顺序处理。</summary>
-    private void EnqueueRemote(DeviceMessage msg)
-    {
-        Channel<DeviceMessage>? ch;
-        lock (_remoteQueuesLock)
-        {
-            if (!_remoteQueues.TryGetValue(msg.ConversationId, out ch))
-            {
-                ch = Channel.CreateBounded<DeviceMessage>(MaxRemoteQueueDepth);
-                _remoteQueues[msg.ConversationId] = ch;
-                DrainRemoteQueueAsync(msg.ConversationId, ch).SafeFireAndForget();
-            }
-        }
-        // TryWrite：队列已满（500）说明严重积压，丢弃以保护内存——实际不应发生。
-        ch.Writer.TryWrite(msg);
-    }
-
-    /// <summary>每会话独占 drainer：FIFO 依次处理消息，跑完一条接下一条。队列排空后自清理。</summary>
-    private async Task DrainRemoteQueueAsync(Guid convId, Channel<DeviceMessage> ch)
-    {
-        await foreach (var msg in ch.Reader.ReadAllAsync())
-        {
-            try
-            {
-                await ProcessRemoteMessageAsync(msg);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Trace.WriteLine($"[Chat] 远程消息处理异常 (conv {convId}): {ex.Message}");
-            }
-        }
-        lock (_remoteQueuesLock)
-        {
-            if (_remoteQueues.TryGetValue(convId, out var current) && ReferenceEquals(current, ch))
-                _remoteQueues.Remove(convId);
-        }
+        _remotePump.Accept(msg);
+        return Task.CompletedTask;
     }
 
     /// <summary>实际处理一条远程消息（drainer 串行调用）：显示 + 跑 agent + 回复 / 未选目标回执。
@@ -1741,7 +1547,7 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
 
             // 首轮后异步用 LLM 生成会话标题（不阻塞；失败静默）
             if (justCreated)
-                GenerateAndApplyTitleAsync(content, fullText.ToString()).SafeFireAndForget();
+                _titleApplier.ApplyAsync(_currentConversationId, content, fullText.ToString(), Conversations).SafeFireAndForget();
 
             return;
         }
@@ -1783,29 +1589,6 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             });
             turn.Finish(TurnStatus.Done);
         }
-    }
-
-    /// <summary>异步用 LLM 生成标题并更新当前会话（持久化 + 侧栏项）。</summary>
-    private async Task GenerateAndApplyTitleAsync(string userMessage, string assistantReply)
-    {
-        if (_currentConversationId == Guid.Empty) return;
-        try
-        {
-            var title = await _titleService.GenerateTitleAsync(userMessage, assistantReply);
-            if (string.IsNullOrWhiteSpace(title)) return;
-
-            var conv = await _conversationStore.GetConversationAsync(_currentConversationId);
-            if (conv is null) return;
-            conv.Title = title;
-            await _conversationStore.SaveConversationAsync(conv);
-
-            await _dispatcher.InvokeAsync(() =>
-            {
-                var item = Conversations.FirstOrDefault(c => c.Id == _currentConversationId);
-                if (item is not null) item.Title = title;
-            });
-        }
-        catch { /* 标题生成失败不影响主流程 */ }
     }
 
     /// <summary>

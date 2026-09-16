@@ -9,7 +9,7 @@ namespace Aether.AI.Memory.Stores;
 /// SQLite-backed <see cref="IMemoryStore"/> for long-term agent memory. Table <c>agent_memory</c>.
 /// WAL + busy_timeout, lazy schema. Mirrors <see cref="SqliteConversationStore"/>'s pattern (no EF Core).
 /// <para>Search is a simple substring (LIKE) match over key/content — no embeddings. Sufficient for
-/// Phase 1; a vector backend can implement <see cref="IMemoryStore"/> separately later.</para>
+/// the single-user desktop case; a vector backend can implement <see cref="IMemoryStore"/> separately later.</para>
 /// </summary>
 public sealed class SqliteMemoryStore : SqliteStoreBase, IMemoryStore
 {

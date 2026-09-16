@@ -83,12 +83,16 @@ public sealed class AgentBuilder
         Name = string.IsNullOrWhiteSpace(_name) ? _id : _name,
         Instructions = _instructions,
         ModelId = _modelId,
+        Engine = _engine,
+        Rules = _rules,
+        IsCodeRule = _isCodeRule,
         Temperature = _temperature,
         TopP = _topP,
         MaxOutputTokens = _maxOutputTokens,
         ResponseFormat = _responseFormat,
         Tools = _tools,
         ToolApprovals = _toolApprovals.Count == 0 ? null : _toolApprovals,
+        AutoApprovalRules = _autoApprovalRules.Count == 0 ? null : _autoApprovalRules,
         Memory = _memory,
         MaxHistory = _maxHistory,
         RequireToolApproval = _requireToolApproval,
@@ -98,5 +102,6 @@ public sealed class AgentBuilder
         EnableFileMemory = _enableFileMemory,
         EnableOpenTelemetry = _enableOpenTelemetry,
         EnableLongTermMemory = _enableLongTermMemory,
+        BackgroundAgents = _backgroundAgents.Count == 0 ? null : _backgroundAgents,
     };
 }

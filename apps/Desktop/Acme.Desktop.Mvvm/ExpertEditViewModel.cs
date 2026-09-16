@@ -1,9 +1,15 @@
 using System.Collections.ObjectModel;
+using System.Text;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Agents;
 using Aether.AI.Abstractions;
+using Aether.AI.Core.Agents;
 using Aether.AI.Hosting;
 using CommunityToolkit.Mvvm.ComponentModel;
+// Core 与 Notes.Domain 各有平行 AgentMemoryMode/AgentResponseFormat 枚举（适配器在 ToAgentDefinition 处映射）；
+// 此 VM 构建 CustomAgentDefinition（Notes 域），故别名钉到 Notes 域枚举，消解歧义。
+using AgentMemoryMode = Acme.Notes.Domain.Agents.AgentMemoryMode;
+using AgentResponseFormat = Acme.Notes.Domain.Agents.AgentResponseFormat;
 
 namespace Acme.Desktop.Mvvm;
 
@@ -133,8 +139,12 @@ public sealed partial class ExpertEditViewModel : ObservableObject
 {
     public ExpertEditViewModel(ExpertItem? existing, IReadOnlyList<CustomToolMeta> allTools, IReadOnlyList<CustomModelOption> allModels,
         IReadOnlyList<McpServerStatus>? mcpServers = null, string currentHost = "All",
-        IReadOnlyList<string>? backgroundAgentCandidates = null)
+        IReadOnlyList<string>? backgroundAgentCandidates = null,
+        ICustomAgentEvalRunner? evalRunner = null, IReportDialogService? reportDialog = null)
     {
+        // 评测可选注入（宿主未注册评测服务/报告弹窗 → 隐藏评测按钮）
+        _evalRunner = evalRunner;
+        _reportDialog = reportDialog;
         AvailableModels = allModels ?? Array.Empty<CustomModelOption>();
 
         var selectedSet = new HashSet<string>(existing?.Tools ?? Enumerable.Empty<string>());
@@ -482,5 +492,100 @@ public sealed partial class ExpertEditViewModel : ObservableObject
     private void Cancel()
     {
         CancelRequested?.Invoke();
+    }
+
+    // —— 评测（labs evals/*.eval.yaml）：跑指向本 agent 的全部套件 → markdown 报告弹窗 ——
+    // 契约 ICustomAgentEvalRunner 在 Core（impl 在 ai/Agents 适配器，Mvvm 经契约消费不引适配器——镜像 ICustomAgentRunner）。
+
+    private readonly ICustomAgentEvalRunner? _evalRunner;
+    private readonly IReportDialogService? _reportDialog;
+
+    /// <summary>评测可用（服务+弹窗已注入且在编辑已保存 agent——新建 agent 无落盘 id，无可评测目标）。</summary>
+    public bool HasEval => _evalRunner is not null && _reportDialog is not null && IsEditing;
+
+    public bool CanRunEval => HasEval && !IsRunningEval;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunEvalCommand))]
+    private bool _isRunningEval;
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand(CanExecute = nameof(CanRunEval))]
+    private async Task RunEvalAsync()
+    {
+        if (_evalRunner is null || _reportDialog is null) return;
+        IsRunningEval = true;
+        Error = null;
+        try
+        {
+            var result = await _evalRunner.RunAsync(Id);
+            await _reportDialog.ShowAsync($"评测报告 — {result.AgentName}", FormatEvalReport(result));
+        }
+        catch (Exception ex)
+        {
+            Error = $"评测失败：{ex.Message}";
+        }
+        finally
+        {
+            IsRunningEval = false;
+        }
+    }
+
+    /// <summary>评测结果 → markdown 报告（概览汇总 + 逐套件 + 逐 case 回复摘录与检查明细）。</summary>
+    public static string FormatEvalReport(AgentEvalRunResult result)
+    {
+        var sb = new StringBuilder();
+        if (result.Error is not null)
+        {
+            sb.AppendLine($"## ❌ 评测失败");
+            sb.AppendLine();
+            sb.AppendLine(result.Error);
+        }
+        else if (!result.HasSuites)
+        {
+            sb.AppendLine("## 暂无评测文件");
+            sb.AppendLine();
+            sb.AppendLine("在 labs `evals/` 目录创建 `*.eval.yaml`（`agentId` 指向本 agent 的 id）后重试。");
+        }
+        else
+        {
+            sb.AppendLine($"## {(result.AllPassed ? "✅ 全部通过" : "❌ 有失败")}");
+            sb.AppendLine();
+            sb.AppendLine($"套件 {result.Suites.Count} · 用例 {result.TotalCases} · 通过 {result.PassedCases} · 失败 {result.FailedCases}");
+        }
+
+        foreach (var suite in result.Suites)
+        {
+            sb.AppendLine();
+            var icon = suite.Error is not null ? "⚠️" : suite.AllPassed ? "✅" : "❌";
+            sb.AppendLine($"### {icon} {suite.EvalName}（{suite.Passed}/{suite.Total}）");
+            if (suite.EvalDescription is not null)
+            {
+                sb.AppendLine();
+                sb.AppendLine(suite.EvalDescription);
+            }
+            sb.AppendLine();
+            sb.AppendLine($"`{suite.EvalFile}`");
+            if (suite.Error is not null)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"> {suite.Error}");
+                continue;
+            }
+
+            foreach (var c in suite.Cases)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"#### {(c.Passed ? "✅" : "❌")} 「{c.Query}」");
+                if (!string.IsNullOrEmpty(c.Response))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine($"> {c.Response.ReplaceLineEndings(" ")}");
+                }
+                foreach (var check in c.Checks)
+                    sb.AppendLine($"- {(check.Passed ? "✅" : "❌")} {check.CheckName} — {check.Reason}");
+            }
+        }
+
+        return sb.ToString();
     }
 }

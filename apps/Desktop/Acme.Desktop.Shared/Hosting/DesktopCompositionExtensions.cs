@@ -1,6 +1,7 @@
 using System.IO;
 using Acme.ApkParser.AI;
 using Acme.Agents.AI;
+using Acme.Agents.AI.Evals;
 using Acme.Desktop.Mvvm;
 using Aether.AI.Harness.Agents;
 using Aether.AI.Harness.Tools;
@@ -243,6 +244,15 @@ public static class DesktopCompositionExtensions
                 () => sp.GetRequiredService<IKnowledgeDirectoryProvider>().CurrentDirectory
                       ?? sp.GetRequiredService<IKnowledgeDirectoryProvider>().DefaultRoot,
                 sp.GetRequiredService<IWorkflowSourceParser>()));
+        // —— Agent 评测运行器（labs evals/*.eval.yaml，目录消费）：契约 ICustomAgentEvalRunner 在 Core.Agents
+        // （镜像 ICustomAgentRunner），impl 在 ai/Agents 适配器（需 ICustomAgentCatalog + AgentFactory 双视野），
+        // 不进 AddCustomAgents——适配器不知道 labs 根，根经委托由宿主注入（同上两个 catalog）。
+        services.AddSingleton<ICustomAgentEvalRunner>(sp =>
+            new AgentEvalRunner(
+                () => sp.GetRequiredService<IKnowledgeDirectoryProvider>().CurrentDirectory
+                      ?? sp.GetRequiredService<IKnowledgeDirectoryProvider>().DefaultRoot,
+                sp.GetRequiredService<ICustomAgentCatalog>(),
+                sp.GetRequiredService<AgentFactory>()));
         // —— 策略/代码规则/Lean 算法读源也切 labs 目录（INoteCatalogSource 换注册为目录版，绑 labs 根）。
         // StrategyNoteSource/CodeNoteSource/LeanAlgorithmNoteSource 依赖 INoteCatalogSource，换注册即自动从 labs 文件读。
         services.AddSingleton<Acme.Notes.Domain.Catalog.INoteCatalogSource>(sp =>

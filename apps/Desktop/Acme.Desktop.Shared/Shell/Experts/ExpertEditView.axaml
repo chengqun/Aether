@@ -6,10 +6,20 @@
              Classes="form-fields">
 
   <DockPanel>
+    <!--  底栏：左=自动保存状态/评测进度提示，右=评测按钮（跑 labs evals/*.eval.yaml → 报告弹窗；
+          HasEval=评测服务+弹窗已注入且在编辑已保存 agent，新建 agent 无落盘 id 不显示）  -->
     <Border DockPanel.Dock="Bottom" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
-                 VerticalAlignment="Center"
-                 IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="▶ 评测" FontSize="12"
+                Command="{Binding RunEvalCommand}" IsVisible="{Binding HasEval}"
+                VerticalAlignment="Center" Margin="8,0,0,0"/>
+        <TextBlock DockPanel.Dock="Right" Text="评测运行中…" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                   VerticalAlignment="Center" Margin="0,0,8,0"
+                   IsVisible="{Binding IsRunningEval}"/>
+        <TextBlock Text="{Binding AutoSaveStatus}" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding AutoSaveStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+      </DockPanel>
     </Border>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

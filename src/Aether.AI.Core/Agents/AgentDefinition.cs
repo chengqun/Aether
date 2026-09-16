@@ -88,7 +88,7 @@ public sealed class AgentDefinition
     public AgentResponseFormat ResponseFormat { get; init; } = AgentResponseFormat.Default;
 
     // —— HarnessAgent provider 开关（仅 HarnessAgent 路径生效；ChatClientAgent 不用这些 provider）。
-    //   默认全 false = 全部禁用，保持 Phase 1 的轻量运行时行为。按需开启。
+    //   默认全 false = 全部禁用，保持轻量运行时。按需开启。
 
     /// <summary>启用 web search provider（默认禁用）。</summary>
     public bool EnableWebSearch { get; init; }
@@ -108,8 +108,6 @@ public sealed class AgentDefinition
 
     /// <summary>启用 file memory provider（默认禁用）。</summary>
     public bool EnableFileMemory { get; init; }
-
-    /// <summary>启用 agent skills provider（默认禁用）。</summary>
 
     /// <summary>启用 OpenTelemetry（默认禁用）。</summary>
     public bool EnableOpenTelemetry { get; init; }
