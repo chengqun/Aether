@@ -59,10 +59,13 @@ public static class EventHistoryRebuilder
                             asst.Contents.Add(new TextContent(pendingText.ToString()));
                             pendingText.Clear();
                         }
+                        // 显式恒等转换：ToInputDict 在写入端已把 null 值合并为 string.Empty（值恒非空），
+                        // 但 Dictionary<K,V> 对 IDictionary<K,V'> 泛型不变，MEAI 10.10 起形参放宽为
+                        // IDictionary<string, object?>? 后须手动标注（运行时同一类型，可空性擦除）。
                         asst.Contents.Add(new FunctionCallContent(
                             tc?.CallId ?? string.Empty,
                             string.IsNullOrWhiteSpace(tc?.Name) ? "tool" : tc!.Name,
-                            tc?.Input));
+                            (IDictionary<string, object?>?)tc?.Input));
                         messages.Add(asst);
                         break;
 
