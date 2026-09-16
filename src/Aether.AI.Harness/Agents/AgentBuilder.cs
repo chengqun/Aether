@@ -13,17 +13,22 @@ public sealed class AgentBuilder
     private string _name = string.Empty;
     private string _instructions = string.Empty;
     private string _modelId = string.Empty;
+    private EngineKind _engine = EngineKind.Llm;
+    private RuleProgram? _rules;
+    private bool _isCodeRule;
     private double? _temperature;
     private double? _topP;
     private int? _maxOutputTokens;
     private AgentResponseFormat _responseFormat = AgentResponseFormat.Default;
     private readonly List<string> _tools = new();
     private readonly Dictionary<string, string> _toolApprovals = new();
+    private readonly List<string> _autoApprovalRules = new();
     private AgentMemoryMode _memory = AgentMemoryMode.Full;
     private int _maxHistory = 20;
     private bool _requireToolApproval;
     private bool _enableWebSearch, _enableTodoProvider, _enableAgentModeProvider;
     private bool _enableFileMemory, _enableOpenTelemetry, _enableLongTermMemory;
+    private readonly List<string> _backgroundAgents = new();
 
     public AgentBuilder(string id)
     {
@@ -37,6 +42,11 @@ public sealed class AgentBuilder
     public AgentBuilder Instructions(string instructions) { _instructions = instructions; return this; }
     public AgentBuilder ModelId(string modelId) { _modelId = modelId; return this; }
 
+    // —— 引擎（大脑；默认 LLM）——
+    public AgentBuilder Engine(EngineKind engine) { _engine = engine; return this; }
+    public AgentBuilder Rules(RuleProgram rules) { _rules = rules; return this; }
+    public AgentBuilder IsCodeRule(bool isCodeRule = true) { _isCodeRule = isCodeRule; return this; }
+
     // —— 采样 ——
     public AgentBuilder Temperature(double temperature) { _temperature = temperature; return this; }
     public AgentBuilder TopP(double topP) { _topP = topP; return this; }
@@ -47,12 +57,18 @@ public sealed class AgentBuilder
     public AgentBuilder WithTool(string toolName) { _tools.Add(toolName); return this; }
     public AgentBuilder WithTools(IEnumerable<string> toolNames) { _tools.AddRange(toolNames); return this; }
     public AgentBuilder WithToolApproval(string toolName, string level) { _toolApprovals[toolName] = level; return this; }
+    public AgentBuilder AutoApproveTool(string toolName) { _autoApprovalRules.Add(toolName); return this; }
+    public AgentBuilder AutoApproveTools(IEnumerable<string> toolNames) { _autoApprovalRules.AddRange(toolNames); return this; }
     public AgentBuilder RequireToolApproval(bool require = true) { _requireToolApproval = require; return this; }
 
     // —— 记忆 ——
     public AgentBuilder Memory(AgentMemoryMode memory) { _memory = memory; return this; }
     public AgentBuilder MaxHistory(int max) { _maxHistory = max; return this; }
     public AgentBuilder EnableLongTermMemory(bool enable = true) { _enableLongTermMemory = enable; return this; }
+
+    // —— 后台 Agent（动态多 agent 并行白名单，orchestrator 分派子任务）——
+    public AgentBuilder WithBackgroundAgent(string agentName) { _backgroundAgents.Add(agentName); return this; }
+    public AgentBuilder WithBackgroundAgents(IEnumerable<string> agentNames) { _backgroundAgents.AddRange(agentNames); return this; }
 
     // —— Provider 开关 ——
     public AgentBuilder EnableWebSearch(bool enable = true) { _enableWebSearch = enable; return this; }
