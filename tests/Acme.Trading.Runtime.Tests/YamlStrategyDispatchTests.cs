@@ -55,6 +55,60 @@ default: Hold
     }
 
     [Fact]
+    public void TryDeserialize_rejects_rules_with_missing_or_unparseable_when()
+    {
+        // 修复前 Map() 静默丢弃坏规则（TryParse 失败 continue）——截断的策略照常「解析成功」注册，
+        // 缺规则的策略永不交易且零反馈（交易静默错）。现在缺 when / when 无法解析都判 malformed，
+        // 错误信息带规则下标 + signal，经 3-out 重载反馈给 AI 工具迭代。
+        var yaml = @"params: []
+indicators:
+  fast: { type: sma, period: 2 }
+rules:
+  - signal: Long
+  - signal: Flat
+    when: plain-string-not-a-condition
+default: Hold
+";
+        Assert.False(StrategyProgramYaml.TryDeserialize(yaml, out var prog, out var err));
+
+        Assert.Null(prog);
+        Assert.NotNull(err);
+        Assert.Contains("rules[0]", err!);
+        Assert.Contains("缺少 when 条件", err!);
+        Assert.Contains("rules[1]", err!);
+        Assert.Contains("无法解析", err!);
+    }
+
+    [Fact]
+    public async Task LoadAsync_surfaces_rule_condition_errors_via_load_errors()
+    {
+        // 坏 when 的 YAML 笔记不注册策略，且错误（含规则下标）进 LoadErrors——agent/用户可据反馈修 YAML。
+        var title = "TestYamlBadWhen_" + Guid.NewGuid().ToString("N")[..8];
+        var yaml = @"params: []
+indicators:
+  fast: { type: sma, period: 2 }
+rules:
+  - signal: Long
+default: Hold
+";
+        var source = new FakeStrategySource(new List<StrategyNote> { new("b1", title, yaml, StrategyKind.Yaml) });
+        var svc = new StrategyScriptingService(source, NullLogger<StrategyScriptingService>.Instance);
+
+        try
+        {
+            await svc.LoadAsync();
+
+            Assert.DoesNotContain(title, StrategyRegistry.GetRegisteredNames());
+            Assert.True(svc.LoadErrors.ContainsKey(title));
+            Assert.Contains("rules[0]", svc.LoadErrors[title]);
+        }
+        finally
+        {
+            StrategyRegistry.Unregister(title);
+        }
+    }
+
+    [Fact]
     public async Task LoadAsync_registers_yaml_strategy_and_surfaces_errors()
     {
         // 用唯一标题避免与其它测试/全局注册表冲突

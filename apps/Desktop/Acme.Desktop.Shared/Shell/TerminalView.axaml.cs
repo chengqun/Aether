@@ -66,6 +66,8 @@ public partial class TerminalView : UserControl
         {
             IsVisible = false,
             TerminalFontSize = 13,
+            // 回滚缓冲封顶（默认无限）：长会话无限回滚把已滚动内容驻留内存，10000 行防无界增长。
+            ScrollbackLimit = 10_000,
         };
         ApplyTheme(ctrl);
         ctrl.TitleChanged += (_, title) => _service?.NotifyTitleChanged(session.Id, title ?? session.Title);

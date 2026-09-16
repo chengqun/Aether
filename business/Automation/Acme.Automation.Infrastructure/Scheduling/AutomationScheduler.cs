@@ -83,7 +83,6 @@ public class AutomationScheduler : IAutomationScheduler
 
     private async Task RunTaskAsync(AutomationTask task, CancellationToken cancellationToken)
     {
-        var now = DateTime.UtcNow;
         var message = string.IsNullOrWhiteSpace(task.Prompt)
             ? $"执行自动化任务: {task.TaskName}"
             : task.Prompt;
@@ -93,17 +92,21 @@ public class AutomationScheduler : IAutomationScheduler
             var result = await _agentExecutor.ExecuteAsync(
                 task.AgentId, task.ConversationId, task.TaskName, message, cancellationToken);
 
-            task.LastExecutionTime = now;
+            // 用执行完成后的新时间戳（agent run 可能耗时数分钟）：Interval 任务从「上次执行完成」
+            // 起算间隔；若用跑前旧 now，60min 间隔跑 10min → 实际 50min 就触发下次，反复漂移提前。
+            var finished = DateTime.UtcNow;
+            task.LastExecutionTime = finished;
             task.LastExecutionStatus = "Success";
             task.LastExecutionResult = result;
-            task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, now);
+            task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, finished);
         }
         catch (Exception ex)
         {
-            task.LastExecutionTime = now;
+            var failedAt = DateTime.UtcNow;
+            task.LastExecutionTime = failedAt;
             task.LastExecutionStatus = "Failed";
             task.LastExecutionResult = ex.Message;
-            task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, now);
+            task.NextExecutionTime = AutomationScheduleCalculator.ComputeNextRun(task, failedAt);
         }
 
         try

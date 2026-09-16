@@ -70,7 +70,7 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                 if (note.Kind == StrategyKind.Yaml)
                 {
                     // 声明式 YAML 策略：解析成 StrategyProgram → YamlStrategy。Code 路径不受影响。
-                    if (StrategyProgramYaml.TryDeserialize(note.Content, out var program) && program is not null)
+                    if (StrategyProgramYaml.TryDeserialize(note.Content, out var program, out var parseErr) && program is not null)
                     {
                         try
                         {
@@ -87,8 +87,8 @@ public sealed class StrategyScriptingService : IStrategyScriptingService
                     }
                     else
                     {
-                        lock (_lock) _loadErrors[note.Title] = "YAML 策略解析失败";
-                        _logger.LogWarning("YAML 策略解析失败 {Name}", note.Title);
+                        lock (_lock) _loadErrors[note.Title] = parseErr ?? "YAML 策略解析失败";
+                        _logger.LogWarning("YAML 策略解析失败 {Name}：{Err}", note.Title, parseErr);
                     }
                 }
                 else

@@ -72,12 +72,27 @@ public static class StrategyProgramYaml
         }
 
         var rules = new List<StrategyRuleDef>();
+        var ruleErrors = new List<string>();
+        var ruleIndex = 0;
         foreach (var r in dto.Rules ?? new())
         {
-            if (r.When is null) continue;
-            if (!ConditionDef.TryParse(Normalize(r.When), out var cond)) continue;
+            ruleIndex++;
+            if (r.When is null)
+            {
+                // 无 when 的规则无触发条件（default 已承担兜底信号）——判 malformed 而非静默丢弃：
+                // 旧版 continue 会把整条规则悄悄吞掉，策略「编译成功」但永不交易、零反馈（交易静默错）。
+                ruleErrors.Add($"rules[{ruleIndex - 1}]（signal={r.Signal ?? "?"}）缺少 when 条件");
+                continue;
+            }
+            if (!ConditionDef.TryParse(Normalize(r.When), out var cond))
+            {
+                ruleErrors.Add($"rules[{ruleIndex - 1}]（signal={r.Signal ?? "?"}）的 when 条件无法解析");
+                continue;
+            }
             rules.Add(new StrategyRuleDef(ParseSignal(r.Signal), cond!));
         }
+        if (ruleErrors.Count > 0)
+            throw new InvalidOperationException("规则条件无效: " + string.Join("; ", ruleErrors));
 
         return new StrategyProgram(@params, indicators, rules, ParseSignal(dto.Default));
     }

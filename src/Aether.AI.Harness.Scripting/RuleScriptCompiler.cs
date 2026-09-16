@@ -96,16 +96,39 @@ public static class RuleScriptCompiler
     {
         instance = null;
         error = null;
-        var brainType = asm.GetTypes().FirstOrDefault(t =>
-            typeof(CodeRuleBrain).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+        Type? brainType;
+        try
+        {
+            brainType = asm.GetTypes().FirstOrDefault(t =>
+                typeof(CodeRuleBrain).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            // 类型加载失败也走「编译失败」路径（TryCompile 契约：失败 out error，不抛异常）——
+            // 否则一条坏笔记的异常会逃逸到调用方，中断整轮 LoadAsync 循环（后续规则不注册、RulesLoaded 不触发）。
+            error = "类型加载失败: " + string.Join("; ", ex.LoaderExceptions.Select(e => e?.Message ?? e!.GetType().Name));
+            return false;
+        }
         if (brainType is null)
         {
             error = "源码中未找到继承 CodeRuleBrain 的非抽象类";
             return false;
         }
 
-        instance = (CodeRuleBrain)Activator.CreateInstance(brainType)!;
-        return true;
+        try
+        {
+            instance = (CodeRuleBrain)Activator.CreateInstance(brainType)!;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // ctor 抛异常同理——按编译失败处理并反馈错误，不让调用方整轮中断。
+            // Activator.CreateInstance 把 ctor 异常包进 TargetInvocationException（Message 是通用包装
+            // 文案），拆包取 InnerException 反馈真实原因。
+            var cause = ex is System.Reflection.TargetInvocationException { InnerException: { } inner } ? inner : ex;
+            error = $"实例化 {brainType.Name} 失败: {cause.Message}";
+            return false;
+        }
     }
 
     // 可卸载 ALC：isCollectible=true 让 Unload() 可回收其程序集。Load 返回 null →

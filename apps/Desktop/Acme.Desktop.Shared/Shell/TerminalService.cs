@@ -35,6 +35,9 @@ public sealed class TerminalService : ITerminalService, IAsyncDisposable
     /// <summary>底部终端面板显隐持久化键（preferences.json）。</summary>
     private const string TerminalVisiblePrefKey = "ui.terminalVisible";
 
+    /// <summary>RunAsync 捕获缓冲上限（2MB）：防无限输出命令在等哨兵期间内存无界；超限时丢已扫描头部保留最近 1MB。</summary>
+    private const int MaxCaptureBytes = 2 * 1024 * 1024;
+
     public TerminalService(IPreferencesStore? prefs = null)
     {
         _prefs = prefs;
@@ -189,6 +192,24 @@ public sealed class TerminalService : ITerminalService, IAsyncDisposable
                 {
                     done.TrySetResult(exitCode);
                     return;
+                }
+                // capture 封顶（防 yes/无限日志类命令在等哨兵期间内存无界）：超 2MB 时丢弃
+                // 已扫描确认无哨兵的头部（scanPos 之前的字节不可能再命中），保留最近 1MB。
+                // 哨兵在命令末尾输出，丢头不影响检测；上层 OutputText 另有 6000 字符截断。
+                if (capture.Count > MaxCaptureBytes)
+                {
+                    var drop = Math.Min(scanPos, capture.Count - (MaxCaptureBytes / 2));
+                    if (drop > 0)
+                    {
+                        capture.RemoveRange(0, drop);
+                        scanPos -= drop;
+                    }
+                    else if (capture.Count > MaxCaptureBytes * 2)
+                    {
+                        // scanPos 被卡在 0（病态流：开头是永不完结的部分哨兵）——硬丢到 1MB 保底。
+                        capture.RemoveRange(0, capture.Count - (MaxCaptureBytes / 2));
+                        scanPos = 0;
+                    }
                 }
             }
         }

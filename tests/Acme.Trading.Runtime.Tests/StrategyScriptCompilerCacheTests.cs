@@ -47,4 +47,30 @@ public class CacheProbeStrategy : IStrategy
         // 不同源码 → 不同 hash → 不同 ALC/程序集。
         Assert.NotSame(first!.GetType().Assembly, second!.GetType().Assembly);
     }
+
+    [Fact]
+    public void Ctor_throwing_strategy_returns_error_not_exception()
+    {
+        // 回归守卫：TryCompile 契约「失败 out error，不抛异常」。修复前策略类 ctor 抛异常会从
+        // Activator.CreateInstance 直接逃逸——一条坏笔记中断整轮 LoadAsync 循环（后续策略不注册、
+        // StrategiesLoaded 不触发、异常经 ContinueWith 未观察）。
+        GC.KeepAlive(typeof(IStrategy));
+
+        var source = @"using Acme.Trading.Domain;
+public class CtorThrowProbeStrategy : IStrategy
+{
+    public CtorThrowProbeStrategy() => throw new System.InvalidOperationException(""init boom"");
+    public int WarmUpBars => 0;
+    public void Initialize(StrategyParameters parameters) { }
+    public SignalDirection EvaluateSignal(MarketBar bar) => SignalDirection.Hold;
+}";
+
+        var ok = StrategyScriptCompiler.TryCompile(source, out var strategy, out var error);
+
+        Assert.False(ok);
+        Assert.Null(strategy);
+        Assert.NotNull(error);
+        Assert.Contains("CtorThrowProbeStrategy", error!);
+        Assert.Contains("init boom", error!);
+    }
 }

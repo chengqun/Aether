@@ -19,6 +19,10 @@ public partial class SourceControlViewModel : ObservableObject
     private readonly IServiceProvider _serviceProvider;
     private readonly ICurrentProjectDirectoryProvider _projectDirProvider;
     private string? _projectDir;
+    private IGitService? _git;
+
+    /// <summary>懒解析缓存的 git 服务（DI 单例；本类 15 个调用点不再各自穿透 service provider）。</summary>
+    private IGitService? Git => _git ??= _serviceProvider.GetService<IGitService>();
 
     // 工作区文件监听：用户改文件（Aether 编辑器或外部工具）后自动刷新变更列表。
     // 去抖 + 噪音过滤（.git/bin/obj/node_modules 等）避免频繁刷新。
@@ -239,7 +243,7 @@ public partial class SourceControlViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanInitRepository))]
     private async Task InitRepositoryAsync()
     {
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null || string.IsNullOrEmpty(_projectDir)) return;
         IsBusy = true;
         try
@@ -260,7 +264,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task LoadHistoryAsync()
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null || !git.IsRepository(_projectDir)) return;
         IsBusy = true;
         try
@@ -282,7 +286,7 @@ public partial class SourceControlViewModel : ObservableObject
     /// 喂 <see cref="CommitHistoryItemViewModel"/>）。后台线程跑 LibGit2Sharp 不阻塞 UI。</summary>
     private async Task<IReadOnlyList<CommitFileChange>> LoadCommitFilesAsync(string sha)
     {
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null || string.IsNullOrEmpty(_projectDir)) return Array.Empty<CommitFileChange>();
         try { return await Task.Run(() => git.GetCommitChanges(_projectDir!, sha)); }
         catch { return Array.Empty<CommitFileChange>(); }
@@ -293,7 +297,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task OpenCommitFileDiffAsync(string sha, CommitFileChange file)
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         IsBusy = true;
         try
@@ -326,7 +330,7 @@ public partial class SourceControlViewModel : ObservableObject
         _projectDir = dir;
         HasProject = !string.IsNullOrEmpty(dir);
         ProjectName = HasProject ? Path.GetFileName(dir!.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) : null;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         IsRepository = git?.IsRepository(dir ?? string.Empty) ?? false;
         Changes.Clear();
         StagedChanges.Clear();
@@ -449,7 +453,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task RefreshAsync()
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null || !git.IsRepository(_projectDir)) { IsRepository = false; return; }
         IsRepository = true;
         IsBusy = true;
@@ -478,7 +482,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task OpenDiffAsync(ChangeItem? item)
     {
         if (item is null || string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         ActiveCommitDiff = null;       // 切回工作区 diff——清 commit 文件 diff（互斥）。
         ActiveCommitDiffPath = null;
@@ -495,7 +499,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task StageAsync(ChangeItem? item)
     {
         if (item is null) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         await Task.Run(() => git.Stage(_projectDir!, item.Path));
         await RefreshAsync();
@@ -504,7 +508,7 @@ public partial class SourceControlViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanStageAll))]
     private async Task StageAllAsync()
     {
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null || Changes.Count == 0) return;
         foreach (var c in Changes.ToList()) await Task.Run(() => git.Stage(_projectDir!, c.Path));
         await RefreshAsync();
@@ -514,7 +518,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task UnstageAsync(ChangeItem? item)
     {
         if (item is null) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         await Task.Run(() => git.Unstage(_projectDir!, item.Path));
         await RefreshAsync();
@@ -524,7 +528,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task DiscardAsync(ChangeItem? item)
     {
         if (item is null) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         await Task.Run(() => git.Discard(_projectDir!, item.Path));
         await RefreshAsync();
@@ -546,7 +550,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task PushAsync()
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         IsBusy = true;
         try
@@ -565,7 +569,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task PullAsync()
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         IsBusy = true;
         try
@@ -584,7 +588,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task SyncAsync()
     {
         if (string.IsNullOrEmpty(_projectDir)) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         IsBusy = true;
         try
@@ -620,7 +624,7 @@ public partial class SourceControlViewModel : ObservableObject
     private async Task CommitAsync()
     {
         if (!CanCommit) return;
-        var git = _serviceProvider.GetService<IGitService>();
+        var git = Git;
         if (git is null) return;
         try
         {

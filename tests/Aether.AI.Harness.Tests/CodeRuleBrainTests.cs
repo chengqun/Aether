@@ -70,6 +70,31 @@ public class Broken : CodeRuleBrain
         Assert.False(string.IsNullOrWhiteSpace(error));
     }
 
+    [Fact]
+    public void RuleScriptCompiler_ctor_throw_returns_error_not_exception()
+    {
+        // 回归守卫：TryCompile 契约「失败 out error，不抛异常」。修复前 brain 类 ctor 抛异常会从
+        // Activator.CreateInstance 直接逃逸——一条坏笔记中断整轮 LoadAsync 循环（后续规则不注册、
+        // RulesLoaded 不触发、异常经 ContinueWith 未观察）。
+        var source = @"
+using System;
+using System.Threading.Tasks;
+using Aether.AI.Harness.Agents;
+
+public class ThrowingCtorBrain : CodeRuleBrain
+{
+    public ThrowingCtorBrain() => throw new InvalidOperationException(""init boom"");
+    protected override Task<string> RunAsync() => Task.FromResult(""never"");
+}";
+        var ok = RuleScriptCompiler.TryCompile(source, out var brain, out var error);
+
+        Assert.False(ok);
+        Assert.Null(brain);
+        Assert.NotNull(error);
+        Assert.Contains("ThrowingCtorBrain", error!);
+        Assert.Contains("init boom", error!);
+    }
+
     // —— 代码大脑驱动 MAF agent 循环 ——
 
     [Fact]

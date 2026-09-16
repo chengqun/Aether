@@ -49,16 +49,21 @@ public class CommandExecutorTool
             using var outputWaitHandle = new ManualResetEvent(false);
             using var errorWaitHandle = new ManualResetEvent(false);
 
+            // StringBuilder 由回调线程写、主流程读（超时/取消路径可能在写进行中读）——
+            // StringBuilder 非线程安全，并发读写可抛异常/撕裂数据，故两侧都加锁。
+            string TakeOutput() { lock (outputBuilder) return outputBuilder.ToString(); }
+            string TakeError() { lock (errorBuilder) return errorBuilder.ToString(); }
+
             process = new Process { StartInfo = processStartInfo };
             process.OutputDataReceived += (sender, e) =>
             {
                 if (e.Data == null)
                 {
-                    outputWaitHandle.Set();
+                    try { outputWaitHandle.Set(); } catch (ObjectDisposedException) { }
                 }
                 else
                 {
-                    outputBuilder.AppendLine(e.Data);
+                    lock (outputBuilder) outputBuilder.AppendLine(e.Data);
                 }
             };
 
@@ -66,11 +71,11 @@ public class CommandExecutorTool
             {
                 if (e.Data == null)
                 {
-                    errorWaitHandle.Set();
+                    try { errorWaitHandle.Set(); } catch (ObjectDisposedException) { }
                 }
                 else
                 {
-                    errorBuilder.AppendLine(e.Data);
+                    lock (errorBuilder) errorBuilder.AppendLine(e.Data);
                 }
             };
 
@@ -92,8 +97,8 @@ public class CommandExecutorTool
                 return new Output
                 {
                     ExitCode = -1,
-                    StandardOutput = outputBuilder.ToString(),
-                    StandardError = errorBuilder.ToString(),
+                    StandardOutput = TakeOutput(),
+                    StandardError = TakeError(),
                     Error = "命令执行已被取消（用户停止）"
                 };
             }
@@ -104,20 +109,23 @@ public class CommandExecutorTool
                 return new Output
                 {
                     ExitCode = -1,
-                    StandardOutput = outputBuilder.ToString(),
-                    StandardError = errorBuilder.ToString(),
+                    StandardOutput = TakeOutput(),
+                    StandardError = TakeError(),
                     Error = $"命令执行超时（{timeout}ms）"
                 };
             }
 
-            outputWaitHandle.WaitOne();
-            errorWaitHandle.WaitOne();
+            // 读超时（镜像 ShellCommandTool 的 5s）：主进程退出 ≠ 管道 EOF——孙进程继承 stdout/stderr
+            // 管道且不关时，OutputDataReceived 的 null 终结符永不发，无超时的 WaitOne 会永久挂死。
+            // 超时后照常返回已捕获的部分输出（丢的只是孙进程的尾部噪音）。
+            outputWaitHandle.WaitOne(5000);
+            errorWaitHandle.WaitOne(5000);
 
             return new Output
             {
                 ExitCode = process.ExitCode,
-                StandardOutput = outputBuilder.ToString(),
-                StandardError = errorBuilder.ToString()
+                StandardOutput = TakeOutput(),
+                StandardError = TakeError()
             };
         }
         catch (Exception ex)

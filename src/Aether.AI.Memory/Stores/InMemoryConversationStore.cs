@@ -30,8 +30,11 @@ public sealed class InMemoryConversationStore : IConversationStore
 
     public Task<IReadOnlyList<ConversationSummary>> GetSummariesAsync(string userId, CancellationToken cancellationToken = default)
     {
+        // NULL 容忍，镜像 SqliteConversationStore 的 `@uid IS NULL OR user_id IS NULL OR user_id=@uid`：
+        // 桌面单用户的 Conversation.UserId 是 null（SQLite 落 NULL），查询传 ""——严格 == 会漏掉全部会话
+        // （store 兜底切换时历史列表恒空）。GetRunsInRangeAsync 同语义。
         var results = _conversations.Values
-            .Where(c => c.UserId == userId)
+            .Where(c => userId is null || c.UserId is null || c.UserId == userId)
             .OrderByDescending(c => c.UpdatedAt)
             .Select(c => new ConversationSummary(
                 c.ConversationId, c.Title, c.AgentId, c.AgentName, c.UpdatedAt,
@@ -43,7 +46,7 @@ public sealed class InMemoryConversationStore : IConversationStore
     public Task<IReadOnlyList<Conversation>> FindByUserAsync(string userId, CancellationToken cancellationToken = default)
     {
         var results = _conversations.Values
-            .Where(c => c.UserId == userId)
+            .Where(c => userId is null || c.UserId is null || c.UserId == userId)
             .OrderByDescending(c => c.UpdatedAt)
             .ToList();
         return Task.FromResult<IReadOnlyList<Conversation>>(results);
@@ -102,12 +105,14 @@ public sealed class InMemoryConversationStore : IConversationStore
 
     public Task<IReadOnlyList<RunSummary>> GetRunsInRangeAsync(string userId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
     {
-        var uid = userId ?? string.Empty;
         var list = new List<RunSummary>();
         foreach (var (convId, runs) in _runsByConversation)
         {
-            // join conversation 取 user_id 过滤 + title（与 Sqlite 实现对齐）。
-            if (!_conversations.TryGetValue(convId, out var conv) || (conv.UserId ?? string.Empty) != uid) continue;
+            // join conversation 取 user_id 过滤 + title。NULL 容忍同 GetSummariesAsync
+            //（与 Sqlite 的 `@uid IS NULL OR c.user_id IS NULL OR c.user_id=@uid` 对齐——
+            // 旧版 `(conv.UserId ?? "") != uid` 在 conv.UserId=null、uid="" 时才匹配，语义偏窄）。
+            if (!_conversations.TryGetValue(convId, out var conv)
+                || !(userId is null || conv.UserId is null || conv.UserId == userId)) continue;
             foreach (var run in runs)
             {
                 if (run.StartedAt < from || run.StartedAt >= to) continue;
