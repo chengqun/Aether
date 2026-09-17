@@ -37,6 +37,10 @@
     "AgentUsageManagement": "Agent Usage Statistics",
     "Permission:AgentUsage": "Agent Usage Statistics",
     "Permission:AgentUsage.View": "View Agent Usage Statistics",
-    "Permission:AgentUsage.Record": "Record Agent Usage"
+    "Permission:AgentUsage.Record": "Record Agent Usage",
+    "CrashManagement": "Crash Telemetry",
+    "Permission:Crash": "Crash Telemetry",
+    "Permission:Crash.View": "View Crash Telemetry",
+    "Permission:Crash.Record": "Report Crash Records"
   }
 }

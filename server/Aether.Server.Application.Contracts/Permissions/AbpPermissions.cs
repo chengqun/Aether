@@ -151,4 +151,12 @@ public static class AbpPermissions
         public const string View = Default + ".View";
         public const string Record = Default + ".Record";
     }
+
+    // 崩溃遥测权限
+    public static class Crash
+    {
+        public const string Default = GroupName + ".Crash";
+        public const string View = Default + ".View";
+        public const string Record = Default + ".Record";
+    }
 }

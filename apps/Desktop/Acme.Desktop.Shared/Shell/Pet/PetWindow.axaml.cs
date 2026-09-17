@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using Acme.Desktop.Mvvm;
+using Acme.Desktop.Shared.Telemetry;
 using Aether.AI.Core.Agents;
 using Avalonia;
 using Avalonia.Controls;
@@ -365,11 +366,20 @@ public partial class PetWindow : Window, IRunProgressSink, IPetTokenStream
 
     protected override void OnClosed(EventArgs e)
     {
-        _posWatch?.Stop();
-        _posWatch = null;
-        StopBubbleStream();
-        _bubbleAutoHide?.Dispose();
-        _avatar?.StopAndDispose();   // 释放动画 + 定时器 + 位图（替换引擎时同路径清理）
+        // 桌宠关窗路径此前完全裸奔（无 try/catch）——关窗期异常既没进 crash.log 也没进遥测。
+        // 包住 + 记非致命（不影响原上抛行为；OnClosing saga 的教训：退出路径异常是最需要遥测的盲区）。
+        try
+        {
+            _posWatch?.Stop();
+            _posWatch = null;
+            StopBubbleStream();
+            _bubbleAutoHide?.Dispose();
+            _avatar?.StopAndDispose();   // 释放动画 + 定时器 + 位图（替换引擎时同路径清理）
+        }
+        catch (Exception ex)
+        {
+            CrashRecorder.Record(CrashSource.Shutdown, CrashSeverity.NonFatal, ex);
+        }
         base.OnClosed(e);
     }
 }

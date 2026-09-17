@@ -90,6 +90,9 @@ public class AbpDbContext :
     // Agent 使用记录
     public virtual DbSet<AppAgentUsageRecord> AgentUsageRecords { get; set; } = null!;
 
+    // 崩溃遥测记录
+    public virtual DbSet<AppCrashRecord> CrashRecords { get; set; } = null!;
+
     // 毓数平台 Token（跨端同步）
     public virtual DbSet<AppYushuToken> YushuTokens { get; set; } = null!;
 
@@ -279,6 +282,24 @@ public class AbpDbContext :
             b.HasIndex(r => r.AgentName);
             b.HasIndex(r => r.CreationTime);
             b.Property(r => r.AgentName).HasMaxLength(64).IsRequired();
+        });
+
+        // 配置崩溃遥测记录表 - CrashRecords
+        builder.Entity<AppCrashRecord>(b =>
+        {
+            b.ToTable("AppCrashRecords");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.ExceptionType);
+            b.HasIndex(r => r.App);
+            b.HasIndex(r => r.CreationTime);
+            b.Property(r => r.App).HasMaxLength(32).IsRequired();
+            b.Property(r => r.AppVersion).HasMaxLength(64).IsRequired();
+            b.Property(r => r.Os).HasMaxLength(256).IsRequired();
+            b.Property(r => r.Source).HasMaxLength(32).IsRequired();
+            b.Property(r => r.ExceptionType).HasMaxLength(256).IsRequired();
+            b.Property(r => r.Message).HasMaxLength(2048);
+            b.Property(r => r.Stack).HasMaxLength(8000);
+            b.Property(r => r.DeviceName).HasMaxLength(128);
         });
 
         // 配置毓数平台 Token 表 - YushuTokens

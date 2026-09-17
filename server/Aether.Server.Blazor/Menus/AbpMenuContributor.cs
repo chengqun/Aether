@@ -101,6 +101,17 @@ public class AbpMenuContributor : IMenuContributor
             ));
         }
 
+        // 管理员菜单 - 崩溃遥测
+        if (await context.IsGrantedAsync("Abp.Crash.View"))
+        {
+            administration.AddItem(new ApplicationMenuItem(
+                "CrashManagement",
+                l["CrashManagement"],
+                url: "/crash-management",
+                icon: "fas fa-bug"
+            ));
+        }
+
         if (MultiTenancyConsts.IsEnabled)
         {
             administration.SetSubItemOrder(TenantManagementMenuNames.GroupName, 1);

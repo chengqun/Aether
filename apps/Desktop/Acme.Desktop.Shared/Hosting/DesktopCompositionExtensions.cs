@@ -23,6 +23,7 @@ using Acme.ChatSocial.Infrastructure.DependencyInjection;
 using Acme.Desktop.Shared.Shell;
 using Acme.DeviceConnect.Application.DependencyInjection;
 using Acme.DeviceConnect.Infrastructure.DependencyInjection;
+using Acme.DeviceConnect.Infrastructure;
 using Acme.DeviceManagement.Application.DependencyInjection;
 using Acme.DeviceManagement.Infrastructure.DependencyInjection;
 using Acme.Llm.Application.DependencyInjection;
@@ -31,6 +32,8 @@ using Acme.Notes.Domain.Agents;
 using Acme.Notes.Infrastructure.DependencyInjection;
 using Acme.Shared.HostGlue;
 using Acme.SystemTools.AI;
+using Acme.AppAuth.Application.Auth;
+using Acme.Desktop.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 
@@ -314,6 +317,16 @@ public static class DesktopCompositionExtensions
             fanout.Add(sp.GetRequiredService<PetStatusFeedRouter>());
             return fanout;
         });
+
+        // 崩溃遥测上报器：本地 crash.db 队列 → 登录后批量上报服务端（api/app/crash/record-crashes）。
+        // 未登录本地排队；失败静默重试（10 次后 Prune 清理）。各租户 App 调 CrashTelemetryHost.Start 启动
+        // （DesktopApp.Services = Services 之后）。
+        services.AddSingleton<CrashReportUploader>(sp => new CrashReportUploader(
+            sp.GetRequiredService<IAppServerHttpClient>(),
+            sp.GetRequiredService<IAppAuthService>(),
+            sp.GetService<SqliteDeviceConfigRepository>(),
+            tenant,
+            Path.Combine(tenantDir, "crash.db")));
 
         // shell 主 ViewModel（租户子类）由各租户入口项目注册，此处不注册。
         return aether;

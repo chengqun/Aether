@@ -9,8 +9,10 @@ namespace Acme.Desktop.Mvvm;
 /// 状态（Messages/ActiveTodos/IsRunning/计划状态/CT/run-seq/历史增量缓冲），使多会话可并发——每个会话
 /// 持独立 runtime，背景 run 往自己的 Messages 追加，切会话只换 <c>_current</c> 指针不取消背景 run。
 /// <see cref="ObservableObject"/>：标量属性变更经 VM 订阅转发（仅当此 runtime 是当前会话时），驱动 UI。
+/// 2026-09 ChatVM 拆分起 public（ChatTranscriptPersister/ConversationHistoryLoader/ChatStreamEngine 的
+/// 公共 API 收发它 + 测试工程直接构造；纯放宽，无新增可变性）。
 /// </summary>
-internal sealed partial class ConversationRuntime : ObservableObject
+public sealed partial class ConversationRuntime : ObservableObject
 {
     /// <summary>会话 Id。待新聊天态为 <see cref="Guid.Empty"/>（首次发送落库拿到真 Guid 后回填 + 注册进字典）。</summary>
     public Guid ConversationId;

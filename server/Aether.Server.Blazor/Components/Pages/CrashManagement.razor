@@ -1,0 +1,215 @@
+@page "/crash-management"
+@inherits AbpComponentBase
+@using Aether.Server.Application.Contracts.DTOs.Crash
+@using Aether.Server.Application.Contracts.Services.Crash
+@inject ICrashAppService CrashAppService
+
+<PageTitle>崩溃遥测</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h3 class="mb-3"><i class="fas fa-bug me-2"></i>崩溃遥测</h3>
+
+            <!-- 筛选栏 -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-end gap-3">
+                        <div class="form-group mb-0">
+                            <label class="form-label">应用</label>
+                            <select class="form-control" @bind="filterApp">
+                                <option value="">全部</option>
+                                @foreach (var app in appNames)
+                                {
+                                    <option value="@app">@app</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="form-label">来源</label>
+                            <select class="form-control" @bind="filterSource">
+                                <option value="">全部</option>
+                                @foreach (var source in sourceNames)
+                                {
+                                    <option value="@source">@source</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="form-label">严重级别</label>
+                            <select class="form-control" @bind="filterSeverity">
+                                <option value="">全部</option>
+                                <option value="0">Fatal（致命）</option>
+                                <option value="1">NonFatal（非致命）</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="form-label">开始时间</label>
+                            <input type="date" class="form-control" @bind="filterStartDate" />
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="form-label">结束时间</label>
+                            <input type="date" class="form-control" @bind="filterEndDate" />
+                        </div>
+                        <button type="button" class="btn btn-primary" @onclick="LoadData">
+                            <i class="fas fa-search"></i> 查询
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="ResetFilters">
+                            <i class="fas fa-undo"></i> 重置
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 汇总表 -->
+            @if (summaryData.Any())
+            {
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">异常汇总（按类型 + 来源）</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>异常类型</th>
+                                        <th>来源</th>
+                                        <th>应用</th>
+                                        <th>累计次数</th>
+                                        <th>记录条数</th>
+                                        <th>会话数</th>
+                                        <th>最近发生</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in summaryData)
+                                    {
+                                        <tr>
+                                            <td><code>@item.ExceptionType</code></td>
+                                            <td>@item.Source</td>
+                                            <td>@item.Apps</td>
+                                            <td><strong>@item.TotalCount.ToString("N0")</strong></td>
+                                            <td>@item.RecordCount</td>
+                                            <td>@item.SessionCount</td>
+                                            <td>@item.LastOccurredAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-active">
+                                        <td><strong>合计</strong></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td><strong>@summaryData.Sum(s => s.TotalCount).ToString("N0")</strong></td>
+                                        <td><strong>@summaryData.Sum(s => s.RecordCount)</strong></td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- 明细表 -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">上报明细</h5>
+                </div>
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-3"><div class="spinner-border" role="status"></div></div>
+                    }
+                    else if (detailData.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>用户</th>
+                                        <th>级别</th>
+                                        <th>异常类型</th>
+                                        <th>消息</th>
+                                        <th>来源</th>
+                                        <th>应用</th>
+                                        <th>版本</th>
+                                        <th>次数</th>
+                                        <th>发生时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in detailData)
+                                    {
+                                        <tr>
+                                            <td>@item.UserName</td>
+                                            <td>
+                                                @if (item.Severity == 0)
+                                                {
+                                                    <span class="badge badge-danger">Fatal</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge badge-warning">NonFatal</span>
+                                                }
+                                            </td>
+                                            <td><code>@item.ExceptionType</code></td>
+                                            <td class="text-truncate" style="max-width: 280px;" title="@item.Message">@item.Message</td>
+                                            <td>@item.Source</td>
+                                            <td>@item.App</td>
+                                            <td>@item.AppVersion</td>
+                                            <td>@item.Count</td>
+                                            <td>@item.OccurredAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => ShowStack(item)">
+                                                    <i class="fas fa-search"></i> 堆栈
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-bug" style="font-size: 32px;"></i>
+                            <p class="mt-2">暂无崩溃记录</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 堆栈详情模态框（纯 Blazor 状态驱动，不依赖 Bootstrap JS 与 @onclick 的竞态） -->
+@if (selectedCrash != null)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block; background: rgba(0,0,0,.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><code>@selectedCrash.ExceptionType</code></h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseStack"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-2">
+                        @selectedCrash.Message
+                    </p>
+                    <pre class="bg-light p-3 rounded" style="white-space: pre-wrap; word-break: break-all; font-size: 12px;">@selectedCrash.Stack</pre>
+                    <div class="text-muted small">
+                        应用 @selectedCrash.App v@(selectedCrash.AppVersion) · @selectedCrash.Os ·
+                        设备 @(string.IsNullOrWhiteSpace(selectedCrash.DeviceName) ? "-" : selectedCrash.DeviceName) ·
+                        会话 <code>@selectedCrash.SessionId.ToString()[..8]...</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}

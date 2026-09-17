@@ -1,6 +1,6 @@
+using Acme.Desktop.Shared.Hosting;
+using Acme.Desktop.Shared.Telemetry;
 using Avalonia;
-using System;
-using System.IO;
 
 namespace Acme.Qifu.Desktop;
 
@@ -11,28 +11,11 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // 全局未处理异常日志：崩溃时把托管异常类型 + 堆栈写到 crash.log，便于定位（不再靠猜）。
-        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-            LogCrash("AppDomain.UnhandledException", e.ExceptionObject as Exception);
-        TaskScheduler.UnobservedTaskException += (s, e) =>
-        {
-            LogCrash("UnobservedTaskException", e.Exception);
-            e.SetObserved();
-        };
+        // 崩溃遥测（DI 之前就要能接住异常）：全局 handler + 本地 crash.db 队列 + 非干净关机墓碑扫描。
+        // 登录后由 CrashReportUploader 批量上报服务端。取代旧的 ~/Desktop/Aether-crash.log 裸 append。
+        CrashRecorder.Initialize("qifu", TenantDataPaths.GetTenantDir("Qifu"));
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-    }
-
-    private static void LogCrash(string source, Exception? ex)
-    {
-        try
-        {
-            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Aether-crash.log");
-            var text = $"\n===== {DateTime.Now:yyyy-MM-dd HH:mm:ss} {source} =====\n" +
-                       (ex is null ? "(no exception)" : ex.ToString()) + "\n";
-            File.AppendAllText(path, text);
-        }
-        catch { /* 日志失败不阻断崩溃路径 */ }
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

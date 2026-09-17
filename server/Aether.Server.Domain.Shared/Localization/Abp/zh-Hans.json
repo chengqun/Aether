@@ -42,6 +42,10 @@
     "AgentUsageManagement": "Agent使用统计",
     "Permission:AgentUsage": "Agent使用统计",
     "Permission:AgentUsage.View": "查看Agent使用统计",
-    "Permission:AgentUsage.Record": "上报Agent使用量"
+    "Permission:AgentUsage.Record": "上报Agent使用量",
+    "CrashManagement": "崩溃遥测",
+    "Permission:Crash": "崩溃遥测",
+    "Permission:Crash.View": "查看崩溃遥测",
+    "Permission:Crash.Record": "上报崩溃记录"
   }
 }

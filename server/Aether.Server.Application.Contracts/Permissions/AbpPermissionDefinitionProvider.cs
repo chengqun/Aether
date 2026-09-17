@@ -106,6 +106,11 @@ public class AbpPermissionDefinitionProvider : PermissionDefinitionProvider
         var agentUsagePermission = myGroup.AddPermission(AbpPermissions.AgentUsage.Default, L("Permission:AgentUsage"));
         agentUsagePermission.AddChild(AbpPermissions.AgentUsage.View, L("Permission:AgentUsage.View"));
         agentUsagePermission.AddChild(AbpPermissions.AgentUsage.Record, L("Permission:AgentUsage.Record"));
+
+        // 崩溃遥测权限
+        var crashPermission = myGroup.AddPermission(AbpPermissions.Crash.Default, L("Permission:Crash"));
+        crashPermission.AddChild(AbpPermissions.Crash.View, L("Permission:Crash.View"));
+        crashPermission.AddChild(AbpPermissions.Crash.Record, L("Permission:Crash.Record"));
     }
 
     private static LocalizableString L(string name)

@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\Desktop\Acme.Desktop.Mvvm\Acme.Desktop.Mvvm.csproj" />
+    <!-- InMemoryConversationStore（ChatVM 拆分协作者单测用：persister/history loader 直测 IConversationStore） -->
+    <ProjectReference Include="..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <!-- ApplyPatchTool 回滚逻辑单测（ai/SystemTools 纯逻辑，无 Avalonia 依赖） -->
     <ProjectReference Include="..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
     <!-- ThemeLoader 渐变画刷单测（P1 皮肤系统）：仅构造 LinearGradientBrush/ResourceDictionary，无渲染/平台依赖 -->
