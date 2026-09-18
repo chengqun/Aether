@@ -648,11 +648,11 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
     private LlmConfigDto? _selectedLlmItem;
 
     /// <summary>从偏好恢复选中目标（跨重启保留），并保证启动时有一个默认选中。下拉池列全部目标，无召唤态。
-    /// 偏好读取/解析在 <see cref="ChatTargetRegistry.RestoreAsync"/>（B3 抽出，含 legacy selectedAgentId 迁移）。</summary>
+    /// 偏好读取/解析在 <see cref="ChatTargetRegistry.RestoreAsync"/>（B3 抽出，含 legacy selectedAgentId 迁移）。
+    /// 偏好恢复失败（state=null）只跳过「选中/展开态恢复」，**池照常填充**——偏好坏不该让下拉一整个会话没 agent。</summary>
     private async Task RestoreSelectedTargetAsync()
     {
         var state = await _targets.RestoreAsync();
-        if (state is null) return; // 偏好读取失败——跳过整个恢复块（原 catch 语义）
 
         // ★ 下拉池 + 选中须在 UI 线程改：InitializeAsync 链经 ListAsync(ConfigureAwait(false)) 后续可能落在 threadpool，
         // ObservableCollection 跨线程修改 Avalonia ComboBox 不会反映（首轮下拉「明明有数据却为空」的隐患）。
@@ -663,6 +663,13 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             // 同步填充下拉（列全部 agent/规则/工作流；此时已在 UI 线程，不依赖后续的 RefreshChatTargetItems）
             ChatTargetItems.Clear();
             foreach (var t in _targets.BuildPool()) ChatTargetItems.Add(t);
+
+            if (state is null)
+            {
+                // 偏好恢复失败 → 只跳过选中/展开态恢复，仍给默认选中（首项）。
+                SetSelectedTargetSilently(ChatTargetItems.FirstOrDefault());
+                return;
+            }
 
             // 选中：已保存的 → 回退到池中首项
             var saved = _targets.ResolveSaved(state.Selected);
@@ -795,6 +802,10 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             var curKey = ChatTargetRegistry.TargetKey(current, KindOf(current));
             ChatTargetItems.Clear();
             foreach (var t in _targets.BuildPool()) ChatTargetItems.Add(t);
+            // 诊断：池重建后的容量（experts/rules/workflows 三源合计）——「首轮下拉缺 agent」复发时
+            // 在 dotnet run 控制台即可看到三源各自的条数，定位是哪个列表没就绪。
+            System.Diagnostics.Trace.WriteLine(
+                $"[ChatTargetPool] rebuilt: pool={ChatTargetItems.Count} experts={_experts.Experts.Count} rules={_rules.Rules.Count} workflows={_workflows.Workflows.Count} thread={Environment.CurrentManagedThreadId}");
 
             // 同一逻辑目标仍在池中 → 静默把 SelectedChatTarget 重定向到其新实例（仅同步引用，
             // 供 ComboBox 显示正确项 + 后续 KindOf 取值正确）。走 SetSelectedTargetSilently——它预置 key 再赋值，

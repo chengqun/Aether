@@ -79,6 +79,8 @@ public partial class RulesViewModel : ObservableObject
                     Rules.Add(item);
                 }
             });
+            // 列表内容已（重新）填充 → 通知聊天下拉刷新（同 ExpertsViewModel.LoadAsync 的自愈语义）。
+            TargetsChanged?.Invoke();
         }
         catch (Exception ex)
         {

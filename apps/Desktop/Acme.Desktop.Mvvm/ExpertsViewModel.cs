@@ -101,6 +101,10 @@ public partial class ExpertsViewModel : ObservableObject
                     Experts.Add(item);
                 }
             });
+            // 列表内容已（重新）填充 → 通知聊天下拉刷新。初始 LoadAsync 也发：若加载晚于 Chat 初始化
+            // （时序竞态/慢加载），RestoreSelectedTargetAsync 的池快照会缺 agent——靠此通知自愈补上
+            // （RefreshChatTargetItems 按 (Id,Kind) 静默保留选中，不会清空会话）。
+            TargetsChanged?.Invoke();
         }
         catch (Exception ex)
         {
