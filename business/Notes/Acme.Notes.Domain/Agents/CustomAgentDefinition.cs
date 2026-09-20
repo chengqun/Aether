@@ -25,6 +25,11 @@ public sealed class CustomAgentDefinition
     /// <summary>笔记节点类型：<see cref="NoteNodeType.Agent"/>（普通 agent）|<see cref="NoteNodeType.Rule"/>（规则 agent）。目录按此过滤/保存；默认 Agent。</summary>
     public NoteNodeType NodeType { get; set; } = NoteNodeType.Agent;
 
+    /// <summary>代码规则正文语言："csharp"（默认，.coderule.cs）|"fsharp"（.coderule.fs）。仅 CodeRule 用——
+    /// 持久化为 front-matter <c>language:</c> 字段，权威路由信号（编译器分派 + 新文件扩展名选择）。
+    /// 语言是文件的属性而非 NodeType——CodeRule 家族仍是同一节点类型。</summary>
+    public string? CodeLanguage { get; set; }
+
     /// <summary>
     /// 模型标识（opaque）：桌面端存 LLM 配置的 Id；空表示用宿主默认模型。
     /// 由 <c>IChatClientFactory</c> 解析为具体的 <c>IChatClient</c>。

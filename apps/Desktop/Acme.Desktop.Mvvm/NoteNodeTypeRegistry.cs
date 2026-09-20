@@ -66,6 +66,48 @@ links: []
 ";
 
     /// <summary>
+    /// 代码规则 F# 变体模板（labs <c>coderules/*.coderule.fs</c>，front-matter <c>language: fsharp</c>）。
+    /// 每步决策式（<c>IFsRuleBrain</c> + <c>Step</c> DU + Regex active pattern）是 F#-first 作者契约的展示形态；
+    /// 线性流程式（<c>FsCodeRuleBrain</c> + task CE）见正文注释。由 FCS（<c>FsRuleScriptCompiler</c>）编译。
+    /// 模板是公开 const——资料库页「新建 → F# 代码规则」直接取用（描述符 DefaultContent 仍是 C# 模板，单一 NodeType）。
+    /// </summary>
+    public const string CodeRuleFSharpTemplate = @"---
+name: 新 F# 代码规则
+description: F# 代码规则示例：正则匹配 → 调工具 → 终答
+category: 代码规则
+language: fsharp
+tools: []
+tool_approvals: {}
+memory: Off
+max_history: 20
+model:
+require_tool_approval: false
+---
+open Aether.AI.Harness.FSharp
+
+// 每步决策式：每轮 Decide 返回一个 Step（Call 调工具 / Reply 终答）；DU exhaustive matching——漏配分支是编译错。
+type MyFsRule() =
+    interface IFsRuleBrain with
+        member _.Decide(ctx) =
+            match ctx.UserText with
+            | Regex @""查询\s*(\d+)"" [code] ->
+                Call(""Query"", [ ""code"", box code ])
+            | ""帮助"" ->
+                Reply ""说「查询 123」试试""
+            | _ ->
+                Reply ""没听懂，说「帮助」""
+
+// 线性流程式（另一种形态）：继承 FsCodeRuleBrain，task { let! } 顺序调工具、字段存状态：
+// type MyFlow() =
+//     inherit FsCodeRuleBrain()
+//     override this.RunAsync() =
+//         task {
+//             let! r = this.Call(""Query"", [ ""code"", box ""1"" ])
+//             return ""结果："" + r
+//         }
+";
+
+    /// <summary>
     /// 代码规则默认模板：YAML front-matter（元数据，与 <c>CodeSourceParser</c> 往返一致）+ 原始 C# 正文。
     /// 正文是一个 <c>CodeRuleBrain</c> 子类——平台 Roslyn 服务编译它成代码大脑（无 LLM，确定性）。
     /// 基类 helper：UserText（用户消息）、Step（本回合已调工具数）、LastResult、AvailableTools、History。

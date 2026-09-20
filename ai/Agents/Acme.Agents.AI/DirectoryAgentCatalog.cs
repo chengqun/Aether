@@ -43,11 +43,12 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         _ruleRegistry = ruleRegistry ?? throw new ArgumentNullException(nameof(ruleRegistry));
     }
 
-    private static readonly (NoteNodeType Type, string Dir, string Ext)[] AgentLayouts =
+    private static readonly (NoteNodeType Type, string Dir, string[] Exts)[] AgentLayouts =
     {
-        (NoteNodeType.Agent, "agents", ".agent.md"),
-        (NoteNodeType.Rule, "rules", ".rule.yaml"),
-        (NoteNodeType.CodeRule, "coderules", ".coderule.cs"),
+        (NoteNodeType.Agent, "agents", new[] { ".agent.md" }),
+        (NoteNodeType.Rule, "rules", new[] { ".rule.yaml" }),
+        // CodeRule 双扩展名：.coderule.cs（默认）+ .coderule.fs（front-matter language: fsharp 变体）。
+        (NoteNodeType.CodeRule, "coderules", new[] { ".coderule.cs", ".coderule.fs" }),
     };
 
     /// <summary>按节点类型选解析器（Agent→AgentSourceParser / Rule→RuleSourceParser / CodeRule→CodeSourceParser）。</summary>
@@ -64,11 +65,12 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         if (string.IsNullOrWhiteSpace(root)) return Array.Empty<CustomAgentDefinition>();
 
         var result = new List<CustomAgentDefinition>();
-        foreach (var (type, dir, ext) in AgentLayouts)
+        foreach (var (type, dir, exts) in AgentLayouts)
         {
             ct.ThrowIfCancellationRequested();
             var fullDir = Path.Combine(root, dir);
             if (!Directory.Exists(fullDir)) continue;
+            foreach (var ext in exts)
             foreach (var file in Directory.GetFiles(fullDir, "*" + ext, SearchOption.TopDirectoryOnly))
             {
                 string content;
@@ -98,12 +100,12 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         var root = Root;
         if (string.IsNullOrWhiteSpace(root)) return null;
 
-        foreach (var (type, dir, ext) in AgentLayouts)
+        foreach (var (type, dir, exts) in AgentLayouts)
         {
             ct.ThrowIfCancellationRequested();
             var fullDir = Path.Combine(root, dir);
             if (!Directory.Exists(fullDir)) continue;
-            foreach (var file in Directory.GetFiles(fullDir, "*" + ext, SearchOption.TopDirectoryOnly))
+            foreach (var file in EnumerateLayoutFiles(fullDir, exts))
             {
                 string content;
                 try { content = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false); }
@@ -135,9 +137,11 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
             throw new InvalidOperationException("未打开 labs 目录");
 
         if (definition.Id == Guid.Empty) definition.Id = Guid.NewGuid();
-        var (_, dir, ext) = AgentLayouts.FirstOrDefault(l => l.Type == definition.NodeType);
+        var (_, dir, exts) = AgentLayouts.FirstOrDefault(l => l.Type == definition.NodeType);
         if (string.IsNullOrEmpty(dir)) dir = "agents";
-        if (string.IsNullOrEmpty(ext)) ext = ".agent.md";
+        if (exts is null || exts.Length == 0) exts = new[] { ".agent.md" };
+        // 新文件扩展名按语言选（CodeRule 的 F# 变体 .coderule.fs）；原地重写按 id 找原文件，扩展名天然保留。
+        var ext = IsFSharp(definition.CodeLanguage) && exts.Length > 1 ? exts[^1] : exts[0];
 
         var source = definition.NodeType == NoteNodeType.Rule
             ? _ruleParser.Serialize(definition)
@@ -148,8 +152,8 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         var fullDir = Path.Combine(root, dir);
         Directory.CreateDirectory(fullDir);
 
-        // 已存在（按 id 找）→ 原地重写
-        var existing = FindFileByTypeAndId(fullDir, ext, definition.NodeType, definition.Id);
+        // 已存在（按 id 找，扫全部扩展名）→ 原地重写
+        var existing = FindFileByTypeAndId(fullDir, exts, definition.NodeType, definition.Id);
         if (existing is not null)
         {
             await File.WriteAllTextAsync(existing, source, ct).ConfigureAwait(false);
@@ -165,11 +169,11 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         var root = Root;
         if (string.IsNullOrWhiteSpace(root)) return;
 
-        foreach (var (type, dir, ext) in AgentLayouts)
+        foreach (var (type, dir, exts) in AgentLayouts)
         {
             var fullDir = Path.Combine(root, dir);
             if (!Directory.Exists(fullDir)) continue;
-            var found = FindFileByTypeAndId(fullDir, ext, type, id);
+            var found = FindFileByTypeAndId(fullDir, exts, type, id);
             if (found is not null)
             {
                 try { File.Delete(found); } catch { /* 删除失败不阻断 */ }
@@ -191,11 +195,11 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
     public IReadOnlyList<CustomModelOption> GetAvailableModels()
         => _modelSource.GetModels();
 
-    /// <summary>按 id 在指定类型目录里找文件（扫描文件 front-matter 的 id:）。</summary>
-    private string? FindFileByTypeAndId(string fullDir, string ext, NoteNodeType type, Guid id)
+    /// <summary>按 id 在指定类型目录里找文件（扫全部扩展名 + 文件 front-matter 的 id:）。</summary>
+    private string? FindFileByTypeAndId(string fullDir, string[] exts, NoteNodeType type, Guid id)
     {
         if (!Directory.Exists(fullDir)) return null;
-        foreach (var file in Directory.GetFiles(fullDir, "*" + ext, SearchOption.TopDirectoryOnly))
+        foreach (var file in EnumerateLayoutFiles(fullDir, exts))
         {
             string content;
             try { content = File.ReadAllText(file); }
@@ -205,6 +209,17 @@ public sealed class DirectoryAgentCatalog : ICustomAgentCatalog
         }
         return null;
     }
+
+    /// <summary>某类型目录下按扩展名集合枚举全部文件（CodeRule 双扩展名）。</summary>
+    private static IEnumerable<string> EnumerateLayoutFiles(string fullDir, string[] exts)
+    {
+        foreach (var ext in exts)
+            foreach (var file in Directory.GetFiles(fullDir, "*" + ext, SearchOption.TopDirectoryOnly))
+                yield return file;
+    }
+
+    private static bool IsFSharp(string? language)
+        => string.Equals(language, "fsharp", StringComparison.OrdinalIgnoreCase);
 
     private static string Sanitize(string name)
     {

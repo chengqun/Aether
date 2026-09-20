@@ -134,11 +134,12 @@ public static class RuleScriptCompiler
     // 可卸载 ALC：isCollectible=true 让 Unload() 可回收其程序集。Load 返回 null →
     // 全部依赖（System.*、Aether.AI.Harness 等）走默认 ALC 解析，保证 CodeRuleBrain 类型身份跨 ALC 一致
     // （IsAssignableFrom 成立）；只有编译出的规则程序集本身在本 ALC，卸载干净不牵连共享依赖。
-    private sealed class CollectibleAlc : AssemblyLoadContext
+    // internal：同程序集的 FsRuleScriptCompiler（F# 编译器）复用同一 ALC 语义（仅此一处消费）。
+    internal sealed class CollectibleAlc : AssemblyLoadContext
     {
         public CollectibleAlc() : base(isCollectible: true) { }
         protected override Assembly? Load(AssemblyName assemblyName) => null;
     }
 
-    private readonly record struct LoadedAssembly(Assembly Assembly, CollectibleAlc Alc);
+    internal readonly record struct LoadedAssembly(Assembly Assembly, CollectibleAlc Alc);
 }

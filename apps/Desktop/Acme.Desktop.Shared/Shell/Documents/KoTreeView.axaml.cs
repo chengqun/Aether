@@ -53,17 +53,21 @@ public partial class KoTreeView : UserControl
     // 节点经 VM.SelectedNode 取（右键时已选中），不依赖菜单项 DataContext（ContextMenu 是 popup，DataContext=VM）。
     // 「新建知识对象」写带 front-matter 的 .md 模板；「打开」复用 VM.OnSelectedNodeChanged 的 OpenKnowledgeAsync。
 
-    /// <summary>按类型新建文件（「新建」子菜单 9 类）：弹名字框 → VM 落盘到对应类型目录 → 打开新文件。</summary>
+    /// <summary>按类型新建文件（「新建」子菜单）：弹名字框 → VM 落盘到对应类型目录 → 打开新文件。
+    /// Tag 格式 "Type" 或 "Type:language"（语言变体，如 CodeRule:fsharp → .coderule.fs + F# 模板）。</summary>
     private async void OnNewNodeClick(object? sender, RoutedEventArgs e)
     {
         if (_vm is null || sender is not MenuItem mi || mi.Tag is not string tag) return;
-        if (!Enum.TryParse<NoteNodeType>(tag, out var type)) return;
+        var parts = tag.Split(':');
+        if (!Enum.TryParse<NoteNodeType>(parts[0], out var type)) return;
+        var language = parts.Length > 1 ? parts[1] : null;
         var parent = TopLevel.GetTopLevel(this) as Window;
         if (parent is null) return;
         var desc = NoteNodeTypeRegistry.Get(type).Display;
+        if (language is not null) desc += $"（{language}）";
         var name = await FileTreeOps.PromptNameAsync(parent, $"新建{desc}", $"新建{desc}", "名称");
         if (string.IsNullOrWhiteSpace(name)) return;
-        var path = await _vm.CreateNodeAsync(type, name.Trim());
+        var path = await _vm.CreateNodeAsync(type, name.Trim(), language);
         if (path is null) return;
         // 直接打开新文件（watcher 去抖刷树会补齐树节点；此处不依赖刷树即开）
         await _vm.OpenKnowledgeByPathAsync(path);

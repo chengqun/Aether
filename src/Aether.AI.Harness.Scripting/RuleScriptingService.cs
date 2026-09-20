@@ -57,6 +57,7 @@ public sealed class RuleScriptingService : IRuleScriptingService
             lock (_lock) _loadErrors.Clear();
 
             // 本轮编译的代码规则源码 hash 集合——扫完后调 UnloadStale 回收已删除/改名/改坏的旧版本 ALC。
+            // C#/F# 两个编译器各持独立缓存但共享同一 SHA256 hash 集（同源码内容同 hash，语言互斥无冲突）。
             var currentHashes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var note in notes)
             {
@@ -67,11 +68,25 @@ public sealed class RuleScriptingService : IRuleScriptingService
                     continue;
                 }
                 currentHashes.Add(RuleScriptCompiler.HashOf(note.Content!));
-                if (RuleScriptCompiler.TryCompile(note.Content!, out var instance, out var err) && instance is not null)
+                // 按笔记语言分派编译器（front-matter language: 字段；默认 csharp）。
+                IRuleBrain? instance;
+                string? err;
+                bool ok;
+                if (string.Equals(note.Language, "fsharp", StringComparison.OrdinalIgnoreCase))
+                {
+                    ok = FsRuleScriptCompiler.TryCompile(note.Content!, out instance, out err);
+                }
+                else
+                {
+                    ok = RuleScriptCompiler.TryCompile(note.Content!, out var csBrain, out err);
+                    instance = csBrain;
+                }
+                if (ok && instance is not null)
                 {
                     var type = instance.GetType();
                     var id = note.Id;
-                    // 工厂每次召唤返回 fresh 实例（代码大脑可有状态）。
+                    // 工厂每次召唤返回 fresh 实例（代码大脑可有状态）。每步式 F# 大脑的 type 是
+                    // FsRuleBrainAdapter<'T>（无参构造经 new() 约束重建 'T），与线性式同构。
                     _registry.Register(id, () => (IRuleBrain)Activator.CreateInstance(type)!);
                     _registeredIds.Add(id);
                     _logger.LogInformation("已加载代码规则脚本：{Title} ({Id})", note.Title, id);
@@ -85,6 +100,7 @@ public sealed class RuleScriptingService : IRuleScriptingService
             }
             // 回收本轮源码集合之外的旧编译产物（可卸载 ALC）——防长会话反复改代码规则致默认 ALC 无界堆积。
             RuleScriptCompiler.UnloadStale(currentHashes);
+            FsRuleScriptCompiler.UnloadStale(currentHashes);
             RulesLoaded?.Invoke();
         }
         finally

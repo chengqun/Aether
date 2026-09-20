@@ -29,7 +29,9 @@ public sealed class RepoModel
     public static RepoModel Load()
     {
         var root = FindRepoRoot();
+        // 扫描 *.csproj + *.fsproj（仓库含 F# 契约项目 Aether.AI.Harness.FSharp——层化规则同样绑定它）。
         var projects = Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(root, "*.fsproj", SearchOption.AllDirectories))
             .Select(p => Path.GetRelativePath(root, p))
             .Where(rel => !IsSkipped(rel))
             .OrderBy(rel => rel, StringComparer.Ordinal)

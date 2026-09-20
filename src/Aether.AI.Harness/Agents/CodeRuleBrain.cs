@@ -28,23 +28,27 @@ namespace Aether.AI.Harness.Agents;
 /// </summary>
 public abstract class CodeRuleBrain : IRuleBrain
 {
-    /// <summary>当前求值上下文（<see cref="DecideAsync"/> 调用前由基类设置）。</summary>
+    /// <summary>当前求值上下文（<see cref="DecideAsync"/> 调用前由基类设置）。保持 protected——原始管线数据。</summary>
     protected RuleContext Context { get; private set; } = null!;
 
+    // 以下便利属性刻意 public（原 protected）：F# 不能在 task/lambda 闭包内访问 C# protected 成员
+    //（C# 允许，F# 语言限制）——F# 线性大脑（FsCodeRuleBrain）的 task { let! ... } 里要用它们。
+    // 只读视图，公开无副作用；C# 作者用法不变。
+
     /// <summary>本轮最新 user 消息文本（无则空串）。</summary>
-    protected string UserText => Context.LatestUser?.Text ?? string.Empty;
+    public string UserText => Context.LatestUser?.Text ?? string.Empty;
 
     /// <summary>本轮已调工具次数（最后一条 user 消息之后的 FunctionCallContent 计数）= 协程已恢复次数。</summary>
-    protected int Step => Context.ToolCallsThisTurn;
+    public int Step => Context.ToolCallsThisTurn;
 
     /// <summary>历史里最新一条工具结果文本（无则空串）。协程里通常直接用 <c>await Call</c> 的返回值，此为兜底。</summary>
-    protected string LastResult => Context.LatestToolResult?.Result?.ToString() ?? string.Empty;
+    public string LastResult => Context.LatestToolResult?.Result?.ToString() ?? string.Empty;
 
     /// <summary>本轮可用的工具（来自 ChatOptions.Tools）。</summary>
-    protected IReadOnlyList<AIFunction> AvailableTools => Context.AvailableTools;
+    public IReadOnlyList<AIFunction> AvailableTools => Context.AvailableTools;
 
     /// <summary>完整对话历史（含 system / 历史 turn / 本轮工具调用与结果）。</summary>
-    protected IReadOnlyList<ChatMessage> History => Context.History;
+    public IReadOnlyList<ChatMessage> History => Context.History;
 
     /// <summary>
     /// 作者实现：写确定性流程。<c>await Call("工具", new {{ 参数=值 }})</c> 调工具并取结果（字符串）；
@@ -189,10 +193,16 @@ public readonly struct CallAwaitable
 }
 
 /// <summary>
-/// 工具调用 awaiter：实现 <see cref="INotifyCompletion"/>。<see cref="IsCompleted"/> 恒 false（总是挂起），
-/// <see cref="OnCompleted"/> 把续体交大脑 yield，<see cref="GetResult"/> 在协程恢复时返回喂回的工具结果。
+/// 工具调用 awaiter：实现 <see cref="ICriticalNotifyCompletion"/>（继承 INotifyCompletion）。
+/// <see cref="IsCompleted"/> 恒 false（总是挂起），<see cref="OnCompleted"/> 把续体交大脑 yield，
+/// <see cref="GetResult"/> 在协程恢复时返回喂回的工具结果。
+/// <para>实现 ICriticalNotifyCompletion（UnsafeOnCompleted = OnCompleted，无 ExecutionContext 流转差异）：
+/// ① C# 编译器对实现它的 awaiter 走 AwaitUnsafeOnCompleted，语义与原 INotifyCompletion 路径一致；
+/// ② F# task CE 只能 await 满足 FS-1097 GetAwaiter 模式的 awaiter，其 SRTP 约束要求
+/// <c>:&gt; ICriticalNotifyCompletion</c>——补上它后 <c>FsCodeRuleBrain</c> 的 <c>task { let! r = Call(...) }</c>
+/// 才能编译。这是 C# 基类对 F# 子类的唯一让步（3 行，零行为变化）。</para>
 /// </summary>
-public sealed class CallAwaiter : INotifyCompletion
+public sealed class CallAwaiter : ICriticalNotifyCompletion
 {
     private readonly CodeRuleBrain _brain;
     private readonly string _tool;
@@ -208,6 +218,8 @@ public sealed class CallAwaiter : INotifyCompletion
     public bool IsCompleted => false;
 
     public void OnCompleted(Action continuation) => _brain.YieldCall(_tool, _args, continuation);
+
+    public void UnsafeOnCompleted(Action continuation) => _brain.YieldCall(_tool, _args, continuation);
 
     public string GetResult() => _brain.ConsumePendingResult();
 }

@@ -834,13 +834,15 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         var cards = await Task.Run(() =>
         {
             var list = new List<FileCardItem>();
-            var (dir, ext) = CatalogNoteDirectory.For(type);
-            var fullDir = Path.Combine(root, dir);
+            var layout = CatalogNoteDirectory.For(type);
+            var fullDir = Path.Combine(root, layout.DirectoryName);
             if (!Directory.Exists(fullDir)) return list;
-            foreach (var file in Directory.EnumerateFiles(fullDir, "*" + ext)
-                         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            var files = new List<string>();
+            foreach (var ext in layout.AllExtensions) // CodeRule 双扩展名（.coderule.cs + .coderule.fs）
+                files.AddRange(Directory.EnumerateFiles(fullDir, "*" + ext));
+            foreach (var file in files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
             {
-                var name = StripCompound(Path.GetFileName(file), ext); // 显示名默认=文件名 stem
+                var name = StripCompound(Path.GetFileName(file), layout.Extension); // 显示名默认=文件名 stem
                 var card = new FileCardItem { Name = name, Path = file };
                 string content;
                 try { content = File.ReadAllText(file); } catch { list.Add(card); continue; }
@@ -973,7 +975,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>各类型目录的 README 说明文案（目录用途 + 文件格式）。名字由 <see cref="CatalogNoteDirectory.For"/> 提供。</summary>
     private static string TypeDirectoryReadme(NoteNodeType type)
     {
-        var (dir, ext) = CatalogNoteDirectory.For(type);
+        var layout = CatalogNoteDirectory.For(type);
+        var dir = layout.DirectoryName;
+        var ext = layout.Extension;
         var head = $"# {dir}/\n\n";
         return type switch
         {
@@ -986,9 +990,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             NoteNodeType.Rule => head + $"存放 **规则 agent** 定义，文件扩展名 `{ext}`（单 YAML 文档）。\n\n" +
                 "无 LLM 的确定性规则大脑：name/description/tools + steps（match→action）程序。\n\n" +
                 "在资料库页点击文件打开两栏编辑；右键「新建 → 规则」创建。",
-            NoteNodeType.CodeRule => head + $"存放 **代码规则** 定义，文件扩展名 `{ext}`。\n\n" +
-                "YAML front-matter + C# 正文（`CodeRuleBrain` 子类，Roslyn 编译成确定性大脑）。\n\n" +
-                "在资料库页点击文件打开两栏编辑；右键「新建 → 代码规则」创建。",
+            NoteNodeType.CodeRule => head + $"存放 **代码规则** 定义，文件扩展名 `{ext}`（C#）或 `.coderule.fs`（F# 变体）。\n\n" +
+                "YAML front-matter + 源码正文：C#（`CodeRuleBrain` 子类，Roslyn 编译）或 F#（`IFsRuleBrain` 每步式 / `FsCodeRuleBrain` 线性式，FCS 编译，front-matter `language: fsharp`）。\n\n" +
+                "在资料库页点击文件打开两栏编辑；右键「新建 → 代码规则 / 代码规则（F#）」创建。",
             NoteNodeType.Knowledge => head + $"存放 **知识对象** 定义，文件扩展名 `{ext}`。\n\n" +
                 "YAML front-matter（kind + links 图边）+ Markdown 正文。typed links 指向其它知识对象文件（相对路径）。\n\n" +
                 "在资料库页点击文件打开两栏编辑；右键「新建 → 知识对象」创建。",
@@ -1020,8 +1024,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     // —— 按类型新建文件（右键菜单）——
 
     /// <summary>按类型新建文件，落盘到对应类型目录（<c>CatalogNoteDirectory</c> 权威映射），返回新文件完整路径。
-    /// form 类型（Agent/Rule/CodeRule/Workflow）经 parser.Serialize 生成含 <c>id</c> 的完整格式；代码/知识类型用注册表模板。</summary>
-    public async Task<string?> CreateNodeAsync(NoteNodeType type, string name)
+    /// form 类型（Agent/Rule/CodeRule/Workflow）经 parser.Serialize 生成含 <c>id</c> 的完整格式；代码/知识类型用注册表模板。
+    /// <paramref name="language"/>：正文语言变体（当前仅 CodeRule 支持 "fsharp" → .coderule.fs + F# 模板）；null = 主语言。</summary>
+    public async Task<string?> CreateNodeAsync(NoteNodeType type, string name, string? language = null)
     {
         var root = RootPath ?? _knowledgeDirProvider.DefaultRoot;
         if (string.IsNullOrWhiteSpace(root)) { StatusMessage = "未打开资料库目录"; return null; }
@@ -1047,11 +1052,13 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         var fullDir = Path.Combine(root, layout.DirectoryName);
         Directory.CreateDirectory(fullDir);
         var safe = SanitizeFileName(name);
-        var path = Path.Combine(fullDir, safe + layout.Extension);
+        // 语言变体选次扩展名（CodeRule 的 fsharp → .coderule.fs）；主语言用主扩展名。
+        var ext = IsFSharpVariant(language) && layout.SecondaryExtension is { } fs ? fs : layout.Extension;
+        var path = Path.Combine(fullDir, safe + ext);
         if (File.Exists(path)) { StatusMessage = $"已存在同名项：{safe}"; return null; }
         try
         {
-            await File.WriteAllTextAsync(path, BuildNewContent(type, name));
+            await File.WriteAllTextAsync(path, BuildNewContent(type, name, language));
             StatusMessage = string.Empty;
             return path;
         }
@@ -1059,17 +1066,20 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     }
 
     /// <summary>新建文件的完整正确内容：form 类型经 parser.Serialize（含 id）；代码/知识类型直接用注册表模板。</summary>
-    private string BuildNewContent(NoteNodeType type, string name)
+    private string BuildNewContent(NoteNodeType type, string name, string? language = null)
     {
         switch (type)
         {
             case NoteNodeType.Agent: return SerializeAgent(name);
             case NoteNodeType.Rule: return SerializeRule(name);
-            case NoteNodeType.CodeRule: return SerializeCodeRule(name);
+            case NoteNodeType.CodeRule: return SerializeCodeRule(name, IsFSharpVariant(language));
             case NoteNodeType.Workflow: return SerializeWorkflow(name);
             default: return NoteNodeTypeRegistry.Get(type).DefaultContent; // Knowledge/Strategy/CodeStrategy/LeanAlgorithm/Note
         }
     }
+
+    private static bool IsFSharpVariant(string? language)
+        => string.Equals(language, "fsharp", StringComparison.OrdinalIgnoreCase);
 
     private string SerializeAgent(string name)
     {
@@ -1092,12 +1102,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         });
     }
 
-    private string SerializeCodeRule(string name)
+    private string SerializeCodeRule(string name, bool fsharp = false)
     {
         var p = ServiceProvider.GetService<ICodeSourceParser>();
         if (p is null) return $"---\nname: {name}\n---\n";
-        // 默认 C# body 从 CodeRule 注册表模板提取（去 front-matter）。
-        var tmpl = NoteNodeTypeRegistry.Get(NoteNodeType.CodeRule).DefaultContent;
+        // 默认 body 从对应语言的注册表模板提取（去 front-matter）；F# 变体同时带 language: fsharp。
+        var tmpl = fsharp
+            ? NoteNodeTypeRegistry.CodeRuleFSharpTemplate
+            : NoteNodeTypeRegistry.Get(NoteNodeType.CodeRule).DefaultContent;
         string body = tmpl;
         if (p.TryParse(tmpl, out var tdef, out _) && tdef is not null && !string.IsNullOrWhiteSpace(tdef.SystemPrompt))
             body = tdef.SystemPrompt;
@@ -1105,6 +1117,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         {
             Id = Guid.NewGuid(), Name = name, Category = "代码规则", NodeType = NoteNodeType.CodeRule,
             Engine = "Rule", Memory = AgentMemoryMode.Off, MaxHistory = 20,
+            CodeLanguage = fsharp ? "fsharp" : null,
             SystemPrompt = body,
         });
     }
@@ -1303,15 +1316,18 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             }
             else
             {
-                var ext = CatalogNoteDirectory.For(t).Extension;
-                foreach (var file in Directory.EnumerateFiles(fullPath, "*" + ext)
+                var layout = CatalogNoteDirectory.For(t);
+                var typedFiles = new List<string>();
+                foreach (var ext in layout.AllExtensions) // CodeRule 双扩展名（.coderule.cs + .coderule.fs）
+                    typedFiles.AddRange(Directory.EnumerateFiles(fullPath, "*" + ext));
+                foreach (var file in typedFiles
                              .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
                 {
                     var fileName = Path.GetFileName(file);
                     // 排除目录 README（readme.md / readme.ok）——它是目录说明，点目录时经 OpenFolderReadmeAsync 显示，不进树。
                     if (IsReadmeFile(fileName)) continue;
                     var stem = fileName;
-                    var display = StripCompound(stem, ext);
+                    var display = StripCompound(stem, layout.Extension);
                     node.Children.Add(new FileNode(display, stem, file, isFolder: false, iconOverride: TypeIcon(t)));
                 }
                 // 产物体文件（csv/sql 等）：类型目录（尤其 knowledge/）内与 .md 并列显示，通用文件图标，

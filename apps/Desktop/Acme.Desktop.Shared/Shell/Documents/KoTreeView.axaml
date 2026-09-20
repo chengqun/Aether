@@ -89,6 +89,7 @@
               <MenuItem Header="Workflow（专家团）" Tag="Workflow" Click="OnNewNodeClick"/>
               <MenuItem Header="规则" Tag="Rule" Click="OnNewNodeClick"/>
               <MenuItem Header="代码规则" Tag="CodeRule" Click="OnNewNodeClick"/>
+              <MenuItem Header="代码规则（F#）" Tag="CodeRule:fsharp" Click="OnNewNodeClick"/>
               <MenuItem Header="知识对象" Tag="Knowledge" Click="OnNewNodeClick"/>
               <MenuItem Header="技能" Tag="Skill" Click="OnNewNodeClick"/>
               <MenuItem Header="MCP" Tag="McpServer" Click="OnNewNodeClick"/>

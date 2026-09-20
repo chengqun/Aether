@@ -100,6 +100,10 @@ public sealed class CodeSourceParser : ICodeSourceParser
                 case "category":
                     result.Category = value;
                     break;
+                case "language":
+                    // 正文语言（csharp 默认 | fsharp）——编译器分派 + 新文件扩展名的权威信号。
+                    result.CodeLanguage = value.ToLowerInvariant();
+                    break;
                 case "memory":
                     if (Enum.TryParse<AgentMemoryMode>(value, true, out var mm)) result.Memory = mm;
                     break;
@@ -173,11 +177,17 @@ public sealed class CodeSourceParser : ICodeSourceParser
             ? null
             : "tool_approvals: " + System.Text.Json.JsonSerializer.Serialize(f.ToolApprovals);
 
+        // language 仅 F# 变体写出（.coderule.fs）——C# 是默认值，不写出保旧文件稳定。
+        var languageLine = string.Equals(f.CodeLanguage, "fsharp", StringComparison.OrdinalIgnoreCase)
+            ? "language: fsharp"
+            : null;
+
         return $@"---
 id: {f.Id}
 name: {f.Name}
 description: {f.Description}
 category: {f.Category}
+{languageLine}
 {toolsLine}
 {approvalsLine}
 memory: {f.Memory}

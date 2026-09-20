@@ -114,12 +114,13 @@ internal static class CodeEditorSetup
             _ => null,
         };
 
-    /// <summary>语法 key → 高亮定义：yaml 走自定义 .xshd，其余走内置定义 + VSCode 配色重映射。null = 纯文本。</summary>
+    /// <summary>语法 key → 高亮定义：yaml/fsharp 走自定义 .xshd，其余走内置定义 + VSCode 配色重映射。null = 纯文本。</summary>
     public static IHighlightingDefinition? GetHighlighting(string? syntax, bool dark)
     {
         if (string.IsNullOrEmpty(syntax)) return null;
         var s = syntax!.ToLowerInvariant();
         if (s == "yaml") return LoadYaml(dark);
+        if (s == "fsharp") return LoadFSharp(dark);
         return Load(SyntaxToDefinitionName(s), dark);
     }
 
@@ -225,6 +226,85 @@ internal static class CodeEditorSetup
     <Keywords color=""Keyword"">
       <Word>true</Word><Word>false</Word><Word>null</Word>
       <Word>yes</Word><Word>no</Word><Word>on</Word><Word>off</Word>
+    </Keywords>
+  </RuleSet>
+</SyntaxDefinition>";
+        using var reader = XmlReader.Create(new StringReader(xshd));
+        return HighlightingLoader.Load(reader, HighlightingManager.Instance);
+    }
+
+    // —— F#（镜像 LoadYaml 的自定义 .xshd 模式：AvaloniaEdit 无内置 F# 定义；缓存 + 每次主题重着色）——
+
+    private static IHighlightingDefinition? _fsharpLight, _fsharpDark;
+
+    private static IHighlightingDefinition LoadFSharp(bool dark)
+    {
+        var def = dark ? (_fsharpDark ??= BuildFSharp(dark)) : (_fsharpLight ??= BuildFSharp(dark));
+        ApplyFSharpColors(def, dark);
+        return def;
+    }
+
+    /// <summary>把当前皮肤 JSON editor 段的 F# 配色原地刷到定义的命名色上（与 <see cref="ApplyYamlColors"/> 同构）——
+    /// 缓存实例颜色随主题实时改，不冻结在首次构建（同 YAML 启动竞态教训）。</summary>
+    private static void ApplyFSharpColors(IHighlightingDefinition def, bool dark)
+    {
+        var p = Palette;
+        foreach (var c in def.NamedHighlightingColors)
+        {
+            var n = (c.Name ?? "").ToUpperInvariant();
+            string? hex = n switch
+            {
+                "COMMENT" => p?.Comment ?? (dark ? "#8b949e" : "#6e7781"),
+                "STRING" or "VERBSTRING" or "TRIPLESTRING" => p?.String ?? (dark ? "#a5d6ff" : "#0a3069"),
+                "NUMBER" => p?.Number ?? (dark ? "#79c0ff" : "#0550ae"),
+                "KEYWORD" => p?.Keyword ?? (dark ? "#ff7b72" : "#cf222e"),
+                "ATTRIBUTE" => p?.Attribute ?? (dark ? "#79c0ff" : "#0550ae"),
+                _ => null,
+            };
+            if (hex is not null)
+                c.Foreground = new SimpleHighlightingBrush(Color.Parse(hex));
+        }
+    }
+
+    private static IHighlightingDefinition BuildFSharp(bool dark)
+    {
+        var p = Palette;
+        var comment = p?.Comment ?? (dark ? "#8b949e" : "#6e7781");
+        var str = p?.String ?? (dark ? "#a5d6ff" : "#0a3069");
+        var num = p?.Number ?? (dark ? "#79c0ff" : "#0550ae");
+        var kw = p?.Keyword ?? (dark ? "#ff7b72" : "#cf222e");
+        var attr = p?.Attribute ?? (dark ? "#79c0ff" : "#0550ae");
+        var xshd = $@"<SyntaxDefinition name=""F#"" xmlns=""http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008"">
+  <Color name=""Comment"" foreground=""{comment}""/>
+  <Color name=""String"" foreground=""{str}""/>
+  <Color name=""TripleString"" foreground=""{str}""/>
+  <Color name=""VerbString"" foreground=""{str}""/>
+  <Color name=""Number"" foreground=""{num}""/>
+  <Color name=""Keyword"" foreground=""{kw}""/>
+  <Color name=""Attribute"" foreground=""{attr}""/>
+  <RuleSet>
+    <Span color=""Comment"" multiline=""true""><Begin>\(\*</Begin><End>\*\)</End></Span>
+    <Span color=""Comment""><Begin>//</Begin><End>\n</End></Span>
+    <Span color=""TripleString"" multiline=""true""><Begin>&quot;&quot;&quot;</Begin><End>&quot;&quot;&quot;</End></Span>
+    <Span color=""VerbString""><Begin>@&quot;</Begin><End>&quot;</End></Span>
+    <Span color=""String"" escapeCharacter=""\""><Begin>&quot;</Begin><End>&quot;</End></Span>
+    <Span color=""Attribute""><Begin>\[&lt;</Begin><End>&gt;\]</End></Span>
+    <Rule color=""Number"">\b\d+(\.\d+)?[fFmMyuUL]*\b</Rule>
+    <Keywords color=""Keyword"">
+      <Word>abstract</Word><Word>and</Word><Word>as</Word><Word>assert</Word><Word>base</Word>
+      <Word>begin</Word><Word>class</Word><Word>default</Word><Word>delegate</Word><Word>do</Word>
+      <Word>done</Word><Word>downcast</Word><Word>downto</Word><Word>elif</Word><Word>else</Word>
+      <Word>end</Word><Word>exception</Word><Word>extern</Word><Word>false</Word><Word>finally</Word>
+      <Word>fixed</Word><Word>for</Word><Word>fun</Word><Word>function</Word><Word>global</Word>
+      <Word>if</Word><Word>in</Word><Word>inherit</Word><Word>inline</Word><Word>interface</Word>
+      <Word>internal</Word><Word>lazy</Word><Word>let</Word><Word>let!</Word><Word>match</Word>
+      <Word>match!</Word><Word>member</Word><Word>module</Word><Word>mutable</Word><Word>namespace</Word>
+      <Word>new</Word><Word>not</Word><Word>null</Word><Word>of</Word><Word>open</Word><Word>or</Word>
+      <Word>override</Word><Word>private</Word><Word>public</Word><Word>rec</Word><Word>return</Word>
+      <Word>return!</Word><Word>select</Word><Word>static</Word><Word>struct</Word><Word>then</Word>
+      <Word>to</Word><Word>true</Word><Word>try</Word><Word>type</Word><Word>upcast</Word><Word>use</Word>
+      <Word>use!</Word><Word>val</Word><Word>void</Word><Word>when</Word><Word>while</Word><Word>with</Word>
+      <Word>yield</Word><Word>yield!</Word><Word>task</Word><Word>async</Word>
     </Keywords>
   </RuleSet>
 </SyntaxDefinition>";

@@ -9,9 +9,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Aether.AI.Core\Aether.AI.Core.csproj" />
     <ProjectReference Include="..\Aether.AI.Harness\Aether.AI.Harness.csproj" />
+    <!-- F# 作者契约（Step DU / IFsRuleBrain / FsCodeRuleBrain / 适配器）——FsRuleScriptCompiler 编译目标接口 -->
+    <ProjectReference Include="..\Aether.AI.Harness.FSharp\Aether.AI.Harness.FSharp.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Compiler.Service" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />

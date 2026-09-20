@@ -171,6 +171,7 @@
     <Project Path="src/Aether.AI.Abstractions/Aether.AI.Abstractions.csproj" />
     <Project Path="src/Aether.AI.Core/Aether.AI.Core.csproj" />
     <Project Path="src/Aether.AI.Harness/Aether.AI.Harness.csproj" />
+    <Project Path="src/Aether.AI.Harness.FSharp/Aether.AI.Harness.FSharp.fsproj" />
     <Project Path="src/Aether.AI.Harness.Scripting/Aether.AI.Harness.Scripting.csproj" />
     <Project Path="src/Aether.AI.Hosting/Aether.AI.Hosting.csproj" />
     <Project Path="src/Aether.AI.Memory/Aether.AI.Memory.csproj" />

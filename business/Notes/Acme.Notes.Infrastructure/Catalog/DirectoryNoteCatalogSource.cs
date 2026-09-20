@@ -43,25 +43,29 @@ public sealed class DirectoryNoteCatalogSource : INoteCatalogSource
             var dir = System.IO.Path.Combine(root, layout.DirectoryName);
             if (!System.IO.Directory.Exists(dir)) continue;
 
-            string[] files;
-            try
+            foreach (var ext in layout.AllExtensions) // CodeRule 双扩展名（.coderule.cs + .coderule.fs）
             {
-                files = System.IO.Directory.GetFiles(dir, "*" + layout.Extension, System.IO.SearchOption.TopDirectoryOnly);
-            }
-            catch { continue; } // 目录无权限/不可访问 → 跳过
+                string[] files;
+                try
+                {
+                    files = System.IO.Directory.GetFiles(dir, "*" + ext, System.IO.SearchOption.TopDirectoryOnly);
+                }
+                catch { continue; } // 目录无权限/不可访问 → 跳过
 
-            foreach (var file in files)
-            {
-                ct.ThrowIfCancellationRequested();
-                string content;
-                try { content = _readFile(file); }
-                catch { continue; } // 单个文件读取失败 → 跳过（不阻断整个枚举）
+                foreach (var file in files)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string content;
+                    try { content = _readFile(file); }
+                    catch { continue; } // 单个文件读取失败 → 跳过（不阻断整个枚举）
 
-                var rel = System.IO.Path.GetRelativePath(root, file);
-                var name = System.IO.Path.GetFileNameWithoutExtension(file);
-                // 复合扩展名（.agent.md / .workflow.json / .rule.yaml / .coderule.cs / .lean.cs）去掉首段，回退 stem
-                name = StripCompoundExtension(name, layout.Extension);
-                result.Add(new CatalogNote(rel, name, content, type));
+                    var rel = System.IO.Path.GetRelativePath(root, file);
+                    var name = System.IO.Path.GetFileNameWithoutExtension(file);
+                    // 复合扩展名（.agent.md / .workflow.json / .rule.yaml / .coderule.cs / .coderule.fs / .lean.cs）
+                    // 去掉首段（两种 CodeRule 扩展名首段同为 coderule，剥段一致），回退 stem
+                    name = StripCompoundExtension(name, ext);
+                    result.Add(new CatalogNote(rel, name, content, type));
+                }
             }
         }
 

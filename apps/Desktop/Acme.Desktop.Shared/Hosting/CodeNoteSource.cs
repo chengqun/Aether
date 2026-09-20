@@ -34,8 +34,9 @@ public sealed class CodeNoteSource : ICodeNoteSource
     /// 的规则 agent 构建才能经此键从 <c>ICodeBrainRegistry</c> 查到编译产物（否则一直 miss →「尚未编译」）。
     /// 解析失败或遗留文件无 <c>id:</c>（<see cref="Guid.Empty"/>）回退 <see cref="CatalogNote.ExternalId"/>（路径），
     /// 避免所有此类文件撞同一个空 Guid 键。</para>
-    /// <para>正文取 front-matter 后的 C# 源文本；解析失败（如编辑中 front-matter 不完整）回退原文本，
-    /// 让编译器报真实错误而非误导性的「YAML 当 C#」错误。</para></summary>
+    /// <para>正文取 front-matter 后的源码文本（C# 或 F#，由 front-matter <c>language:</c> 字段路由——
+    /// .coderule.fs 文件写 <c>language: fsharp</c>）；解析失败（如编辑中 front-matter 不完整）回退原文本
+    /// + 默认 csharp，让编译器报真实错误而非误导性的「YAML 当源码」错误。</para></summary>
     private CodeNote ToCodeNote(CatalogNote n)
     {
         var content = n.Content ?? string.Empty;
@@ -44,7 +45,8 @@ public sealed class CodeNoteSource : ICodeNoteSource
         {
             if (def.Id != Guid.Empty)
                 id = def.Id.ToString();
-            return new CodeNote(id, n.Name, def.SystemPrompt ?? string.Empty);
+            return new CodeNote(id, n.Name, def.SystemPrompt ?? string.Empty,
+                string.IsNullOrWhiteSpace(def.CodeLanguage) ? "csharp" : def.CodeLanguage!);
         }
         return new CodeNote(id, n.Name, content);
     }

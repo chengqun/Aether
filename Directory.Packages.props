@@ -19,6 +19,10 @@
     <PackageVersion Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="FlaUI.UIA3" Version="5.0.0" />
+    <!-- F# 代码规则（.coderule.fs）：契约项目用的 FSharp.Core 与编译器服务。FCS 对 FSharp.Core 是
+         精确依赖（=10.1.401），两处版本必须同步升（FCS 要求与自身打包的 FSharp.Core 严格一致）。 -->
+    <PackageVersion Include="FSharp.Compiler.Service" Version="43.12.401" />
+    <PackageVersion Include="FSharp.Core" Version="10.1.401" />
     <PackageVersion Include="IconPacks.Avalonia.Codicons" Version="2.0.0" />
     <PackageVersion Include="Indiko.Maui.Controls.Markdown" Version="1.5.0" />
     <PackageVersion Include="LibGit2Sharp" Version="0.31.0" />

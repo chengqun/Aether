@@ -17,6 +17,7 @@ public static class SyntaxMap
         return extension.ToLowerInvariant() switch
         {
             ".cs" => "csharp",
+            ".fs" or ".fsx" => "fsharp",
             ".py" or ".pyw" => "python",
             ".md" or ".markdown" => "markdown",
             ".json" => "json",

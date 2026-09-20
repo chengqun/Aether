@@ -9,8 +9,19 @@ namespace Acme.Notes.Domain.Catalog;
 /// </summary>
 public static class CatalogNoteDirectory
 {
-    /// <summary>每类型的目录名 + 文件扩展名（含前导点）。</summary>
-    public sealed record Layout(string DirectoryName, string Extension);
+    /// <summary>
+    /// 每类型的目录名 + 文件扩展名（含前导点）。<see cref="SecondaryExtension"/>：同目录的第二语言变体
+    /// （当前仅 CodeRule 的 F# 变体 .coderule.fs——语言是文件属性，不另开 NodeType）。
+    /// <see cref="Extension"/> 是主扩展名（新建文件默认、复合扩展名剥段）；glob 消费用 <see cref="AllExtensions"/>。
+    /// </summary>
+    public sealed record Layout(string DirectoryName, string Extension, string? SecondaryExtension = null)
+    {
+        /// <summary>该类型的全部文件扩展名（主 + 可选次），目录枚举/glob 消费用。</summary>
+        public IReadOnlyList<string> AllExtensions =>
+            SecondaryExtension is null
+                ? new[] { Extension }
+                : new[] { Extension, SecondaryExtension };
+    }
 
     private static readonly IReadOnlyDictionary<NoteNodeType, Layout> Layouts =
         new Dictionary<NoteNodeType, Layout>
@@ -19,7 +30,8 @@ public static class CatalogNoteDirectory
             [NoteNodeType.Agent] = new("agents", ".agent.md"),
             [NoteNodeType.Workflow] = new("workflows", ".workflow.json"),
             [NoteNodeType.Rule] = new("rules", ".rule.yaml"),
-            [NoteNodeType.CodeRule] = new("coderules", ".coderule.cs"),
+            // C#（主）+ F#（language: fsharp 变体）同目录共存——同一 CodeRule 家族，语言是文件属性。
+            [NoteNodeType.CodeRule] = new("coderules", ".coderule.cs", ".coderule.fs"),
             [NoteNodeType.Knowledge] = new("knowledge", ".md"),
             [NoteNodeType.CodeStrategy] = new("codestrategies", ".cs"),
             [NoteNodeType.Strategy] = new("strategies", ".strategy.yaml"),

@@ -11,5 +11,10 @@ public interface ICodeNoteSource
     Task<IReadOnlyList<CodeNote>> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>代码规则笔记（从 Notes 桥接的最小字段）。<see cref="Id"/> = 笔记 Guid 字符串，作注册表键。</summary>
-public sealed record CodeNote(string Id, string Title, string Content);
+/// <summary>
+/// 代码规则笔记（从 Notes 桥接的最小字段）。<see cref="Id"/> = 笔记 Guid 字符串，作注册表键。
+/// <para><see cref="Language"/> = 正文语言（"csharp" 默认 | "fsharp"，来自笔记 front-matter 的
+/// <c>language:</c> 字段）——服务据此分派 <see cref="RuleScriptCompiler"/>（Roslyn）或
+/// <c>FsRuleScriptCompiler</c>（FCS）。</para>
+/// </summary>
+public sealed record CodeNote(string Id, string Title, string Content, string Language = "csharp");
