@@ -46,8 +46,8 @@ public static class FsRuleScriptCompiler
         Path.GetDirectoryName(typeof(IFsRuleBrain).Assembly.Location)!,
         "FSharp.Core.dll");
 
-    /// <summary>targeting pack ref 目录（<c>&lt;dotnet&gt;/packs/Microsoft.NETCore.App.Ref/&lt;ver&gt;/ref/&lt;tfm&gt;</c>）。
-    /// 懒定位；未装 .NET SDK 时 null → TryCompile 返回友好错误（Aether 是开发者工具，SDK 是合理前置）。</summary>
+    /// <summary>targeting pack ref 目录（多根候选，见 <see cref="FindRefPackDir"/>——framework-dependent 走 SDK
+    /// packs/，自包含 .app 走 NuGet 缓存兜底）。懒定位；全候选 miss 时 null → TryCompile 返回友好错误。</summary>
     private static readonly Lazy<string?> RefPackDir = new(FindRefPackDir);
 
     /// <summary>编译 F# 源码并创建 <see cref="IRuleBrain"/> 实例（线性式=FsCodeRuleBrain 子类；
@@ -89,7 +89,8 @@ public static class FsRuleScriptCompiler
         var refPack = RefPackDir.Value;
         if (refPack is null)
         {
-            error = "未找到 .NET targeting pack（packs/Microsoft.NETCore.App.Ref）——F# 代码规则需要 .NET 10 SDK。";
+            error = "未找到 .NET targeting pack（Microsoft.NETCore.App.Ref）——F# 代码规则需要 .NET 10 SDK，"
+                + "或设置 DOTNET_ROOT 指向 dotnet 安装目录，或在构建过本项目的机器上运行（NuGet 缓存含该包）。";
             return false;
         }
 
@@ -194,47 +195,127 @@ public static class FsRuleScriptCompiler
     }
 
     /// <summary>AppDomain 已加载的非框架程序集（应用/NuGet：契约程序集 / Harness 的 FsCodeRuleBrain、
-    /// IFsRuleBrain / MEAI 等）。排除 &lt;dotnet&gt;/shared/ 框架 impl 目录——框架引用由 ref-pack 提供
-    /// （impl facade 会破坏 fsc 的系统类型解析，见 <see cref="BuildArgs"/>）。</summary>
+    /// IFsRuleBrain / MEAI 等）。排除共享框架 impl 目录与 System.Private.CoreLib——框架引用由 ref-pack 提供
+    /// （impl facade 会破坏 fsc 的系统类型解析，见 <see cref="BuildArgs"/>；CoreLib 是转发目标、与 ref-pack
+    /// 契约重复定义系统类型）。<b>自包含运行时（打包 .app）下全部程序集都在 bundle 内</b>——按运行时目录上溯
+    /// 推导 shared 根会把应用程序集也排除掉，故按<b>路径签名</b>（相邻 <c>shared/Microsoft.*</c> 段，SDK 布局特征）
+    /// 判；bundle 内的 System.* impl 由 ref-pack 同名去重兜底（BuildArgs 的 seen 集合先到先得）。</summary>
     private static IEnumerable<string> AppAssemblyPaths()
     {
-        string sharedRoot;
-        try
-        {
-            var runtimeDir = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory();
-            sharedRoot = Path.GetFullPath(Path.Combine(runtimeDir, "..", "..")) // → <dotnet>/shared/
-                + Path.DirectorySeparatorChar;
-        }
-        catch { yield break; }
-
         foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
         {
             if (a.IsDynamic || string.IsNullOrEmpty(a.Location)) continue;
-            if (a.Location.StartsWith(sharedRoot, StringComparison.OrdinalIgnoreCase)) continue;
+            if (Path.GetFileNameWithoutExtension(a.Location) == "System.Private.CoreLib") continue;
+            if (IsSharedFrameworkPath(a.Location)) continue;
             yield return a.Location;
         }
     }
 
-    /// <summary>定位 targeting pack ref 目录：runtimeDirectory（&lt;dotnet&gt;/shared/&lt;tfm&gt;/&lt;ver&gt;/）
-    /// 上溯到 &lt;dotnet&gt;，取 packs/Microsoft.NETCore.App.Ref 最高版本下的 ref/&lt;tfm&gt;。</summary>
-    private static string? FindRefPackDir()
+    /// <summary>路径是否位于共享框架 impl 目录（含相邻 <c>shared/Microsoft.&lt;fx&gt;/&lt;版本&gt;</c> 路径段——
+    /// SDK 布局签名（第三段以数字开头，防用户目录碰巧叫 shared/Microsoft.* 的误伤）；自包含 bundle 内
+    /// 无此段 → 不排除）。</summary>
+    private static bool IsSharedFrameworkPath(string location)
+    {
+        var segs = location.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        for (var i = 0; i + 2 < segs.Length; i++)
+        {
+            if (string.Equals(segs[i], "shared", StringComparison.OrdinalIgnoreCase)
+                && segs[i + 1].StartsWith("Microsoft.", StringComparison.Ordinal)
+                && segs[i + 2].Length > 0 && char.IsDigit(segs[i + 2][0]))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>定位 targeting pack 的 ref 目录（<c>&lt;ver&gt;/ref/&lt;tfm&gt;/</c>，含 System.Runtime.dll）。
+    /// public 供测试断言/诊断。多根候选按序探测（探针定案：任何同 major 的 pack 契约都能让 fsc 编译，
+    /// 版本无需精确匹配运行时）：①框架依赖运行时根（dotnet run/test）②NuGet 全局缓存（本仓 PackageReference
+    /// 钉的 Microsoft.NETCore.App.Ref，restore 必下载——<b>自包含 .app 的兜底主力</b>：bundle 内运行时目录
+    /// 指向 app 自身，上溯找不到 SDK packs/）③DOTNET_ROOT（含架构变体）④常见安装根。</summary>
+    public static string? FindRefPackDir()
+    {
+        foreach (var versionsRoot in CandidateVersionsRoots())
+        {
+            var hit = FindHighestRefDir(versionsRoot);
+            if (hit is not null) return hit;
+        }
+        return null;
+    }
+
+    /// <summary>含版本子目录的根（已存在、去重、保序）：各 dotnet 根下的 packs/Microsoft.NETCore.App.Ref + NuGet 包目录。</summary>
+    private static IEnumerable<string> CandidateVersionsRoots()
+    {
+        var roots = new List<string>();
+        void Add(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            string full;
+            try { full = Path.GetFullPath(path!); } catch { return; }
+            if (!Directory.Exists(full)) return;
+            if (!roots.Contains(full, StringComparer.OrdinalIgnoreCase)) roots.Add(full);
+        }
+
+        foreach (var root in CandidateDotnetRoots())
+            Add(Path.Combine(root, "packs", "Microsoft.NETCore.App.Ref"));
+        Add(NuGetRefPackDir());
+        return roots;
+    }
+
+    private static IEnumerable<string> CandidateDotnetRoots()
+    {
+        // ① 框架依赖运行时根：runtimeDir = <root>/shared/<fx>/<ver>/ → 上溯 3 级。
+        //    自包含运行时此处指向 bundle 内 → 加不出 packs（由 ② NuGet 缓存兜底）。
+        string? runtimeDir = null;
+        try { runtimeDir = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(); }
+        catch { }
+        if (!string.IsNullOrEmpty(runtimeDir))
+            yield return Path.Combine(runtimeDir, "..", "..", "..");
+
+        // ② 环境变量（DOTNET_ROOT 架构变体是 SDK 官方约定）+ dotnet-install 用户级。
+        yield return Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? string.Empty;
+        yield return Environment.GetEnvironmentVariable("DOTNET_ROOT(x64)") ?? string.Empty;
+        yield return Environment.GetEnvironmentVariable("DOTNET_ROOT(arm64)") ?? string.Empty;
+        yield return Environment.GetEnvironmentVariable("DOTNET_INSTALL_DIR") ?? string.Empty;
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(profile)) yield return Path.Combine(profile, ".dotnet");
+
+        // ③ 常见安装根（macOS x64 pkg / macOS arm64 Homebrew / Linux 发行版 / Windows）。
+        yield return "/usr/local/share/dotnet";
+        yield return "/opt/homebrew/share/dotnet";
+        yield return "/usr/share/dotnet";
+        yield return "/usr/lib/dotnet";
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrEmpty(programFiles)) yield return Path.Combine(programFiles, "dotnet");
+    }
+
+    /// <summary>NuGet 全局缓存里的 Microsoft.NETCore.App.Ref 包目录（本仓 Scripting csproj 钉了
+    /// ExcludeAssets=all 的 PackageReference——restore 保证它在任何构建过本仓的机器上都存在）。</summary>
+    private static string? NuGetRefPackDir()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrEmpty(profile)
+            ? null
+            : Path.Combine(profile, ".nuget", "packages", "microsoft.netcore.app.ref");
+    }
+
+    /// <summary>取最高的同 major 版本目录下的 ref/&lt;tfm&gt; 子目录（须含 System.Runtime.dll）。
+    /// 只认与运行时同 major（如 net10）的版本——排除装着的 11 预览等（跨 major 契约会绑出 11.0.0.0 的
+    /// System.Runtime 引用，net10 运行时解析不到）。</summary>
+    private static string? FindHighestRefDir(string versionsRoot)
     {
         try
         {
-            var runtimeDir = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory();
-            var dotnetRoot = Path.GetFullPath(Path.Combine(runtimeDir, "..", "..", ".."));
-            var packsRoot = Path.Combine(dotnetRoot, "packs", "Microsoft.NETCore.App.Ref");
-            if (!Directory.Exists(packsRoot)) return null;
-            var latest = Directory.GetDirectories(packsRoot)
-                .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-            if (latest is null) return null;
-            var refDir = Path.Combine(latest, "ref");
-            if (!Directory.Exists(refDir)) return null;
-            var tfm = Directory.GetDirectories(refDir)
-                .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-            return tfm is not null && File.Exists(Path.Combine(tfm, "System.Runtime.dll")) ? tfm : null;
+            var majorPrefix = Environment.Version.Major + ".";
+            foreach (var versionDir in Directory.GetDirectories(versionsRoot)
+                         .OrderByDescending(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase))
+            {
+                if (!Path.GetFileName(versionDir).StartsWith(majorPrefix, StringComparison.Ordinal)) continue;
+                var tfm = Directory.GetDirectories(Path.Combine(versionDir, "ref"))
+                    .OrderByDescending(t => Path.GetFileName(t), StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault(t => File.Exists(Path.Combine(t, "System.Runtime.dll")));
+                if (tfm is not null) return tfm;
+            }
+            return null;
         }
         catch
         {

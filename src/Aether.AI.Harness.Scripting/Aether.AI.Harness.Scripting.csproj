@@ -15,6 +15,9 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Compiler.Service" />
+    <!-- targeting pack：仅物化进 NuGet 全局缓存供 FsRuleScriptCompiler 运行时定位（ExcludeAssets=all
+         = 零编译/输出影响）。自包含 .app 内运行时目录指向 bundle → 找不到 SDK packs/，NuGet 缓存兜底。 -->
+    <PackageReference Include="Microsoft.NETCore.App.Ref" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />

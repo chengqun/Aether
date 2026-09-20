@@ -22,6 +22,9 @@
     <!-- F# 代码规则（.coderule.fs）：契约项目用的 FSharp.Core 与编译器服务。FCS 对 FSharp.Core 是
          精确依赖（=10.1.401），两处版本必须同步升（FCS 要求与自身打包的 FSharp.Core 严格一致）。 -->
     <PackageVersion Include="FSharp.Compiler.Service" Version="43.12.401" />
+    <!-- .NET targeting pack（F# 编译器的系统契约程序集来源）。FCS 对 FSharp.Core 是
+         精确依赖（=10.1.401），两处版本必须同步升（FCS 要求与自身打包的 FSharp.Core 严格一致）。 -->
+    <PackageVersion Include="Microsoft.NETCore.App.Ref" Version="10.0.9" />
     <PackageVersion Include="FSharp.Core" Version="10.1.401" />
     <PackageVersion Include="IconPacks.Avalonia.Codicons" Version="2.0.0" />
     <PackageVersion Include="Indiko.Maui.Controls.Markdown" Version="1.5.0" />

@@ -77,6 +77,17 @@ type ThrowingFs() =
     // —— 编译器契约 ——
 
     [Fact]
+    public void Fs_ref_pack_locator_finds_a_dir_with_system_runtime()
+    {
+        // 多根候选定位器（SDK packs/ 或 NuGet 缓存）——任何能构建/跑本测试的机器都须命中其一
+        //（回归守卫：打包 .app 的自包含场景靠 NuGet 缓存兜底，见 FindRefPackDir 注释）。
+        var dir = FsRuleScriptCompiler.FindRefPackDir();
+
+        Assert.NotNull(dir);
+        Assert.True(File.Exists(Path.Combine(dir!, "System.Runtime.dll")), $"pack 目录缺 System.Runtime.dll: {dir}");
+    }
+
+    [Fact]
     public async Task Fs_compile_stepwise_success()
     {
         var ok = FsRuleScriptCompiler.TryCompile(StepwiseRouterFs, out var brain, out var error);
