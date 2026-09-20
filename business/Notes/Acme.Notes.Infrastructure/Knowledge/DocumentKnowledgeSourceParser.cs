@@ -39,6 +39,7 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
         string body;
         string kind = string.Empty;
         List<KnowledgeLink> links = new();
+        Dictionary<string, object?>? extras = null;
 
         if (text.StartsWith("---", StringComparison.Ordinal))
         {
@@ -61,6 +62,9 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
                         kind = head.Kind ?? string.Empty;
                         links = (head.Links ?? new()).Select(ToDomainLink).ToList();
                     }
+                    // 未知键透传：kind/links 之外的顶层键（如 Intelligence 生命周期字段）原样保留——
+                    // 修复前 typed DTO + IgnoreUnmatchedProperties 会在表单/agent 编辑回写时静默剥掉它们。
+                    extras = ParseExtras(FrontMatterExtras.ExtractExtrasText(yaml));
                 }
                 catch (Exception ex)
                 {
@@ -75,7 +79,7 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
             body = text;
         }
 
-        definition = new KnowledgeObjectDefinition { Kind = kind, Links = links, Body = body };
+        definition = new KnowledgeObjectDefinition { Kind = kind, Links = links, Body = body, ExtraFrontMatter = extras };
         return true;
     }
 
@@ -89,7 +93,29 @@ public sealed class DocumentKnowledgeSourceParser : IDocumentKnowledgeSourcePars
             Links = (definition.Links ?? new()).Select(ToDtoLink).ToList(),
         };
         var yaml = _serializer.Serialize(head).TrimEnd();
+        // 未知键透传：额外键原样写回（kind/links 之后，与语料既有文件顺序一致）。
+        if (definition.ExtraFrontMatter is { Count: > 0 } extras)
+        {
+            var extrasYaml = _serializer.Serialize(extras).TrimEnd();
+            yaml = yaml + "\n" + extrasYaml;
+        }
         return $"---\n{yaml}\n---\n{definition.Body ?? string.Empty}";
+    }
+
+    /// <summary>额外键 YAML 文本 → 有序字典（YamlDotNet 无类型反序列化保插入序）。空白/非法返 null（不阻断）。</summary>
+    private static Dictionary<string, object?>? ParseExtras(string extrasText)
+    {
+        if (string.IsNullOrWhiteSpace(extrasText)) return null;
+        try
+        {
+            var dict = _deserializer.Deserialize<Dictionary<string, object?>>(extrasText);
+            return dict is { Count: > 0 } ? dict : null;
+        }
+        catch
+        {
+            // 额外键 YAML 非法：kind/links 已解析成功——放弃透传（不阻断主体），序列化时不写回该部分。
+            return null;
+        }
     }
 
     /// <summary>DTO→Domain：相对路径优先取 targetId（用户既有格式），回退 target，存入 <see cref="KnowledgeLink.Target"/>；TargetId 留 null。</summary>

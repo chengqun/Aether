@@ -165,4 +165,84 @@ public class DocumentKnowledgeSourceParserTests
         Assert.True(def2!.Links[0].Expand);
         Assert.False(def2.Links[1].Expand);
     }
+
+    // —— front-matter 未知键透传（Intelligence 生命周期字段 round-trip 完整性，2026-09-20 修复的回归守卫） ——
+
+    /// <summary>真实 Intelligence 文件样例：kind/links 之外带 8 个生命周期字段（subject/claim/…/valid_until）。
+    /// 修复前 typed DTO + IgnoreUnmatchedProperties 会静默剥掉它们（表单/agent 编辑回写即丢数据）。</summary>
+    private const string IntelligenceSample = """
+        ---
+        kind: 已知认知
+        links:
+        - role: derived_from
+          targetId: ../5_Assets/dp_data_db/主分析宽表/dp_data_db.jt_draw_case_wide_a
+        subject: 大盘全指标三层水位基线
+        claim: 大盘不是单一水位
+        source: monitoring
+        confidence: high
+        first_seen: 2026-09-09
+        last_updated: 2026-09-09
+        status: active
+        valid_until: 2026-10-31
+        ---
+        # 大盘指标水位基线
+
+        认知正文。
+        """;
+
+    [Fact]
+    public void ExtraFrontMatter_loaded_from_intelligence_sample()
+    {
+        var ok = _parser.TryParse(IntelligenceSample, out var def, out var error);
+        Assert.True(ok, $"解析应成功，错误：{error}");
+        Assert.NotNull(def);
+        Assert.NotNull(def!.ExtraFrontMatter);
+        Assert.Equal(8, def.ExtraFrontMatter!.Count);
+        Assert.Equal("大盘全指标三层水位基线", def.ExtraFrontMatter["subject"]);
+        Assert.Equal("monitoring", def.ExtraFrontMatter["source"]);
+        Assert.Equal("active", def.ExtraFrontMatter["status"]);
+        Assert.Equal("2026-10-31", def.ExtraFrontMatter["valid_until"]);
+    }
+
+    [Fact]
+    public void ExtraFrontMatter_roundtrips_through_serialize()
+    {
+        _parser.TryParse(IntelligenceSample, out var def, out _);
+        var reserialized = _parser.Serialize(def!);
+
+        // 序列化把额外键原样写回（kind/links 之后，与语料既有文件顺序一致）
+        Assert.Contains("subject: 大盘全指标三层水位基线", reserialized);
+        Assert.Contains("status: active", reserialized);
+        Assert.Contains("valid_until: 2026-10-31", reserialized);
+
+        // 二次解析稳定（round-trip 幂等）
+        _parser.TryParse(reserialized, out var def2, out _);
+        Assert.NotNull(def2!.ExtraFrontMatter);
+        Assert.Equal(8, def2.ExtraFrontMatter!.Count);
+        Assert.Equal("大盘全指标三层水位基线", def2.ExtraFrontMatter["subject"]);
+    }
+
+    [Fact]
+    public void Serialize_without_extras_keeps_legacy_format()
+    {
+        // 无额外键的文件：序列化输出与旧格式一致（kind/links，无额外段落）——存量文件零 diff。
+        _parser.TryParse(UserSample, out var def, out _);
+        var src = _parser.Serialize(def!);
+        Assert.DoesNotContain("subject", src);
+        _parser.TryParse(src, out var def2, out _);
+        Assert.Null(def2!.ExtraFrontMatter);
+    }
+
+    [Fact]
+    public void ExtraFrontMatter_agent_merge_via_definition_roundtrip()
+    {
+        // agent Update 的按键合并路径：改 status/last_updated，未提到的键经透传保留。
+        _parser.TryParse(IntelligenceSample, out var def, out _);
+        def!.ExtraFrontMatter!["status"] = "superseded";
+        def.ExtraFrontMatter["last_updated"] = "2026-10-01";
+        var src = _parser.Serialize(def);
+        Assert.Contains("status: superseded", src);
+        Assert.Contains("last_updated: 2026-10-01", src);
+        Assert.Contains("subject: 大盘全指标三层水位基线", src); // 未提到的键不丢
+    }
 }

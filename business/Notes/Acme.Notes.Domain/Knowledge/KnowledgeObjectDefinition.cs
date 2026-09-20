@@ -38,4 +38,12 @@ public sealed class KnowledgeObjectDefinition
 
     /// <summary>markdown 正文（人类说明 / 结构化数据代码块 / 任何 markdown）。</summary>
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>
+    /// front-matter 未知键透传（kind/links 之外的全部顶层键，如 Intelligence 生命周期字段
+    /// subject/claim/source/confidence/first_seen/last_updated/status）。解析时装载、序列化原样写回——
+    /// <b>表单/agent 编辑知识对象时保全语料自有元数据不丢</b>（round-trip 完整；修复前 typed DTO +
+    /// IgnoreUnmatchedProperties 会静默剥掉这些字段）。null/空 = 无额外键。值为标量（字符串）或嵌套结构。
+    /// </summary>
+    public Dictionary<string, object?>? ExtraFrontMatter { get; set; }
 }

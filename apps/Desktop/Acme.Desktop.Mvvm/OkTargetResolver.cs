@@ -26,19 +26,96 @@ public static class OkTargetResolver
     }
 
     /// <summary>候选知识对象文件全路径（按优先序）：无后缀时补 <c>.md</c>，
-    /// 各按 相对项目根 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）展开。</summary>
+    /// 各按 相对项目根 / 相对 knowledge 子目录 / 相对当前文件目录 / 原样（兜底绝对或相对 cwd）展开；
+    /// 基路径是<b>目录</b>时追加其 <c>README.md</c> 候选（场景目录化惯例：每个 Scenario 一个目录、
+    /// README.md = 对象本体——修复前目录目标静默解析失败，Read 内联/图/体检全断）。
+    /// <para><b>knowledge 子目录基</b>：labs 模式下语料的「知识库根相对」写法不带 <c>knowledge/</c> 前缀
+    /// （如 <c>企业知识架构/5_Assets/x</c>）——修复前这些链接在 Read 内联/图中被静默丢弃（解析根植 labs 根）。
+    /// 仅当 <c>&lt;root&gt;/knowledge</c> 目录存在时追加该基（自定义知识库目录模式零影响）。</para></summary>
     public static IEnumerable<string> CandidateOkPaths(string targetPath, string? rootPath, string? currentFileDir)
     {
         var hasExt = targetPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
         var exts = hasExt ? new[] { string.Empty } : new[] { ".md" };
         foreach (var ext in exts)
         {
-            var withExt = targetPath + ext;
+            var bases = new List<string>();
             if (!string.IsNullOrEmpty(rootPath))
-                yield return Path.Combine(rootPath, withExt);
+            {
+                bases.Add(Path.Combine(rootPath, targetPath));
+                var knowledgeBase = Path.Combine(rootPath,
+                    Acme.Notes.Domain.Catalog.CatalogNoteDirectory.For(Acme.Notes.Domain.NoteNodeType.Knowledge).DirectoryName);
+                if (Directory.Exists(knowledgeBase))
+                    bases.Add(Path.Combine(knowledgeBase, targetPath));
+            }
             if (!string.IsNullOrEmpty(currentFileDir))
-                yield return Path.Combine(currentFileDir!, withExt);
-            yield return withExt; // 兜底：绝对路径或相对 cwd
+                bases.Add(Path.Combine(currentFileDir!, targetPath));
+            bases.Add(targetPath); // 兜底：绝对路径或相对 cwd
+
+            foreach (var b in bases)
+            {
+                yield return b + ext;
+                if (Directory.Exists(b)) yield return Path.Combine(b, "README.md");
+            }
+
+            // —— 兜底（仅上述候选全 miss 才可能命中，顺序在后天然低优先级）：
+            // 去点后缀 × 祖先目录（意图恢复）。真实语料的相对链接普遍「../ 计数不可靠 + 根相对后缀」——
+            // 如 课题/x.md 写 ../../2_Feature/F（实际需 3 级）、vintage链/x.md 写 ../fin_dw/T（相对 db 目录）、
+            // Intelligence/x.md 写 ../../1_Scenario/S（多写一级）。去点后的后缀在源文件的某个祖先目录下
+            // 唯一存在——逐级上溯（最紧祖先先，解释最保守）尝试，恢复作者意图；仍不存在的才报断链。
+            var suffix = StripLeadingDotDots(targetPath);
+            if (suffix is not null && !string.IsNullOrEmpty(currentFileDir))
+            {
+                foreach (var a in AncestorsWithin(currentFileDir, rootPath))
+                {
+                    var b = Path.Combine(a, suffix);
+                    yield return b + ext;
+                    if (Directory.Exists(b)) yield return Path.Combine(b, "README.md");
+                }
+            }
+        }
+    }
+
+    /// <summary>剥掉路径开头的全部 <c>../</c>/<c>./</c> 段（含反斜杠变体）。无此类前缀返 null。</summary>
+    private static string? StripLeadingDotDots(string path)
+    {
+        var norm = path.Replace('\\', '/');
+        var changed = false;
+        while (norm.StartsWith("../", StringComparison.Ordinal) || norm.StartsWith("./", StringComparison.Ordinal))
+        {
+            norm = norm[(norm.IndexOf('/') + 1)..];
+            changed = true;
+        }
+        return changed && norm.Length > 0 ? norm : null;
+    }
+
+    /// <summary>从 <paramref name="startDir"/> 逐级上溯的祖先目录（含自身，最近优先；止于 <paramref name="rootPath"/>
+    /// 或出界/文件系统根，上限 12 级防深路径）。供「去点后缀」兜底探针。</summary>
+    private static IEnumerable<string> AncestorsWithin(string startDir, string? rootPath)
+    {
+        string dir;
+        string? stop = null;
+        try
+        {
+            dir = Path.GetFullPath(startDir);
+            if (!string.IsNullOrEmpty(rootPath)) stop = Path.GetFullPath(rootPath);
+        }
+        catch { yield break; }
+
+        var hops = 0;
+        while (hops < 12)
+        {
+            yield return dir;
+            if (stop is not null && string.Equals(dir, stop, StringComparison.OrdinalIgnoreCase)) yield break;
+            string? parent;
+            try { parent = Path.GetDirectoryName(dir); } catch { yield break; }
+            if (string.IsNullOrEmpty(parent) || parent == dir) yield break;
+            // 出界止步（startDir 不在 rootPath 下时只探自身一级）
+            if (stop is not null
+                && !string.Equals(parent, stop, StringComparison.OrdinalIgnoreCase)
+                && !parent.StartsWith(stop + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                yield break;
+            dir = parent;
+            hops++;
         }
     }
 
@@ -70,12 +147,15 @@ public static class OkTargetResolver
 
     /// <summary>按 basename 全局匹配（知识库根递归枚举 <c>*.md</c>，忽略点开头目录/bin/obj/node_modules，上限 200 文件）。
     /// <b>最后兜底</b>：仅当按路径候选全 miss 且 targetId 为裸名时启用——目录整体迁移后，旧根相对 targetId 已断，
-    /// 但图与 Read 仍能经此兜底找到目标，不掉线。多个同名时取路径序最小者（确定性）。</summary>
+    /// 但图与 Read 仍能经此兜底找到目标，不掉线。匹配规则：①stem 全等 ②stem 后缀等（语料「库名前缀」文件命名约定
+    /// <c>库.表.md</c> vs 链接写表名裸名——如 <c>loan_vintage_base_a</c> ↔ 文件 <c>dp_data_db.loan_vintage_base_a</c>）；
+    /// 全等 > 后缀，同类内取路径序最小者（确定性）。</summary>
     private static string? TryFindByNameGlobal(string targetPath, string? rootPath)
     {
         if (rootPath is null || !Directory.Exists(rootPath)) return null;
         var stem = StemOf(targetPath);
-        string? best = null;
+        string? bestExact = null;
+        string? bestSuffix = null;
         var scanned = 0;
         var queue = new Queue<string>();
         queue.Enqueue(rootPath);
@@ -89,8 +169,11 @@ public static class OkTargetResolver
             foreach (var f in files)
             {
                 scanned++;
-                if (!string.Equals(Path.GetFileNameWithoutExtension(f), stem, StringComparison.OrdinalIgnoreCase))
-                    continue;
+                var name = Path.GetFileNameWithoutExtension(f);
+                var isExact = string.Equals(name, stem, StringComparison.OrdinalIgnoreCase);
+                var isSuffix = !isExact && name.EndsWith("." + stem, StringComparison.OrdinalIgnoreCase);
+                if (!isExact && !isSuffix) continue;
+                ref var best = ref (isExact ? ref bestExact : ref bestSuffix);
                 if (best is null || string.CompareOrdinal(f, best) < 0) best = f;
             }
 
@@ -108,7 +191,7 @@ public static class OkTargetResolver
                 queue.Enqueue(sub);
             }
         }
-        return best;
+        return bestExact ?? bestSuffix; // 全等 > 后缀（库名前缀惯例）
     }
 
     /// <summary>解析 link target 到 (显示名称=stem, 定义)。首个存在知识对象文件 → 读 + TryParse；

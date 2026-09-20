@@ -35,6 +35,7 @@ public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
         string body;
         string kind = string.Empty;
         List<KnowledgeLink> links = new();
+        Dictionary<string, object?>? extras = null;
 
         if (text.StartsWith("---", StringComparison.Ordinal))
         {
@@ -57,6 +58,8 @@ public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
                         kind = head.Kind ?? string.Empty;
                         links = head.Links ?? new();
                     }
+                    // 未知键透传（与 DocumentKnowledgeSourceParser 同构）。
+                    extras = ParseExtras(FrontMatterExtras.ExtractExtrasText(yaml));
                 }
                 catch (Exception ex)
                 {
@@ -71,7 +74,7 @@ public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
             body = text;
         }
 
-        definition = new KnowledgeObjectDefinition { Kind = kind, Links = links, Body = body };
+        definition = new KnowledgeObjectDefinition { Kind = kind, Links = links, Body = body, ExtraFrontMatter = extras };
         return true;
     }
 
@@ -81,7 +84,28 @@ public sealed class KnowledgeSourceParser : IKnowledgeSourceParser
 
         var head = new KnowledgeHead { Kind = definition.Kind, Links = definition.Links };
         var yaml = _serializer.Serialize(head).TrimEnd();
+        // 未知键透传（与 DocumentKnowledgeSourceParser 同构）：额外键原样写回。
+        if (definition.ExtraFrontMatter is { Count: > 0 } extras)
+        {
+            var extrasYaml = _serializer.Serialize(extras).TrimEnd();
+            yaml = yaml + "\n" + extrasYaml;
+        }
         return $"---\n{yaml}\n---\n{definition.Body ?? string.Empty}";
+    }
+
+    /// <summary>额外键 YAML 文本 → 有序字典。空白/非法返 null（不阻断）。</summary>
+    private static Dictionary<string, object?>? ParseExtras(string extrasText)
+    {
+        if (string.IsNullOrWhiteSpace(extrasText)) return null;
+        try
+        {
+            var dict = _deserializer.Deserialize<Dictionary<string, object?>>(extrasText);
+            return dict is { Count: > 0 } ? dict : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>front-matter 承载 DTO（kind + links）。</summary>

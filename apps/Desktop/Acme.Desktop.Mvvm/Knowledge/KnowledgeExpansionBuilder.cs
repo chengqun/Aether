@@ -68,6 +68,13 @@ public static class KnowledgeExpansionBuilder
         // —— 头部 ——
         sb.Append(indent).Append("path: ").AppendLine(targetPath);
         sb.Append(indent).Append("kind: ").AppendLine(def.Kind);
+        // front-matter 透传字段（kind/links 之外——如 Intelligence 生命周期 subject/claim/status）：
+        // agent 读认知对象时须能看到这些元数据（修复前只回 kind+正文，生命周期信息对 agent 不可见）。
+        if (def.ExtraFrontMatter is { Count: > 0 })
+        {
+            foreach (var (key, value) in def.ExtraFrontMatter)
+                sb.Append(indent).Append(key).Append(": ").AppendLine(value?.ToString() ?? "");
+        }
         sb.Append(indent).Append("name: ").AppendLine(OkTargetResolver.StemOf(targetPath));
 
         // —— 正文（单目标截断 + 累计计数） ——

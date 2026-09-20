@@ -92,18 +92,24 @@ public static class DesktopToolRegistrations
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ReadDocumentKnowledgeObject"),
                 ToolApprovalLevel.Safe);
-            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.md 文件）。name=相对路径不含扩展名，将创建 <知识库目录>/<name>.md。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。", "文档知识",
+            reg.Register("CreateDocumentKnowledgeObject", "创建一个文档知识对象（.md 文件）。name=相对路径不含扩展名，将创建 <知识库目录>/<name>.md。kind 分类自由字符串。links 可选 JSON 数组（targetId=相对路径权威 或 target=名称）。extraJson 可选 front-matter 额外字段 JSON 对象（Intelligence 生命周期 subject/claim/status 等）。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.CreateDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "CreateDocumentKnowledgeObject"),
                 ToolApprovalLevel.Confirm);
-            reg.Register("UpdateDocumentKnowledgeObject", "更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位；传哪个参数更新哪个，不传保留原值。links 全量替换。", "文档知识",
+            reg.Register("UpdateDocumentKnowledgeObject", "更新一个文档知识对象（.md 文件）的 kind/body/links/额外字段。按相对路径定位；传哪个参数更新哪个，不传保留原值。links 全量替换；extraJson 按键合并（未提到的额外键原样保留）。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.UpdateDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "UpdateDocumentKnowledgeObject"),
                 ToolApprovalLevel.Confirm);
+            reg.Register("ValidateKnowledge", "体检知识对象库：检查断链（error 级）/kind 词表/边方向矩阵/按 kind 必填 front-matter 字段（软警告）。规则来自知识库根 knowledge-manifest.yaml（可编辑；无清单只查断链）。写完/改完知识对象后自检调用。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ValidateKnowledge))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "ValidateKnowledge"),
+                ToolApprovalLevel.Safe);
         });
         return aether;
     }

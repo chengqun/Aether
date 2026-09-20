@@ -10,6 +10,7 @@ using Acme.Desktop.Mvvm;
 using Acme.Notes.Domain;
 using Acme.Notes.Domain.Catalog;
 using Acme.Notes.Domain.Knowledge;
+using Acme.Notes.Infrastructure.Knowledge;
 
 namespace Acme.Desktop.Shared.Shell;
 
@@ -190,12 +191,15 @@ public sealed class DocumentKnowledgeTool
                  "{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}（targetId 三种写法：知识库根相对=权威；" +
                  "相对源文件目录 ./b 或 ../xx/b；裸名 b 全局匹配——推荐目录内互链用裸名/相对路径，目录迁移不断链）。" +
                  "每条 link 可选 expand:true 标记「AI 读取此对象时内联该目标内容」（默认 false=只列引用，agent 按需单独 read）。" +
+                 "extraJson 可选 JSON 对象：写 front-matter 额外字段（kind/links 之外），如回写 Intelligence 时填 " +
+                 "{\"subject\":\"…\",\"claim\":\"…\",\"source\":\"monitoring\",\"confidence\":\"high\",\"first_seen\":\"2026-09-20\",\"last_updated\":\"2026-09-20\",\"status\":\"active\"}。" +
                  "已存在则失败。")]
     public async Task<CreateDocumentKnowledgeOutput> CreateDocumentKnowledgeObject(
         [Description("相对路径（不含 .md 扩展名；如 业务分析/测试KO 或 knowledge/业务分析/测试KO）")] string name,
         [Description("分类，自由字符串：流程 / 数据源 / 规则 / Entity 等")] string kind,
         [Description("markdown 正文：人类说明、字段表、SQL 模板、示例输出等")] string body,
         [Description("links（可选），JSON 数组，如 [{\"role\":\"uses\",\"targetId\":\"Hive表/fin_dw\"}]")] string? linksJson = null,
+        [Description("front-matter 额外字段（可选），JSON 对象，标量值，如 {\"subject\":\"…\",\"status\":\"active\"}（Intelligence 生命周期等语料自有元数据）")] string? extraJson = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -222,6 +226,7 @@ public sealed class DocumentKnowledgeTool
                 Kind = kind ?? string.Empty,
                 Body = body ?? string.Empty,
                 Links = links,
+                ExtraFrontMatter = ParseExtras(extraJson),
             };
             var source = _parser.Serialize(def);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
@@ -235,13 +240,15 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
-    [Description("更新一个文档知识对象（.md 文件）的 kind/body/links。按相对路径定位（仅可更新 labs knowledge/ 子树内的知识对象，" +
-                 "路径越界拒绝）；传哪个参数更新哪个，不传保留原值。links 全量替换。name=相对路径（不含 .md）。")]
+    [Description("更新一个文档知识对象（.md 文件）的 kind/body/links/额外字段。按相对路径定位（仅可更新 labs knowledge/ 子树内的知识对象，" +
+                 "路径越界拒绝）；传哪个参数更新哪个，不传保留原值。links 全量替换；extraJson 按键合并（只覆盖给出的键，" +
+                 "其余 front-matter 额外字段原样保留——如只改 status 时不会丢 subject/claim）。name=相对路径（不含 .md）。")]
     public async Task<UpdateDocumentKnowledgeOutput> UpdateDocumentKnowledgeObject(
         [Description("相对路径（不含 .md；如 knowledge/业务分析/退款 或 业务分析/退款）")] string name,
         [Description("新 kind（可选，不传保留原值）")] string? kind = null,
         [Description("新 markdown 正文（可选，不传保留原值）")] string? body = null,
         [Description("新 links（可选，JSON 数组，全量替换；不传保留原 links）。targetId=相对路径权威 或 target=名称")] string? linksJson = null,
+        [Description("front-matter 额外字段按键合并（可选，JSON 对象标量值，如 {\"status\":\"superseded\",\"last_updated\":\"2026-10-01\"}）；未提到的额外键原样保留")] string? extraJson = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -270,6 +277,12 @@ public sealed class DocumentKnowledgeTool
             if (kind is not null) def.Kind = kind;
             if (body is not null) def.Body = body;
             if (linksJson is not null) def.Links = ParseLinks(linksJson);
+            // 额外字段按键合并（未提到的键经透传原样保留）
+            if (extraJson is not null && ParseExtras(extraJson) is { } patch)
+            {
+                def.ExtraFrontMatter ??= new Dictionary<string, object?>();
+                foreach (var (key, value) in patch) def.ExtraFrontMatter[key] = value;
+            }
 
             var source = _parser.Serialize(def);
             await File.WriteAllTextAsync(full, source, cancellationToken);
@@ -280,6 +293,159 @@ public sealed class DocumentKnowledgeTool
         catch (Exception ex)
         {
             return new UpdateDocumentKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    // —— 知识对象库体检 ——
+
+    public sealed class ValidateKnowledgeOutput
+    {
+        /// <summary>体检的知识对象文件数。</summary>
+        public int TotalChecked { get; set; }
+        /// <summary>规则清单是否装载（true=knowledge-manifest.yaml 存在且解析成功；null=无清单，仅断链检查）。</summary>
+        public bool? ManifestLoaded { get; set; }
+        public List<KnowledgeDiagnosticDto> Diagnostics { get; set; } = new();
+        /// <summary>分类汇总（类别 → 条数），如「断链: 2 / kind: 35」。</summary>
+        public string? Summary { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public sealed class KnowledgeDiagnosticDto
+    {
+        public string? Severity { get; set; } // error（断链）| warning（软约束）
+        public string? Category { get; set; } // 断链 / kind / 边类型 / 边方向 / 必填字段
+        public string? File { get; set; }
+        public string? Message { get; set; }
+    }
+
+    [Description("体检知识对象库：全量解析知识对象 .md 文件，检查 ①断链（links 指向不存在的文件，error 级）" +
+                 "②kind 词表 ③边类型/边方向矩阵 ④按 kind 必填 front-matter 字段（后三类软警告）。" +
+                 "规则来自知识库根的 knowledge-manifest.yaml（词表/边矩阵/必填字段——语料自治数据文件可编辑；无清单则只查断链）。" +
+                 "写完/改完知识对象后自检调用（尤其回写 Intelligence 后验证生命周期字段完整性）。诊断不阻断写入。")]
+    public async Task<ValidateKnowledgeOutput> ValidateKnowledge(CancellationToken cancellationToken = default)
+    {
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root))
+            return new ValidateKnowledgeOutput { Error = "未配置资料库目录。" };
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                var (knowledgeRoot, _) = ResolveScope(root);
+
+                // 规则清单（无 = 合法，仅断链检查；解析失败 = 提示但不阻断体检）。
+                var manifestLoaded = KnowledgeManifestLoader.TryLoad(knowledgeRoot, out var manifest, out var loadError);
+
+                // 全量收集（含解析失败项——参与断链索引）。
+                var files = new List<(string Full, string Rel, KnowledgeObjectDefinition? Def)>();
+                CollectOkFiles(knowledgeRoot, knowledgeRoot, files, cancellationToken);
+                var byRel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // rel → full
+                foreach (var f in files)
+                    byRel[f.Rel] = f.Full;
+
+                // 解析委托：与 Read 路径完全同源（ResolveTargetWithPath：路径候选 + 裸名全局兜底 + 目录/README 兜底），
+                // 防止校验器与读写工具解析语义分叉产生假阳性断链。
+                KnowledgeItem? Resolve(string target, string sourceRelPath)
+                {
+                    if (!byRel.TryGetValue(sourceRelPath, out var sourceFull)) return null;
+                    var dir = Path.GetDirectoryName(sourceFull);
+                    var resolved = OkTargetResolver.ResolveTargetWithPath(_parser, target, root, dir);
+                    return resolved?.FullPath is null
+                        ? null // 断链
+                        : new KnowledgeItem(ToRelativePath(knowledgeRoot, resolved.FullPath), resolved.Def);
+                }
+
+                var items = files.Select(f => new KnowledgeItem(f.Rel, f.Def)).ToList();
+                var diagnostics = KnowledgeGraphValidator.Validate(items, manifest, Resolve);
+
+                var output = new ValidateKnowledgeOutput
+                {
+                    TotalChecked = files.Count,
+                    ManifestLoaded = manifest is null ? null : manifestLoaded,
+                    Diagnostics = diagnostics.Select(d => new KnowledgeDiagnosticDto
+                    {
+                        Severity = d.Severity, Category = d.Category, File = d.File, Message = d.Message,
+                    }).ToList(),
+                };
+                output.Summary = diagnostics.Count == 0
+                    ? "全部通过（0 诊断）"
+                    : string.Join(" / ", diagnostics.GroupBy(d => d.Category)
+                        .Select(g => $"{g.Key}: {g.Count()}"));
+                if (!manifestLoaded && loadError is not null)
+                    output.Error = loadError;
+                return output;
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new ValidateKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    /// <summary>递归收集知识对象文件（.md，复用 List 的目录守卫：跳构建产物/VCS/依赖目录 + 符号链接，上限 2000）。
+    /// 与 <see cref="EnumerateOkFiles"/> 的差异：收集 (全路径, 相对路径, 定义) 三元组供体检测算。</summary>
+    private void CollectOkFiles(string dir, string knowledgeRoot, List<(string Full, string Rel, KnowledgeObjectDefinition? Def)> files, CancellationToken ct)
+    {
+        if (files.Count >= 2000) return;
+        string[]? subdirs = null;
+        string[]? mdFiles = null;
+        try
+        {
+            mdFiles = Directory.GetFiles(dir, "*.md");
+            subdirs = Directory.GetDirectories(dir);
+        }
+        catch { /* 无权限/不存在 → 跳过 */ }
+
+        if (mdFiles is not null)
+        {
+            foreach (var f in mdFiles)
+            {
+                if (files.Count >= 2000) return;
+                ct.ThrowIfCancellationRequested();
+                KnowledgeObjectDefinition? def = null;
+                try { _ = _parser.TryParse(File.ReadAllText(f), out def, out _); }
+                catch { /* 读/解析失败 → 仍收集（Def=null，参与断链索引） */ }
+                files.Add((f, ToRelativePath(knowledgeRoot, f), def));
+            }
+        }
+        if (subdirs is null) return;
+        foreach (var d in subdirs)
+        {
+            if (files.Count >= 2000) return;
+            var name = Path.GetFileName(d);
+            if (IsIgnoredDir(name) || IsSymlinkDir(d)) continue;
+            CollectOkFiles(d, knowledgeRoot, files, ct);
+        }
+    }
+
+    /// <summary>解析 extraJson（front-matter 额外字段 JSON 对象）。仅标量（string/number/bool/null）；
+    /// 嵌套结构跳过（front-matter 是 YAML，嵌套 JSON 原样写回会产非法 YAML）。非法/空返 null。</summary>
+    private static Dictionary<string, object?>? ParseExtras(string? extraJson)
+    {
+        if (string.IsNullOrWhiteSpace(extraJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(extraJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var dict = new Dictionary<string, object?>();
+            foreach (var p in doc.RootElement.EnumerateObject())
+            {
+                dict[p.Name] = p.Value.ValueKind switch
+                {
+                    JsonValueKind.String => p.Value.GetString(),
+                    JsonValueKind.Number => p.Value.GetRawText(),   // 数字原样文本（同是合法 YAML 标量）
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    JsonValueKind.Null => null,
+                    _ => null,                                       // 嵌套对象/数组跳过
+                };
+            }
+            return dict.Count > 0 ? dict : null;
+        }
+        catch
+        {
+            return null; // 容错：extraJson 非法 → 忽略额外字段，仍执行主体创建/更新
         }
     }
 
