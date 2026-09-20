@@ -419,6 +419,428 @@ public sealed class DocumentKnowledgeTool
         }
     }
 
+    // —— 搜索 / 关联 / 改名 / 合并（知识增长循环的检索面与治理面，2026-09-20） ——
+
+    public sealed class KnowledgeSearchMatch
+    {
+        /// <summary>知识库根相对路径（不含 .md，Read/Search 入参用此）。</summary>
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+        public string? Kind { get; set; }
+        /// <summary>命中位置：name / kind / extras / body（可多命中，分号分隔）。</summary>
+        public string? MatchedIn { get; set; }
+        public string? BodyPreview { get; set; }
+    }
+
+    public sealed class SearchKnowledgeOutput
+    {
+        public List<KnowledgeSearchMatch> Matches { get; set; } = new();
+        public int TotalScanned { get; set; }
+        public string? Error { get; set; }
+    }
+
+    [Description("跨目录关键词搜索知识对象（冷启动循环的 Explore 步）：对知识库全部 .md 做**不区分大小写**子串匹配——" +
+                 "名称 stem / kind / front-matter 额外字段值 / 正文。按命中位置排序（名称 > kind > 额外字段 > 正文），" +
+                 "返回路径+kind+命中位置+正文预览。可选 kind 过滤（如 已知认知）、folder 限定子目录。命中后用 " +
+                 "ReadDocumentKnowledgeObject 读全文。这是 ListDocumentKnowledgeObjects（按目录枚举）的检索互补。")]
+    public async Task<SearchKnowledgeOutput> SearchKnowledge(
+        [Description("关键词（不区分大小写子串匹配名称/kind/额外字段/正文）")] string query,
+        [Description("kind 过滤（可选，如 已知认知/业务场景）")] string? kind = null,
+        [Description("限定子目录（可选，知识库内相对路径，可带 knowledge/ 前缀）")] string? folder = null,
+        [Description("返回上限（默认 20，最大 50）")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new SearchKnowledgeOutput { Error = "query 不能为空" };
+        limit = Math.Clamp(limit, 1, 50);
+
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root))
+            return new SearchKnowledgeOutput { Error = "未配置资料库目录。" };
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                var (knowledgeRoot, isLabs) = ResolveScope(root);
+                var baseDir = knowledgeRoot;
+                if (!string.IsNullOrWhiteSpace(folder))
+                {
+                    var folderNorm = isLabs ? StripKnowledgePrefix(folder) : folder;
+                    baseDir = Path.Combine(knowledgeRoot, folderNorm);
+                }
+                if (!Directory.Exists(baseDir))
+                    return new SearchKnowledgeOutput { Error = $"目录不存在: {folder}" };
+
+                var files = new List<(string Full, string Rel, KnowledgeObjectDefinition? Def)>();
+                CollectOkFiles(baseDir, knowledgeRoot, files, cancellationToken);
+
+                var q = query.Trim();
+                var scored = new List<(int Score, string MatchedIn, KnowledgeSearchMatch Match)>();
+                foreach (var (full, rel, def) in files)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (kind is not null && !string.Equals(def?.Kind, kind, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var name = OkTargetResolver.StemOf(rel);
+                    var matchedIn = new List<string>();
+                    var score = 0;
+                    if (name.Contains(q, StringComparison.OrdinalIgnoreCase)) { matchedIn.Add("name"); score = 4; }
+                    if (def?.Kind?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) { matchedIn.Add("kind"); score = Math.Max(score, 3); }
+                    if (def?.ExtraFrontMatter is { } extras)
+                    {
+                        foreach (var v in extras.Values)
+                            if (v?.ToString()?.Contains(q, StringComparison.OrdinalIgnoreCase) == true)
+                            {
+                                matchedIn.Add("extras");
+                                score = Math.Max(score, 2);
+                                break;
+                            }
+                    }
+                    if (def?.Body?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) { matchedIn.Add("body"); score = Math.Max(score, 1); }
+                    if (score == 0) continue;
+                    scored.Add((score, string.Join(";", matchedIn), new KnowledgeSearchMatch
+                    {
+                        Path = rel,
+                        Name = name,
+                        Kind = def?.Kind,
+                        MatchedIn = string.Join(";", matchedIn),
+                        BodyPreview = string.IsNullOrWhiteSpace(def?.Body) ? null : Truncate(def!.Body, 80),
+                    }));
+                }
+
+                return new SearchKnowledgeOutput
+                {
+                    TotalScanned = files.Count,
+                    Matches = scored.OrderByDescending(s => s.Score)
+                        .ThenBy(s => s.Match.Path, StringComparer.OrdinalIgnoreCase)
+                        .Take(limit)
+                        .Select(s => s.Match)
+                        .ToList(),
+                };
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new SearchKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    public sealed class RelatedLinkDto
+    {
+        public string? Role { get; set; }
+        /// <summary>出边：目标 targetId 原文；入边：来源对象路径。</summary>
+        public string? Target { get; set; }
+        /// <summary>出边：目标的库内相对路径（解析失败=null 断链）。</summary>
+        public string? ResolvedPath { get; set; }
+    }
+
+    public sealed class RelatedKnowledgeOutput
+    {
+        public string? Path { get; set; }
+        public string? Kind { get; set; }
+        /// <summary>本对象发出的 links（谁被我引用）。</summary>
+        public List<RelatedLinkDto> Outgoing { get; set; } = new();
+        /// <summary>引用本对象的边（谁引用我——反向链接，合并/改名前查影响面）。</summary>
+        public List<RelatedLinkDto> Incoming { get; set; } = new();
+        public string? Error { get; set; }
+    }
+
+    [Description("查一个知识对象的关联：出边（它引用谁，含解析后路径）+ 入边（谁引用它，反向链接）。" +
+                 "合并/改名/废弃对象前先查 Incoming 评估影响面；扩展已有认知时查 Outgoing 找可复用对象。name=相对路径（同 Read）。")]
+    public async Task<RelatedKnowledgeOutput> RelatedKnowledge(
+        [Description("相对路径（不含 .md；如 企业知识架构/2_Feature/同设备识别）")] string name,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return new RelatedKnowledgeOutput { Error = "名称不能为空" };
+
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root))
+            return new RelatedKnowledgeOutput { Error = "未配置资料库目录。" };
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                var (knowledgeRoot, isLabs) = ResolveScope(root);
+                var focal = ResolveFileInScope(name, root, knowledgeRoot, isLabs);
+                if (focal is null)
+                    return new RelatedKnowledgeOutput { Error = $"找不到知识对象文件（或不在 knowledge/ 子树内）: {name}" };
+
+                var focalRel = ToRelativePath(knowledgeRoot, focal);
+                string? focalKind = null;
+                if (_parser.TryParse(File.ReadAllText(focal), out var focalDef, out _) && focalDef is not null)
+                    focalKind = focalDef.Kind;
+                var focalDir = Path.GetDirectoryName(focal)!;
+
+                // 出边：本对象 links + 逐一解析
+                var outgoing = new List<RelatedLinkDto>();
+                if (focalDef?.Links is { } links)
+                {
+                    foreach (var l in links)
+                    {
+                        var resolved = OkTargetResolver.ResolveTargetWithPath(_parser, l.Target, root, focalDir);
+                        outgoing.Add(new RelatedLinkDto
+                        {
+                            Role = l.Role,
+                            Target = l.Target,
+                            ResolvedPath = resolved?.FullPath is null ? null : ToRelativePath(knowledgeRoot, resolved.FullPath),
+                        });
+                    }
+                }
+
+                // 入边：全库扫描，解析每条 link，命中焦点全路径的收集
+                var files = new List<(string Full, string Rel, KnowledgeObjectDefinition? Def)>();
+                CollectOkFiles(knowledgeRoot, knowledgeRoot, files, cancellationToken);
+                var incoming = new List<RelatedLinkDto>();
+                foreach (var (full, rel, def) in files)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (string.Equals(full, focal, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (def?.Links is not { } ls) continue;
+                    var dir = Path.GetDirectoryName(full)!;
+                    foreach (var l in ls)
+                    {
+                        var resolved = OkTargetResolver.ResolveTargetWithPath(_parser, l.Target, root, dir);
+                        if (resolved?.FullPath is not null
+                            && string.Equals(Path.GetFullPath(resolved.FullPath), Path.GetFullPath(focal), StringComparison.OrdinalIgnoreCase))
+                        {
+                            incoming.Add(new RelatedLinkDto { Role = l.Role, Target = rel });
+                        }
+                    }
+                }
+
+                return new RelatedKnowledgeOutput
+                {
+                    Path = focalRel,
+                    Kind = focalKind,
+                    Outgoing = outgoing,
+                    Incoming = incoming,
+                };
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new RelatedKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    public sealed class RenameKnowledgeOutput
+    {
+        public bool Success { get; set; }
+        public string? NewPath { get; set; }
+        /// <summary>被改写引用的文件数（入边全部改指新路径）。</summary>
+        public int ReferencesRewritten { get; set; }
+        public string? Error { get; set; }
+    }
+
+    [Description("改名/迁移一个知识对象（.md 文件对象）：移动文件 + **自动改写全部入边引用**（谁引用它，targetId 全部改指新路径——" +
+                 "规范写法：同目录裸名/跨目录 knowledge/ 前缀根相对）。改名前建议先 RelatedKnowledge 查影响面；" +
+                 "完成后建议 ValidateKnowledge 复查。场景目录对象（README.md 本体）不支持——目录整体迁移请手动 git mv 后跑 ValidateKnowledge。")]
+    public async Task<RenameKnowledgeOutput> RenameKnowledge(
+        [Description("现有相对路径（不含 .md；如 企业知识架构/2_Feature/同设备识别）")] string name,
+        [Description("新相对路径（不含 .md，知识库内；改名=同目录新名，迁移=新目录路径）")] string newPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(newPath))
+            return new RenameKnowledgeOutput { Error = "name 与 newPath 都不能为空" };
+
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root))
+            return new RenameKnowledgeOutput { Error = "未配置资料库目录。" };
+
+        try
+        {
+            var (knowledgeRoot, isLabs) = ResolveScope(root);
+            var source = ResolveFileInScope(name, root, knowledgeRoot, isLabs);
+            if (source is null)
+                return new RenameKnowledgeOutput { Error = $"找不到知识对象文件（或不在 knowledge/ 子树内）: {name}" };
+            if (string.Equals(Path.GetFileName(source), "README.md", StringComparison.OrdinalIgnoreCase))
+                return new RenameKnowledgeOutput { Error = "场景目录对象（README.md 本体）不支持改名——目录整体迁移请手动 git mv 后跑 ValidateKnowledge" };
+
+            var newNameNoExt = StripKnowledgePrefix(StripOkExt(newPath));
+            var target = Path.Combine(knowledgeRoot, newNameNoExt + ".md");
+            if (File.Exists(target))
+                return new RenameKnowledgeOutput { Error = $"目标已存在: {newNameNoExt}" };
+
+            // 先改写入边（此时旧路径仍可解析），再移动文件——中途失败不丢引用
+            var rewritten = await RewriteReferencesAsync(
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFullPath(source) },
+                Path.GetFullPath(target), root, knowledgeRoot, cancellationToken).ConfigureAwait(false);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(source, target);
+
+            return new RenameKnowledgeOutput
+            {
+                Success = true,
+                NewPath = ToRelativePath(root, target),
+                ReferencesRewritten = rewritten,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new RenameKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    public sealed class MergeKnowledgeOutput
+    {
+        public bool Success { get; set; }
+        /// <summary>合并产物（新对象）路径。</summary>
+        public string? MergedPath { get; set; }
+        /// <summary>被合并的原对象（已标 superseded，保留作 lineage）。</summary>
+        public List<string>? Superseded { get; set; }
+        public int ReferencesRewritten { get; set; }
+        public string? Error { get; set; }
+    }
+
+    [Description("合并两个表达同一概念的知识对象（Knowledge Marriage）：生成新对象 C（front-matter 带 parents=[primary,secondary] 溯源），" +
+                 "links 取两者并集（去重、剔自指），原对象标 status: superseded + superseded_by=C **保留不删**（lineage/provenance），" +
+                 "全部入边引用自动改指 C。mergedBody 由 agent 融合两对象正文写成（先 Read 两者再合并）。合并前建议 RelatedKnowledge 查两者影响面；" +
+                 "完成后 ValidateKnowledge 复查。")]
+    public async Task<MergeKnowledgeOutput> MergeKnowledge(
+        [Description("对象 A 相对路径（不含 .md）——其 kind 作为合并对象默认 kind")] string primary,
+        [Description("对象 B 相对路径（不含 .md）")] string secondary,
+        [Description("合并产物新相对路径（不含 .md，知识库内，须不存在）")] string newName,
+        [Description("融合后的 markdown 正文（agent 融合 A/B 内容写成）")] string mergedBody,
+        [Description("合并对象 kind（可选，默认取 A 的 kind）")] string? kind = null,
+        [Description("合并对象额外 front-matter 字段（可选，JSON 对象，如 Intelligence 生命周期字段）")] string? extraJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(primary) || string.IsNullOrWhiteSpace(secondary) || string.IsNullOrWhiteSpace(newName))
+            return new MergeKnowledgeOutput { Error = "primary/secondary/newName 都不能为空" };
+
+        var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
+        if (string.IsNullOrWhiteSpace(root))
+            return new MergeKnowledgeOutput { Error = "未配置资料库目录。" };
+
+        try
+        {
+            var (knowledgeRoot, isLabs) = ResolveScope(root);
+            var aFull = ResolveFileInScope(primary, root, knowledgeRoot, isLabs);
+            var bFull = ResolveFileInScope(secondary, root, knowledgeRoot, isLabs);
+            if (aFull is null) return new MergeKnowledgeOutput { Error = $"找不到 primary: {primary}" };
+            if (bFull is null) return new MergeKnowledgeOutput { Error = $"找不到 secondary: {secondary}" };
+            if (string.Equals(aFull, bFull, StringComparison.OrdinalIgnoreCase))
+                return new MergeKnowledgeOutput { Error = "primary 与 secondary 是同一对象" };
+
+            var newNameNoExt = StripKnowledgePrefix(StripOkExt(newName));
+            var cFull = Path.Combine(knowledgeRoot, newNameNoExt + ".md");
+            if (File.Exists(cFull))
+                return new MergeKnowledgeOutput { Error = $"目标已存在: {newNameNoExt}" };
+
+            if (!_parser.TryParse(File.ReadAllText(aFull), out var aDef, out var aErr) || aDef is null)
+                return new MergeKnowledgeOutput { Error = $"primary 解析失败: {aErr}" };
+            if (!_parser.TryParse(File.ReadAllText(bFull), out var bDef, out var bErr) || bDef is null)
+                return new MergeKnowledgeOutput { Error = $"secondary 解析失败: {bErr}" };
+
+            // C 的 links：A+B 并集（role+target 去重；剔除解析后指向 A/B 自身的边——自指无意义）
+            var oldFulls = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                Path.GetFullPath(aFull), Path.GetFullPath(bFull),
+            };
+            var links = new List<KnowledgeLink>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var src in new[] { aDef, bDef })
+            {
+                foreach (var l in src.Links)
+                {
+                    if (string.IsNullOrWhiteSpace(l.Target)) continue;
+                    var resolved = OkTargetResolver.ResolveTargetWithPath(_parser, l.Target, root,
+                        Path.GetDirectoryName(src == aDef ? aFull! : bFull!)!);
+                    if (resolved?.FullPath is { } rf && oldFulls.Contains(Path.GetFullPath(rf))) continue;
+                    if (!seen.Add($"{l.Role}|{l.Target}")) continue;
+                    links.Add(new KnowledgeLink { Role = l.Role, Target = l.Target, Expand = l.Expand });
+                }
+            }
+
+            // C 的 front-matter：parents 溯源 + 可选生命周期字段（extraJson）
+            var extras = new Dictionary<string, object?>
+            {
+                ["parents"] = new List<object?> { ToRelativePath(root, aFull), ToRelativePath(root, bFull) },
+            };
+            if (ParseExtras(extraJson) is { } patch)
+                foreach (var (k, v) in patch) extras[k] = v;
+
+            var cDef = new KnowledgeObjectDefinition
+            {
+                Kind = string.IsNullOrWhiteSpace(kind) ? aDef.Kind : kind,
+                Body = mergedBody ?? string.Empty,
+                Links = links,
+                ExtraFrontMatter = extras,
+            };
+            Directory.CreateDirectory(Path.GetDirectoryName(cFull)!);
+            await File.WriteAllTextAsync(cFull, _parser.Serialize(cDef), cancellationToken);
+
+            // A/B 标 superseded + superseded_by=C（保留不删，lineage）
+            foreach (var (full, def) in new[] { (aFull, aDef), (bFull, bDef) })
+            {
+                def.ExtraFrontMatter ??= new Dictionary<string, object?>();
+                def.ExtraFrontMatter["status"] = "superseded";
+                def.ExtraFrontMatter["superseded_by"] = ToRelativePath(root, cFull);
+                await File.WriteAllTextAsync(full, _parser.Serialize(def), cancellationToken);
+            }
+
+            // 入边引用 A/B → C
+            var rewritten = await RewriteReferencesAsync(oldFulls, Path.GetFullPath(cFull), root, knowledgeRoot, cancellationToken)
+                .ConfigureAwait(false);
+
+            return new MergeKnowledgeOutput
+            {
+                Success = true,
+                MergedPath = ToRelativePath(root, cFull),
+                Superseded = new List<string> { ToRelativePath(root, aFull), ToRelativePath(root, bFull) },
+                ReferencesRewritten = rewritten,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new MergeKnowledgeOutput { Error = ex.Message };
+        }
+    }
+
+    /// <summary>按 name 解析知识对象文件全路径（labs 根相对 + knowledge/ 相对候选 + 越界守卫）——Read/Update 同款语义。</summary>
+    private string? ResolveFileInScope(string name, string root, string knowledgeRoot, bool isLabs)
+    {
+        var candidates = OkTargetResolver.CandidateOkPaths(name, root, root).ToList();
+        if (isLabs)
+            candidates.AddRange(OkTargetResolver.CandidateOkPaths(StripKnowledgePrefix(name), knowledgeRoot, knowledgeRoot));
+        return candidates.FirstOrDefault(p => File.Exists(p) && IsUnder(p, knowledgeRoot));
+    }
+
+    /// <summary>把全库中解析到 <paramref name="oldFullPaths"/> 的 link targetId 改写为指向 <paramref name="newFullPath"/>
+    /// 的规范写法（<see cref="KnowledgeLinkRewriter.CanonicalTargetId"/>：同目录裸名/跨目录 knowledge/ 前缀根相对）。
+    /// 返回被改写的文件数。front-matter 经透传 round-trip（额外字段不丢）。</summary>
+    private async Task<int> RewriteReferencesAsync(
+        HashSet<string> oldFullPaths, string newFullPath, string root, string knowledgeRoot, CancellationToken ct)
+    {
+        var files = new List<(string Full, string Rel, KnowledgeObjectDefinition? Def)>();
+        CollectOkFiles(knowledgeRoot, knowledgeRoot, files, ct);
+
+        var rewritten = 0;
+        foreach (var (full, _, def) in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (def?.Links is not { Count: > 0 }) continue;
+            var dir = Path.GetDirectoryName(full)!;
+            var changed = false;
+            foreach (var l in def.Links)
+            {
+                var resolved = OkTargetResolver.ResolveTargetWithPath(_parser, l.Target, root, dir);
+                if (resolved?.FullPath is not { } rf) continue;
+                if (!oldFullPaths.Contains(Path.GetFullPath(rf))) continue;
+                l.Target = KnowledgeLinkRewriter.CanonicalTargetId(full, newFullPath, root);
+                changed = true;
+            }
+            if (!changed) continue;
+            await File.WriteAllTextAsync(full, _parser.Serialize(def), ct);
+            rewritten++;
+        }
+        return rewritten;
+    }
+
     /// <summary>解析 extraJson（front-matter 额外字段 JSON 对象）。仅标量（string/number/bool/null）；
     /// 嵌套结构跳过（front-matter 是 YAML，嵌套 JSON 原样写回会产非法 YAML）。非法/空返 null。</summary>
     private static Dictionary<string, object?>? ParseExtras(string? extraJson)

@@ -110,6 +110,30 @@ public static class DesktopToolRegistrations
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ValidateKnowledge"),
                 ToolApprovalLevel.Safe);
+            reg.Register("SearchKnowledge", "跨目录关键词搜索知识对象（冷启动 Explore 步）：不区分大小写子串匹配名称/kind/额外字段/正文，按命中位置排序。List 是按目录枚举、本工具是检索；命中后 Read 读全文。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.SearchKnowledge))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "SearchKnowledge"),
+                ToolApprovalLevel.Safe);
+            reg.Register("RelatedKnowledge", "查知识对象关联：出边（引用谁）+ 入边（谁引用我，反向链接）。合并/改名/废弃前查影响面；扩展认知时找可复用对象。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.RelatedKnowledge))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "RelatedKnowledge"),
+                ToolApprovalLevel.Safe);
+            reg.Register("RenameKnowledge", "改名/迁移知识对象（.md 文件对象）：移动文件 + 自动改写全部入边引用（同目录裸名/跨目录 knowledge/ 前缀）。README.md 目录对象不支持。改前建议 RelatedKnowledge 查影响面。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.RenameKnowledge))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "RenameKnowledge"),
+                ToolApprovalLevel.Confirm);
+            reg.Register("MergeKnowledge", "合并两个同概念知识对象（Knowledge Marriage）：生成带 parents 溯源的新对象，links 取并集，原对象标 superseded 保留，入边自动改指新对象。mergedBody 由 agent 融合两对象正文。", "文档知识",
+                sp => AIFunctionFactory.Create(
+                    typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.MergeKnowledge))!,
+                    sp.GetRequiredService<DocumentKnowledgeTool>(),
+                    "MergeKnowledge"),
+                ToolApprovalLevel.Confirm);
         });
         return aether;
     }
