@@ -2,7 +2,6 @@
 
 > 本文件是知识对象系统的**权威设计文档**（架构 + 决策记录），随工具同仓自包含。
 > README.md 是开发/使用快速上手，SKILL.md 是 agent 使用说明（部署物）——三者分工：DESIGN 讲为什么，README 讲怎么开发，SKILL 讲怎么用。
-> 状态基准：2026-09-21（六命令 + 五类型契约已实现，46 例测试锁行为）。
 
 ---
 
@@ -10,7 +9,7 @@
 
 **一个公司无关的工具 × N 个公司知识目录**：五类型领域知识模型（Scenario/Feature/Method/Procedure/Asset）+ 六命令（search/read/list/create/update/relate）——变的是各公司的内容，不变的是这五个桶和这套命令。
 
-## 2. 设计目标（源自精简版架构文档）
+## 2. 设计目标
 
 1. **按需加载**——不把领域知识塞 System Prompt；agent 按任务动态 search/read。
 2. **跨场景复用**——Feature/Method/Assets 被多个 Scenario 复用；改一处，引用方拿新版。
@@ -27,7 +26,7 @@
 | procedure | How to execute | 多步执行流程模板 | **可选非必经**——只有复杂/重复/稳定任务才沉淀 |
 | asset | Where | 可调用的能力/资源 | 只描述「资源在哪、如何获取」，不写业务逻辑 |
 
-**刻意不设 Intelligence 类型**：「已经知道什么」是公司/工作流特定的**状态**而非通用模式——它属于各公司目录自己的约定（精简版 Phase 4 的 Artifact/Promotion 再议），不进公司无关契约。
+**刻意不设 Intelligence 类型**：「已经知道什么」是公司/工作流特定的**状态**而非通用模式——它属于各公司目录自己的约定，不进公司无关契约。
 
 ## 4. 六命令
 
@@ -62,36 +61,27 @@ links:
 └── …
 ```
 
-**格式兼容性（有意设计）**：front-matter 结构（`kind` + `links{role,targetId}`）与 Aether 桌面端解析器互读——Aether 资料库页可作为**任意公司目录的可选浏览器/编辑器**（图视图/表单/树免费获得）。Aether 是 N 个消费者之一，不是宿主。
-
 ## 6. 解耦原则（什么住在哪）
 
 | 归属 | 内容 |
 |---|---|
 | **工具**（本目录，公司无关） | 五类型契约、六命令、文件格式、根解析链、SKILL.md 使用纪律 |
 | **公司目录**（公司各异） | 全部对象内容、根 README 公司约定、git 历史 |
-| **宿主**（可替换） | 只是 python3 运行环境——Claude Code / Aether / 任何 Agent Skills 宿主 |
+| **宿主**（可替换） | 只是 python3 运行环境——任何 Agent Skills 规范宿主 |
 
-部署：`install.sh <目标技能目录>`（Aether 侧必须拷贝——MAF 路径硬化拒绝 symlink；Claude Code 可软链）。
-
-## 7. 关键设计决策（ADR-lite）
+## 7. 关键设计决策（ADR）
 
 | 决策 | 理由 | 代价与补偿 |
 |---|---|---|
-| **五类型固定**（vs 自由 kind） | 公司无关契约的前提——工具能校验/过滤/落位，agent 有统一心智模型 | 表达力受限 → 正文自由 markdown 兜底；未来需要时可加自定义子目录 |
+| **五类型固定** | 公司无关契约的前提——工具能校验/过滤/落位，agent 有统一心智模型 | 表达力受限 → 正文自由 markdown 兜底 |
 | **type=目录=身份** | create 落位即分类，免 front-matter 重复；update 不可改 type 防目录/kind 失同步 | 建错类型须删了重建（低成本，git 兜底） |
 | **路径即引用**（非 Guid） | 人可读、git diff 友好、无字典映射 | 改名断链 → relate 目标解析警告 + 未来 rename 命令 |
 | **relate 目标缺失仅警告** | 增量建集合法（先 relate 后 create 目标） | 可能引入断链 → 警告可见 + 未来 validate 命令 |
 | **裸名跨五类型目录查找** | create scenario xxx 后 read xxx 即命中，免记前缀 | 同名跨类型歧义 → 按类型目录声明序取先 |
-| **根解析链**（--root > env > 脚本位置 > CWD） | 打开哪家公司目录就服务哪家，免配置 | 全新空目录冷启动探测不到 → 首条命令 `--root .`（创建后类型目录即可探测） |
+| **根解析链**（--root > env > 脚本位置 > CWD） | 打开哪家公司目录就服务哪家，免配置 | 全新空目录冷启动探测不到 → 首条命令 `--root .` |
 | **零第三方依赖** | 单文件拷到任何有 python3 的机器即用 | 手写 YAML 子集解析（KO 只有 kind+links 两键，复杂度可控） |
-| **安全阀镜像 Aether C# 版** | 两侧行为一致，语料互操作无惊喜 | 双实现需同步维护（测试锁行为） |
 
-## 8. 与旧体系的关系
+## 8. 路线图
 
-旧世界（Aether 侧，均在 Aether 仓 CLAUDE.md 有实现索引）：C# `DocumentKnowledgeTool` 九工具（含 Validate/Rename/Merge 治理面——Phase 2+ 择优移植）、Qifu 六层语料 121 文件（含 Intelligence 层，五类型无其家——迁移待决）。**本工具的 read/list 对旧语料兼容可用**（旧任意树与新五类型子树共存），create 仅走五类型。
-
-## 9. 路线图
-
-- Phase 2+（精简版文档的后续阶段，按需）：`validate`（断链/词表体检）、`rename`（入边自动改写）、`merge`（Knowledge Marriage）——语义对齐 Aether C# 版择优移植
+- Phase 2+：`validate`（断链/词表体检）、`rename`（入边自动改写）、`merge`（对象合并 + lineage）
 - 纯 MCP 客户端覆盖：FastMCP 薄包装同一 ko.py

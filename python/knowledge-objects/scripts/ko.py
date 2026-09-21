@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""知识对象（document knowledge objects）便携 CLI——Aether 文档版知识对象的可移植读写工具。
+"""知识对象（Knowledge Objects）便携 CLI——五类型领域知识图谱的可移植读写工具。
 
-与 Aether 桌面端 C# 工具（DocumentKnowledgeTool / DocumentKnowledgeSourceParser /
-KnowledgeExpansionBuilder / OkTargetResolver）语义逐条对齐。**共存不替换**：Aether 内的 agent
-仍走 C# 工具（带审批 + 守卫）；本 skill 面向 Aether 之外的 agent 与跨宿主复用（SKILL.md + 本脚本
-即 Agent Skills 规范的完整形态，Claude Code 等可直接消费）。零第三方依赖——front-matter 手写
-YAML 子集解析（KO 只有 kind + links 两键）。
+一个公司无关的工具 × N 个公司知识目录。零第三方依赖——front-matter 手写 YAML 子集解析
+（KO 只有 kind + links 两键）。SKILL.md + 本脚本即 Agent Skills 规范的完整形态，
+任何支持该规范的宿主（Claude Code 等）可直接消费。
 
 知识对象 = 一个 .md 文件（front-matter + markdown 正文）：
 
@@ -49,7 +47,7 @@ import os
 import sys
 from pathlib import Path
 
-# —— 与 C# 侧常量一致的安全阀（勿单独调）——
+# —— 安全阀（防撑爆 LLM 上下文）——
 MAX_LIST = 200                 # list/search 枚举上限
 MAX_EXPAND_DEPTH = 4           # read 递归展开深度硬上限
 MAX_TARGET_INLINE_CHARS = 8000     # 单个内联正文上限（截断头部）
@@ -66,7 +64,7 @@ TYPE_DIRS = {
     "asset": "assets",          # 可调资源（Where）——表/API/工具
 }
 
-# 递归枚举跳过的目录名（镜像 C# _ignoredDirs；点开头目录一并跳过）
+# 递归枚举跳过的目录名（构建产物/VCS/依赖目录；点开头目录一并跳过）
 IGNORED_DIRS = {
     "bin", "obj", "node_modules", ".git", ".vs", ".idea", ".vscode",
     "packages", "testresults", "dist", "build", "target", "__pycache__",
@@ -88,11 +86,11 @@ class KoDef:
 
 
 # ——————————————————————————————————————————————
-# front-matter 解析 / 序列化（镜像 DocumentKnowledgeSourceParser）
+# front-matter 解析 / 序列化
 # ——————————————————————————————————————————————
 
 def parse_ko(raw):
-    """解析 .md 源文本 → KoDef。容错语义与 C# 一致：
+    """解析 .md 源文本 → KoDef。容错语义：
     无 front-matter → 全文为正文；有 --- 无闭合 → 全文为正文；front-matter 坏 → 报错。"""
     if not raw or not raw.strip():
         raise KoError("源文本为空")
@@ -148,7 +146,7 @@ def _parse_frontmatter(yaml):
                     else:
                         break
         else:
-            i += 1  # 未知键忽略（镜像 IgnoreUnmatchedProperties）
+            i += 1  # 未知键忽略
     return kind, links
 
 
@@ -228,8 +226,7 @@ def _split_top_level(s):
 
 
 def _to_link(item):
-    """link dict → {role, target, expand}。targetId 优先、回退 target（镜像 ToDomainLink）；
-    两者皆空跳过。"""
+    """link dict → {role, target, expand}。targetId 优先、回退 target；两者皆空跳过。"""
     role = str(item.get("role", "") or "")
     target = str(item.get("targetid", "") or "") or str(item.get("target", "") or "")
     if not target.strip():
@@ -248,8 +245,7 @@ def _unquote(v):
 
 
 def serialize_ko(defn):
-    """KoDef → .md 源文本（round-trip 稳定；输出为 YamlDotNet 可解析的 YAML，
-    与 C# DocumentKnowledgeSourceParser.Serialize 互读）。"""
+    """KoDef → .md 源文本（round-trip 稳定；输出为标准 YAML，兼容任何 YAML 解析器）。"""
     lines = ["---"]
     lines.append("kind: " + _yaml_str(defn.kind))
     if defn.links:
@@ -275,8 +271,8 @@ def _yaml_str(s):
 
 
 def parse_links_json(links_json):
-    """工具入参 links JSON（C# ParseLinks 镜像）：[{role, targetId|target, expand}]，
-    targetId 优先；非法 JSON → 空 links + 警告（容错，仍创建/更新）。"""
+    """工具入参 links JSON：[{role, targetId|target, expand}]，targetId 优先；
+    非法 JSON → 空 links + 警告（容错，仍创建/更新）。"""
     links = []
     if not links_json or not links_json.strip():
         return links, None
@@ -299,7 +295,7 @@ def parse_links_json(links_json):
 
 
 # ——————————————————————————————————————————————
-# 路径 / 作用域（镜像 OkTargetResolver + DocumentKnowledgeTool 助手）
+# 路径 / 作用域
 # ——————————————————————————————————————————————
 
 def resolve_scope(root):
@@ -445,7 +441,7 @@ def is_under(full, base_dir):
 
 
 def _read_text(path):
-    with open(path, "r", encoding="utf-8-sig") as fh:  # 容 BOM（同 C# ReadAllText 探测）
+    with open(path, "r", encoding="utf-8-sig") as fh:  # 容 BOM
         return fh.read()
 
 
@@ -455,7 +451,7 @@ def _write_text(path, text):
 
 
 # ——————————————————————————————————————————————
-# read：递归展开（镜像 KnowledgeExpansionBuilder——含全部安全阀与标记文案）
+# read：递归展开（含全部安全阀与标记文案）
 # ——————————————————————————————————————————————
 
 def build_expanded_definition(defn, rel_path, focal_full, root, expand_depth):
@@ -485,7 +481,7 @@ def build_expanded_definition(defn, rel_path, focal_full, root, expand_depth):
             if len(body) > MAX_TARGET_INLINE_CHARS:
                 body = body[:MAX_TARGET_INLINE_CHARS] + (
                     f"\n…（已截断，原文共 {len(defn.body)} 字符；"
-                    f"如需完整内容请单独 ReadDocumentKnowledgeObject \"{target_path}\"）")
+                    f"如需完整内容请单独 read \"{target_path}\"）")
             linked_total[0] += len(body)
             out.append("")
             for ln in body.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
@@ -510,10 +506,10 @@ def build_expanded_definition(defn, rel_path, focal_full, root, expand_depth):
                 continue
             out.append(head + ":")
             if remaining <= 0:
-                out.append(f"{indent}  （已达展开深度上限，如需完整内容请单独 ReadDocumentKnowledgeObject 对应路径）")
+                out.append(f"{indent}  （已达展开深度上限，如需完整内容请单独 read 对应路径）")
                 continue
             if linked_total[0] >= MAX_LINKED_INLINE_TOTAL_CHARS:
-                out.append(f"{indent}  （引用过多，已停止展开后续目标；完整内容请单独 ReadDocumentKnowledgeObject 对应路径）")
+                out.append(f"{indent}  （引用过多，已停止展开后续目标；完整内容请单独 read 对应路径）")
                 continue
             if child_full and ci(child_full) in visited:
                 out.append(f"{indent}  （已在展开路径上，跳过防环）")
@@ -551,7 +547,7 @@ def enumerate_ok_files(base_dir, root, items):
             defn = parse_ko(_read_text(full))
             kind, preview = defn.kind, defn.body
         except (OSError, KoError):
-            kind, preview = None, None  # 读/解析失败仍列出（镜像 C#）
+            kind, preview = None, None  # 读/解析失败仍列出
         rel = os.path.relpath(full, root)
         items.append({
             "path": rel,
@@ -580,7 +576,7 @@ def enumerate_ok_files(base_dir, root, items):
 def resolve_root(explicit):
     """根目录解析链：--root 显式 > AETHER_KNOWLEDGE_ROOT 环境变量 > 脚本位置上溯 >
     **当前工作目录上溯**（外部 agent 打开的工作目录——跑命令时 CWD 即打开的目录；
-    Aether 的脚本运行器把 CWD 设为用户主目录，但脚本位置上溯在那之前已命中 labs）。
+    宿主把 CWD 设为用户主目录时，脚本位置上溯会先命中）。
     「知识库根」的识别见 <see>_is_ko_root。"""
     if explicit:
         return os.path.abspath(explicit)
@@ -754,7 +750,7 @@ def cmd_create(args):
     if not name_no_ext or not name_no_ext.strip():
         raise KoError("名称不能为空")
     full = os.path.join(knowledge_root, TYPE_DIRS[args.type], name_no_ext + ".md")
-    # 越界守卫（加固：C# Create 未显式做；防 ../ 逃逸出知识对象目录）
+    # 越界守卫（防 ../ 逃逸出知识对象目录）
     if not is_under(full, knowledge_root):
         raise KoError(f"路径越界（不在知识对象目录内）: {args.name}")
     if os.path.exists(full):
@@ -955,7 +951,7 @@ def main(argv):
                "  ko.py create scenario 新场景 --body '情境描述' --root ~/company-knowledge\n"
                "  ko.py update scenarios/新场景 --body '更新' --root ~/company-knowledge\n"
                "  ko.py relate scenarios/新场景 features/设备异常 --root ~/company-knowledge\n"
-               "  ko.py list --root ~/AetherData/labs\n",
+               "  ko.py list --root ~/company-knowledge\n",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
 

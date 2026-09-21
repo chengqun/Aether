@@ -4,14 +4,9 @@
 # 用法：
 #   ./install.sh <目标目录>
 #
-# 示例：
-#   ./install.sh ~/.deepbank/.claude/skills/knowledge-objects     # Claude Code（deepbank 配置）
-#   ./install.sh ~/Library/Application\ Support/Aether/Desktop-Qifu/labs/skills/knowledge-objects  # Aether Qifu 租户
-#
 # 说明：
 # - 只部署 SKILL.md + scripts/（tests/README/install.sh 是开发物，不进部署）。
-# - Aether 侧必须用本脚本拷贝——MAF skill 路径硬化拒绝 symlink，软链的技能目录会被拒；
-#   Claude Code 侧可改用软链（ln -s）指向本目录实现单一源。
+# - 拒绝 symlink 的宿主用本脚本拷贝；支持 symlink 的宿主可 ln -s 实现单一源。
 set -euo pipefail
 
 if [ $# -ne 1 ]; then

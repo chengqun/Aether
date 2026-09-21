@@ -118,7 +118,7 @@ class TestSerialize(unittest.TestCase):
         self.assertIn("links: []", src)
 
     def test_output_structure_csharp_compatible(self):
-        # 输出必须是 C# DocumentKnowledgeSourceParser 可解析的结构（kind + links[role/targetId]）
+        # 输出结构：kind + links[role/targetId]（标准 YAML，任何解析器可读）
         src = ko.serialize_ko(ko.KoDef("流程", [{"role": "uses", "target": "A/B", "expand": True}], "b"))
         self.assertIn("- role: uses", src)
         self.assertIn("  targetId: A/B", src)
