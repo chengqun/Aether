@@ -375,7 +375,7 @@ labs 目录承载 9 种节点类型（`NoteNodeType`，`business/Notes/Acme.Note
 
 ### Knowledge objects (知识对象 / 微型知识图谱)
 
-> **2026-09-21 起系统转向精简版架构**：权威设计在 `python/knowledge-objects/DESIGN.md`（五类型 Scenario/Feature/Method/Procedure/Asset + 六命令 ko.py + 工具/目录解耦——一个公司无关工具 × N 个公司知识目录）。本节是 **Aether 侧 C# 实现的索引**（九工具 + 语料 + 退休计划）。
+> **2026-09-21 桌面端 C# 九工具已退休**（`AddDocumentKnowledgeTool()` 注册已注释——代码留档可逆）。知识对象读写走 `python/knowledge-objects/` 的 Python skill（ko.py 六命令，五类型契约；部署进各租户 `labs/skills/knowledge-objects/`）。**手机端 `MobileDocumentKnowledgeTool` 不退休**（iOS 禁子进程）。权威设计在 `python/knowledge-objects/DESIGN.md`。本节保留作 C# 实现的历史索引（恢复注册取消一行注释即可）。
 
 labs 目录的 form 节点类型之一（`NoteNodeType.Knowledge = 3`，UI 显示「知识对象」，强制 `syntax=yaml`、icon `knowledge`；见 [Note node types](#note-node-types-5-种-form-节点)）。**最简通用知识模型**：`KnowledgeObjectDefinition { Kind, Links[], Body }`（`business/Notes/Acme.Notes.Domain/Knowledge/KnowledgeObjectDefinition.cs`），`KnowledgeLink { Role, TargetId?, Target }`。持久化为 YAML front-matter（`kind` + `links`）+ markdown body（`KnowledgeSourceParser`，YamlDotNet，容忍无 front-matter），与 Agent 文件同构（labs `knowledge/*.md`）；`name` = 文件名 stem（不在内容里）。区别于 Agent（多字段）/ Workflow（JSON）/ Rule（单 YAML 文档）：知识对象只有 3 字段，**typed graph links 是它的定义性特征**——带 role 的图边指向其它知识对象文件，`TargetId` 权威（相对路径）、标题回退（老数据无路径）。
 

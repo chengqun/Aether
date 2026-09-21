@@ -180,9 +180,11 @@ public static class DesktopCompositionExtensions
         // 与项目目录 provider 解耦的独立单例；未打开知识对象页时回退 DefaultRoot（<tenantDir>/labs）。标 Safe。
         aether.AddCurrentKnowledgeDirectoryTool();
 
-        // 文档版知识对象工具（.md 文件 CRUD）：镜像 note KnowledgeTool 的 4 工具，操作磁盘 .md 文件
-        // （note 版操作 note 节点）。需知识库目录（独立于项目目录）→ 宿主层注册（ai/ 不可引 apps 层）。
-        aether.AddDocumentKnowledgeTool();
+        // 文档版知识对象 C# 工具（DocumentKnowledgeTool 九件套）已退休（2026-09-21）：
+        // 知识对象读写走 labs/skills/knowledge-objects 的 Python skill（ko.py 六命令，公司无关五类型契约）。
+        // 手机端 MobileDocumentKnowledgeTool 不退休（iOS 禁子进程，Python 跑不了）。
+        // 代码留档（可逆）：恢复注册取消下一行注释即可。
+        // aether.AddDocumentKnowledgeTool();
 
         // git 工具（git_status 只读 / git_commit 暂存全部并提交 / git_push 推送 / git_pull 拉取合并）：
         // 让 agent 查看与提交、同步文档页当前项目的 git 变更。git 无业务上下文 → 宿主层注册（非 ai/ 适配器）。
