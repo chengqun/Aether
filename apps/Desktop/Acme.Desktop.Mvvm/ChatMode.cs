@@ -1,28 +1,46 @@
+using Aether.AI.Core.Agents;
+
 namespace Acme.Desktop.Mvvm;
 
 /// <summary>聊天输入框的 4 档运行模式（对标 Claude Code 的 Plan/Manual/Edit-automatically/Auto）。
-/// MAF 只存 plan/execute 两态（<see cref="IsPlan"/> → desiredMode）；execute 子档（Manual/AutoEdit/Auto）
-/// 是纯 VM 状态，经审批拦截（VM 层 OnApprovalRequest）逐工具决定自动批/弹框。详见 ChatWorkspaceViewModel。</summary>
+/// MAF 1.22 起四档均为<b>真 AgentMode</b>（<see cref="AgentModes"/> 名 + 每档独立指令——模型感知档位）；
+/// 审批门控仍在 VM 层（ChatApprovalDecider 逐工具拦截）——指令对齐模型行为，门控是硬保证。详见 ChatWorkspaceViewModel。</summary>
 public enum ChatMode
 {
     /// <summary>规划：AgentMode=plan，agent 先出计划不执行；产出计划后弹「接受计划→执行」。</summary>
     Plan,
-    /// <summary>手动：AgentMode=execute；每个非 Safe 工具都弹审批框。</summary>
+    /// <summary>手动：AgentMode=manual；每个非 Safe 工具都弹审批框，模型逐步说明再动手。</summary>
     Manual,
-    /// <summary>自动编辑（默认）：AgentMode=execute；自动批 Confirm 级工具，Dangerous 仍弹框。</summary>
+    /// <summary>自动编辑（默认）：AgentMode=auto-edit；自动批 Confirm 级工具，Dangerous 仍弹框。</summary>
     AutoEdit,
-    /// <summary>自动：AgentMode=execute；全部自动批（含 Dangerous），不弹框。</summary>
+    /// <summary>自动：AgentMode=auto；全部自动批（含 Dangerous），不弹框。</summary>
     Auto,
 }
 
 public static class ChatModeExtensions
 {
-    /// <summary>是否为规划档（对应 MAF AgentMode=plan；其余三档为 execute）。</summary>
+    /// <summary>是否为规划档（AgentMode=plan）。</summary>
     public static bool IsPlan(this ChatMode mode) => mode == ChatMode.Plan;
 
-    /// <summary>映射到 MAF desiredMode 字符串（"plan"/"execute"）。</summary>
-    public static string ToDesiredMode(this ChatMode mode) => mode == ChatMode.Plan ? "plan" : "execute";
+    /// <summary>映射到 MAF desiredMode 字符串（4 档一一对应 <see cref="AgentModes"/>）。</summary>
+    public static string ToDesiredMode(this ChatMode mode) => mode switch
+    {
+        ChatMode.Plan => AgentModes.Plan,
+        ChatMode.Manual => AgentModes.Manual,
+        ChatMode.Auto => AgentModes.Auto,
+        _ => AgentModes.AutoEdit,
+    };
+
+    /// <summary>MAF 读回的 mode 字符串 → ChatMode（4 档全量同步用；未知值返 null 保留现值）。</summary>
+    public static ChatMode? FromMafMode(string? mafMode) => mafMode switch
+    {
+        AgentModes.Plan => ChatMode.Plan,
+        AgentModes.Manual => ChatMode.Manual,
+        AgentModes.AutoEdit => ChatMode.AutoEdit,
+        AgentModes.Auto => ChatMode.Auto,
+        _ => null,
+    };
 
     /// <summary>从 MAF 读回的 mode 字符串判断是否为 plan。</summary>
-    public static bool IsPlanMode(string? mafMode) => mafMode == "plan";
+    public static bool IsPlanMode(string? mafMode) => mafMode == AgentModes.Plan;
 }

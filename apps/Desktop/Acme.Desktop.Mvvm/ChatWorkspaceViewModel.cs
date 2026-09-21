@@ -871,9 +871,8 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
             await _agentRunner.SetModeAsync(_currentConversationId, mode);
     }
 
-    /// <summary>轮后从会话读实际模式（捕获 agent 自行 set_mode 的切换），带 guard 不回触 SetMode。
-    /// 只同步 plan/execute（MAF 唯一存的两态）；execute 子档（Manual/AutoEdit/Auto）保留 VM 当前值——
-    /// set_mode 经 ToolFilteringChatClient 过滤，agent 不能自切，子档只由用户改。</summary>
+    /// <summary>轮后从会话读实际模式，带 guard 不回触 SetMode。<b>4 档全量同步</b>（MAF 1.22 自定义模式——
+    /// 模式即完整状态，不再有「execute 子档保留 VM 值」的折衷）；未知值（如旧会话残留）保留现值。</summary>
     private async Task RefreshModeAsync(Guid? conversationId = null)
     {
         var convId = conversationId ?? _currentConversationId;
@@ -881,25 +880,22 @@ public partial class ChatWorkspaceViewModel : ObservableObject, IChatViewHost
         string? m = KindOf(SelectedChatTarget) == ChatTargetKind.Workflow
             ? await _workflowRunner.GetModeAsync(convId).ConfigureAwait(false)
             : await _agentRunner.GetModeAsync(convId).ConfigureAwait(false);
-        if (m is not null)
+        if (m is not null && ChatModeExtensions.FromMafMode(m) is { } synced)
         {
             _syncingMode = true;
-            // MAF=plan → Plan；MAF=execute → 若当前是 Plan 则置默认 AutoEdit，否则保留 execute 子档。
-            SelectedChatMode = ChatModeExtensions.IsPlanMode(m)
-                ? ChatMode.Plan
-                : (SelectedChatMode == ChatMode.Plan ? ChatMode.AutoEdit : SelectedChatMode);
+            SelectedChatMode = synced;
             _syncingMode = false;
         }
     }
 
-    /// <summary>接受计划：切 AutoEdit（execute 子档）+ 续跑一轮"已接受计划，进入执行"。</summary>
+    /// <summary>接受计划：切 AutoEdit 档 + 续跑一轮"已接受计划，进入执行"。</summary>
     [RelayCommand]
     private async Task AcceptPlanAsync()
     {
         if (!HasModeSupport || IsAgentRunning || _currentConversationId == Guid.Empty) return;
-        PlanAwaitingAccept = false; // 已接受→不再显示接受条（execute 轮后也不会误弹）
+        PlanAwaitingAccept = false; // 已接受→不再显示接受条（执行轮后也不会误弹）
         _syncingMode = true; SelectedChatMode = ChatMode.AutoEdit; _syncingMode = false;
-        await SetModeOnSessionAsync("execute");
+        await SetModeOnSessionAsync(ChatMode.AutoEdit.ToDesiredMode());
         InputText = "（已接受计划，进入执行模式）";
         await SendInputAsync();
     }

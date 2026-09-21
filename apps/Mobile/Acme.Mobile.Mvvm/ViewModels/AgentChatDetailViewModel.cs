@@ -939,14 +939,15 @@ public partial class AgentChatDetailViewModel : NavigableViewModelBase
             {
                 // 协作式工具审批循环（镜像桌面 RunSegmentedStreamAsync）：RunStreamingAsync 遇需审批工具
                 // → 发 ToolApprovalRequestContent 后本轮结束 → 弹框拿决定 → 以 approvalResponse 重入同一会话恢复。
-                // desiredMode: 手机端无 plan/execute UI，强制 execute（自主执行）。
+                // desiredMode: 手机端无 4 档模式 UI，强制 auto-edit（可逆自主+危险审批——与手机审批弹框行为对齐；
+                // MAF 1.22 自定义模式后 "execute" 不在模式表内，传它会 ValidateMode 抛异常）。
                 ToolApprovalDecision? approvalResponse = null;
                 while (true)
                 {
                     _pendingApproval = null; // OnApprovalRequest 在 RunStreamingAsync 期间置位
                     await _agentRunner.RunStreamingAsync(
                         _currentConversationId, _agentId, content, handlers,
-                        approvalResponse, desiredMode: "execute", ct);
+                        approvalResponse, desiredMode: AgentModes.AutoEdit, ct);
 
                     if (_streamVersion != version) return;
                     if (_pendingApproval is null) break; // 无审批请求 → 本轮完成

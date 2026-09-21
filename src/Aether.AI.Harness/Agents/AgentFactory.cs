@@ -226,14 +226,17 @@ public sealed class AgentFactory
             DisableAgentModeProvider = !definition.EnableAgentModeProvider,
             DisableFileMemory = !fileMemoryEnabled,
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
-            // 模式工具原生于 provider 层禁用（MAF 1.22 AgentModeProviderOptions）：LLM 看不到 mode_get/mode_set，
-            // 但模式状态管理 + 指令注入保持。取代旧 ToolFilteringChatClient 包装——那版把工具名记反了
-            // （过滤 "get_mode"/"set_mode"，真实名是 "mode_get"/"mode_set"），从未真正过滤掉。
+            // 模式：MAF 1.22 自定义模式（4 档 Plan/Manual/AutoEdit/Auto 升为真 AgentMode——模型感知档位、
+            // 每档独立指令；取代旧「MAF 只存 plan/execute + VM 层凑子档」的绕行）。目录见 AetherAgentModeCatalog，
+            // 名字单一来源在 Core AgentModes（Mvvm/手机/测试同名引用）。mode_get/mode_set 工具原生禁用
+            //（LLM 看不到但状态管理 + 指令注入保持；切档由宿主 SetModeAsync 驱动——取代旧 ToolFilteringChatClient
+            // 包装，那版把工具名记反从未生效）。审批门控仍在宿主 VM 层逐工具硬门控，不依赖指令。
             AgentModeProviderOptions = definition.EnableAgentModeProvider
                 ? new AgentModeProviderOptions
                 {
                     DisableModeGetTool = true,
                     DisableModeSetTool = true,
+                    Modes = AetherAgentModeCatalog.Modes,
                 }
                 : null,
             ChatOptions = BuildChatOptions(definition, tools),

@@ -199,18 +199,35 @@ public class HarnessRuntimeLifecycleTests
         // 未启用 provider：Set 返 false、Get 返 null（不抛）。
         var (plain, _, _, _) = Build();
         var plainSession = plain.StartSession("echo-agent");
-        Assert.False(await plain.SetModeAsync(plainSession.SessionId, "execute"));
+        Assert.False(await plain.SetModeAsync(plainSession.SessionId, AgentModes.Auto));
         Assert.Null(await plain.GetModeAsync(plainSession.SessionId));
 
-        // 启用 provider：Set → Get 回读；运行期 desiredMode 亦在 run 开始时生效。
+        // 启用 provider：4 档自定义模式（MAF 1.22）逐一 Set → Get 回读；
+        // 运行期 desiredMode 亦在 run 开始时生效。
         var (modeful, _, client, _) = Build(enableMode: true);
         var modeSession = modeful.StartSession("echo-agent");
-        Assert.True(await modeful.SetModeAsync(modeSession.SessionId, "execute"));
-        Assert.Equal("execute", await modeful.GetModeAsync(modeSession.SessionId));
+        foreach (var mode in new[] { AgentModes.Manual, AgentModes.AutoEdit, AgentModes.Auto })
+        {
+            Assert.True(await modeful.SetModeAsync(modeSession.SessionId, mode));
+            Assert.Equal(mode, await modeful.GetModeAsync(modeSession.SessionId));
+        }
 
         client.Script.Add(MakeText("ok"));
-        await modeful.RunStreamingAsync(modeSession.SessionId, "go", desiredMode: "plan");
-        Assert.Equal("plan", await modeful.GetModeAsync(modeSession.SessionId));
+        await modeful.RunStreamingAsync(modeSession.SessionId, "go", desiredMode: AgentModes.Plan);
+        Assert.Equal(AgentModes.Plan, await modeful.GetModeAsync(modeSession.SessionId));
+    }
+
+    [Fact]
+    public async Task Mode_validation_rejects_unknown_mode_names()
+    {
+        // MAF 1.22 ValidateMode：不在 4 档模式表内的名字（含旧 "execute"——自定义模式取代默认两态后失效）
+        // 抛 ArgumentException——名字漂移快速失败（Core AgentModes 单一来源防散落硬编码的依据）。
+        var (modeful, _, _, _) = Build(enableMode: true);
+        var session = modeful.StartSession("echo-agent");
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => modeful.SetModeAsync(session.SessionId, "execute"));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => modeful.SetModeAsync(session.SessionId, "get_mode"));
     }
 
     // —— 审批恢复的防御分支 ——
