@@ -181,8 +181,8 @@ public static class DesktopCompositionExtensions
         aether.AddCurrentKnowledgeDirectoryTool();
 
         // 文档版知识对象 C# 工具（DocumentKnowledgeTool 九件套）：2026-09-21 曾退休改走 Python skill，
-        // 同日恢复注册，与 labs/skills/knowledge-objects 的 ko.py 六命令并存（C# 工具常驻工具池即勾即用，
-        // Python skill 按需 load_skill）。手机端 MobileDocumentKnowledgeTool 一直未退休（iOS 禁子进程）。
+        // 同日恢复注册；用户随后全面弃用 Python skill——九工具是唯一知识对象工具面（常驻工具池即勾即用）。
+        // 手机端 MobileDocumentKnowledgeTool 一直未退休（iOS 禁子进程）。
         aether.AddDocumentKnowledgeTool();
 
         // git 工具（git_status 只读 / git_commit 暂存全部并提交 / git_push 推送 / git_pull 拉取合并）：
