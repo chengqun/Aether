@@ -5,8 +5,10 @@ namespace Aether.AI.Harness.Agents;
 /// <summary>
 /// <see cref="IChatClient"/> 包装器：从 <see cref="ChatOptions.Tools"/> 中过滤掉指定工具名，
 /// 使 LLM 看不到这些工具（不会调用），但不影响 MAF 内部的 provider 状态管理。
-/// <para>用途：<see cref="AgentModeProvider"/> 的 get_mode/set_mode 工具导致 GLM 无限调用——
-/// 过滤掉后 LLM 不再看到这些工具，但 AgentModeProvider 仍然注入模式上下文 + 管理 mode 状态。</para>
+/// <para><b>历史注记（2026-09-21）</b>：曾用于过滤 <see cref="AgentModeProvider"/> 的模式工具，但把工具名
+/// 记反了（过滤 "get_mode"/"set_mode"，MAF 真实名是 "mode_get"/"mode_set"）——从未真正生效。
+/// MAF 1.22 起 mode 工具禁用走原生 <c>AgentModeProviderOptions.DisableModeGetTool/SetTool</c>
+/// （见 <c>AgentFactory.BuildHarnessAgent</c>），本类不再有调用方；保留作通用「按名藏工具」工具。</para>
 /// </summary>
 public sealed class ToolFilteringChatClient : IChatClient
 {

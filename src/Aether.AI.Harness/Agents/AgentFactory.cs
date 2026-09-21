@@ -226,6 +226,16 @@ public sealed class AgentFactory
             DisableAgentModeProvider = !definition.EnableAgentModeProvider,
             DisableFileMemory = !fileMemoryEnabled,
             DisableOpenTelemetry = !definition.EnableOpenTelemetry,
+            // 模式工具原生于 provider 层禁用（MAF 1.22 AgentModeProviderOptions）：LLM 看不到 mode_get/mode_set，
+            // 但模式状态管理 + 指令注入保持。取代旧 ToolFilteringChatClient 包装——那版把工具名记反了
+            // （过滤 "get_mode"/"set_mode"，真实名是 "mode_get"/"mode_set"），从未真正过滤掉。
+            AgentModeProviderOptions = definition.EnableAgentModeProvider
+                ? new AgentModeProviderOptions
+                {
+                    DisableModeGetTool = true,
+                    DisableModeSetTool = true,
+                }
+                : null,
             ChatOptions = BuildChatOptions(definition, tools),
             ChatHistoryProvider = historyProvider,
             ToolApprovalAgentOptions = BuildToolApprovalOptions(definition),
@@ -256,12 +266,9 @@ public sealed class AgentFactory
 
         var client = _chatClientFactory.Create(definition.ModelId);
 
-        // AgentModeProvider 开启时，过滤掉 get_mode/set_mode 工具不暴露给 LLM
-        // （GLM 会无限调用 mode_get；但保留 AgentModeProvider 的模式注入 + 状态管理）
-        if (definition.EnableAgentModeProvider)
-        {
-            client = new ToolFilteringChatClient(client, "get_mode", "set_mode");
-        }
+        // mode_get/mode_set 工具的禁用已上移到 HarnessAgentOptions.AgentModeProviderOptions
+        // （MAF 1.22 原生 DisableModeGetTool/SetTool——见上 options 构造处注释），
+        // 不再需要 ToolFilteringChatClient 包装（旧版名字记反从未生效，见该类注释）。
 
         return client.AsHarnessAgent(options, _loggerFactory);
     }
@@ -281,10 +288,21 @@ public sealed class AgentFactory
         // skill 全量按需加载（镜像 Claude Code / knowledge object 理念）：所有 skill 索引常驻
         // 每轮上下文，agent 运行时自己 load_skill 取正文（按需付费）。无 per-agent 白名单——
         // skill 是只读知识（load 只拉正文进上下文，agent 自己决定用不用），不需 ACL。
-        AgentSkillsSource? source = null;
+        //
+        // MAF 1.22 起经 AgentSkillsProviderBuilder 构造：Build() 默认叠加
+        // ①CachingAgentSkillsSource——索引扫描缓存（目录枚举 + SKILL.md front-matter 解析
+        //   每 RefreshInterval 至多一次，并发串行化）；30s TTL 保「资料库改技能近实时生效」
+        //   （旧裸构造每次 provider 拉索引都重扫目录）。
+        // ②DeduplicatingAgentSkillsSource——同名 skill 去重防护（用户复制技能文件夹场景）。
+        AgentSkillsProvider provider;
         if (!string.IsNullOrEmpty(SkillsDirectory))
         {
-            source = new AgentFileSkillsSource(SkillsDirectory, _skillScriptRunner, options: null, _loggerFactory);
+            provider = new AgentSkillsProviderBuilder()
+                .UseLoggerFactory(_loggerFactory)
+                .UseFileSkill(SkillsDirectory, options: null, _skillScriptRunner)
+                .UseOptions(DisableSkillApprovals)
+                .UseCachingOptions(c => c.RefreshInterval = TimeSpan.FromSeconds(30))
+                .Build();
         }
         else
         {
@@ -294,19 +312,25 @@ public sealed class AgentFactory
             var agentSkills = skills
                 .Select(s => (AgentSkill)new AgentInlineSkill(
                     new AgentSkillFrontmatter(s.Name, s.Description, ""), s.Content, null, null))
-                .ToList();
-            source = new AgentInMemorySkillsSource(agentSkills);
+                .ToArray();
+            // 内存源无 IO——builder 默认缓存恒命中零成本，无需 TTL 配置。
+            provider = new AgentSkillsProviderBuilder()
+                .UseLoggerFactory(_loggerFactory)
+                .UseSkills(agentSkills)
+                .UseOptions(DisableSkillApprovals)
+                .Build();
         }
-
-        var provider = new AgentSkillsProvider(source, new AgentSkillsProviderOptions
-        {
-            DisableLoadSkillApproval = true,
-            DisableReadSkillResourceApproval = true,
-            DisableRunSkillScriptApproval = true,
-        }, _loggerFactory, ownsSource: false);
 
         options.DisableAgentSkillsProvider = true; // 关内部默认 provider，避免双重 + 避免其默认审批
         options.AIContextProviders = new List<AIContextProvider> { provider };
+    }
+
+    /// <summary>skill 工具审批全关（聊天页无审批 UI，MAF 默认审批会挡住 run_skill_script——模型只 load 不执行）。</summary>
+    private static void DisableSkillApprovals(AgentSkillsProviderOptions o)
+    {
+        o.DisableLoadSkillApproval = true;
+        o.DisableReadSkillResourceApproval = true;
+        o.DisableRunSkillScriptApproval = true;
     }
 
     private AIAgent BuildChatClientAgent(AgentDefinition definition, IList<AITool> tools, ChatHistoryProvider? historyProvider)
