@@ -33,7 +33,7 @@
 1. **最简通用模型**：一个对象只有 `kind` + `links` + `body`（+ front-matter 额外字段透传）。typed graph links（带 role 的有向边）是它的**定义性特征**——这是它区别于普通 markdown 文件的全部结构。
 2. **按需付费**：对象内容不进任何常驻上下文；agent 先 List/Search 发现，再 `read` 拉正文。读是非破坏的、per-flow 的。
 3. **路径即指针**：文档版对象的权威引用是**相对路径字符串**（`targetId`），没有 ID 注册表、没有数据库反查。相对路径本身就是指针。
-4. **语料自治**：校验规则（词表/边方向矩阵/必填字段）归 `knowledge-manifest.yaml` **数据文件**（语库自己可编辑）；校验器归平台代码（一次通用）。规则归数据、校验归代码。
+4. **语料规范归 README 散文**：各项目目录的 README 承载该项目的 kind 词表/边方向等规范（agent 可 read，天然按目录一份、各目录不同）；平台只做结构化检查（断链）。曾用 `knowledge-manifest.yaml` 机器可读清单承载语料规则，2026-09-22 移除（见 §8）。
 5. **DAG 纪律**：边**单向**，只写「流程 uses/then → 资产」这类正向依赖边；**禁止反向回指边**（`consumed-by`/`schema-for` 等——冗余，且会被 read 内联当噪音）。分层：**流程层**（`kind=流程`，带出边，是消费/编排者）vs **资产层**（`kind=数据源`/`规则`，被引用的复用目标）。
 
 ---
@@ -109,7 +109,7 @@ status: active
 | 6 | `RelatedKnowledge` | **Safe** | `(name)` | 出边（它引用谁，含解析后路径）+ **入边**（谁引用它，反向链接——全库扫描）。合并/改名前查影响面 |
 | 7 | `RenameKnowledge` | **Confirm** | `(name, newPath)` | 移动文件 + **自动改写全部入边引用**（改写先于移动——中途失败不丢引用）。改写为规范 targetId（`KnowledgeLinkRewriter.CanonicalTargetId`：同目录裸名/跨目录 `knowledge/` 前缀根相对）。README.md 目录对象不支持 |
 | 8 | `MergeKnowledge` | **Confirm** | `(primary, secondary, newName, mergedBody, kind?, extraJson?)` | **Knowledge Marriage**（见 §9）：新对象 C 带 `parents=[A,B]` 溯源，links 取并集（role+target 去重、剔自指），原对象标 `status: superseded` + `superseded_by=C` **保留不删**（lineage），入边自动改指 C |
-| 9 | `ValidateKnowledge` | **Safe** | `()` | 知识库体检（见 §8）：断链（error）+ kind 词表/边方向矩阵/必填字段（warning）。写完改完自检 |
+| 9 | `ValidateKnowledge` | **Safe** | `()` | **断链体检**（见 §8）：全量解析 `.md`，links 解析不到目标文件 → error。写完/改完（尤其 Rename/Merge 后）自检 |
 | 相邻 | `GetCurrentKnowledgeDirectory` | **Safe** | `()` | 获取资料库目录绝对路径与顶层结构（agent 跑 git 等目录参数用，如 `git_commit` 的 workingDirectory） |
 
 **审批级别设计**：读（List/Read/Search/Related/Validate）= Safe 自动跑；写（Create/Update/Rename/Merge）= Confirm 弹审批——对齐全仓「reversible write = Confirm」惯例。专家编辑器可按 agent 覆盖。
@@ -167,37 +167,21 @@ front-matter 透传字段（ExtraFrontMatter）也输出进头部——agent 读
 
 ---
 
-## 8. 知识库体检（ValidateKnowledge + manifest）
+## 8. 断链体检（ValidateKnowledge）
 
-**规则清单** `knowledge-manifest.yaml`（知识库根，语料自治数据文件，可编辑；**可选机制**——无清单=合法，体检自动降级为仅断链检查）：
+`ValidateKnowledge()`（Safe）：全量解析知识对象 `.md`，检查**断链**——link `targetId` 解析不到任何知识对象文件 → error（改名/移动/删除目标后遗留的坏引用）。
 
-```yaml
-kinds:                      # kind 词表（软约束）
-- 流程
-- 数据源
-- 规则
-edges:                      # 边方向矩阵：role → {from kinds} × {to kinds}
-  uses:
-    from: [流程]
-    to: [数据源, 规则]
-requiredFields:             # 按 kind 必填 front-matter 字段
-  已知认知: [subject, claim, status]
-```
+- **解析与 Read 完全同源**（`OkTargetResolver.ResolveTargetWithPath`：路径候选 + 裸名全局兜底 + 目录/README 兜底）——防校验器与读写工具解析语义分叉产生假阳性断链。
+- 解析失败的文件（Def=null）仍参与断链索引（可被别的文件解析到）、自身 links 不检查（不可信）。
+- **诊断不阻断写入**——自检信号非门禁。写完/改完（尤其 Rename/Merge 改写引用后）调用。
 
-**校验器** `KnowledgeGraphValidator`（Notes.Domain **纯函数**，目标解析注入委托）产四类诊断：
+**manifest 机制（2026-09-22 已移除）**：曾配套 `knowledge-manifest.yaml`（kinds 词表 / edges 边方向矩阵 / requiredFields 必填字段，三类**软警告**；`KnowledgeManifestLoader` 装载 + `KnowledgeGraphValidator` 检查）。移除原因：
 
-| 检查 | 级别 | 说明 |
-|---|---|---|
-| ① 断链 | **error** | link 解析不到任何知识对象文件 |
-| ② kind 词表 | warning | 缺 kind / 词表外 kind |
-| ③ 边类型 + 边方向 | warning | 词表外 role / role 不允许从该 kind 发出 / 目标 kind 不在 to 列表 |
-| ④ 必填字段 | warning | kind「X」缺必填 front-matter 字段 |
+1. 三项均软警告、不阻断；唯一 error 级检查（断链）与清单无关——体检的真正价值独立存在。
+2. 维护成本高于收益——语料演化快于规则维护：历史体检发现 kind 漂移 36 处，最终选择删清单而非按词表收敛（语料重构 commit `e933fb3` 先行删了清单，当天机制随之移除）。
+3. 「每目录规则不同」的实际承载是**各项目 README 散文**（agent 可 read，天然按目录一份；语料 README 明写「kind 由各项目自行定义并在项目 README 中说明」）——机器可读清单要再加就近目录解析/作用域/合并语义，换 advisory 警告，不值。
 
-**一律不阻断写入**——诊断是自检信号非门禁。解析失败的文件仍参与断链索引（Def=null，不再做边/字段检查）。`ManifestLoaded` 报告清单装载状态；解析失败提示但不阻断体检。
-
-> **现役语料状态（2026-09-22）**：Qifu 知识库的 manifest **已删除**（当日上午语料重构 commit `e933fb3`「精简知识库架构，移除 Intelligence/Glossary/skills」一并删除，原 71 行含 26 kind 词表/四边矩阵）——`ValidateKnowledge` 自动降级为**仅断链**模式，软约束三项检查（词表/边方向/必填字段）当前 inert，重建 yaml 即恢复。代码侧零硬依赖（`KnowledgeManifestLoader.TryLoad` 对缺失文件返回 false），删清单无任何破坏。
->
-> 历史注记：manifest 曾随 commit `2269abc` 配齐（26 kind/四边矩阵 + 7 处边方向修复），体检发现 kind 漂移 36 处 + 边矩阵超规若干——最终选择随「精简知识库架构」重构整体退场（认知下沉至场景课题），而非按词表收敛。
+移除后工具描述与输出不再含 manifest 概念——此前 agent 每次体检看到 `ManifestLoaded: null` + 描述提及就复述「manifest 不存在」的噪音源一并清除。
 
 ---
 
@@ -275,8 +259,9 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 | 2026-09-20 | **知识增长循环**：Search/Related/Rename/Merge 四工具 + Knowledge Marriage |
 | 2026-09-21 | **全面弃用 Python skill**：桌面 C# 九工具是唯一知识对象工具面（曾短暂退休改走 ko.py skill，随即恢复并定局）；`~/Desktop/knowledge-objects/`（ko.py 六命令五类型契约）归档零引用；`knowledge-bootstrap`/`knowledge-object-conventions` 两 skill 同批删除。**手机端 `MobileDocumentKnowledgeTool` 从未退休**（iOS 禁子进程） |
 | 2026-09-22 | **Qifu 语料大重构**（Aether agent 执行，语料库 git `e933fb3`）：删 `6_Intelligence`/`Glossary`/skills/**knowledge-manifest.yaml**，已知认知（共享设备tag客群、prepay_vintage 结构、大盘水位基线等）下沉至对应场景课题目录，检索链路去 Glossary 消歧——体检回到「仅断链」，词表/边矩阵软约束退场 |
+| 2026-09-22（下午） | **manifest 体检机制整体移除**（代码侧）：`KnowledgeManifestLoader` 删除、`KnowledgeManifest`/`KnowledgeEdgeRule` record 删除、`KnowledgeGraphValidator.Validate` 去掉 manifest 参数只留断链、工具描述/输出清除 manifest 概念——软约束维护成本高于收益，语料规范归各项目 README 散文（见 §8） |
 
-当前定局：**桌面 = C# 九工具 + Validate/检索/治理全家桶；手机 = 4 工具子集；skill 路径已死；manifest 体检为可选机制、现役语料未启用（无清单，仅断链）**。
+当前定局：**桌面 = C# 九工具 + 断链体检/检索/治理全家桶；手机 = 4 工具子集；skill 路径已死；manifest 机制已移除（体检=纯断链）**。
 
 ---
 
@@ -290,5 +275,5 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 6. **展开有安全阀**：read 默认只内联 `expand:true` 的边；覆盖模式最多 4 层、单目标 8000 字、累计 20000 字——超限截断并提示单独 read。
 7. **extraJson 仅标量**：嵌套 JSON 对象/数组跳过（front-matter 是 YAML，嵌套原样写回会产非法 YAML）。
 8. **AI 写盘实时生效**：`FileSystemWatcher` 自动重载树 + 活动 `.md`——agent 编辑知识对象后无需重启。
-9. **manifest 是语料数据（当前已删）**：kinds/edges/requiredFields 的变更改 yaml 文件即可，校验器代码不动；无清单=合法（仅断链检查）。现役 Qifu 语料 2026-09-22 重构后**无 manifest**——`ValidateKnowledge` 只剩断链检查，属预期状态非故障；要恢复软约束重建 `knowledge-manifest.yaml` 即可。
+9. **manifest 已移除（2026-09-22）**：`ValidateKnowledge` 只做断链体检（error 级、不阻断写入）；kind 词表/边方向等语料规范看各项目 README。工具描述/输出不含 manifest 概念——agent 不应再提它（此前因描述提及 + `ManifestLoaded: null` 输出字段被反复复述「manifest 不存在」）。
 10. **Read 默认已于 2026-08-31 翻转**（commit `9d206f8`）：旧默认「内联一层」→ 现行作者标志模式（无标志=只返回本对象，agent 传 `expandDepth` 挖深，见 §7）。旧行为描述曾滞留三处（CLAUDE.md / `DesktopToolRegistrations` 注册描述 / 知识库自述 README），2026-09-22 已同步修正——知识库 README 的「乱挂 links 污染上下文」告诫同步改为指向 `expand` 标志（上下文成本所在）。

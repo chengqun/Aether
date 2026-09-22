@@ -104,7 +104,7 @@ public static class DesktopToolRegistrations
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "UpdateDocumentKnowledgeObject"),
                 ToolApprovalLevel.Confirm);
-            reg.Register("ValidateKnowledge", "体检知识对象库：检查断链（error 级）/kind 词表/边方向矩阵/按 kind 必填 front-matter 字段（软警告）。规则来自知识库根 knowledge-manifest.yaml（可编辑；无清单只查断链）。写完/改完知识对象后自检调用。", "文档知识",
+            reg.Register("ValidateKnowledge", "体检知识对象库：全量解析 .md，检查断链（links 指向不存在的文件——改名/移动/删除目标后遗留的坏引用，error 级）。写完/改完知识对象后自检调用（尤其 Rename/Merge 改写引用后复查）；诊断不阻断写入。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ValidateKnowledge))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),

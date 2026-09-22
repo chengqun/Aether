@@ -302,26 +302,22 @@ public sealed class DocumentKnowledgeTool
     {
         /// <summary>体检的知识对象文件数。</summary>
         public int TotalChecked { get; set; }
-        /// <summary>规则清单是否装载（true=knowledge-manifest.yaml 存在且解析成功；null=无清单，仅断链检查）。</summary>
-        public bool? ManifestLoaded { get; set; }
         public List<KnowledgeDiagnosticDto> Diagnostics { get; set; } = new();
-        /// <summary>分类汇总（类别 → 条数），如「断链: 2 / kind: 35」。</summary>
+        /// <summary>分类汇总（类别 → 条数），如「断链: 2」。</summary>
         public string? Summary { get; set; }
         public string? Error { get; set; }
     }
 
     public sealed class KnowledgeDiagnosticDto
     {
-        public string? Severity { get; set; } // error（断链）| warning（软约束）
-        public string? Category { get; set; } // 断链 / kind / 边类型 / 边方向 / 必填字段
+        public string? Severity { get; set; } // error（断链）
+        public string? Category { get; set; } // 断链
         public string? File { get; set; }
         public string? Message { get; set; }
     }
 
-    [Description("体检知识对象库：全量解析知识对象 .md 文件，检查 ①断链（links 指向不存在的文件，error 级）" +
-                 "②kind 词表 ③边类型/边方向矩阵 ④按 kind 必填 front-matter 字段（后三类软警告）。" +
-                 "规则来自知识库根的 knowledge-manifest.yaml（词表/边矩阵/必填字段——语料自治数据文件可编辑；无清单则只查断链）。" +
-                 "写完/改完知识对象后自检调用（尤其回写 Intelligence 后验证生命周期字段完整性）。诊断不阻断写入。")]
+    [Description("体检知识对象库：全量解析知识对象 .md 文件，检查断链（links 指向不存在的文件——改名/移动/删除目标后遗留的坏引用，error 级）。" +
+                 "写完/改完知识对象后自检调用（尤其 Rename/Merge 改写引用后复查）。诊断不阻断写入。")]
     public async Task<ValidateKnowledgeOutput> ValidateKnowledge(CancellationToken cancellationToken = default)
     {
         var root = _knowledgeDir.CurrentDirectory ?? _knowledgeDir.DefaultRoot;
@@ -333,9 +329,6 @@ public sealed class DocumentKnowledgeTool
             return await Task.Run(() =>
             {
                 var (knowledgeRoot, _) = ResolveScope(root);
-
-                // 规则清单（无 = 合法，仅断链检查；解析失败 = 提示但不阻断体检）。
-                var manifestLoaded = KnowledgeManifestLoader.TryLoad(knowledgeRoot, out var manifest, out var loadError);
 
                 // 全量收集（含解析失败项——参与断链索引）。
                 var files = new List<(string Full, string Rel, KnowledgeObjectDefinition? Def)>();
@@ -357,12 +350,11 @@ public sealed class DocumentKnowledgeTool
                 }
 
                 var items = files.Select(f => new KnowledgeItem(f.Rel, f.Def)).ToList();
-                var diagnostics = KnowledgeGraphValidator.Validate(items, manifest, Resolve);
+                var diagnostics = KnowledgeGraphValidator.Validate(items, Resolve);
 
                 var output = new ValidateKnowledgeOutput
                 {
                     TotalChecked = files.Count,
-                    ManifestLoaded = manifest is null ? null : manifestLoaded,
                     Diagnostics = diagnostics.Select(d => new KnowledgeDiagnosticDto
                     {
                         Severity = d.Severity, Category = d.Category, File = d.File, Message = d.Message,
@@ -372,8 +364,6 @@ public sealed class DocumentKnowledgeTool
                     ? "全部通过（0 诊断）"
                     : string.Join(" / ", diagnostics.GroupBy(d => d.Category)
                         .Select(g => $"{g.Key}: {g.Count()}"));
-                if (!manifestLoaded && loadError is not null)
-                    output.Error = loadError;
                 return output;
             }, cancellationToken);
         }
