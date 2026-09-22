@@ -44,9 +44,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// <summary>主题选择持久化键（存主题名：light/dark/用户文件名）。</summary>
     private const string ThemePrefKey = "ui.theme";
 
-    /// <summary>侧边栏展开/收起持久化键（"true"/"false"，默认收起=只图标）。</summary>
-    private const string SidebarPrefKey = "ui.sidebarExpanded";
-
     public WorkbenchShellViewModel(
         IAppAuthService auth, ICurrentUser currentUser, ILoginDialogService loginDialog,
         IAppTokenStore tokenStore, ISettingsDialogService settingsDialog, IServiceProvider serviceProvider,
@@ -145,12 +142,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
     /// 与 tab 耦合：此属性是手动 toggle 是否开；有效可见还须当前是编辑器类 tab（由 WorkspaceView 叠加判定）。</summary>
     [ObservableProperty]
     private bool _isLeftTreeVisible = true;
-
-    /// <summary>侧边栏是否展开（true=图标+导航文字 200px / false=仅图标 48px）。当前默认收起（仅图标）。
-    /// 纯 shell 窗口态（侧栏 Border 宽 + nav 项文字显隐经 Classes.expanded 绑定 + SharedTheme 样式），
-    /// 不经 service（侧栏在工作区 ContentControl 之外，WorkspaceView 无需响应）。持久化 <see cref="SidebarPrefKey"/>。</summary>
-    [ObservableProperty]
-    private bool _isSidebarExpanded;
 
     /// <summary>主题变化（overlay JSON 或明暗倾向改变）时触发。子窗口（设置/Trace）订阅以即时重染——
     /// 主题引擎已下沉 Shared，<see cref="ThemedWindow"/> 直接读 <see cref="IThemeHost"/> 调 ThemeLoader。</summary>
@@ -256,9 +247,6 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         await LoadThemesAsync();
         var savedTheme = await _preferences.GetAsync(ThemePrefKey);
         await SelectThemeCoreAsync(savedTheme ?? "light", default);
-        // 侧边栏展开/收起态恢复（默认收起=仅图标；持久化 "true" 才展开）。
-        var savedSidebar = await _preferences.GetAsync(SidebarPrefKey);
-        IsSidebarExpanded = savedSidebar == "true";
         var def = await RestoreLayoutAsync(_defaultWorkspace);
         await _workspaceManager.ActivateAsync(def);
 
@@ -462,14 +450,4 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         => _leftTreePanelService?.SetLeftTreeVisible(!IsLeftTreeVisible);
 
     private void OnLeftTreeVisibilityChanged(bool visible) => IsLeftTreeVisible = visible;
-
-    /// <summary>侧边栏展开/收起 toggle：切 IsSidebarExpanded + 持久化（fire-and-forget，SafeFireAndForget 记 Trace）。
-    /// 纯 shell 态，无 service 回路——窗口 XAML 经 Classes.expanded 绑定即时切宽 + nav 文字显隐。</summary>
-    [RelayCommand]
-    private void ToggleSidebar()
-    {
-        IsSidebarExpanded = !IsSidebarExpanded;
-        Task.Run(async () => await _preferences.SetAsync(SidebarPrefKey, IsSidebarExpanded ? "true" : "false"))
-            .SafeFireAndForget();
-    }
 }

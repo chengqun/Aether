@@ -128,36 +128,19 @@
       </Grid>
     </Border>
 
-    <!-- ═══ 侧边栏（收起=48px 仅图标 / 展开=200px 图标+文字；Classes.expanded 绑 IsSidebarExpanded） ═══ -->
-    <Border DockPanel.Dock="Left" Classes="sidebar-rail" Classes.expanded="{Binding IsSidebarExpanded}"
+    <!-- ═══ 侧边栏（VSCode activity bar 式：恒定 48px 仅图标，hover Tooltip 显名——无展开/收起） ═══ -->
+    <Border DockPanel.Dock="Left" Classes="sidebar-rail"
             Background="{DynamicResource SidebarBgBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-      <Grid RowDefinitions="Auto,Auto,*,Auto">
-        <!-- 侧栏展开/收起 toggle（顶部 arrow：收起 →=点击展开 / 展开 ←=点击收起） -->
-        <Button Grid.Row="0" Classes="nav-rail" Command="{Binding ToggleSidebarCommand}"
-                ToolTip.Tip="展开/收起侧栏" Margin="6,10,6,2">
-          <Grid>
-            <Path Data="{x:Static shell:Codicons.ArrowRight}" Stretch="Uniform" Width="16" Height="16"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                  IsVisible="{Binding !IsSidebarExpanded}"/>
-            <Path Data="{x:Static shell:Codicons.ArrowLeft}" Stretch="Uniform" Width="16" Height="16"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                  IsVisible="{Binding IsSidebarExpanded}"/>
-          </Grid>
-        </Button>
-
-        <StackPanel Grid.Row="1" Margin="0,2,0,0">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Row="0" Margin="0,10,0,0">
           <ItemsControl ItemsSource="{Binding WorkbenchNavItems}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Button Classes="nav-rail" Command="{Binding Command}" CommandParameter="{Binding Key}"
                         ToolTip.Tip="{Binding Title}">
-                  <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
-                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                    <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center"
-                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                  </StackPanel>
+                  <Path Data="{Binding Icon}" Stretch="Uniform" Width="16" Height="16"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -166,7 +149,7 @@
 
 
         <!-- 终端/AI 右栏 toggle 已上移标题栏（VSCode 式）；侧栏底部仅剩账号按钮。 -->
-        <Button Grid.Row="3" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
+        <Button Grid.Row="2" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">

@@ -159,7 +159,7 @@
     <Setter Property="Opacity" Value="1"/>
   </Style>
 
-  <!-- 收起态 rail：导航项 / 收起按钮（仅图标，居中） -->
+  <!-- rail 导航项（仅图标，居中——侧栏恒定 48px 图标栏，VSCode activity bar 式） -->
   <Style Selector="Button.nav-rail">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
@@ -206,30 +206,11 @@
     <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
   </Style>
 
-  <!-- 侧边栏 rail 收起/展开：Classes.expanded 绑 IsSidebarExpanded 切宽 + nav 文字显隐 + 左对齐。
-       descendant 选择器从 Border.sidebar-rail 触达内部按钮（nav 项 + 底部 toggle + 账号）。
-       收起=48px 仅图标居中；展开=200px 图标+文字左对齐。base nav-rail/account-rail 样式之上叠加，属性不冲突。 -->
+  <!-- 侧边栏 rail：恒定 48px 仅图标（VSCode activity bar 式——无展开/收起，nav 项 hover Tooltip 显名）。
+       descendant 选择器从 Border.sidebar-rail 触达内部按钮（nav 项 + 账号）。
+       原展开/收起双态（Classes.expanded 绑 IsSidebarExpanded 切 200px/文字显隐）2026-09-22 删——展开收起属多余摩擦。 -->
   <Style Selector="Border.sidebar-rail">
     <Setter Property="Width" Value="48"/>
-  </Style>
-  <Style Selector="Border.sidebar-rail.expanded">
-    <Setter Property="Width" Value="200"/>
-  </Style>
-  <!-- 收起态隐藏 nav 项文字（仅图标）；展开态显文字 -->
-  <Style Selector="Border.sidebar-rail Button.nav-rail TextBlock">
-    <Setter Property="IsVisible" Value="False"/>
-  </Style>
-  <Style Selector="Border.sidebar-rail.expanded Button.nav-rail TextBlock">
-    <Setter Property="IsVisible" Value="True"/>
-  </Style>
-  <!-- 展开态 nav 项 + 底部 toggle 左对齐（覆盖 base nav-rail 的 Center / Padding） -->
-  <Style Selector="Border.sidebar-rail.expanded Button.nav-rail">
-    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-    <Setter Property="Padding" Value="14,9"/>
-  </Style>
-  <Style Selector="Border.sidebar-rail.expanded Button.account-rail">
-    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-    <Setter Property="Padding" Value="14,4"/>
   </Style>
 
   <!-- 一级 Tab 按钮 -->

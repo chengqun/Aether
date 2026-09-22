@@ -32,9 +32,9 @@
 │ rail │ │ 左栏 240px  │ 主面板（Grid 叠放，nav 是唯一切换器）   │ │ 右栏      │
 │      │ │            │ 资料库│资料库SCM│文档│SCM            │ │ ChatView │
 │ 48px │ │ documents   │ │源代码管理│连接器│自动化│活动        │ │ 420px    │
-│ 收起 │ │  →文件树     │ （Stockapp 追加：期货│回测/实盘│股票）   │ │ 可折叠    │
-│ 200px│ │ sourcecontrol│                                  │ │ 流式不断  │
-│ 展开 │ │  →SCM 面板   │                                  │ │          │
+│ 恒定 │ │  →文件树     │ （Stockapp 追加：期货│回测/实盘│股票）   │ │ 可折叠    │
+│ 图标 │ │ sourcecontrol│                                  │ │ 流式不断  │
+│ hover│ │  →SCM 面板   │                                  │ │          │
 │      │ │ knowledge   │                                  │ │          │
 │      │ │  →.md 树    │                                  │ │          │
 │      │ │ knowledgescm│                                  │ │          │
@@ -106,7 +106,7 @@ new LayoutSplit(Horizontal,
 AddWorkbench(def)                    注册 def 单例 + IViewRegistry/IRegionManager/IWorkspaceManager
   → WorkbenchShellViewModel.InitializeAsync
       ① LoadThemesAsync + SelectThemeCoreAsync       窗口打开前已应用主题
-      ② 恢复 ui.sidebarExpanded
+      ② （侧栏恒定 48px 仅图标——无展开态可恢复）
       ③ RestoreLayoutAsync(def)                      合并持久化布局（§6）
       ④ _workspaceManager.ActivateAsync(def)
             → Panels.Select(d => PanelViewModel(d, _viewRegistry.CreateViewModel(d.Key)))
@@ -134,7 +134,7 @@ nav rail 的项**不是手写的**——`WorkbenchShellViewModel.RebuildNav` 从
 - **LeftTree/Terminal/Chat 是 LayoutRegion 不进 tabbed → 不进 nav**——左栏按当前 tab 条件显隐（§7），终端是底部常驻，聊天是右栏。
 - 图标：`PanelDescriptor.Icon` 是 key → `IconLoader` 解析 codicon path data，未命中回退原串。
 
-侧栏 rail 本体：收起 48px 仅图标 / 展开 200px 图标+文字（`Classes.expanded` 绑 `IsSidebarExpanded`，SharedTheme 切宽），持久化 `ui.sidebarExpanded` 默认收起。底部账号按钮带 MenuFlyout（设置/Trace/重置布局/桌宠/主题列表/登录）。
+侧栏 rail 本体：**恒定 48px 仅图标**（VSCode activity bar 式——hover Tooltip 显名，无展开/收起；原 200px 文字展开态 2026-09-22 删，展开收起属多余摩擦）。底部账号按钮带 MenuFlyout（设置/Trace/重置布局/桌宠/主题列表/登录）。
 
 ---
 
