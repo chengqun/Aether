@@ -24,14 +24,8 @@
     </Setter>
   </Style>
 
-  <!-- 账号按钮·收起态 rail（侧栏底部头像，Workbench shell 实显）：圆形紫光环 -->
+  <!-- 账号按钮（侧栏底部头像，Workbench shell 实显）：圆形紫光环 -->
   <Style Selector="Button.account-rail">
-    <Setter Property="Effect">
-      <DropShadowEffect Color="#8b5cf6" BlurRadius="18" Opacity="0.5" OffsetX="0" OffsetY="0"/>
-    </Setter>
-  </Style>
-  <!-- 账号按钮·展开态 chip（设置/对话框内展开侧栏用）：同款紫光环 -->
-  <Style Selector="Button.account-chip">
     <Setter Property="Effect">
       <DropShadowEffect Color="#8b5cf6" BlurRadius="18" Opacity="0.5" OffsetX="0" OffsetY="0"/>
     </Setter>
@@ -81,13 +75,8 @@
     </Setter>
   </Style>
 
-  <!-- 账号按钮悬停（收起/展开两态）：紫光环放大 -->
+  <!-- 账号按钮悬停：紫光环放大 -->
   <Style Selector="Button.account-rail:pointerover">
-    <Setter Property="Effect">
-      <DropShadowEffect Color="#8b5cf6" BlurRadius="26" Opacity="0.7" OffsetX="0" OffsetY="0"/>
-    </Setter>
-  </Style>
-  <Style Selector="Button.account-chip:pointerover">
     <Setter Property="Effect">
       <DropShadowEffect Color="#8b5cf6" BlurRadius="26" Opacity="0.7" OffsetX="0" OffsetY="0"/>
     </Setter>
