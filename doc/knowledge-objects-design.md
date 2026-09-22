@@ -1,7 +1,7 @@
 # 知识对象（Knowledge Objects）设计文档
 
-> 状态：现行设计（2026-09-22 整理）。
-> 权威来源：代码（`DocumentKnowledgeTool.cs` / `KnowledgeObjectDefinition.cs` / `OkTargetResolver.cs` 等）+ CLAUDE.md「Knowledge objects」节。本文档是设计综述，代码以仓库为准。
+> 状态：现行设计（2026-09-22 整理；同日移除 manifest 机制、增补 §14 愿景对照）。
+> 权威来源：代码（`DocumentKnowledgeTool.cs` / `KnowledgeObjectDefinition.cs` / `OkTargetResolver.cs` 等）+ CLAUDE.md「Knowledge objects」节。本文档是设计综述，代码以仓库为准；产品愿景基准见 [knowledge-objects-vision.md](knowledge-objects-vision.md)。
 
 ---
 
@@ -265,7 +265,65 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 
 ---
 
-## 14. 注意事项（Gotchas）
+## 14. 与产品愿景的对照（已做 / 未来）
+
+愿景基准：[knowledge-objects-vision.md](knowledge-objects-vision.md)（《AI Agent 知识对象最终架构（精简版）》，2026-09-22 存档）。状态标记：✅ 已做 · ⚠️ 部分 · ❌ 未来（未做）。
+
+### 14.1 设计目标（§1）——✅ 4/4 已做
+
+| 愿景目标 | 状态 | 现状 |
+|---|---|---|
+| 按需加载（不进 System Prompt） | ✅ | 索引零常驻；List/Search 发现 → `Read` 拉正文；`expand` 作者标志 / `expandDepth` 覆盖模式精细控制内联成本（超出愿景） |
+| 跨场景复用（改一处处处新） | ✅ | links 是**图边不是树**（愿景 §8 原话）；多 Scenario 指向同一 Feature/Method 天然支持；引用即路径，读时取最新 |
+| 人机同源 | ✅ | 同一批 `.md`：人走知识对象页（表单+源码+Ctrl+S），agent 走九工具；`FileSystemWatcher` 双向实时同步 |
+| 领域无关 | ✅ | `kind` 自由字符串 + 路径图边，模型零领域假设；语料五目录（`1_Scenario`…`5_Assets`）承载五类型 |
+
+### 14.2 五类型（§2-§7）——✅ 已做（kind + 目录承载，无强制 schema）
+
+- Scenario / Feature / Method / Procedure / Assets = **kind 字符串 + 语料目录分区**约定承载，同一通用模型（`kind`+`links`+`body`）——符合愿景「最小实现、先跑通」哲学。
+- Scenario 内部结构（Context/Inputs/Features/Methods/Procedures/Assets/Outputs）：**links（role 指向子对象 KO）+ body 章节（Context/Inputs/Outputs）约定层**，不做 schema 强制。
+- 不设 Intelligence 独立类型——与 2026-09-22 语料重构一致（`6_Intelligence` 已删、认知下沉至场景课题）。
+- Assets 只描述能力不执行——执行交真实工具（sql-query skill / DataQuery / MCP），与愿景的 `KO→Assets→MAF→Tool/MCP` 链一致。
+
+### 14.3 Phase 1 最小工具集（§9）——✅ 5/5 已做 + 超配
+
+| 愿景工具 | 现有工具 | 状态 |
+|---|---|---|
+| `knowledge.search` | `SearchKnowledge`（+kind/folder 过滤、命中位置排序） | ✅ |
+| `knowledge.get` | `ReadDocumentKnowledgeObject`（+展开模式、安全阀） | ✅ |
+| `knowledge.create` | `CreateDocumentKnowledgeObject`（+links/extraJson） | ✅ |
+| `knowledge.update` | `UpdateDocumentKnowledgeObject`（+部分更新、按键合并） | ✅ |
+| `knowledge.relate` | `RelatedKnowledge`（出边+**入边**，比愿景更全） | ✅ |
+| —（超配） | `List` / `Validate`（断链体检）/ `Rename`（引用自动改写）/ `Merge`（**Phase 5 提前实现**） | ➕ |
+
+**核心闭环**（Question→Scenario→Feature/Method→Procedure→Assets→MAF→Output）知识侧全通。Phase 1 的验证目标（「Agent 能否从 Scenario 出发完成一次真实分析」）是**验证动作**：用专家评测（labs `evals/*.eval.yaml`）跑一条链即可。
+
+### 14.4 Roadmap 逐阶段状态
+
+| Phase | 愿景内容 | 状态 |
+|---|---|---|
+| **1 知识对象基础** | 五类型 + search/get/create/update/relate + 真实闭环 | ✅ **已做**（评测验证待执行） |
+| **2 知识图与复用** | Relation / Reference / Dependency | ✅ **已做**（typed links + Related 出入边） |
+| | 「修改后引用方获得更新」 | ✅ **已做**（引用即路径、读时取最新——正是目标行为） |
+| | Version | ⚠️ **文件级已做**（知识库独立 git + KnowledgeScm 页提供历史）；对象级语义版本/钉版本引用 = ❌ 未来（低优先，不建议现在做） |
+| **3 知识自动产生** | Agent 产知识 + Candidate 状态 | ⚠️ **部分**：Create/Update 自由写 ✅；`status: candidate` 可经 extraJson 写入（约定层）✅；`SearchKnowledge` **无 status 过滤** = 未来小补（加一个过滤参数即可）；candidate→正式 晋升流 = 未来（约定层，Update 改 status） |
+| **4 Artifact 与沉淀** | Execution / Artifact / Provenance / Evidence / Promotion | ❌ **未来**（愿景自己也说「这时再正式引入」）。雏形已有：front-matter 透传可带 provenance 字段、Merge 的 `parents` 溯源 |
+| **5 知识进化** | Merge / 结婚 / Lineage | ✅ **已做**（`MergeKnowledge` = Knowledge Marriage：`parents=[A,B]` 溯源 + `status: superseded` + `superseded_by` lineage + 入边自动改写）；Child/Derivation 显式关系 = ❌ 未来 |
+| **6 自主进化** | Search→Reuse→Execute→Observe→Discover→Create/Update/Merge 循环 | ⚠️ **部分**：知识侧循环（Search→Reuse→Create/Update/Merge）已通；Observe/Discover（从执行结果自动产知识）依赖 Phase 4 = ❌ 未来 |
+
+### 14.5 结论与未来项优先级
+
+**模型层与愿景是同一个东西，实现深度已到 Phase 5，不需要改架构。** 未来项按优先级：
+
+1. **`SearchKnowledge` 加 `status?` 过滤**（小，一处参数）——支撑 Phase 3 的 candidate 治理。
+2. **candidate→正式 晋升约定**（纯约定 + 语料 README 写明，零代码）。
+3. **Assets→实际工具的标准约定**（可选：front-matter `tools:` 字段或 body 模板写明工具名，零代码）。
+4. **Phase 4 Artifact 体系**（大，等真实需求出现再动）。
+5. 对象级 Version（低优先）。
+
+---
+
+## 15. 注意事项（Gotchas）
 
 1. **`targetId` 是相对路径字符串不是 Guid**——文档版权威引用是路径。三种写法：知识库根相对（权威）/ 相对源文件目录（`./b`、`../xx/b`）/ 裸名（全局 basename 匹配）。目录内互链推荐裸名/相对路径（目录迁移不断链）。
 2. **link 靠路径解析须路径有效**——改名/移动文件经 `RenameKnowledge` 自动改写入边；手动 git mv 后须跑 `ValidateKnowledge` 复查（README.md 目录对象不支持工具改名）。
