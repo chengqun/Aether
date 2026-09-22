@@ -163,7 +163,7 @@ status: active
 
 front-matter 透传字段（ExtraFrontMatter）也输出进头部——agent 读认知对象能看到生命周期元数据。
 
-> **现役语料现状（2026-09-22）**：113 个文件 **0 个 `expand:` 标志**——作者标志从未被语料采用，默认 read 即「只返回本对象（body + links 清单）」；agent 要挖深须显式传 `expandDepth`。注意知识库自述 README 中「Read 时自动展开一层」是 2026-08-31 行为翻转**前**的旧描述（见 §14 Gotcha ⑩）。
+> **现役语料现状（2026-09-22）**：113 个文件 **0 个 `expand:` 标志**——作者标志从未被语料采用，默认 read 即「只返回本对象（body + links 清单）」；agent 要挖深须显式传 `expandDepth`。旧行为描述曾滞留 CLAUDE.md/工具注册描述/知识库自述 README 三处，同日已同步修正（见 §14 Gotcha ⑩）。
 
 ---
 
@@ -291,4 +291,4 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 7. **extraJson 仅标量**：嵌套 JSON 对象/数组跳过（front-matter 是 YAML，嵌套原样写回会产非法 YAML）。
 8. **AI 写盘实时生效**：`FileSystemWatcher` 自动重载树 + 活动 `.md`——agent 编辑知识对象后无需重启。
 9. **manifest 是语料数据（当前已删）**：kinds/edges/requiredFields 的变更改 yaml 文件即可，校验器代码不动；无清单=合法（仅断链检查）。现役 Qifu 语料 2026-09-22 重构后**无 manifest**——`ValidateKnowledge` 只剩断链检查，属预期状态非故障；要恢复软约束重建 `knowledge-manifest.yaml` 即可。
-10. **三处「Read 展开一层」旧描述与现行默认不符**：①CLAUDE.md「Knowledge objects」节 ②`DesktopToolRegistrations` 的 Read 注册描述 ③知识库自述 README——均写旧行为「只展开一层」；现行默认=作者标志模式（无标志=只返回本对象，agent 传 `expandDepth` 挖深，见 §7）。其中**知识库 README 是 agent 会 read 的规范文档**，其「links 只放真依赖（Read 会全文展开一层，乱挂 links 污染上下文）」这条规则的理由在新默认下已不成立——修正时须同步。
+10. **Read 默认已于 2026-08-31 翻转**（commit `9d206f8`）：旧默认「内联一层」→ 现行作者标志模式（无标志=只返回本对象，agent 传 `expandDepth` 挖深，见 §7）。旧行为描述曾滞留三处（CLAUDE.md / `DesktopToolRegistrations` 注册描述 / 知识库自述 README），2026-09-22 已同步修正——知识库 README 的「乱挂 links 污染上下文」告诫同步改为指向 `expand` 标志（上下文成本所在）。
