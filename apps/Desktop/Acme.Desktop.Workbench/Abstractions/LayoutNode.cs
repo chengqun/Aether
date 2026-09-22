@@ -10,7 +10,8 @@ namespace Acme.Desktop.Workbench.Abstractions;
 /// <list type="bullet">
 /// <item><see cref="LayoutSplit"/> — 子节点按方向分割，相邻子节点之间插可拖 GridSplitter。</item>
 /// <item><see cref="LayoutRegion"/> — 单 panel 叶子，对应一个命名 region（向 <see cref="IRegionManager"/> 登记）。</item>
-/// <item><see cref="LayoutTabbed"/> — 多 panel 叶子，TabControl 平铺。</item>
+/// <item><see cref="LayoutTabbed"/> — 多 panel 叶子，Grid 叠放无头 tab：所有 panel 视图一次创建常驻，仅选中项 IsVisible
+/// （侧栏 nav rail 是唯一切换入口，切换不重建；构建见 WorkspaceView.BuildTabbed）。</item>
 /// </list>
 /// </remarks>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$kind")]
