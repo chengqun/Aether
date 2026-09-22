@@ -30,8 +30,8 @@
 ├──────┬───────────────────────────────────────────────────┬──────────┤
 │ nav  │ ┌────────────┬──────────────────────────────────┐ │  AI 聊天  │
 │ rail │ │ 左栏 240px  │ 主面板（Grid 叠放，nav 是唯一切换器）   │ │ 右栏      │
-│      │ │            │ ChatPage│资料库│资料库SCM│文档│SCM    │ │ ChatView │
-│ 48px │ │ documents   │ │源代码管理│连接器│自动化│活动│网络     │ │ 420px    │
+│      │ │            │ 资料库│资料库SCM│文档│SCM            │ │ ChatView │
+│ 48px │ │ documents   │ │源代码管理│连接器│自动化│活动        │ │ 420px    │
 │ 收起 │ │  →文件树     │ （Stockapp 追加：期货│回测/实盘│股票）   │ │ 可折叠    │
 │ 200px│ │ sourcecontrol│                                  │ │ 流式不断  │
 │ 展开 │ │  →SCM 面板   │                                  │ │          │
@@ -90,8 +90,8 @@ new LayoutSplit(Horizontal,
         new LayoutRegion(LeftTree),                                    // 左栏 240px 固定
         new LayoutSplit(Vertical,                                      // 中区上下分
             children: [
-                new LayoutTabbed([ChatPage, Knowledge, KnowledgeScm,   // 主面板（Star 弹性）
-                    Documents, SourceControl, Experts, Automation, Activity, Browser]),
+                new LayoutTabbed([Knowledge, KnowledgeScm, Documents, // 主面板（Star 弹性）
+                    SourceControl, Experts, Automation, Activity]),
                 new LayoutRegion(Terminal)],                           // 底部 220px 固定
             pixels: [0, 220]),
         new LayoutRegion(Chat)],                                       // 右栏 420px 固定
@@ -119,7 +119,7 @@ AddWorkbench(def)                    注册 def 单例 + IViewRegistry/IRegionMa
   → base.InitializeAsync（登录态/业务 VM/Chat/调度器）   ← 工作台先上屏再填数据，感知更快
 ```
 
-**视图注册**：`WorkbenchViewRegistry`（共享）注册 12 个面板视图（Chat/ChatPage/Documents/LeftTree/SourceControl/Terminal=BottomPanelView/Activity/Knowledge/KnowledgeScm/Browser/Experts/Automation），VM 工厂全部经 `MainViewModelBase` 单例解析。**租户注入缝** `IViewRegistryContributor`：Stockapp 的 `StockappViewContributor` 注册 `Ctp→FuturesView`/`Backtest→TradingView`/`StockTrade→StockTradingView`——Workbench 库不依赖租户程序集，租户无 contributor 时共享 12 视图即全量（Qifu）。
+**视图注册**：`WorkbenchViewRegistry`（共享）注册 10 个面板视图（Chat/Documents/LeftTree/SourceControl/Terminal=BottomPanelView/Activity/Knowledge/KnowledgeScm/Experts/Automation），VM 工厂全部经 `MainViewModelBase` 单例解析。聊天无 nav 页（ChatView 右栏是唯一视图面）、浏览器网络无 registry 注册（`BottomPanelView` 内联实例化 `BrowserView`）——2026-09-22 删 ChatPage/Browser nav 入口，对齐 VSCode 三栏心智（nav=目的地、右栏=聊天助手、底部=过程遥测）。**租户注入缝** `IViewRegistryContributor`：Stockapp 的 `StockappViewContributor` 注册 `Ctp→FuturesView`/`Backtest→TradingView`/`StockTrade→StockTradingView`——Workbench 库不依赖租户程序集，租户无 contributor 时共享 10 视图即全量（Qifu）。
 
 **`PanelKeys` 单一真相源**：workspace 定义、view registry、租户 contributor 三处必须用同一 key 串——散落字面量会因拼写不一致导致 panel **静默不渲染**（`CreateView` 返回 null → ContentControl 空）。
 
@@ -179,7 +179,7 @@ nav rail 的项**不是手写的**——`WorkbenchShellViewModel.RebuildNav` 从
 
 **关键性质：折叠视图不销毁**——PTY 会话、聊天流式回复、树展开态在折叠/切 tab 期间全部存活（`IsVisible=false` 只是隐藏空间）。这是全 shell 的通用纪律：**BuildTabbed 建全部视图后只切 IsVisible**，任何面板切换/折叠/恢复都不重建。
 
-**tab-coupled 显隐**（`IsPanelHidingTab`）：切到「关闭类」tab（`ChatPage`/`Experts`/`Automation`/`Activity`/`Browser`）时终端、右栏、（有内容时）左栏**视觉自动收起**（让出空间）；切回编辑/数据页且 toggle 开则恢复。toggle 全局态不变、面板后台继续跑。语义 = `有效可见 = toggleOn && !关闭类tab`。
+**tab-coupled 显隐**（`IsPanelHidingTab`）：切到「关闭类」tab（`Experts`/`Automation`/`Activity`）时终端、右栏、（有内容时）左栏**视觉自动收起**（让出空间）；切回编辑/数据页且 toggle 开则恢复。toggle 全局态不变、面板后台继续跑。语义 = `有效可见 = toggleOn && !关闭类tab`。
 
 **左栏的条件可见**（比另两个多一层）：左栏叠放 4 个子树（`LeftTreePanelView.SetActiveTree`：documents→文件树 / sourcecontrol→SCM 面板 / knowledge→.md 树 / knowledgescm→知识库 SCM），按当前 tab 切子树；非编辑类 tab 整列宽 0。子 view 各绑 `MainViewModelBase` 上的共享 VM 单例（`Documents`/`SourceControl`/`Knowledge`），**无跨 view 通信**。手动 toggle（`ILeftTreePanelService`，默认开）叠加其上——关则无视 tab 整体折叠。
 
@@ -284,7 +284,7 @@ nav rail 的项**不是手写的**——`WorkbenchShellViewModel.RebuildNav` 从
 | 底部面板（终端/网络） | Panel（Terminal/Output） | 同构 |
 | 右栏聊天 | Auxiliary Side Bar（chat panel） | 同构——对 AI 桌面产品即 ChatGPT desktop/Cursor 的 chat 面板模式 |
 
-聊天**双视图**（全屏 ChatPage 居中输入 + 可折叠右栏紧凑视图，共享同一 VM）对齐 ChatGPT 桌面端「首页对话 ↔ 侧边随行」的双形态。**不做的部分**：VSCode 的面板拖拽重排/浮动（dock）——Avalonia 无成熟 dock 库、自研成本高，且面板集合已知稳定；固定分区在 app 形态产品（ChatGPT desktop、Linear）中同样普遍。**这是合理裁剪而非缺陷**。
+聊天**单视图**（可折叠右栏紧凑 `ChatView`，聊天的唯一视图面）对齐 VSCode/Cursor 的 chat 面板模式——2026-09-22 删除全屏 ChatPage nav 页（与右栏共享同一 VM 属重复入口；「网络」nav 页同批删除，网络只留底部面板「网络」tab）。**不做的部分**：VSCode 的面板拖拽重排/浮动（dock）与「面板展开占中栏」（maximize panel）——Avalonia 无成熟 dock 库、自研成本高，且面板集合已知稳定；固定分区在 app 形态产品（ChatGPT desktop、Linear）中同样普遍。**这是合理裁剪而非缺陷**。
 
 ### 12.2 实现路径：主流思想 + 自研轻量化
 
