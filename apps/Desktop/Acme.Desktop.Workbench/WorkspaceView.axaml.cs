@@ -127,8 +127,7 @@ public partial class WorkspaceView : UserControl
         }
 
         // 订阅右侧 AI 聊天面板显隐（VSCode 式可折叠侧栏）：折叠/展开 chat region 的 Grid 列宽（聊天视图不销毁，流式不中断）。
-        // BuildLayout 已跑（上方 Content = BuildLayout），故 _chatSplitGrid/_chatCol 已填充。初次显隐在下方 tab 索引解析后调用
-        //（tab-coupled：切到关闭类 nav 时右栏自动收起，须先解析 tab 索引才能判定当前 tab）。
+        // BuildLayout 已跑（上方 Content = BuildLayout），故 _chatSplitGrid/_chatCol 已填充。初次显隐在下方调用。
         _chatService ??= DesktopApp.Services?.GetService<IChatPanelService>();
         if (_chatService is not null)
         {
@@ -165,7 +164,7 @@ public partial class WorkspaceView : UserControl
             pc.PropertyChanged += OnWorkspaceSelectedTabChanged;
         }
         ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
-        // 须在 BuildLayout 后调（tab-coupled：切到关闭类 nav 时右栏自动收起——单可见，无双输入框）。
+        // 须在 BuildLayout 后调（_chatSplitGrid/_chatCol 已填充）；纯 toggle 驱动，与 tab 无关。
         ApplyChatVisibility();
     }
 
@@ -421,14 +420,13 @@ public partial class WorkspaceView : UserControl
         => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyTerminalVisibility(visible));
 
     /// <summary>折叠/展开底部终端 region：改其父 Grid 行高（0 ↔ 展开高度）+ splitter 显隐 + content 显隐。
-    /// 折叠时 PTY 不中断（仅隐藏 region 空间，会话继续在后台跑）。</summary>
+    /// 折叠时 PTY 不中断（仅隐藏 region 空间，会话继续在后台跑）。纯用户 toggle 驱动，与当前 nav tab 无关
+    /// （VSCode 式：切 editor tab 不动面板；原 tab-coupled 隐藏 2026-09-22 删——ChatPage 死后无保留理由）。</summary>
     private void ApplyTerminalVisibility(bool visible)
     {
         if (_terminalSplitGrid is null || _terminalRow < 0) return;
-        // tab-coupled：关闭类 tab（专家/自动化/活动）下终端视觉收起，切回编辑/数据页恢复（toggle 全局态不变，PTY 不中断）。
-        bool effective = visible && !IsPanelHidingTab(CurrentTabRegionId());
         var row = _terminalSplitGrid.RowDefinitions[_terminalRow];
-        if (!effective)
+        if (!visible)
         {
             if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后的实际值）
             row.Height = new GridLength(0);
@@ -464,30 +462,12 @@ public partial class WorkspaceView : UserControl
 
     // ── 侧栏 shell 级左栏条件可见（VSCode 式：documents/notes tab 显示对应树，切其它 tab 隐藏列宽 0） ──
 
-    /// <summary>当前选中 tab 的 region id（LayoutTabbed.RegionIds[SelectedTabIndex]），null = 无 tabbed/越界。</summary>
-    private string? CurrentTabRegionId()
-    {
-        if (_workspace is null) return null;
-        var tabbed = LayoutNode.FindFirstTabbed(_workspace.Layout);
-        if (tabbed is null) return null;
-        var idx = _workspace.SelectedTabIndex;
-        if (idx < 0 || idx >= tabbed.RegionIds.Count) return null;
-        return tabbed.RegionIds[idx];
-    }
-
-    /// <summary>关闭类 tab：专家/自动化/活动——这些页默认不显示底部终端和右侧 AI 对话（VSCode 式：
-    /// 编辑/数据页才需终端+右栏辅助，非编辑页收起让出空间）。tab-coupled：切到这些 tab → 终端/右栏视觉收起
-    /// （toggle 全局态不变，PTY/流式不中断），切回编辑/数据页恢复；toggle 按钮仍反映全局 toggle 态（同 chat tab-coupled 范式）。</summary>
-    private static bool IsPanelHidingTab(string? regionId)
-        => regionId is PanelKeys.Experts or PanelKeys.Automation or PanelKeys.Activity;
-
-    /// <summary>workspace SelectedTabIndex 变化 → 侧栏显隐 + 切对应树 + 终端/右栏 tab-coupled（关闭类 tab 收起）。</summary>
+    /// <summary>workspace SelectedTabIndex 变化 → 只切左栏树内容（documents→文件树 / knowledge→.md 树 / …）。
+    /// 终端/右栏不随 tab 变——纯用户 toggle（VSCode 式：切 editor tab 不动面板，布局恒定不跳）。</summary>
     private void OnWorkspaceSelectedTabChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IWorkspace.SelectedTabIndex) || _workspace is null) return;
         ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
-        ApplyChatVisibility(); // tab-coupled 右栏：关闭类 tab（专家/自动化/活动）收起
-        ApplyTerminalVisibility(_terminalService?.IsPanelVisible ?? true); // tab-coupled 终端：同上
     }
 
     /// <summary>当前 tab → 侧栏活动树：documents→"documents" / sourcecontrol→"sourcecontrol" / knowledge→"knowledge" / knowledgescm→"knowledgescm" / 其它→null（隐藏左栏）。</summary>
@@ -507,7 +487,7 @@ public partial class WorkspaceView : UserControl
     private void ApplyLeftTreeVisibility(string? kind)
     {
         if (_leftTreeSplitGrid is null || _leftTreeCol < 0) return;
-        // 手动 toggle（默认开）：关则整体折叠，无视 tab 种类（镜像右栏 ApplyChatVisibility 的 toggleOn）。
+        // 手动 toggle（默认开）：关则整体折叠，无视 tab 种类（镜像右栏 ApplyChatVisibility 的 service toggle）。
         bool toggleOn = _leftTreeService?.IsLeftTreeVisible ?? true;
         if (!toggleOn) kind = null;
         // 无 documents/sourcecontrol/knowledge tab（均 -1）→ ResolveLeftTreeKind 恒 null → 永不显示。
@@ -561,7 +541,7 @@ public partial class WorkspaceView : UserControl
 
     // ── 右侧 AI 聊天面板折叠/展开（VSCode 式可折叠侧栏：chat region 改 Grid 列宽，聊天视图不销毁，流式不中断） ──
 
-    /// <summary>聊天面板显隐变更（ChatPanelService 触发，可能非 UI 线程）→ marshal 到 UI 线程重算（tab-coupled，须重算判定 chat nav）。</summary>
+    /// <summary>聊天面板显隐变更（ChatPanelService 触发，可能非 UI 线程）→ marshal 到 UI 线程重算列宽。</summary>
     private void OnChatVisibilityChanged(bool visible)
         => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyChatVisibility());
 
@@ -572,13 +552,12 @@ public partial class WorkspaceView : UserControl
     /// <summary>折叠/展开右侧聊天 region：改其父 Grid 列宽（0 ↔ 展开宽度）+ splitter 显隐 + content 显隐。
     /// 折叠时聊天视图不销毁（仅隐藏 region 空间，流式回复继续在后台）。镜像 <see cref="ApplyLeftTreeVisibility"/>，
     /// 但不切子树（聊天只有单一视图，无 documents/notes 那种树切换）。复用 <see cref="SetSplitterVisibleCol"/>，不新增方法。
-    /// tab-coupled（Option A）：有效可见 = toggle 开 && 当前非关闭类 tab——切到「专家/自动化/活动」nav 时
-    /// 右栏自动收起（这些页不需边聊边看，让出空间）；切回编辑/数据页时若 toggle 开则右栏「漏出来」边聊边看期货/文档。</summary>
+    /// 纯用户 toggle 驱动，与当前 nav tab 无关（VSCode 式：切 editor tab 不动面板，布局恒定不跳；
+    /// 原 tab-coupled 隐藏 2026-09-22 删——其为 ChatPage 双聊天框防重复而生，ChatPage 死后无保留理由）。</summary>
     private void ApplyChatVisibility()
     {
         if (_chatSplitGrid is null || _chatCol < 0) return;
-        bool toggleOn = _chatService?.IsChatVisible ?? true; // 默认开（不回归）
-        bool visible = toggleOn && !IsPanelHidingTab(CurrentTabRegionId());
+        bool visible = _chatService?.IsChatVisible ?? true; // 默认开（不回归）
         var col = _chatSplitGrid.ColumnDefinitions[_chatCol];
         if (!visible)
         {

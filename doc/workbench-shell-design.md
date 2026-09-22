@@ -14,7 +14,7 @@
 | 面板位置 | 运行时任意拖拽、重停靠、浮动 | **分区固定**：左栏/主区/底部/右栏位置不变，只有宽高可拖 |
 | 布局定义 | 运行时状态 | **声明式 `LayoutNode` 树**（代码里一行 `LayoutSplit(...)` 写死，JSON 可序列化） |
 | 可拖的东西 | 面板本身 | 只有 **GridSplitter**（分界条拖宽高，位置持久化） |
-| 面板显隐 | dock/undock/float | **折叠**（行/列宽 0 + toggle）+ **tab-coupled**（切特定页自动收起） |
+| 面板显隐 | dock/undock/float | **折叠**（行/列宽 0 + 纯用户 toggle，与当前 tab 无关——同 VSCode 切 editor 不动面板） |
 | 实现成本 | 需 dock 框架（Avalonia 生态无成熟项） | 纯 Grid/GridSplitter + ~600 行布局引擎 |
 
 分区解剖完全对标 VSCode：活动栏（nav rail）→ 侧边栏（左栏树）→ 编辑器区（主面板 tab 页）→ 面板（底部终端）→ 辅助侧栏（右栏 AI 聊天）。但每个分区的内容由**每租户的 `WorkspaceDefinition` 数据声明**，共享 shell 引擎零租户知识。
@@ -179,9 +179,9 @@ nav rail 的项**不是手写的**——`WorkbenchShellViewModel.RebuildNav` 从
 
 **关键性质：折叠视图不销毁**——PTY 会话、聊天流式回复、树展开态在折叠/切 tab 期间全部存活（`IsVisible=false` 只是隐藏空间）。这是全 shell 的通用纪律：**BuildTabbed 建全部视图后只切 IsVisible**，任何面板切换/折叠/恢复都不重建。
 
-**tab-coupled 显隐**（`IsPanelHidingTab`）：切到「关闭类」tab（`Experts`/`Automation`/`Activity`）时终端、右栏、（有内容时）左栏**视觉自动收起**（让出空间）；切回编辑/数据页且 toggle 开则恢复。toggle 全局态不变、面板后台继续跑。语义 = `有效可见 = toggleOn && !关闭类tab`。
+**终端/右栏显隐 = 纯用户 toggle**：可见性只由各自 toggle 决定，**与当前 nav tab 无关**（VSCode 式：切 editor tab 不动面板，布局恒定不跳）——切到 连接器/自动化/活动 等页终端与右栏照常同屏。原 tab-coupled 显隐（`IsPanelHidingTab`，切「关闭类」tab 自动收起面板）2026-09-22 删除——它为 ChatPage 双聊天框防重复而生，ChatPage 删除后仅剩「让出空间」弱理由。toggle 全局态不变、面板后台继续跑。语义 = `有效可见 = toggleOn`。
 
-**左栏的条件可见**（比另两个多一层）：左栏叠放 4 个子树（`LeftTreePanelView.SetActiveTree`：documents→文件树 / sourcecontrol→SCM 面板 / knowledge→.md 树 / knowledgescm→知识库 SCM），按当前 tab 切子树；非编辑类 tab 整列宽 0。子 view 各绑 `MainViewModelBase` 上的共享 VM 单例（`Documents`/`SourceControl`/`Knowledge`），**无跨 view 通信**。手动 toggle（`ILeftTreePanelService`，默认开）叠加其上——关则无视 tab 整体折叠。
+**左栏的条件可见**（内容驱动，与让空间无关）：左栏叠放 4 个子树（`LeftTreePanelView.SetActiveTree`：documents→文件树 / sourcecontrol→SCM 面板 / knowledge→.md 树 / knowledgescm→知识库 SCM），按当前 tab 切子树；非编辑类 tab 无树可显、整列宽 0。子 view 各绑 `MainViewModelBase` 上的共享 VM 单例（`Documents`/`SourceControl`/`Knowledge`），**无跨 view 通信**。手动 toggle（`ILeftTreePanelService`，默认开）叠加其上——关则无视 tab 整体折叠。
 
 **两个防坑机制**：
 

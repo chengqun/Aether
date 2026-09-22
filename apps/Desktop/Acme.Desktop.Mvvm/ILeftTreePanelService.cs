@@ -8,10 +8,11 @@ namespace Acme.Desktop.Mvvm;
 /// 标题栏「主侧栏」toggle 按钮经此服务开关左栏（VSCode 式可折叠侧栏，与终端/AI 右栏 toggle 一致）。
 /// </summary>
 /// <remarks>
-/// 左栏原本由 tab 自动驱动（切到 documents/sourcecontrol/knowledge/knowledgescm tab 才显示，其余 tab 归 0）。
-/// 本服务加一层**手动 toggle**：有效可见 = 手动 toggle 开 && 当前是编辑器类 tab（镜像右栏 <c>ApplyChatVisibility</c> 的
-/// <c>toggleOn && !IsPanelHidingTab</c>）。折叠时仅隐藏 region 空间（列宽 0 + content IsVisible=false），
-/// 树视图不销毁——Workbench 加载即建全部 panel 视图，跨 nav 切换常驻（仅隐藏），文件树展开状态不丢。
+/// 左栏由 tab **内容驱动**（切到 documents/sourcecontrol/knowledge/knowledgescm tab 显示对应树，其余 tab 无树可显、归 0——
+/// 这是内容切换而非让空间，区别于已删除的终端/右栏 tab-coupled 面板隐藏）。
+/// 本服务叠加一层**手动 toggle**：有效可见 = 手动 toggle 开 && 当前是编辑器类 tab。折叠时仅隐藏 region 空间
+/// （列宽 0 + content IsVisible=false），树视图不销毁——Workbench 加载即建全部 panel 视图，跨 nav 切换常驻（仅隐藏），
+/// 文件树展开状态不丢。
 /// </remarks>
 public interface ILeftTreePanelService
 {
