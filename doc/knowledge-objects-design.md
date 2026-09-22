@@ -87,6 +87,7 @@ status: active
 
 - labs 子目录 `knowledge/`（`NoteNodeType.Knowledge = 3`，目录映射权威在 `CatalogNoteDirectory`）。
 - **文件即权威**：无 note SQLite、无第二套存储（note 子系统 2026-09 整体删除）。
+- **现役语料（Qifu 租户，2026-09-22 核实）**：`~/Library/Application Support/Aether/Desktop-Qifu/labs/knowledge/`（Windows 为 `%LOCALAPPDATA%\Aether\Desktop-Qifu\labs\knowledge`，路径单一来源 `TenantDataPaths`）——113 个 `.md`、0 个 `.ok`，本体是独立 git 仓库（agent 经 git 工具 + `GetCurrentKnowledgeDirectory` 可直接对其提交）。结构按项目分区：`企业知识架构/{1_Scenario, 2_Feature, 3_Method, 4_Procedure, 5_Assets}` 数字分层目录 + 45 个目录化 README 容器。
 - 知识库根 = `IKnowledgeDirectoryProvider.CurrentDirectory`（知识对象页打开的目录）?? 默认 labs 根。**独立单例**，与文档页 `ICurrentProjectDirectoryProvider` 解耦（防知识库目录覆盖项目目录，SCM/终端/活动页都订阅后者）。
 - 场景目录化惯例：**目录即对象、README.md=本体**——`ResolveScope` 命中目录时追加 `<dir>/README.md` 候选；给目录 README 声明 kind/links 可使其成为链接到成员的一等知识对象。
 
@@ -162,11 +163,13 @@ status: active
 
 front-matter 透传字段（ExtraFrontMatter）也输出进头部——agent 读认知对象能看到生命周期元数据。
 
+> **现役语料现状（2026-09-22）**：113 个文件 **0 个 `expand:` 标志**——作者标志从未被语料采用，默认 read 即「只返回本对象（body + links 清单）」；agent 要挖深须显式传 `expandDepth`。注意知识库自述 README 中「Read 时自动展开一层」是 2026-08-31 行为翻转**前**的旧描述（见 §14 Gotcha ⑩）。
+
 ---
 
 ## 8. 知识库体检（ValidateKnowledge + manifest）
 
-**规则清单** `knowledge-manifest.yaml`（知识库根，语料自治数据文件，可编辑；无清单=合法仅断链检查）：
+**规则清单** `knowledge-manifest.yaml`（知识库根，语料自治数据文件，可编辑；**可选机制**——无清单=合法，体检自动降级为仅断链检查）：
 
 ```yaml
 kinds:                      # kind 词表（软约束）
@@ -192,7 +195,9 @@ requiredFields:             # 按 kind 必填 front-matter 字段
 
 **一律不阻断写入**——诊断是自检信号非门禁。解析失败的文件仍参与断链索引（Def=null，不再做边/字段检查）。`ManifestLoaded` 报告清单装载状态；解析失败提示但不阻断体检。
 
-> 体检发现的真实语料问题：kind 漂移 36 处 + 边矩阵超规若干——留给用户收敛，不代改。
+> **现役语料状态（2026-09-22）**：Qifu 知识库的 manifest **已删除**（当日上午语料重构 commit `e933fb3`「精简知识库架构，移除 Intelligence/Glossary/skills」一并删除，原 71 行含 26 kind 词表/四边矩阵）——`ValidateKnowledge` 自动降级为**仅断链**模式，软约束三项检查（词表/边方向/必填字段）当前 inert，重建 yaml 即恢复。代码侧零硬依赖（`KnowledgeManifestLoader.TryLoad` 对缺失文件返回 false），删清单无任何破坏。
+>
+> 历史注记：manifest 曾随 commit `2269abc` 配齐（26 kind/四边矩阵 + 7 处边方向修复），体检发现 kind 漂移 36 处 + 边矩阵超规若干——最终选择随「精简知识库架构」重构整体退场（认知下沉至场景课题），而非按词表收敛。
 
 ---
 
@@ -264,12 +269,14 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 | 时间 | 决策 |
 |---|---|
 | 2026-09 前 | 文件后缀 `.ok`；note SQLite 子系统并存（`note_node` 表） |
+| 2026-08-31 | **Read 展开模式升级**：`expandDepth` 覆盖参数 + `KnowledgeLink.Expand` 作者标志——默认从「内联一层」翻转为「无标志=只返回本对象」，安全阀（深度/字数上限/防环）同批引入 |
 | 2026-09 | **`.ok` → `.md` 迁移**（解析层 `.md` 优先、`.ok` 回退）；**note SQLite 子系统整体删除**——labs 文件成唯一权威存储，无第二套入口 |
 | 2026-09-20 | **front-matter 未知键透传**（修数据丢失 bug：typed DTO + IgnoreUnmatchedProperties 会静默剥掉 Intelligence 生命周期字段）；**manifest 体检**；**OkTargetResolver 四项解析增强**（断链 65→1） |
 | 2026-09-20 | **知识增长循环**：Search/Related/Rename/Merge 四工具 + Knowledge Marriage |
 | 2026-09-21 | **全面弃用 Python skill**：桌面 C# 九工具是唯一知识对象工具面（曾短暂退休改走 ko.py skill，随即恢复并定局）；`~/Desktop/knowledge-objects/`（ko.py 六命令五类型契约）归档零引用；`knowledge-bootstrap`/`knowledge-object-conventions` 两 skill 同批删除。**手机端 `MobileDocumentKnowledgeTool` 从未退休**（iOS 禁子进程） |
+| 2026-09-22 | **Qifu 语料大重构**（Aether agent 执行，语料库 git `e933fb3`）：删 `6_Intelligence`/`Glossary`/skills/**knowledge-manifest.yaml**，已知认知（共享设备tag客群、prepay_vintage 结构、大盘水位基线等）下沉至对应场景课题目录，检索链路去 Glossary 消歧——体检回到「仅断链」，词表/边矩阵软约束退场 |
 
-当前定局：**桌面 = C# 九工具 + Validate/检索/治理全家桶；手机 = 4 工具子集；skill 路径已死**。
+当前定局：**桌面 = C# 九工具 + Validate/检索/治理全家桶；手机 = 4 工具子集；skill 路径已死；manifest 体检为可选机制、现役语料未启用（无清单，仅断链）**。
 
 ---
 
@@ -283,4 +290,5 @@ apps/Mobile/Acme.Mobile.Shared/Hosting/Tools/        ← 手机端 4 工具子�
 6. **展开有安全阀**：read 默认只内联 `expand:true` 的边；覆盖模式最多 4 层、单目标 8000 字、累计 20000 字——超限截断并提示单独 read。
 7. **extraJson 仅标量**：嵌套 JSON 对象/数组跳过（front-matter 是 YAML，嵌套原样写回会产非法 YAML）。
 8. **AI 写盘实时生效**：`FileSystemWatcher` 自动重载树 + 活动 `.md`——agent 编辑知识对象后无需重启。
-9. **manifest 是语料数据**：kinds/edges/requiredFields 的变更改 yaml 文件即可，校验器代码不动；无清单=合法（仅断链检查）。
+9. **manifest 是语料数据（当前已删）**：kinds/edges/requiredFields 的变更改 yaml 文件即可，校验器代码不动；无清单=合法（仅断链检查）。现役 Qifu 语料 2026-09-22 重构后**无 manifest**——`ValidateKnowledge` 只剩断链检查，属预期状态非故障；要恢复软约束重建 `knowledge-manifest.yaml` 即可。
+10. **三处「Read 展开一层」旧描述与现行默认不符**：①CLAUDE.md「Knowledge objects」节 ②`DesktopToolRegistrations` 的 Read 注册描述 ③知识库自述 README——均写旧行为「只展开一层」；现行默认=作者标志模式（无标志=只返回本对象，agent 传 `expandDepth` 挖深，见 §7）。其中**知识库 README 是 agent 会 read 的规范文档**，其「links 只放真依赖（Read 会全文展开一层，乱挂 links 污染上下文）」这条规则的理由在新默认下已不成立——修正时须同步。

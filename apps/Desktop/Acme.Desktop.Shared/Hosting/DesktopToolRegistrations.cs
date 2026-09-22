@@ -86,7 +86,7 @@ public static class DesktopToolRegistrations
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
                     "ListDocumentKnowledgeObjects"),
                 ToolApprovalLevel.Safe);
-            reg.Register("ReadDocumentKnowledgeObject", "按相对路径读取一个文档知识对象（.md）的完整定义：kind+正文+links 指向的子 .md 文件内容（只展开一层）。name=相对路径不含 .md（如 业务分析/退款会员日志分析）。先调此工具获取知识再执行。", "文档知识",
+            reg.Register("ReadDocumentKnowledgeObject", "按相对路径读取一个文档知识对象（.md）的完整定义：kind+正文+links。默认只内联 link 上标了 expand:true 的目标（沿链递归多层）；未标 expand 的边只列引用，agent 按需单独 read。可选 expandDepth=N（0~4）覆盖模式：blanket 内联 N 层全部子节点（安全阀：4 层/单目标 8000 字/累计 20000 字截断）。name=相对路径不含 .md（如 业务分析/退款会员日志分析）。先调此工具获取知识再执行。", "文档知识",
                 sp => AIFunctionFactory.Create(
                     typeof(DocumentKnowledgeTool).GetMethod(nameof(DocumentKnowledgeTool.ReadDocumentKnowledgeObject))!,
                     sp.GetRequiredService<DocumentKnowledgeTool>(),
