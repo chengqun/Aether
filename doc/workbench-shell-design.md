@@ -254,8 +254,8 @@ nav rail 的项**不是手写的**——`WorkbenchShellViewModel.RebuildNav` 从
 | **RoyalApps.RoyalTerminal.Avalonia** | 0.5.2 | 集成终端（真实 PTY：Unix forkpty / Win ConPTY） | **全生态唯一可用**的 Avalonia PTY 控件（WriteOutput/SendInput/DataReceived），为此整体升级 Avalonia 12.1.1 |
 | ProDataGrid | 12.1.0.4 | CSV 表格预览 | MIT、drop-in 官方 DataGrid 替代（绕反射绑定坑） |
 | IconPacks.Avalonia.Codicons | 2.0.0 | 全 app 图标（VSCode codicon 填充 glyph） | 视觉语言直接对标 VSCode |
-| **Mermaider** | 0.12.2 | mermaid → SVG（纯托管，无 JS 运行时） | `MermaidSvgRenderer` 再对 SVG 后处理（节点/边 class 重定位拉直） |
-| Svg.Skia / Svg.Controls.Skia.Avalonia | 5.2.3 / 12.0.0.17 | SVG 光栅显示（mermaid 图、图标） | |
+| **Mermaider** | 0.12.2 | mermaid → SVG（纯托管，无 JS 运行时） | `MermaidSvgRenderer` 后处理：FlattenCssVars（Mermaider SVG 用 CSS `var()`/`color-mix()`，Svg.Skia 的 CSS 引擎不解析→黑块，须展平成具体色 + 删 `<style>` 块）+ 拉直折线边 + 边标签重定位 |
+| Svg.Skia / Svg.Controls.Skia.Avalonia | 5.2.3 / 12.0.0.17 | mermaid 图 **矢量直显**（`SvgImage` 实现 `IImage` 喂 `Image.Source`，任意 DPI 清晰免光栅） | 经 Markdown.Avalonia `IContainerBlockHandler` 拦截 `::: mermaid` 容器块注入 |
 | **SkiaSharp + SkiaSharp.Skottie** | 4.151.1 | 桌宠 Lottie 矢量动画（离屏 SKBitmap→WriteableBitmap） | libSkia 内置 skottie 符号，零新增原生库 |
 
 ### 引擎类功能底座
