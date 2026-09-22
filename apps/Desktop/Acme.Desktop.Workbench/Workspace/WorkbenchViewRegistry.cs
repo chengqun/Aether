@@ -17,14 +17,9 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
 {
     public WorkbenchViewRegistry(IServiceProvider serviceProvider, IEnumerable<IViewRegistryContributor> contributors)
     {
-        // 聊天右栏：共享 ChatView（紧凑），DataContext 绑 ChatViewModel。
+        // 聊天右栏：共享 ChatView（紧凑，聊天的唯一视图面——无 nav 全屏页，VSCode 式右栏助手），DataContext 绑 ChatViewModel。
         Register(PanelKeys.Chat,
             () => new ChatView(),
-            () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
-
-        // 全屏 AI 聊天页（nav 首项，app 启动默认页）：ChatPageView 居中 ChatGPT 式输入，与右栏 ChatView 共享同一 ChatViewModel。
-        Register(PanelKeys.ChatPage,
-            () => new ChatPageView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Chat);
 
         // 打开文档编辑器：共享 DocumentsEditorView（多标签 AvaloniaEdit 编辑器，从原 DocumentsView col2 拆出）。
@@ -67,11 +62,8 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new SourceControlView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Knowledge.SourceControl);
 
-        // 浏览器网络（侧边栏 nav 全屏入口）：与底部 BottomPanelView 的「网络」tab 同源 BrowserViewModel 单例——两个 BrowserView 实例绑同一 VM，
-        // 请求流双视图同步。底部 tab 适合边干别的边瞄一眼，侧边栏全屏适合细看请求流（agent browser_open/get_cookies 经同一 IBrowserService）。
-        Register(PanelKeys.Browser,
-            () => new BrowserView(),
-            () => serviceProvider.GetRequiredService<MainViewModelBase>().Browser);
+        // 浏览器网络无 nav 注册——唯一视图面是底部 BottomPanelView 内联的 BrowserPane（直接实例化 BrowserView，
+        // 绑同一 BrowserViewModel 单例；agent browser_open/get_cookies 经同一 IBrowserService）。
 
         // 专家：共享 ExpertsView（6 tab）。
         Register(PanelKeys.Experts,

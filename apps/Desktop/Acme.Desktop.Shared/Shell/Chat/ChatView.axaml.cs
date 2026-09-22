@@ -7,9 +7,8 @@ using Avalonia.Threading;
 namespace Acme.Desktop.Shared.Shell;
 
 /// <summary>
-/// 右栏紧凑聊天视图：头部（连接/设备配置/历史会话/新聊天）+ 底部紧凑输入 + 嵌入
-/// <see cref="ChatMessagesView"/>（消息区/模板/滚动 全在共享控件）。与全屏 <see cref="ChatPageView"/>
-/// 共享同一 <see cref="IChatViewHost"/> VM，仅头部与输入区布局不同。
+/// 右栏紧凑聊天视图（聊天的唯一视图面，VSCode 式右栏助手——无 nav 全屏页）：头部（连接/设备配置/历史会话/新聊天）
+/// + 底部紧凑输入 + 嵌入 <see cref="ChatMessagesView"/>（消息区/模板/滚动 全在共享控件），绑 <see cref="IChatViewHost"/> VM。
 /// </summary>
 public partial class ChatView : UserControl
 {

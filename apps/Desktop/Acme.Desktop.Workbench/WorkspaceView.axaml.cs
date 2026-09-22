@@ -425,7 +425,7 @@ public partial class WorkspaceView : UserControl
     private void ApplyTerminalVisibility(bool visible)
     {
         if (_terminalSplitGrid is null || _terminalRow < 0) return;
-        // tab-coupled：关闭类 tab（AI 聊天/专家/自动化/活动/网络）下终端视觉收起，切回编辑/数据页恢复（toggle 全局态不变，PTY 不中断）。
+        // tab-coupled：关闭类 tab（专家/自动化/活动）下终端视觉收起，切回编辑/数据页恢复（toggle 全局态不变，PTY 不中断）。
         bool effective = visible && !IsPanelHidingTab(CurrentTabRegionId());
         var row = _terminalSplitGrid.RowDefinitions[_terminalRow];
         if (!effective)
@@ -475,18 +475,18 @@ public partial class WorkspaceView : UserControl
         return tabbed.RegionIds[idx];
     }
 
-    /// <summary>关闭类 tab：AI 聊天/专家/自动化/活动/网络——这些页默认不显示底部终端和右侧 AI 对话（VSCode 式：
+    /// <summary>关闭类 tab：专家/自动化/活动——这些页默认不显示底部终端和右侧 AI 对话（VSCode 式：
     /// 编辑/数据页才需终端+右栏辅助，非编辑页收起让出空间）。tab-coupled：切到这些 tab → 终端/右栏视觉收起
     /// （toggle 全局态不变，PTY/流式不中断），切回编辑/数据页恢复；toggle 按钮仍反映全局 toggle 态（同 chat tab-coupled 范式）。</summary>
     private static bool IsPanelHidingTab(string? regionId)
-        => regionId is PanelKeys.ChatPage or PanelKeys.Experts or PanelKeys.Automation or PanelKeys.Activity or PanelKeys.Browser;
+        => regionId is PanelKeys.Experts or PanelKeys.Automation or PanelKeys.Activity;
 
     /// <summary>workspace SelectedTabIndex 变化 → 侧栏显隐 + 切对应树 + 终端/右栏 tab-coupled（关闭类 tab 收起）。</summary>
     private void OnWorkspaceSelectedTabChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IWorkspace.SelectedTabIndex) || _workspace is null) return;
         ApplyLeftTreeVisibility(ResolveLeftTreeKind(_workspace.SelectedTabIndex));
-        ApplyChatVisibility(); // tab-coupled 右栏：关闭类 tab（AI 聊天/专家/自动化/活动/网络）收起
+        ApplyChatVisibility(); // tab-coupled 右栏：关闭类 tab（专家/自动化/活动）收起
         ApplyTerminalVisibility(_terminalService?.IsPanelVisible ?? true); // tab-coupled 终端：同上
     }
 
@@ -572,7 +572,7 @@ public partial class WorkspaceView : UserControl
     /// <summary>折叠/展开右侧聊天 region：改其父 Grid 列宽（0 ↔ 展开宽度）+ splitter 显隐 + content 显隐。
     /// 折叠时聊天视图不销毁（仅隐藏 region 空间，流式回复继续在后台）。镜像 <see cref="ApplyLeftTreeVisibility"/>，
     /// 但不切子树（聊天只有单一视图，无 documents/notes 那种树切换）。复用 <see cref="SetSplitterVisibleCol"/>，不新增方法。
-    /// tab-coupled（Option A）：有效可见 = toggle 开 && 当前非关闭类 tab——切到「AI 聊天/专家/自动化/活动/网络」nav 时
+    /// tab-coupled（Option A）：有效可见 = toggle 开 && 当前非关闭类 tab——切到「专家/自动化/活动」nav 时
     /// 右栏自动收起（这些页不需边聊边看，让出空间）；切回编辑/数据页时若 toggle 开则右栏「漏出来」边聊边看期货/文档。</summary>
     private void ApplyChatVisibility()
     {

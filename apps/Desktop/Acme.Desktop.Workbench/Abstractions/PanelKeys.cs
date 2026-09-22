@@ -11,12 +11,8 @@ namespace Acme.Desktop.Workbench.Abstractions;
 /// </remarks>
 public static class PanelKeys
 {
-    /// <summary>聊天面板（共享 ChatView，右 region 紧凑视图）。</summary>
+    /// <summary>聊天面板（共享 ChatView，右 region 紧凑视图——聊天的唯一视图面，无 nav 全屏页）。</summary>
     public const string Chat = "chat";
-
-    /// <summary>全屏 AI 聊天页（共享 ChatPageView，tabbed nav 首项——app 启动默认页）。
-    /// 与 <see cref="Chat"/>（右栏紧凑 ChatView）共享同一 ChatViewModel，仅头部/输入布局不同（全屏居中 ChatGPT 式输入）。</summary>
-    public const string ChatPage = "chatpage";
 
     /// <summary>打开文档面板（DocumentsEditorView，多标签 AvaloniaEdit 编辑器，打开磁盘文件）。</summary>
     public const string Documents = "documents";
@@ -30,12 +26,9 @@ public static class PanelKeys
     /// <summary>源代码管理面板（SourceControlView，git status/diff/stage/commit/discard）。</summary>
     public const string SourceControl = "sourcecontrol";
 
-    /// <summary>集成终端面板（TerminalView，多标签真实 PTY；agent run_in_terminal 工具的目标）。</summary>
+    /// <summary>集成终端面板（TerminalView，多标签真实 PTY；agent run_in_terminal 工具的目标）。
+    /// 底部 region 宿主 BottomPanelView（内部叠放终端 + 浏览器网络 BrowserPane，按内部 tab 切换），不进 nav rail。</summary>
     public const string Terminal = "terminal";
-
-    /// <summary>浏览器网络面板（BrowserView，Playwright 持久会话 + 实时记录 HTTP 请求；agent browser_open/get_cookies 工具的目标）。
-    /// 与终端共用底部 tabbed region（LayoutTabbed([Terminal, Browser]) 切换），不进 nav rail。</summary>
-    public const string Browser = "browser";
 
     /// <summary>活动热力图面板（ActivityView，GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。</summary>
     public const string Activity = "activity";

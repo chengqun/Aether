@@ -253,8 +253,7 @@
       </StackPanel>
     </Border>
 
-    <!-- 消息区委托给共享控件 ChatMessagesView（模板 + 滚动/贴底/历史加载/工具卡展开 全在它内）。
-         右栏紧凑视图与全屏 ChatPageView 共用此控件，两视图只差头部与输入区。 -->
+    <!-- 消息区委托给共享控件 ChatMessagesView（模板 + 滚动/贴底/历史加载/工具卡展开 全在它内）。 -->
     <shell:ChatMessagesView />
   </DockPanel>
 </UserControl>

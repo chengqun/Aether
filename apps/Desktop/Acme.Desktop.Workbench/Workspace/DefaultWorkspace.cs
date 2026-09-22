@@ -16,13 +16,12 @@ public static class DefaultWorkspace
         {
             new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector"),
             new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
-            new(PanelKeys.ChatPage, PanelKeys.ChatPage, "AI 聊天", "chat"),
         },
         Layout: new LayoutSplit(
             Orientation: SplitOrientation.Horizontal,
             Children: new LayoutNode[]
             {
-                new LayoutTabbed(RegionIds: new[] { PanelKeys.ChatPage, PanelKeys.Experts }, SelectedIndex: 0),
+                new LayoutTabbed(RegionIds: new[] { PanelKeys.Experts }, SelectedIndex: 0),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
             // Pixels: [0, 420] → 内容区 Star（弹性）+ chat 区 420px 默认（首次/重置布局时）。

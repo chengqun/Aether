@@ -14,8 +14,7 @@ namespace Acme.Desktop.Shared.Shell;
 /// <summary>
 /// 聊天消息流（共享控件）：滚动消息列表 + 全部消息模板（用户气泡 / agent markdown / 思考 /
 /// 工具步骤 / 计划 / 审批卡）+ 贴底跟随 / 历史增量加载 / 工具卡展开 / 复制 等交互。
-/// 被 <see cref="ChatView"/>（右栏紧凑）与 <see cref="ChatPageView"/>（全屏）共同嵌入——消息渲染
-/// 单一定义，两视图只差头部与输入区。绑 <c>IChatViewHost</c>（DataContext 继承自父视图同款 VM）。
+/// 由 <see cref="ChatView"/>（右栏紧凑，聊天唯一视图面）嵌入。绑 <c>IChatViewHost</c>（DataContext 继承自父视图同款 VM）。
 /// </summary>
 public partial class ChatMessagesView : UserControl
 {
