@@ -22,6 +22,9 @@ public partial class TerminalViewModel : ObservableObject
     /// <summary>标签条数据源（绑 TerminalView 标签 ItemsControl）。</summary>
     public ObservableCollection<TerminalSessionItem> Sessions { get; } = new();
 
+    /// <summary>是否零会话——驱动空态「新建终端」占位按钮（标签条 [+] 已删，关掉全部会话后这是唯一新建入口）。</summary>
+    public bool HasNoSessions => Sessions.Count == 0;
+
     [ObservableProperty] private TerminalSessionItem? _activeSession;
 
     public TerminalViewModel(IServiceProvider serviceProvider, ICurrentProjectDirectoryProvider projectDirProvider)
@@ -82,6 +85,7 @@ public partial class TerminalViewModel : ObservableObject
             ActiveSession = Sessions.FirstOrDefault(x => x.Id == _service.ActiveSessionId);
         foreach (var s in Sessions)
             s.IsActive = s.Id == _service.ActiveSessionId;
+        OnPropertyChanged(nameof(HasNoSessions));
     }
 
     [RelayCommand]
