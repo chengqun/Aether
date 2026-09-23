@@ -37,17 +37,6 @@
     <Style Selector="Button.term-close:pointerover">
       <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     </Style>
-    <!-- 空态占位「新建终端」按钮（零会话时唯一新建入口；常驻样式 term-new 已随 [+] 删除） -->
-    <Style Selector="Button.term-empty">
-      <Setter Property="Background" Value="{DynamicResource SidebarBgBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    </Style>
-    <Style Selector="Button.term-empty:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
-    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*">
@@ -90,18 +79,8 @@
       </StackPanel>
     </Border>
     <!-- 终端控件宿主：每会话一个 RoyalTerminal TerminalControl，靠 IsVisible 切换。
-         空态占位：删掉标签条 [+] 后，关掉全部会话时唯一的新建入口（平时不可见，零常驻 chrome）。 -->
-    <Panel Grid.Row="1">
-      <Grid x:Name="ContentHost" Background="{DynamicResource TerminalBgBrush}"/>
-      <Button Command="{Binding NewSessionCommand}" HorizontalAlignment="Center" VerticalAlignment="Center"
-              Padding="16,8" Classes="term-empty"
-              IsVisible="{Binding HasNoSessions}">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <Path Data="{x:Static shell:Codicons.Add}" Stretch="Uniform" Width="14" Height="14"
-                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-          <TextBlock Text="新建终端" FontSize="13"/>
-        </StackPanel>
-      </Button>
-    </Panel>
+         无空态浮层/新建按钮——关掉最后一个会话由 TerminalService.CloseSession 自动补全新会话（面板恒有活终端）。
+         resize 防抖在 transport 层（TerminalResizeDebounce 包两个工厂）——本地网格实时重排，非布局冻结。 -->
+    <Grid Grid.Row="1" x:Name="ContentHost" Background="{DynamicResource TerminalBgBrush}"/>
   </Grid>
 </UserControl>

@@ -143,6 +143,9 @@ public sealed class TerminalService : ITerminalService, IAsyncDisposable
         {
             if (newActive is { } aid) { _view?.Activate(aid); ActiveSessionChanged?.Invoke(aid); }
             SessionsChanged?.Invoke();
+            // 关掉最后一个会话 → 自动补一个全新会话：终端面板恒有活终端（无空态死区——
+            // 标签条 [+]/空态浮层均已按用户心智删除，无其它新建入口；cwd 走 shell 默认家目录）。
+            lock (_lock) { if (_sessions.Count == 0) { CreateSession(null, null); return; } }
         }
     }
 

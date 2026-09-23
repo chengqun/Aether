@@ -60,7 +60,17 @@ public partial class TerminalView : UserControl
     public void CreateSessionControl(ITerminalSession session)
     {
         if (_controls.ContainsKey(session.Id)) return;
-        var ctrl = new TerminalControl
+        // 6 参 ctor 注入防抖 session service（Unix PTY resize 防抖——VSCode 式本地实时重排 + PTY 只拿稳定
+        // 后尺寸；RoyalTerminal 仅 Windows 端自带 75ms 防抖。详见 TerminalResizeDebounce）。其余 5 参 = 库
+        // 公开默认实现，与控件无参 ctor 内部默认等价（DefaultVtProcessorFactory 在 Vt.Default 包、
+        // DefaultPtyFactory 在 Pty.Platform 包，均经 Avalonia 包传递引用）。
+        var ctrl = new TerminalControl(
+            TerminalResizeDebounce.Wrap(new RoyalTerminal.Terminal.Services.TerminalSessionService()),
+            new RoyalTerminal.Avalonia.Services.DefaultTerminalInputAdapter(),
+            new RoyalTerminal.Avalonia.Services.DefaultTerminalSelectionService(),
+            new RoyalTerminal.Avalonia.Services.DefaultTerminalScrollService(),
+            new RoyalTerminal.Terminal.DefaultVtProcessorFactory(),
+            new RoyalTerminal.Terminal.DefaultPtyFactory())
         {
             IsVisible = false,
             TerminalFontSize = 13,
