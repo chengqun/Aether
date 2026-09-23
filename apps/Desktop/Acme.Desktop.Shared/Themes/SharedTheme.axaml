@@ -209,11 +209,12 @@
     <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
   </Style>
 
-  <!-- 侧边栏 rail：恒定 88px 竖排图标+标签（QWork/飞书式——无展开/收起，标签常显；矮窗口 rail 内滚）。
+  <!-- 侧边栏 rail：恒定 72px 竖排图标+标签（QWork/飞书式——无展开/收起，标签常显；矮窗口 rail 内滚）。
+       宽度按「最长标签 4 汉字 × 12px = 48px + 项 margin 12px + 两侧余量」收——标签一律 ≤4 汉字（租户 Workspace.cs Title）。
        descendant 选择器从 Border.sidebar-rail 触达内部按钮（nav 项 + 账号）。
-       演进：48px 图标-only（2026-09-22，删展开/收起双态）→ 88px 图标+常显标签（2026-09-23，选中/hover 态一并修复）。 -->
+       演进：48px 图标-only（2026-09-22，删展开/收起双态）→ 88px 图标+常显标签（2026-09-23）→ 72px 收窄（同日，用户反馈偏宽）。 -->
   <Style Selector="Border.sidebar-rail">
-    <Setter Property="Width" Value="88"/>
+    <Setter Property="Width" Value="72"/>
   </Style>
 
   <!-- 一级 Tab 按钮 -->

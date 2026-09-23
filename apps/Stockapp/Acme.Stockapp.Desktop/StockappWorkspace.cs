@@ -12,7 +12,7 @@ namespace Acme.Stockapp.Desktop;
 /// 终端与上方主面板同时可见，不用切 tab）；聊天住右栏 ChatView、网络住底部「网络」tab，均无 nav 全屏页。
 /// 比 Qifu 多 CTP 期货 + 回测 + 股票（外部版股票期货场景）。
 /// icon 用 codicon key（connector/automation/futures/backtest/activity/chat）。
-/// Title 是 nav rail 常显标签——保持 2-4 字（源码管理/资料SCM）；Group 连续变化时 rail 项间加间距分组（创作/运行/洞察/业务）。
+/// Title 是 nav rail 常显标签——保持 2-4 字（源码管理/资料版本——资料库+其版本管理成对，全汉字 ≤4 字）；Group 连续变化时 rail 项间加间距分组（创作/运行/洞察/业务）。
 /// </summary>
 public static class StockappWorkspace
 {
@@ -29,7 +29,7 @@ public static class StockappWorkspace
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation", "运行"),
             new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history", "洞察"),
             new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge", "创作"),
-            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料SCM", "sourcecontrol", "创作"),
+            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料版本", "sourcecontrol", "创作"),
             new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures", "业务"),
             new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest", "业务"),
             new(PanelKeys.StockTrade, PanelKeys.StockTrade, "股票", "activity", "业务"),

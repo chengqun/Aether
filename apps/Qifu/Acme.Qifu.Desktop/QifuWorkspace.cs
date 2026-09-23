@@ -12,7 +12,7 @@ namespace Acme.Qifu.Desktop;
 /// 终端与上方主面板同时可见，不用切 tab）；聊天住右栏 ChatView、网络住底部「网络」tab，均无 nav 全屏页。
 /// 无租户专属页（无 CTP/回测/股票）。
 /// icon 用 icons.json manifest key（IconLoader 解析为 path data）。
-/// Title 是 nav rail 常显标签——保持 2-4 字（源码管理/资料SCM）；Group 连续变化时 rail 项间加间距分组（创作/运行/洞察）。
+/// Title 是 nav rail 常显标签——保持 2-4 字（源码管理/资料版本——资料库+其版本管理成对，全汉字 ≤4 字）；Group 连续变化时 rail 项间加间距分组（创作/运行/洞察）。
 /// </summary>
 public static class QifuWorkspace
 {
@@ -29,7 +29,7 @@ public static class QifuWorkspace
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation", "运行"),
             new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history", "洞察"),
             new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge", "创作"),
-            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料SCM", "sourcecontrol", "创作"),
+            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料版本", "sourcecontrol", "创作"),
             new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
         },
         Layout: new LayoutSplit(
