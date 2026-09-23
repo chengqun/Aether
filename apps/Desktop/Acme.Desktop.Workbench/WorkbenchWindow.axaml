@@ -158,7 +158,7 @@
 
 
         <!-- 终端/AI 右栏 toggle 已上移标题栏（VSCode 式）；侧栏底部仅剩账号按钮。 -->
-        <Button Grid.Row="1" Classes="account-rail" ToolTip.Tip="{Binding UserName}">
+        <Button Grid.Row="1" Classes="account-rail" ToolTip.Tip="{Binding AccountTooltip}">
           <Button.Flyout>
             <MenuFlyout Placement="Top">
               <MenuItem Header="设置" Command="{Binding ShowSettingsCommand}">
@@ -195,10 +195,22 @@
               </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
-          <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}">
-            <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
+          <!-- 已登录：accent 圆 + 用户名首字；未登录：中性底 + 人形图标（accent 彩圆+「?」读不出「点这里登录」）。 -->
+          <!-- Panel 包双 Border：Button 是 ContentControl 只容一个内容子元素，两态互斥叠放。 -->
+          <Panel>
+            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}"
+                    IsVisible="{Binding IsLoggedIn}">
+              <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}"
+                    Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    IsVisible="{Binding !IsLoggedIn}">
+              <Path Data="{x:Static shell:Codicons.Account}" Stretch="Uniform" Width="14" Height="14"
+                    Fill="{DynamicResource TextSecondaryBrush}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Panel>
         </Button>
       </Grid>
     </Border>

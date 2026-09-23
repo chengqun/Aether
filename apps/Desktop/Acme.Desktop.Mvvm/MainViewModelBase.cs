@@ -180,16 +180,21 @@ public abstract partial class MainViewModelBase : ObservableObject, IShellHost
     // —— 账户 / 登录态 ——
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UserInitial))]
+    [NotifyPropertyChangedFor(nameof(AccountTooltip))]
     private bool _isLoggedIn;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UserInitial))]
+    [NotifyPropertyChangedFor(nameof(AccountTooltip))]
     private string _userName = "未登录";
 
     /// <summary>账户头像首字母（未登录显示 ?）。</summary>
     public string UserInitial => IsLoggedIn
         ? (string.IsNullOrEmpty(UserName) ? "?" : UserName[..1])
         : "?";
+
+    /// <summary>侧栏底部账户按钮 Tooltip——未登录时带「点击登录」引导（人形占位图标配「未登录」裸文案不够指向）。</summary>
+    public string AccountTooltip => IsLoggedIn ? UserName : "未登录 · 点击登录";
 
     /// <summary>启动期初始化：登录态 + 业务 VM 加载 + 聊天引擎初始化 + 调度器/MCP 启动。
     /// 业务 VM 须先于 <see cref="Chat"/> 初始化（Chat 恢复选中目标读这三类列表）。</summary>

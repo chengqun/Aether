@@ -68,6 +68,7 @@ public static class Codicons
     public static readonly string Refresh = R(PackIconCodiconsKind.Refresh);             // ↻↺
     public static readonly string ColorMode = R(PackIconCodiconsKind.ColorMode);         // 🎨 主题
     public static readonly string Key = R(PackIconCodiconsKind.Key);                     // 🔑
+    public static readonly string Account = R(PackIconCodiconsKind.Account);             // 👤 账户/未登录占位
     public static readonly string SignOut = R(PackIconCodiconsKind.SignOut);             // 🚪 退出
     public static readonly string SignIn = R(PackIconCodiconsKind.SignIn);               // 登录
     public static readonly string SettingsGear = R(PackIconCodiconsKind.SettingsGear);   // ⚙ 设置
