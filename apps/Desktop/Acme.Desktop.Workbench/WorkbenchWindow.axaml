@@ -198,15 +198,15 @@
           <!-- 已登录：accent 圆 + 用户名首字；未登录：中性底 + 人形图标（accent 彩圆+「?」读不出「点这里登录」）。 -->
           <!-- Panel 包双 Border：Button 是 ContentControl 只容一个内容子元素，两态互斥叠放。 -->
           <Panel>
-            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}"
+            <Border Width="32" Height="32" CornerRadius="{DynamicResource CornerRadiusLg}" Background="{DynamicResource AccentBrush}"
                     IsVisible="{Binding IsLoggedIn}">
-              <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="13" FontWeight="SemiBold"
+              <TextBlock Text="{Binding UserInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="14" FontWeight="SemiBold"
                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <Border Width="28" Height="28" CornerRadius="{DynamicResource CornerRadiusLg}"
+            <Border Width="32" Height="32" CornerRadius="{DynamicResource CornerRadiusLg}"
                     Background="{DynamicResource CardBgBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     IsVisible="{Binding !IsLoggedIn}">
-              <Path Data="{x:Static shell:Codicons.Account}" Stretch="Uniform" Width="14" Height="14"
+              <Path Data="{x:Static shell:Codicons.Account}" Stretch="Uniform" Width="16" Height="16"
                     Fill="{DynamicResource TextSecondaryBrush}"
                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
