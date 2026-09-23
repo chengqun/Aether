@@ -158,23 +158,41 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="Opacity" Value="1"/>
   </Style>
+  <!-- 同 nav-rail:disabled：Background 须 template 层才能压过 Fluent 主题的 :disabled ContentPresenter setter -->
+  <Style Selector="Button.settings-nav:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+  </Style>
 
-  <!-- rail 导航项（仅图标，居中——侧栏恒定 48px 图标栏，VSCode activity bar 式） -->
+  <!-- rail 导航项（紧凑竖排：图标上/常显标签下居中——QWork/飞书式，标签常显免猜图标） -->
   <Style Selector="Button.nav-rail">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusMd}"/>
-    <Setter Property="Padding" Value="0,9"/>
-    <Setter Property="MinHeight" Value="40"/>
+    <Setter Property="Padding" Value="0,7"/>
+    <Setter Property="MinHeight" Value="56"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="Margin" Value="6,2"/>
   </Style>
+  <!-- 选中态（当前页）：accent 胶囊——按钮 IsEnabled=!IsCurrent（disabled 不响应 hover，指针样式即语义）。
+       Background 须在 /template/ ContentPresenter 层设：Fluent 主题的 :disabled/:pointerover 样式直接设
+       ContentPresenter 背景、绕过 TemplateBinding，Button 级 setter 压不过（本仓 term-tab/scm-row-btn/account-rail 同款处理）。 -->
   <Style Selector="Button.nav-rail:disabled">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
     <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="Button.nav-rail:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- 悬停底色（NavHoverBrush）——48px icon-only 改版时曾随旧样式丢失，随标签化恢复；同须 template 层 -->
+  <Style Selector="Button.nav-rail:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
+  </Style>
+  <!-- 分组首项：上方加间距分隔（Group 变化 → Classes.gap ← NavItem.StartsGroup） -->
+  <Style Selector="Button.nav-rail.gap">
+    <Setter Property="Margin" Value="6,14,6,2"/>
   </Style>
 
   <!-- 账户按钮（仅头像，居中，hover 背景）——侧栏底部账号入口 -->
@@ -191,11 +209,11 @@
     <Setter Property="Background" Value="{DynamicResource NavHoverBrush}"/>
   </Style>
 
-  <!-- 侧边栏 rail：恒定 48px 仅图标（VSCode activity bar 式——无展开/收起，nav 项 hover Tooltip 显名）。
+  <!-- 侧边栏 rail：恒定 88px 竖排图标+标签（QWork/飞书式——无展开/收起，标签常显；矮窗口 rail 内滚）。
        descendant 选择器从 Border.sidebar-rail 触达内部按钮（nav 项 + 账号）。
-       原展开/收起双态（Classes.expanded 绑 IsSidebarExpanded 切 200px/文字显隐）2026-09-22 删——展开收起属多余摩擦。 -->
+       演进：48px 图标-only（2026-09-22，删展开/收起双态）→ 88px 图标+常显标签（2026-09-23，选中/hover 态一并修复）。 -->
   <Style Selector="Border.sidebar-rail">
-    <Setter Property="Width" Value="48"/>
+    <Setter Property="Width" Value="88"/>
   </Style>
 
   <!-- 一级 Tab 按钮 -->
@@ -363,8 +381,11 @@
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
   </Style>
   <Style Selector="Button.scm-act:pointerover">
-    <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- 同 nav-rail:pointerover：Background 须 template 层才能压过 Fluent 主题的 :pointerover ContentPresenter setter -->
+  <Style Selector="Button.scm-act:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
   </Style>
 
   <!-- TreeView 共享块：三棵文件/笔记/知识树各自带 class（notes-tree/docs-tree/ko-tree）——

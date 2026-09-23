@@ -7,5 +7,7 @@ public interface IPanel
     string Key { get; }
     string Title { get; }
     string Icon { get; }
+    /// <summary>可选分组名（仅 nav rail 呈现用；null = 不分组）。来自 <see cref="PanelDescriptor.Group"/>。</summary>
+    string? Group { get; }
     object? ViewModel { get; }
 }

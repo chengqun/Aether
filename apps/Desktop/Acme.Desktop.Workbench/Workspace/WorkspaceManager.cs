@@ -28,7 +28,7 @@ public sealed class WorkspaceManager : IWorkspaceManager
         var panels = definition.Panels
             .Select(d => (IPanel)new PanelViewModel(
                 d.RegionId, d.Key, d.Title, d.Icon,
-                _viewRegistry.CreateViewModel(d.Key)))
+                _viewRegistry.CreateViewModel(d.Key), d.Group))
             .ToList();
 
         var selectedIndex = LayoutNode.FindFirstTabbed(definition.Layout)?.SelectedIndex ?? 0;

@@ -181,12 +181,15 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
             UpdateNavCurrent();
     }
 
-    /// <summary>从活动工作台的首个 LayoutTabbed 节点派生导航 rail 项（数据驱动：租户 panel 差异由工作台定义决定）。</summary>
+    /// <summary>从活动工作台的首个 LayoutTabbed 节点派生导航 rail 项（数据驱动：租户 panel 差异由工作台定义决定）。
+    /// 连续项 <see cref="PanelDescriptor.Group"/> 变化时标记 <see cref="NavItem.StartsGroup"/>——rail 里分组首项上方加间距（呈现层 Classes.gap 消费）。</summary>
     private void RebuildNav(IWorkspace ws)
     {
         WorkbenchNavItems.Clear();
         var tabbed = LayoutNode.FindFirstTabbed(ws.Layout);
         if (tabbed is null) return;
+        string? prevGroup = null;
+        var isFirst = true;
         foreach (var rid in tabbed.RegionIds)
         {
             var panel = ws.Panels.FirstOrDefault(p => p.RegionId == rid);
@@ -199,7 +202,10 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
                 Icon = icon,
                 Title = panel.Title,
                 Command = SwitchContentCommand,
+                StartsGroup = !isFirst && panel.Group != prevGroup,
             });
+            prevGroup = panel.Group;
+            isFirst = false;
         }
     }
 

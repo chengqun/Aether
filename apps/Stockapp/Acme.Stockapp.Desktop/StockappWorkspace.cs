@@ -12,6 +12,7 @@ namespace Acme.Stockapp.Desktop;
 /// 终端与上方主面板同时可见，不用切 tab）；聊天住右栏 ChatView、网络住底部「网络」tab，均无 nav 全屏页。
 /// 比 Qifu 多 CTP 期货 + 回测 + 股票（外部版股票期货场景）。
 /// icon 用 codicon key（connector/automation/futures/backtest/activity/chat）。
+/// Title 是 nav rail 常显标签——保持 2-4 字（源码管理/资料SCM）；Group 连续变化时 rail 项间加间距分组（创作/运行/洞察/业务）。
 /// </summary>
 public static class StockappWorkspace
 {
@@ -21,17 +22,17 @@ public static class StockappWorkspace
         Panels: new List<PanelDescriptor>
         {
             new(PanelKeys.LeftTree, PanelKeys.LeftTree, "侧栏", "files"),
-            new(PanelKeys.Documents, PanelKeys.Documents, "文档", "documents"),
-            new(PanelKeys.SourceControl, PanelKeys.SourceControl, "源代码管理", "sourcecontrol"),
+            new(PanelKeys.Documents, PanelKeys.Documents, "文档", "documents", "创作"),
+            new(PanelKeys.SourceControl, PanelKeys.SourceControl, "源码管理", "sourcecontrol", "创作"),
             new(PanelKeys.Terminal, PanelKeys.Terminal, "终端", "terminal"),
-            new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector"),
-            new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation"),
-            new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history"),
-            new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge"),
-            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料库·SCM", "sourcecontrol"),
-            new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures"),
-            new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest"),
-            new(PanelKeys.StockTrade, PanelKeys.StockTrade, "股票", "activity"),
+            new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector", "运行"),
+            new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation", "运行"),
+            new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history", "洞察"),
+            new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge", "创作"),
+            new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料SCM", "sourcecontrol", "创作"),
+            new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures", "业务"),
+            new(PanelKeys.Backtest, PanelKeys.Backtest, "回测", "backtest", "业务"),
+            new(PanelKeys.StockTrade, PanelKeys.StockTrade, "股票", "activity", "业务"),
             new(PanelKeys.Chat, PanelKeys.Chat, "聊天右栏", "chat"),
         },
         Layout: new LayoutSplit(
