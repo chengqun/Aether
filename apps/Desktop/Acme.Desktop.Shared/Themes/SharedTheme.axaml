@@ -502,15 +502,47 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
   </Style>
 
-  <!-- ═══ 分隔条分界线（区域拖动条）：VSCode 式——静止透明（无分界线，靠区域背景对比），hover 才显 SplitterBrush ════
-       WorkspaceView code 创建的 GridSplitter（工作台区域之间 / 终端 / 左树 / 右 chat）不设本地 Background，
-       由此样式接管 → 悬停时 {DynamicResource SplitterBrush} 现身，颜色随主题 JSON 变（改 JSON 即调分界线色）。
-       已在某元素上显式设 Background（如 BrowserView 用了 BorderBrush）的 splitter 不受此样式影响（本地值优先）。 -->
+  <!-- ═══ 分隔条分界线（区域拖动条）═══
+       基础样式（静止透明 + hover 显 SplitterBrush）留给编辑器页等 XAML 声明的 GridSplitter；
+       工作台区域分界走 **常显 hairline**（split-v / split-h，由 WorkspaceView.BuildSplit 按 Orientation 打 class）：
+       静止 1px SplitterBrush 细线——既是区域边界（light 下 chat/终端/内容区同为纯白、纯靠背景对比完全看不到边界，
+       2026-09-23 用户反馈后改 VSCode 式常显）也是拖拽把手的可视提示；hover 加粗 3px 转 AccentBrush；
+       6px 全宽命中区不变（模板根 Panel 透明底）。自定义模板纯视觉——GridSplitter 拖拽逻辑在控件级，不受影响。 -->
   <Style Selector="GridSplitter">
     <Setter Property="Background" Value="Transparent"/>
   </Style>
   <Style Selector="GridSplitter:pointerover">
     <Setter Property="Background" Value="{DynamicResource SplitterBrush}"/>
+  </Style>
+  <!-- 列分隔（左右区域之间）→ 竖线 -->
+  <Style Selector="GridSplitter.split-v">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel Background="Transparent">
+          <Rectangle x:Name="Line" Width="1" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                     Fill="{DynamicResource SplitterBrush}"/>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="GridSplitter.split-v:pointerover /template/ Rectangle#Line">
+    <Setter Property="Width" Value="3"/>
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <!-- 行分隔（上下区域之间）→ 横线 -->
+  <Style Selector="GridSplitter.split-h">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel Background="Transparent">
+          <Rectangle x:Name="Line" Height="1" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                     Fill="{DynamicResource SplitterBrush}"/>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="GridSplitter.split-h:pointerover /template/ Rectangle#Line">
+    <Setter Property="Height" Value="3"/>
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
 </Styles>

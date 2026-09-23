@@ -265,13 +265,14 @@ public partial class WorkspaceView : UserControl
             grid.Children.Add(child);
             if (i < n - 1)
             {
-                // 分界线接主题 token SplitterBrush：Background 不在此设（保持默认 null），由 SharedTheme 的
-                // `GridSplitter` 样式用 {DynamicResource SplitterBrush} 接管——这样「改主题 JSON」即可调分界线颜色。
+                // 分界线 = 常显 hairline 模板（SharedTheme 的 GridSplitter.split-v / split-h：静止 1px SplitterBrush、
+                // hover 3px AccentBrush）——方向按 split Orientation 打 class。纯视觉模板，拖拽逻辑在 GridSplitter 控件级。
                 var splitter = new GridSplitter
                 {
                     ResizeDirection = horiz ? GridResizeDirection.Columns : GridResizeDirection.Rows,
                     Focusable = false,
                 };
+                splitter.Classes.Add(horiz ? "split-v" : "split-h");
                 // 拖动结束同步展开尺寸记忆字段——否则拖动只改 Grid 列/行宽、`_xxxExpandedWidth/Height` 还是旧值，
                 // 切导航时 ApplyXxxVisibility 用旧值覆盖 → 分栏「重置」回拖动前位置（VSCode 应保持拖动后位置）。
                 splitter.DragCompleted += (_, _) => SyncExpandedSizes();
