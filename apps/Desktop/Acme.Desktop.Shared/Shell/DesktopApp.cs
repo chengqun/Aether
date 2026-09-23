@@ -42,6 +42,10 @@ public static class DesktopApp
     /// 已 Hide → <c>ShowDialog(主窗)</c> 抛 "Cannot show window with non-visible owner" 的问题：
     /// 有可见 owner（主窗或桌宠）走 <c>ShowDialog(owner)</c> 模态；否则退回无 owner 的 <c>Show()</c>，
     /// 经 <c>Closed</c> 完成 Task。审批窗/ask_user 窗等 agent 运行中弹出的模态窗都走此 helper。
+    /// ⚠ **只用于「从主窗（或桌宠）直接弹出」的模态**——对话框里再弹子对话框（嵌套模态）勿用：
+    /// owner 会被解析成主窗而非宿主对话框，子窗关闭时主窗被 Activate 顶到宿主对话框之上，
+    /// 宿主窗（多无任务栏图标）被压到主窗后「消失」。嵌套场景直接 <c>ShowDialog(宿主窗)</c>
+    /// （活例：SettingsViewModel.ShowLlmEditModal——设置窗内的 LLM 编辑窗挂设置窗）。
     /// </summary>
     public static async Task ShowModalWithVisibleOwnerAsync(Window window)
     {

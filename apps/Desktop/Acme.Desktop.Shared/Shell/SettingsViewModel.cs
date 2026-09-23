@@ -301,7 +301,15 @@ public sealed partial class SettingsViewModel : ObservableObject
             window.Close();
         };
 
-        await DesktopApp.ShowModalWithVisibleOwnerAsync(window);
+        // 子模态的 owner 必须是设置窗（按钮宿主窗），不能走 ShowModalWithVisibleOwnerAsync——ModalOwnerResolver 会拿主窗：
+        // 设置窗已是主窗的模态，子窗再挂主窗 → 子窗关闭时 Avalonia Activate(主窗) 把主窗顶到设置窗之上，
+        // 设置窗（ShowInTaskbar=False）被压到主窗后面「消失」，须重新点设置才出来。正确嵌套链：子窗关 → 回设置窗。
+        var owner = desktop.Windows.OfType<SettingsWindow>().FirstOrDefault(w => w.IsVisible)
+                    ?? desktop.Windows.FirstOrDefault(w => w.IsActive && w.IsVisible);
+        if (owner is not null)
+            await window.ShowDialog(owner);
+        else
+            await DesktopApp.ShowModalWithVisibleOwnerAsync(window); // 兜底（理论不到：按钮就在设置窗里）
     }
 
     [RelayCommand]
