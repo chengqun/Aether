@@ -74,6 +74,27 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         ".csv", ".sql",
     };
 
+    // —— 分区切换器状态（labs 根下固定类型目录；全部声明即初始化——OnFolderOpeningAsync 可能在构造期执行）——
+
+    /// <summary>分区持久化偏好键（记住上次分区，值为目录名如 "knowledge"）。</summary>
+    private const string ScopePrefKey = "ko.scope";
+
+    /// <summary>跨分区展开记忆（并集：切走时并进当前展开路径，切回时按路径命中恢复；换根清空）。</summary>
+    private readonly HashSet<string> _rememberedExpandedPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>当前可用分区（labs 根下存在且租户可见的固定类型目录，按固定顺序）。</summary>
+    private IReadOnlyList<KoScopeItem> _scopes = Array.Empty<KoScopeItem>();
+
+    /// <summary>当前分区索引（-1 = 无分区）。</summary>
+    private int _scopeIndex = -1;
+
+    /// <summary>当前分区目录名（<see cref="BuildNode"/> 根层过滤在后台线程读它——string 引用读原子；
+    /// 不变量：<see cref="HasScopeSwitcher"/>==true 时非 null）。</summary>
+    private string? _scopeDirName;
+
+    /// <summary>分区条目（目录名 + 显示名 + 图标，来自 <see cref="NoteNodeTypeRegistry"/> 描述符）。</summary>
+    private sealed record KoScopeItem(string DirName, string Display, string? FillIconPath, string IconColor);
+
     protected override string FontSizePrefKey => "ko.editorFontSize";
     protected override string RootPathPrefKey => "ko.rootPath";
     protected override void WriteBackDirectory(string? path) => _knowledgeDirProvider.CurrentDirectory = path;
@@ -137,6 +158,38 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// （回测/实盘页用）；Qifu 不依赖 Trading，隐藏这三种类型（树不扫其目录、右键菜单不列）。</summary>
     public bool HasTradingTypes => string.Equals(_tenant, "stockapp", StringComparison.OrdinalIgnoreCase);
 
+    // —— 分区切换器（‹ 当前分区 ›）：labs 根下固定类型目录横向循环切换，树只显当前分区 ——
+
+    /// <summary>labs 模式（根下 ≥2 个存在且租户可见的固定类型目录）→ 树头显示分区切换器；
+    /// 自定义知识库根（0-1 个固定目录）不显示，树与今日完全一致。</summary>
+    [ObservableProperty] private bool _hasScopeSwitcher;
+
+    /// <summary>当前分区显示名（切换器中间标签）。</summary>
+    public string CurrentScopeDisplay => CurrentScope is { } s ? s.Display : string.Empty;
+
+    /// <summary>当前分区目录名（切换器标签 ToolTip 用）。</summary>
+    public string? CurrentScopeDirName => _scopeDirName;
+
+    /// <summary>当前分区填充图标 path（Material，切换器中间标签左侧）。</summary>
+    public string? CurrentScopeFillIcon => CurrentScope is { } s ? s.FillIconPath : null;
+
+    /// <summary>当前分区图标色（hex 字符串）。</summary>
+    public string? CurrentScopeIconColor => CurrentScope is { } s ? s.IconColor : null;
+
+    /// <summary>切换器是否显示图标（无 fill 图标的分区不占位）。</summary>
+    public bool HasScopeIcon => !string.IsNullOrEmpty(CurrentScopeFillIcon);
+
+    private KoScopeItem? CurrentScope => _scopeIndex >= 0 && _scopeIndex < _scopes.Count ? _scopes[_scopeIndex] : null;
+
+    private void RaiseScopeProperties()
+    {
+        OnPropertyChanged(nameof(CurrentScopeDisplay));
+        OnPropertyChanged(nameof(CurrentScopeDirName));
+        OnPropertyChanged(nameof(CurrentScopeFillIcon));
+        OnPropertyChanged(nameof(CurrentScopeIconColor));
+        OnPropertyChanged(nameof(HasScopeIcon));
+    }
+
     /// <summary>先恢复上次持久化的知识库目录；无则回退打开 <see cref="IKnowledgeDirectoryProvider.DefaultRoot"/>
     /// （默认 <c>&lt;tenantDir&gt;/labs</c>，若不存在则创建）。这样 labs 页启动即有默认目录，用户仍可改目录/关闭。</summary>
     private async Task LoadLastRootWithDefaultAsync()
@@ -151,6 +204,220 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
             await OpenFolderAsync(def);
         }
         catch { /* 默认目录不可创建/打开 → labs 页保持空态，用户可手动打开 */ }
+    }
+
+    // —— 分区切换器：打开期初始化 / 持久化 / 切换核心 / watcher 自愈 ——
+
+    /// <summary>分区固定顺序（knowledge 首位 = 默认分区；策略三目录仅 stockapp；note 兜底）。</summary>
+    private static readonly NoteNodeType[] ScopeOrder =
+    {
+        NoteNodeType.Knowledge, NoteNodeType.Agent, NoteNodeType.Rule, NoteNodeType.CodeRule,
+        NoteNodeType.Workflow, NoteNodeType.Skill, NoteNodeType.McpServer,
+        NoteNodeType.CodeStrategy, NoteNodeType.Strategy, NoteNodeType.LeanAlgorithm, NoteNodeType.Note,
+    };
+
+    /// <summary>计算分区目录名列表：固定顺序 × 目录存在 × 租户可见（镜像 <see cref="IsVisibleTypeDir"/>：
+    /// 非 stockapp 排除策略三目录）。根下固定目录 &lt;2 个（自定义知识库根/仅 1 个）→ 空列表（无切换器）。</summary>
+    public static IReadOnlyList<string> ComputeScopeDirNames(string? rootPath, bool hasTradingTypes)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(rootPath)) return result;
+        foreach (var t in ScopeOrder)
+        {
+            if (!hasTradingTypes && t is NoteNodeType.Strategy or NoteNodeType.CodeStrategy or NoteNodeType.LeanAlgorithm)
+                continue;
+            var dirName = CatalogNoteDirectory.For(t).DirectoryName;
+            if (Directory.Exists(Path.Combine(rootPath, dirName))) result.Add(dirName);
+        }
+        return result;
+    }
+
+    /// <summary>初始分区回退链：持久化值（在列表内）→ "knowledge"（在列表内）→ 首个；空列表 → null。</summary>
+    public static string? ResolveInitialScopeDirName(IReadOnlyList<string> scopeDirNames, string? persisted)
+    {
+        if (scopeDirNames.Count == 0) return null;
+        if (!string.IsNullOrWhiteSpace(persisted))
+            foreach (var n in scopeDirNames)
+                if (string.Equals(n, persisted.Trim(), StringComparison.OrdinalIgnoreCase)) return n;
+        foreach (var n in scopeDirNames)
+            if (string.Equals(n, "knowledge", StringComparison.OrdinalIgnoreCase)) return n;
+        return scopeDirNames[0];
+    }
+
+    private static KoScopeItem CreateScopeItem(string dirName)
+        => NoteNodeTypeRegistry.Get(CatalogNoteDirectory.TypeForDirectory(dirName) ?? NoteNodeType.Note) is { } d
+            ? new KoScopeItem(dirName, d.Display, d.FillIconPath, d.IconColor)
+            : new KoScopeItem(dirName, dirName, null, "#888888");
+
+    private static int IndexOfScopeDir(IReadOnlyList<string> dirNames, string dirName)
+    {
+        for (var i = 0; i < dirNames.Count; i++)
+            if (string.Equals(dirNames[i], dirName, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
+    /// <summary>打开期初始化分区状态（<see cref="BuildNode"/> 根层过滤读它，须在树构建前定好）。
+    /// labs 根（≥2 个固定类型目录）→ 建分区列表 + 恢复持久化分区；否则非切换器模式。
+    /// 构造期安全：只触声明即初始化的字段（见基类构造函数虚方法坑注释）。</summary>
+    protected override async Task OnFolderOpeningAsync(string path)
+    {
+        _rememberedExpandedPaths.Clear(); // 换根：跨分区展开记忆重置
+        var dirNames = ComputeScopeDirNames(path, HasTradingTypes);
+        if (dirNames.Count < 2)
+        {
+            ResetScopeState(); // 非 labs 根（自定义知识库）或仅 1 个固定目录 → 无切换器
+            return;
+        }
+        _scopes = dirNames.Select(CreateScopeItem).ToArray();
+        var initial = ResolveInitialScopeDirName(dirNames, await GetPersistedScopeAsync()) ?? dirNames[0];
+        var idx = IndexOfScopeDir(dirNames, initial);
+        _scopeIndex = idx >= 0 ? idx : 0;
+        _scopeDirName = dirNames[_scopeIndex];
+        HasScopeSwitcher = true;
+        RaiseScopeProperties();
+    }
+
+    private void ResetScopeState()
+    {
+        _scopes = Array.Empty<KoScopeItem>();
+        _scopeIndex = -1;
+        _scopeDirName = null;
+        HasScopeSwitcher = false;
+        RaiseScopeProperties();
+    }
+
+    private async Task<string?> GetPersistedScopeAsync()
+    {
+        try
+        {
+            var store = ServiceProvider.GetService<IPreferencesStore>();
+            if (store is null) return null;
+            var v = await store.GetAsync(ScopePrefKey);
+            return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        }
+        catch { return null; }
+    }
+
+    private async Task PersistScopeAsync(string dirName)
+    {
+        try
+        {
+            var store = ServiceProvider.GetService<IPreferencesStore>();
+            if (store is not null) await store.SetAsync(ScopePrefKey, dirName);
+        }
+        catch { /* 偏好存储失败不影响使用 */ }
+    }
+
+    /// <summary>切到上一分区（‹，wrap-around）。</summary>
+    [RelayCommand]
+    private Task ScopeLeftAsync() => CycleScopeAsync(-1);
+
+    /// <summary>切到下一分区（›，wrap-around）。</summary>
+    [RelayCommand]
+    private Task ScopeRightAsync() => CycleScopeAsync(+1);
+
+    private Task CycleScopeAsync(int delta)
+    {
+        if (_scopes.Count == 0) return Task.CompletedTask;
+        var next = ((_scopeIndex + delta) % _scopes.Count + _scopes.Count) % _scopes.Count;
+        return SetScopeAsync(_scopes[next].DirName);
+    }
+
+    /// <summary>切到指定分区（‹ › 命令 / 跨分区打开联动 / watcher 自愈 / 测试入口）。
+    /// <paramref name="selectScopeRoot"/>：切换后是否选中分区根（右栏经既有 OnSelectedNodeChanged 分流显示
+    /// 该分区卡片网格/README/专属面板）；跨分区打开文件联动传 false（调用方随后自选目标文件节点）。</summary>
+    public async Task SetScopeAsync(string dirName, bool selectScopeRoot = true)
+    {
+        if (!HasScopeSwitcher || string.IsNullOrEmpty(RootPath) || IsOpeningTree) return; // 未开/打开进行中 → 忽略（空分区挂空树是合法状态，不作守卫）
+        var idx = -1;
+        for (var i = 0; i < _scopes.Count; i++)
+            if (string.Equals(_scopes[i].DirName, dirName, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+        if (idx < 0 || idx == _scopeIndex) return;
+        _scopeIndex = idx;
+        _scopeDirName = _scopes[idx].DirName;
+        RaiseScopeProperties();
+        PersistScopeAsync(_scopeDirName).SafeFireAndForget();
+        await RebuildScopedTreeAsync(selectScopeRoot);
+    }
+
+    /// <summary>分区切换重建：取消挂起的 watcher 重建（防旧分区树迟到覆盖）→ 当前展开态并进跨分区记忆 →
+    /// 后台重建 → UI 线程应用。可 await（跨分区打开文件需要树重建完成后继续）。</summary>
+    private async Task RebuildScopedTreeAsync(bool selectScopeRoot)
+    {
+        var rootPath = RootPath;
+        if (string.IsNullOrEmpty(rootPath) || IsOpeningTree) return;
+        CancelPendingTreeRefresh();
+        var captured = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        CaptureExpanded(Roots, captured);
+        foreach (var p in captured) _rememberedExpandedPaths.Add(p); // 并集记忆：切回来时按路径命中恢复
+        FileNode built;
+        try { built = await Task.Run(() => BuildNode(rootPath, isRoot: true)); }
+        catch { return; /* 重建失败保留旧树 */ }
+        var ui = ServiceProvider.GetService<IUiDispatcher>();
+        if (ui is not null) await ui.InvokeAsync(() => ApplyScopedTree(built, selectScopeRoot, rootPath));
+        else ApplyScopedTree(built, selectScopeRoot, rootPath);
+    }
+
+    /// <summary>UI 线程应用分区树：挂分区子节点为树根集（空分区=空树，合法状态）+ 恢复（跨分区）展开态 +
+    /// 清旧选中 + 右栏直驱分区内容（<see cref="ShowFolderContent"/>——分区根不在树中）。</summary>
+    private void ApplyScopedTree(FileNode builtRoot, bool selectScopeRoot, string rootPath)
+    {
+        if (IsOpeningTree) return; // 打开进行中 → 让位
+        if (!string.Equals(RootPath, rootPath, StringComparison.OrdinalIgnoreCase)) return; // 期间关闭/换根 → 丢弃
+        var treeRoots = ResolveTreeRoots(builtRoot);
+        foreach (var t in treeRoots) RestoreExpanded(t, _rememberedExpandedPaths);
+        Roots.Clear();
+        foreach (var t in treeRoots) Roots.Add(t);
+        SelectedNode = null; // 旧分区选中节点已不在树中
+        if (selectScopeRoot && FindScopedNode(builtRoot) is { } scoped) ShowFolderContent(scoped);
+    }
+
+    /// <summary>树根解析：labs 切换器模式下返回当前分区目录的**子节点**（分区名已在树头切换器显示，
+    /// 树内不再重复根层；RootPath 不变）。分区节点仍以 RootPath 直接子目录身份构建（入口卡样式/根目录
+    /// 谓词烘焙进节点），仅取其 Children 挂树。分区目录刚被删（找不到）→ 回退 [labs 根]
+    ///（OnTreeRefreshed 自愈接管）。不设 IsExpanded——打开路径按 ExpandTreeRootsOnOpen、watcher 按快照。</summary>
+    protected override IReadOnlyList<FileNode> ResolveTreeRoots(FileNode builtRoot)
+    {
+        if (!HasScopeSwitcher || _scopeDirName is null) return base.ResolveTreeRoots(builtRoot);
+        var scoped = FindScopedNode(builtRoot);
+        return scoped is null ? base.ResolveTreeRoots(builtRoot) : scoped.Children.ToList();
+    }
+
+    /// <summary>分区模式：子节点即顶层、天然可见，不预展开（展开会多亮一层孙节点）；非切换器模式沿用打开即展开根。</summary>
+    protected override bool ExpandTreeRootsOnOpen => !HasScopeSwitcher;
+
+    /// <summary>构建树里定位当前分区目录节点（RootPath 直接子目录，按目录名 OrdinalIgnoreCase 匹配）。</summary>
+    private FileNode? FindScopedNode(FileNode builtRoot)
+        => _scopeDirName is null ? null : builtRoot.Children.FirstOrDefault(c =>
+            c.IsFolder && string.Equals(Path.GetFileName(c.Path), _scopeDirName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>watcher 重建后：①右栏正显分区卡片/面板（选中态为 null——分区根不在树中）→ 刷新其内容
+    ///（v1 由重选中驱动，children-only 后选中断开，此处直驱）；②分区自愈：固定目录增删 → 重算分区列表；
+    /// 当前分区目录被删 → 回退 knowledge/首个可用；删到 &lt;2 个 → 退出切换器模式重建全树。
+    /// 每重建 ~11 次 Directory.Exists，成本可忽略。</summary>
+    protected override void OnTreeRefreshed()
+    {
+        if (_isSkillsRoot) SkillVm?.LoadAsync().SafeFireAndForget();
+        else if (_isMcpRoot) McpVm?.EnsureLoadedAsync().SafeFireAndForget();
+        else if (_isFileCardsRoot && _fileCardsType is { } ct) BuildFileCardsAsync(ct).SafeFireAndForget();
+
+        if (!HasScopeSwitcher || string.IsNullOrEmpty(RootPath)) return;
+        var dirNames = ComputeScopeDirNames(RootPath, HasTradingTypes);
+        if (dirNames.Count < 2)
+        {
+            ResetScopeState();
+            RebuildScopedTreeAsync(selectScopeRoot: false).SafeFireAndForget(); // 重建无过滤全树
+            return;
+        }
+        _scopes = dirNames.Select(CreateScopeItem).ToArray();
+        if (_scopeDirName is not null && IndexOfScopeDir(dirNames, _scopeDirName) is >= 0 and var idx)
+        {
+            _scopeIndex = idx; // 列表增删 → 保当前分区，仅刷新索引/标签
+            RaiseScopeProperties();
+            return;
+        }
+        var fallback = ResolveInitialScopeDirName(dirNames, null); // 当前分区目录被删 → 回退
+        if (fallback is not null) SetScopeAsync(fallback).SafeFireAndForget();
     }
 
     partial void OnActiveEditVmChanged(object? value)
@@ -289,57 +556,23 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         return type;
     }
 
-    /// <summary>树节点选中：文件→按类型分流打开；文件夹→打开该目录 README（<c>readme.md</c>，无则仅展开/收起由 TreeViewItem 默认处理）。</summary>
+    /// <summary>树节点选中：文件→按类型分流打开；文件夹→经 <see cref="ShowFolderContent"/> 分流
+    ///（根目录谓词 → 卡片网格/专属面板/README）。</summary>
     protected override void OnSelectedNodeChanged(FileNode? value)
     {
-        _isSkillsRoot = value is { IsFolder: true } && IsSkillsRootFolder(value);
-        _isMcpRoot = value is { IsFolder: true } && IsMcpRootFolder(value);
-        _isFileCardsRoot = value is { IsFolder: true } && IsFileCardsRootFolder(value);
-        _fileCardsType = _isFileCardsRoot ? ResolveDirType(value!.Path) : null;
-        _fileCardsVm = null; // 类型目录根切换/选中变化 → 重建（懒建在上次类型，须清空避免串类型）
-        RaiseLayout();
-        if (value is null) return;
-        if (value.IsFolder)
+        if (value is { IsFolder: true })
         {
-            if (_isSkillsRoot)
-            {
-                // skills 根目录 → 右栏内嵌技能卡片网格（SkillView，镜像专家页技能 tab），点树内 SKILL.md 走表单。
-                // 清旧活动文件态（防旧源码/表单残留）；SkillVm.LoadAsync 后台重扫盘刷新卡片。
-                _isReadme = false;
-                _isCsv = false;
-                ReadmeMarkdown = string.Empty;
-                _activePath = null;
-                ActiveEditVm = null;
-                SkillVm?.LoadAsync().SafeFireAndForget();
-                return;
-            }
-            if (_isMcpRoot)
-            {
-                // mcp-servers 根目录 → 右栏内嵌 MCP 管理面板（McpView，镜像专家页 MCP tab），点树内 .json 走全宽编辑器。
-                // 清旧活动文件态（防旧源码/表单残留）；McpVm.EnsureLoadedAsync 后台重连+刷新工具列表。
-                _isReadme = false;
-                _isCsv = false;
-                ReadmeMarkdown = string.Empty;
-                _activePath = null;
-                ActiveEditVm = null;
-                McpVm?.EnsureLoadedAsync().SafeFireAndForget();
-                return;
-            }
-            if (_isFileCardsRoot)
-            {
-                // 类型目录根（agents/workflows/rules/coderules/knowledge/strategies/...）→ 右栏内嵌资产卡片网格。
-                // 清旧活动文件态（防旧源码/表单残留）；BuildFileCardsAsync 后台扫目录 + 解析 front-matter 取 name/description。
-                _isReadme = false;
-                _isCsv = false;
-                ReadmeMarkdown = string.Empty;
-                _activePath = null;
-                ActiveEditVm = null;
-                if (_fileCardsType is { } ct) BuildFileCardsAsync(ct).SafeFireAndForget();
-                return;
-            }
-            OpenFolderReadmeAsync(value.Path).SafeFireAndForget();
+            ShowFolderContent(value);
             return;
         }
+        // null/文件：清分区根卡片态（文件路径在 OpenFileAsync 里亦自清）。
+        _isSkillsRoot = false;
+        _isMcpRoot = false;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
+        RaiseLayout();
+        if (value is null) return;
         // 同路径（watcher 重建树恢复选中）→ 不重开，保持活动编辑态。
         if (string.Equals(value.Path, _activePath, StringComparison.OrdinalIgnoreCase)) return;
         // 切换文件：清旧表单（避免新类型 Border 短暂显示旧 form 的 DataContext）。
@@ -349,10 +582,61 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OpenFileAsync(value).SafeFireAndForget();
     }
 
+    /// <summary>文件夹选中 / 分区切换共用：根目录谓词 + 右栏分流（skills→SkillView、mcp→McpView、
+    /// 类型目录根→文件卡片网格、其余→目录 README）。分区切换后分区根节点不在树中（树=其子节点），
+    /// 经此直驱右栏而不经 SelectedNode——TreeView 双绑对非树节点不可靠（会回写 null 清掉卡片态）。</summary>
+    private void ShowFolderContent(FileNode folder)
+    {
+        _isSkillsRoot = IsSkillsRootFolder(folder);
+        _isMcpRoot = IsMcpRootFolder(folder);
+        _isFileCardsRoot = IsFileCardsRootFolder(folder);
+        _fileCardsType = _isFileCardsRoot ? ResolveDirType(folder.Path) : null;
+        _fileCardsVm = null; // 类型目录根切换/选中变化 → 重建（懒建在上次类型，须清空避免串类型）
+        RaiseLayout();
+        if (_isSkillsRoot)
+        {
+            // skills 根目录 → 右栏内嵌技能卡片网格（SkillView，镜像专家页技能 tab），点树内 SKILL.md 走表单。
+            // 清旧活动文件态（防旧源码/表单残留）；SkillVm.LoadAsync 后台重扫盘刷新卡片。
+            _isReadme = false;
+            _isCsv = false;
+            ReadmeMarkdown = string.Empty;
+            _activePath = null;
+            ActiveEditVm = null;
+            SkillVm?.LoadAsync().SafeFireAndForget();
+            return;
+        }
+        if (_isMcpRoot)
+        {
+            // mcp-servers 根目录 → 右栏内嵌 MCP 管理面板（McpView，镜像专家页 MCP tab），点树内 .json 走全宽编辑器。
+            // 清旧活动文件态（防旧源码/表单残留）；McpVm.EnsureLoadedAsync 后台重连+刷新工具列表。
+            _isReadme = false;
+            _isCsv = false;
+            ReadmeMarkdown = string.Empty;
+            _activePath = null;
+            ActiveEditVm = null;
+            McpVm?.EnsureLoadedAsync().SafeFireAndForget();
+            return;
+        }
+        if (_isFileCardsRoot)
+        {
+            // 类型目录根（agents/workflows/rules/coderules/knowledge/strategies/...）→ 右栏内嵌资产卡片网格。
+            // 清旧活动文件态（防旧源码/表单残留）；BuildFileCardsAsync 后台扫目录 + 解析 front-matter 取 name/description。
+            _isReadme = false;
+            _isCsv = false;
+            ReadmeMarkdown = string.Empty;
+            _activePath = null;
+            ActiveEditVm = null;
+            if (_fileCardsType is { } ct) BuildFileCardsAsync(ct).SafeFireAndForget();
+            return;
+        }
+        OpenFolderReadmeAsync(folder.Path).SafeFireAndForget();
+    }
+
     protected override void ClearActiveContent()
     {
         CloseActiveFile();
         SelectedNode = null;
+        ResetScopeState(); // 关闭/换目录 → 切换器随空态消失（ko.scope 偏好保留，下次打开经回退链恢复）
     }
 
     protected override void ReloadActiveContent() => ReloadActiveFile();
@@ -1017,9 +1301,37 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         };
     }
 
-    /// <summary>按路径打开文件（右键「打开」/新建后打开用）。薄包装 <see cref="OpenFileAsync"/>。</summary>
-    public Task OpenKnowledgeByPathAsync(string filePath, CancellationToken ct = default)
-        => OpenFileAsync(new FileNode(Path.GetFileName(filePath), filePath, false), ct);
+    /// <summary>按路径打开文件（右键「打开」/新建后打开/卡片「打开」用）。
+    /// 分区联动：目标文件在其它固定类型目录下（如当前 knowledge 分区时新建 agent）→ 先切分区（树可见该文件）
+    /// 再打开。优先经树选中联动（树同步高亮新文件）；树中无此节点（异常竞态/不进树的文件）→ 回退直开。</summary>
+    public async Task OpenKnowledgeByPathAsync(string filePath, CancellationToken ct = default)
+    {
+        if (HasScopeSwitcher && ScopeDirForPath(filePath) is { } dir
+            && !string.Equals(dir, _scopeDirName, StringComparison.OrdinalIgnoreCase))
+        {
+            await SetScopeAsync(dir, selectScopeRoot: false); // 不闪分区卡片——马上选目标文件
+        }
+        var node = Roots.Select(r => FindByPath(r, filePath)).FirstOrDefault(n => n is not null);
+        if (node is not null)
+        {
+            SelectedNode = node; // 树选中 → OnSelectedNodeChanged 打开（树同步高亮）
+            return;
+        }
+        await OpenFileAsync(new FileNode(Path.GetFileName(filePath), filePath, false), ct);
+    }
+
+    /// <summary>文件所属固定类型目录（相对 labs 根首段经 <see cref="CatalogNoteDirectory"/> 映射）；
+    /// 非固定目录/根外文件 → null。</summary>
+    private string? ScopeDirForPath(string filePath)
+    {
+        if (string.IsNullOrEmpty(RootPath)) return null;
+        string rel;
+        try { rel = Path.GetRelativePath(RootPath, filePath); }
+        catch { return null; }
+        if (rel.StartsWith("..", StringComparison.Ordinal)) return null; // 根外
+        var seg = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        return string.IsNullOrEmpty(seg) || CatalogNoteDirectory.TypeForDirectory(seg) is null ? null : seg;
+    }
 
     // —— 按类型新建文件（右键菜单）——
 
@@ -1285,10 +1597,11 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 
         // 子目录：先目录后文件排序。类型目录内的子目录继承类型（knowledge/子目录 仍收 .md）。
         // 根层按租户过滤：非 stockapp 跳过策略三目录（strategies/codestrategies/leanalgorithms，Qifu 不依赖 Trading）。
+        // 根层再按分区过滤（labs 切换器模式）：只显当前分区目录，其余固定目录与根层自建目录都隐藏。
         var subtreeType = isRoot ? (NoteNodeType?)null : ResolveDirType(fullPath);
         foreach (var dir in Directory.EnumerateDirectories(fullPath)
                      .Where(d => !IsIgnoredDir(Path.GetFileName(d)) && !IsSymlinkDir(d))
-                     .Where(d => isRoot ? IsVisibleTypeDir(Path.GetFileName(d)) : true)
+                     .Where(d => isRoot ? IsVisibleTypeDir(Path.GetFileName(d)) && IsInCurrentScope(Path.GetFileName(d)) : true)
                      .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase))
         {
             try { node.Children.Add(BuildNode(dir, isRoot: false)); }
@@ -1364,6 +1677,12 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         var type = CatalogNoteDirectory.TypeForDirectory(dirName);
         return type is not (NoteNodeType.Strategy or NoteNodeType.CodeStrategy or NoteNodeType.LeanAlgorithm);
     }
+
+    /// <summary>根层目录是否属当前分区：labs 切换器模式只显当前分区目录（其余固定目录与根层自建目录都
+    /// 隐藏——「打开资料库时只显示一个默认目录」）；非切换器模式（自定义知识库根）恒 true，树与今日完全一致。</summary>
+    private bool IsInCurrentScope(string dirName)
+        => !HasScopeSwitcher || (_scopeDirName is not null
+            && string.Equals(dirName, _scopeDirName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>类型图标（描边 Lucide，复用 <see cref="NoteNodeTypeRegistry"/> 的 path + 色）。</summary>
     private static FileIcons.Icon TypeIcon(NoteNodeType type)

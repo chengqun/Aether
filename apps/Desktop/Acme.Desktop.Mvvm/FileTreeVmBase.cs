@@ -61,6 +61,27 @@ public abstract partial class FileTreeVmBase : ObservableObject
     /// <summary>结构变更重建树应用后的额外刷新钩子（多标签页刷 stale 标签；单对象页默认空）。</summary>
     protected virtual void OnTreeRefreshed() { }
 
+    /// <summary>打开期初始化钩子：<see cref="OpenFolderAsync"/> 在 StartWatcher 后、树构建前调用
+    ///（try 内，异常归入打开失败）。派生类可在此做打开期初始化——KOVM 在此计算 labs 分区列表 + 恢复
+    /// 持久化分区（须在 BuildNode 前——根层过滤读它）。默认空。
+    /// 注意：经派生类构造函数的 LoadLastRootAsync fire-and-forget 链（偏好读同步完成）此钩子可能在
+    /// 构造期间执行——覆写只可触声明即初始化的字段（同基类构造函数虚方法坑纪律）。</summary>
+    protected virtual Task OnFolderOpeningAsync(string path) => Task.CompletedTask;
+
+    /// <summary>树根解析钩子：OpenFolderAsync 挂根 / ApplyTreeRefresh 换根前调，返回挂进 <see cref="Roots"/>
+    /// 的节点列表。默认 [builtRoot]。KOVM 在 labs 分区模式下返回当前分区目录的**子节点**——分区名已在树头
+    /// 切换器显示，树内不再重复根层（RootPath 不变）。覆写不应设 IsExpanded——展开由
+    /// <see cref="ExpandTreeRootsOnOpen"/>（打开路径）或调用方快照恢复（watcher 路径）决定。</summary>
+    protected virtual IReadOnlyList<FileNode> ResolveTreeRoots(FileNode builtRoot) => new[] { builtRoot };
+
+    /// <summary>打开路径是否展开树根。Documents 保持 true（打开即展开根=现行为）；KOVM 分区模式 false
+    ///（子节点即顶层、天然可见，预展开会多亮一层孙节点）。watcher 路径不受此影响（按快照恢复用户折叠态）。</summary>
+    protected virtual bool ExpandTreeRootsOnOpen => true;
+
+    /// <summary>打开目录进行中（OpenFolderAsync 已清树、后台构建未挂根）。派生类自管重建（KOVM 切分区）与
+    /// watcher 应用须让位，防双挂根/旧树迟到覆盖。</summary>
+    protected bool IsOpeningTree { get; private set; }
+
     /// <summary>RootPath 变化后通知派生类依赖 RootPath 的属性（ProjectName/HasProject 或 RootName/HasRoot）。</summary>
     protected virtual void RaiseRootDependentProperties() { }
 
@@ -155,17 +176,25 @@ public abstract partial class FileTreeVmBase : ObservableObject
         RootPath = path;
         StartWatcher(path);
         StatusMessage = "加载中…";
+        IsOpeningTree = true;
         try
         {
+            await OnFolderOpeningAsync(path);
             var root = await Task.Run(() => BuildNode(path, isRoot: true));
-            Roots.Add(root);
-            root.IsExpanded = true;
+            var treeRoots = ResolveTreeRoots(root);
+            foreach (var t in treeRoots) Roots.Add(t);
+            if (ExpandTreeRootsOnOpen)
+                foreach (var t in treeRoots) t.IsExpanded = true;
             StatusMessage = string.Empty;
             await PersistRootPathAsync(path);
         }
         catch (Exception ex)
         {
             StatusMessage = $"打开目录失败：{ex.Message}";
+        }
+        finally
+        {
+            IsOpeningTree = false;
         }
     }
 
@@ -259,6 +288,14 @@ public abstract partial class FileTreeVmBase : ObservableObject
         _treeRefreshCts = null;
     }
 
+    /// <summary>取消挂起的树重建（400ms 去抖等待中/后台构建中的）。派生类自管重建（如 KOVM 切分区）前调，
+    /// 防旧状态构建的树在自管重建应用后迟到覆盖。<see cref="StopWatcher"/> 亦会取消。</summary>
+    protected void CancelPendingTreeRefresh()
+    {
+        _treeRefreshCts?.Cancel();
+        _treeRefreshCts = null;
+    }
+
     /// <summary>去抖 400ms 后重载活动内容（批量改动只刷一次）。FSW 后台线程 → marshal UI 线程。</summary>
     private void ScheduleReload()
     {
@@ -288,6 +325,7 @@ public abstract partial class FileTreeVmBase : ObservableObject
             catch (TaskCanceledException) { return; }
             if (cts.IsCancellationRequested) return;
             if (string.IsNullOrEmpty(RootPath)) return;
+            var rootPath = RootPath; // 快照本次重建对应的根（应用时比对，关/换根丢弃）
 
             // 先在调用线程快照展开态/选中（Path 是不可变值，线程安全）。
             var expanded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -300,21 +338,33 @@ public abstract partial class FileTreeVmBase : ObservableObject
 
             if (cts.IsCancellationRequested) return;
             var ui = ServiceProvider.GetService<IUiDispatcher>();
-            if (ui is not null) ui.Post(() => ApplyTreeRefresh(root, expanded, selected));
-            else ApplyTreeRefresh(root, expanded, selected);
+            // Post 闭包内复查取消——关掉「检查→Post」之间的抢占窗口（派生类切分区重建后，旧树不应迟到落地）。
+            if (ui is not null) ui.Post(() => { if (!cts.IsCancellationRequested) ApplyTreeRefresh(root, expanded, selected, rootPath); });
+            else if (!cts.IsCancellationRequested) ApplyTreeRefresh(root, expanded, selected, rootPath);
         });
     }
 
-    /// <summary>UI 线程：替换树根 + 恢复展开态 + 恢复选中 + 派生额外刷新（<see cref="OnTreeRefreshed"/>）。</summary>
-    private void ApplyTreeRefresh(FileNode root, HashSet<string> expanded, string? selected)
+    /// <summary>UI 线程：替换树 + 恢复展开态 + 恢复选中 + 派生额外刷新（<see cref="OnTreeRefreshed"/>）。
+    /// 丢弃守卫用 rootPath 比对 + <see cref="IsOpeningTree"/>（而非 Roots.Count——空分区挂空树是合法状态，
+    /// 不能当作「已关闭」丢弃，否则空分区永远等不到 watcher 刷新）。</summary>
+    private void ApplyTreeRefresh(FileNode root, HashSet<string> expanded, string? selected, string rootPath)
     {
-        if (Roots.Count == 0) return; // 用户已关闭目录 → 丢弃本次重建
-        RestoreExpanded(root, expanded);
-        Roots[0] = root; // ObservableCollection Replace 通知 TreeView 重渲染
+        if (IsOpeningTree) return; // 打开进行中 → 让位（打开路径稍后挂新树）
+        if (!string.Equals(RootPath, rootPath, StringComparison.OrdinalIgnoreCase)) return; // 已关闭/换根 → 丢弃
+        var treeRoots = ResolveTreeRoots(root);
+        Roots.Clear();
+        foreach (var t in treeRoots)
+        {
+            RestoreExpanded(t, expanded); // 快照路径在返回子树内仍命中（Path 键控）
+            Roots.Add(t);
+        }
         if (selected is not null)
         {
-            var found = FindByPath(root, selected);
-            if (found is not null) SelectedNode = found;
+            foreach (var t in treeRoots)
+            {
+                var found = FindByPath(t, selected);
+                if (found is not null) { SelectedNode = found; break; }
+            }
         }
         OnTreeRefreshed();
     }
