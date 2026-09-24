@@ -425,7 +425,9 @@
   </Style>
 
   <!-- 预览切换眼睛（文档页 markdown「仅看解析/上下双栏」+ 资料库「仅看上栏/上下双栏」共用，
-       2026-09-24 从 DocumentsEditorView 上移）。 -->
+       2026-09-24 从 DocumentsEditorView 上移）。选中态仅图标变 accent、**无背景色**
+      （用户反馈色块太显眼——template 层显式 Transparent 压过 Fluent 主题自带的 checked 背景，
+       否则删掉本样式的 Background 后主题默认色会透出来）。 -->
   <Style Selector="ToggleButton.preview-toggle">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
@@ -438,6 +440,11 @@
   </Style>
   <Style Selector="ToggleButton.preview-toggle:checked">
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.preview-toggle:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="ToggleButton.preview-toggle:checked:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
   </Style>
 
