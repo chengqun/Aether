@@ -349,6 +349,38 @@ public class KnowledgeObjectsScopeTests
         finally { Cleanup(vm, root); }
     }
 
+    // —— 眼睛：收起源码，上栏跨满（镜像文档页 markdown 预览切换） ——
+
+    [Fact]
+    public async Task PreviewOnly_CollapsesSourcePaneAndPersists()
+    {
+        var root = TempRoot(("knowledge", "a.md", "# a"), ("agents", "b.agent.md", "x"));
+        var (vm, store) = CreateVm();
+        try
+        {
+            await vm.OpenFolderAsync(root);
+            await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md")); // 落地 knowledge README（表单两栏）
+
+            Assert.True(vm.IsPreviewToggleVisible); // 两栏模式 → 眼睛可用
+            Assert.True(vm.SplitterVisible);
+            Assert.Equal(1, vm.RightPaneRowSpan);
+            Assert.True(vm.EditorVisible);
+
+            vm.IsPreviewOnly = true; // 收起源码 → 上栏跨满三行
+            Assert.False(vm.SplitterVisible);
+            Assert.Equal(3, vm.RightPaneRowSpan);
+            Assert.False(vm.EditorVisible);
+            Assert.False(vm.IsEmptyStateVisible); // 空态不抢画（它在 XAML 里后于上栏声明，不排除会盖上栏）
+            Assert.Equal("true", store.Values["ko.previewOnly"]); // 持久化记住
+
+            vm.IsPreviewOnly = false; // 展开 → 恢复两栏
+            Assert.True(vm.SplitterVisible);
+            Assert.Equal(1, vm.RightPaneRowSpan);
+            Assert.True(vm.EditorVisible);
+        }
+        finally { Cleanup(vm, root); }
+    }
+
     // —— 空分区：挂空树（合法状态）且不锁死切换 ——
 
     [Fact]

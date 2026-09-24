@@ -60,6 +60,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>README 的 markdown 文案（上栏预览绑定源；ObservableProperty 驱动 SelectableMarkdownViewer 重渲染）。</summary>
     [ObservableProperty] private string _readmeMarkdown = string.Empty;
 
+    /// <summary>仅看上栏（表单/预览），收起下栏源码——增大阅读/编辑地盘（镜像文档页 markdown 眼睛）。持久化 <see cref="PreviewOnlyPrefKey"/>。</summary>
+    [ObservableProperty] private bool _isPreviewOnly;
+
     /// <summary>目录树扫描时跳过的子目录（与 <c>DocumentKnowledgeTool._ignoredDirs</c> 同集，保证树=AI 工具所见）。</summary>
     private static readonly HashSet<string> IgnoredDirs = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -78,6 +81,9 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
 
     /// <summary>分区持久化偏好键（记住上次分区，值为目录名如 "knowledge"）。</summary>
     private const string ScopePrefKey = "ko.scope";
+
+    /// <summary>仅看上栏（收起源码）持久化偏好键。</summary>
+    private const string PreviewOnlyPrefKey = "ko.previewOnly";
 
     /// <summary>跨分区展开记忆（并集：切走时并进当前展开路径，切回时按路径命中恢复；换根清空）。</summary>
     private readonly HashSet<string> _rememberedExpandedPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -150,6 +156,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         _shell = shell;
         _tenant = tenant ?? string.Empty;
         SourceControl = new KnowledgeSourceControlViewModel(serviceProvider, knowledgeDirProvider);
+        LoadPreviewOnlyPrefAsync().SafeFireAndForget(); // 仅看上栏偏好（声明即初始化字段，构造期安全）
         // 恢复上次打开的知识库目录；无持久化目录则回退打开默认 labs 根（provider 字段已就绪，无虚方法调用坑）
         LoadLastRootWithDefaultAsync().SafeFireAndForget();
     }
@@ -536,20 +543,62 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>右栏是否显示「上表单/预览 + 下源码」两栏（form 类型或 README 或 csv 表格）；代码类型仅下栏；skills/mcp 根目录走卡片/面板。</summary>
     public bool HasRightPane => (IsFormNode || IsReadme || IsCsvNode) && !IsSkillsRoot && !IsMcpRoot;
 
-    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills/mcp 根目录走卡片/面板，隐藏编辑器。</summary>
-    public bool EditorVisible => _activePath is not null && !IsSkillsRoot && !IsMcpRoot;
+    /// <summary>眼睛（收起源码切换）可见：上下两栏模式才有「收起下栏」可切；代码类型全宽编辑器无上栏。</summary>
+    public bool IsPreviewToggleVisible => HasRightPane;
 
-    /// <summary>上下分隔条可见（form 类型或 README）。</summary>
-    public bool SplitterVisible => HasRightPane;
+    /// <summary>源码编辑器可见（有活动文件即有；新建后直接打开的文件也显示）。skills/mcp 根目录走卡片/面板；
+    /// preview-only 收起下栏。代码类型不受 preview-only 影响（无上栏可放大）。</summary>
+    public bool EditorVisible => _activePath is not null && !IsSkillsRoot && !IsMcpRoot && !(IsPreviewOnly && HasRightPane);
+
+    /// <summary>上下分隔条可见（form 类型或 README；preview-only 收起）。</summary>
+    public bool SplitterVisible => HasRightPane && !IsPreviewOnly;
 
     /// <summary>上栏（表单/预览）可见。</summary>
     public bool RightPaneVisible => HasRightPane;
+
+    /// <summary>上栏跨行数：preview-only 收起源码时跨满三行（增大上栏地盘）；否则 1（下栏留源码）。</summary>
+    public int RightPaneRowSpan => HasRightPane && IsPreviewOnly ? 3 : 1;
 
     /// <summary>源码编辑器所在 Grid 行：有右栏=2（下栏，上栏表单/预览占 0 行）；代码类型=0（占满全宽）。</summary>
     public int EditorRow => HasRightPane ? 2 : 0;
 
     /// <summary>源码编辑器跨行数：有右栏=1（只占下栏）；代码类型=3（占满 EditorGrid 三行）。</summary>
     public int EditorRowSpan => HasRightPane ? 1 : 3;
+
+    /// <summary>空态（无活动文件）可见。preview-only 时上栏跨满 Row2——空态 Border 在 XAML 里位于上栏之后
+    /// （后声明者盖上），若不排除会画在上栏之上。</summary>
+    public bool IsEmptyStateVisible => !EditorVisible && !HasRightPane;
+
+    partial void OnIsPreviewOnlyChanged(bool value)
+    {
+        if (!LoadingPref) PersistPreviewOnlyAsync(value).SafeFireAndForget();
+        RaiseLayout();
+    }
+
+    private async Task PersistPreviewOnlyAsync(bool value)
+    {
+        try
+        {
+            var store = ServiceProvider.GetService<IPreferencesStore>();
+            if (store is not null) await store.SetAsync(PreviewOnlyPrefKey, value ? "true" : "false");
+        }
+        catch { /* 偏好存储失败不影响使用 */ }
+    }
+
+    private async Task LoadPreviewOnlyPrefAsync()
+    {
+        try
+        {
+            var store = ServiceProvider.GetService<IPreferencesStore>();
+            if (store is not null && bool.TryParse(await store.GetAsync(PreviewOnlyPrefKey), out var v))
+            {
+                LoadingPref = true;
+                IsPreviewOnly = v;
+                LoadingPref = false;
+            }
+        }
+        catch { /* 读取失败用默认值 */ }
+    }
 
     private void RaiseLayout()
     {
@@ -570,11 +619,14 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         OnPropertyChanged(nameof(IsFileCardsRoot));
         OnPropertyChanged(nameof(FileCardsVm));
         OnPropertyChanged(nameof(HasRightPane));
+        OnPropertyChanged(nameof(IsPreviewToggleVisible));
         OnPropertyChanged(nameof(EditorVisible));
         OnPropertyChanged(nameof(SplitterVisible));
         OnPropertyChanged(nameof(RightPaneVisible));
+        OnPropertyChanged(nameof(RightPaneRowSpan));
         OnPropertyChanged(nameof(EditorRow));
         OnPropertyChanged(nameof(EditorRowSpan));
+        OnPropertyChanged(nameof(IsEmptyStateVisible));
         OnPropertyChanged(nameof(ActivePath));
     }
 

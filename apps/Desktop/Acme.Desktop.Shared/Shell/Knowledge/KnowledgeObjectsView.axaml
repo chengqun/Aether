@@ -31,8 +31,8 @@
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
 
-      <!-- 上栏：按类型切换的表单（按类型 Border 切换） -->
-      <Grid Grid.Row="0" IsVisible="{Binding RightPaneVisible}">
+      <!-- 上栏：按类型切换的表单（按类型 Border 切换）；preview-only 时跨满三行（收起源码增大上栏地盘） -->
+      <Grid Grid.Row="0" Grid.RowSpan="{Binding RightPaneRowSpan}" IsVisible="{Binding RightPaneVisible}">
         <Border IsVisible="{Binding IsAgentNode}">
           <shell:ExpertEditView DataContext="{Binding ActiveEditVm}"/>
         </Border>
@@ -63,6 +63,17 @@
         <Border IsVisible="{Binding IsCsvNode}">
           <shell:CsvTableView DataContext="{Binding ActiveEditVm}"/>
         </Border>
+
+        <!-- 眼睛：收起/展开下栏源码（镜像文档页 markdown 预览切换）——上栏跨满增大阅读/编辑地盘。
+             浮于上栏右上角（上栏最后一个子元素 → 盖在内容之上；上栏在两栏模式恒可见，收起后仍可点回）。 -->
+        <ToggleButton Classes="preview-toggle" IsChecked="{Binding IsPreviewOnly}"
+                      IsVisible="{Binding IsPreviewToggleVisible}"
+                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,8,4"
+                      ToolTip.Tip="切换仅看上栏 / 上下双栏">
+          <Path Data="{x:Static shell:Codicons.Eye}}" Stretch="Uniform" Width="16" Height="16"
+                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                VerticalAlignment="Center"/>
+        </ToggleButton>
       </Grid>
 
       <!-- 中：上下分隔条（仅 form 类型）。DragCompleted 实时写盘——切页不再丢拖动后的比例（VSCode 式）。 -->
@@ -80,7 +91,7 @@
                          Background="Transparent" Margin="8,6"
                          IsReadOnly="False"
                          IsVisible="{Binding EditorVisible}"/>
-        <Border Background="{DynamicResource CardBgBrush}" IsVisible="{Binding !EditorVisible}">
+        <Border Background="{DynamicResource CardBgBrush}" IsVisible="{Binding IsEmptyStateVisible}">
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                       Spacing="10" Opacity="0.6">
             <Path Data="{x:Static shell:Codicons.Collection}" Stretch="Uniform" Width="36" Height="36"

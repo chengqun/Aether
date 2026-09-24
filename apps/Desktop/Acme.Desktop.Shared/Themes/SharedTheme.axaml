@@ -423,6 +423,23 @@
     <Setter Property="Height" Value="48"/>
   </Style>
 
+  <!-- 预览切换眼睛（文档页 markdown「仅看解析/上下双栏」+ 资料库「仅看上栏/上下双栏」共用，
+       2026-09-24 从 DocumentsEditorView 上移）。 -->
+  <Style Selector="ToggleButton.preview-toggle">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="6,4"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.preview-toggle:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="ToggleButton.preview-toggle:checked">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}"/>
+  </Style>
+
   <!-- 列表空态外壳：卡片描边 + 圆角 + 居中（Automation/Rules/Mcp/Workflows/Experts/Skill/Trace/Chat 共 8 处曾逐行重复）。
        内层图标+标题+副标题因域而异留各 View——只抽重复的外壳/内层 StackPanel 布局。 -->
   <Style Selector="Border.empty-state">
