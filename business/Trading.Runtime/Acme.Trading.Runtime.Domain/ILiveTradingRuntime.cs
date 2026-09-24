@@ -45,6 +45,15 @@ public sealed class LiveTradingRuntimeRequest
 
     /// <summary>详细日志（true=输出 OnData/Bar/Hold 等调试日志；false=只输出交易信号）。默认 false。</summary>
     public bool VerboseLog { get; set; }
+
+    /// <summary>
+    /// P2 真实下单开关：false=仅信号日志（P1 行为，brokerage 拦截全部下单）；true=经 ICtpSession 真实报单。
+    /// 默认 false——真实下单不可逆，须用户显式打开。
+    /// </summary>
+    public bool EnableRealOrders { get; set; }
+
+    /// <summary>单笔开仓手数上限（保险丝，默认 1）。平仓不受限——否则仓位平不干净。</summary>
+    public int MaxOrderVolume { get; set; } = 1;
 }
 
 /// <summary>

@@ -59,11 +59,14 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
         if (!_session.IsConnected)
             throw new InvalidOperationException("CTP 未登录——请先在 CTP 页登录后再启动实盘引擎");
         WireSessionEvents();
+        // 持仓缓存不在此预热——BrokerageSetupHandler 启动时必调 GetAccountHoldings（先于任何 PlaceOrder），
+        // 其中 QueryPositionAsync + Replace 即完成预热；PlaceOrder 侧另有 stale>2s 节流兜底。
         CtpLeanGateway.Log("[Brokerage] CTP 会话已连接，实盘引擎就绪");
     }
 
     public override void Disconnect()
     {
+        StopWatchdog();
         UnwireSessionEvents();
         // 不调 _session.Logout()——CTP 连接留给 CtpView 继续用
     }
@@ -102,34 +105,8 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
         CtpLeanGateway.Log($"[Brokerage] CTP 连接状态: {e}");
     }
 
-    // —— P1: 交易方法暂不接通（P2 实现 OrderStateManager + 开平仓映射）——
-    public override bool PlaceOrder(Order order)
-    {
-        OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "P1", "CTP 实盘交易在 P2 启用，当前仅行情/信号"));
-        CtpLeanGateway.Log($"[Brokerage] 拦截下单(P1): {order.Symbol.Value} {order.Quantity} {order.Type}");
-        return false;
-    }
-
-    public override bool UpdateOrder(Order order)
-    {
-        OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "P1", "CTP 改单 P2 启用"));
-        return false;
-    }
-
-    public override bool CancelOrder(Order order)
-    {
-        OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, "P1", "CTP 撤单 P2 启用"));
-        return false;
-    }
-
-    public override List<Order> GetOpenOrders() => new();
-
-    public override List<Holding> GetAccountHoldings()
-    {
-        // P1: 暂不回填持仓（Subscribe 捕获的 Symbol 在 Setup 调 GetAccountHoldings时尚未就绪；且 P1 不下单）。
-        // P2 接交易时，按 Subscribe 捕获的 Symbol 映射 CTP 持仓回填 Lean Portfolio。
-        return new List<Holding>();
-    }
+    // —— 交易方法（PlaceOrder/UpdateOrder/CancelOrder/GetOpenOrders/GetAccountHoldings）实现在 CtpBrokerage.Trading.cs ——
+    // —— 报单/成交回报处理（OnOrderReceived/OnTradeReceived）同在 Trading partial ——
 
     public override List<CashAmount> GetCashBalance()
     {

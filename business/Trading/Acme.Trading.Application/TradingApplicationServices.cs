@@ -69,6 +69,8 @@ public sealed class LiveTradingApplicationService : ILiveTradingApplicationServi
             Resolution = input.Resolution,
             MarketDataConnect = input.MarketDataConnect,
             VerboseLog = input.VerboseLog,
+            EnableRealOrders = input.EnableRealOrders,
+            MaxOrderVolume = input.MaxOrderVolume,
         };
         return _runtime.StartAsync(request, ct);
     }

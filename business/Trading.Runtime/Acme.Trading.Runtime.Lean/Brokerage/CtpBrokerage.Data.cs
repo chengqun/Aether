@@ -81,12 +81,7 @@ public partial class CtpBrokerage
             CtpLeanGateway.Log($"[Tick] {tick.InstrumentId} last={tick.LastPrice} bid={tick.BidPrice}/{tick.BidVolume} ask={tick.AskPrice}/{tick.AskVolume} {tick.UpdateTime}.{tick.UpdateMillisec:D3} (#{n})");
     }
 
-    /// <summary>P1: 报单/成交回报仅记录（P2 接 OrderStateManager → OrderEvent）。</summary>
-    private void OnOrderReceived(object? sender, CtpOrder order)
-        => CtpLeanGateway.Log($"[Order] {order.InstrumentId} {order.Direction}{order.OffsetFlag} {order.VolumeTotalOriginal}@{order.LimitPrice} 状态={(char)order.OrderStatusRaw} {order.StatusMsg}");
-
-    private void OnTradeReceived(object? sender, CtpTrade trade)
-        => CtpLeanGateway.Log($"[Trade] {trade.InstrumentId} {trade.Direction}{trade.OffsetFlag} {trade.Volume}@{trade.Price}");
+    // OnOrderReceived/OnTradeReceived（P2 报单/成交回报 → Lean OrderEvent 翻译）实现在 CtpBrokerage.Trading.cs
 
     private static DateTime ParseTickTime(CtpTick tick)
     {

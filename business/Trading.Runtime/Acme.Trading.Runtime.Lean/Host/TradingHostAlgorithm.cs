@@ -130,6 +130,20 @@ public class TradingHostAlgorithm : QCAlgorithm
         }
     }
 
+    public override void OnWarmupFinished()
+    {
+        // P2 持仓回填配套：从 Portfolio 推导 _invested——否则引擎重启后 Portfolio 有持仓而 _invested=false，
+        // `case Flat when _invested[symbol]` 永不命中 → 已有持仓永不被平仓。
+        // 实盘：BrokerageSetupHandler 先回填持仓、AlgorithmManager 在首个数据片前调用本方法（无 warmup 也会调用）；
+        // 回测：warmup 结束时调用，Portfolio 从空仓起步（Invested=false），行为不变。
+        foreach (var symbol in _strategies.Keys)
+        {
+            _invested[symbol] = Portfolio[symbol].Invested;
+            if (Portfolio[symbol].Invested)
+                TradingGateway.Log($"[Algo] 检测到回填持仓 {symbol.Value} {Portfolio[symbol].Quantity} 手，持仓状态已同步");
+        }
+    }
+
     private StrategyParameters BuildParameters()
     {
         var dict = new Dictionary<string, string>();

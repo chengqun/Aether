@@ -45,12 +45,17 @@ public sealed class LeanLiveTradingService : ILiveTradingRuntime
         if (request.Instruments.Count == 0)
             return Task.FromResult((false, (string?)"未指定订阅合约"));
 
-        // 注入网关：CtpLeanGateway（brokerage 用：session/md/instruments/日志）+ TradingGateway（共享算法用：日志/停止）
+        // 注入网关：CtpLeanGateway（brokerage 用：session/md/instruments/日志/P2 交易选项）+ TradingGateway（共享算法用：日志/停止）
         CtpLeanGateway.Reset();
         CtpLeanGateway.Session = _session;
         CtpLeanGateway.MarketDataConnect = mdConnect;
         CtpLeanGateway.Instruments = request.Instruments;
         CtpLeanGateway.LogSink = msg => LogReceived?.Invoke(this, msg);
+        CtpLeanGateway.TradingOptions = new CtpLiveTradingOptions
+        {
+            EnableRealOrders = request.EnableRealOrders,
+            MaxOrderVolume = Math.Max(1, request.MaxOrderVolume),
+        };
         TradingGateway.Reset();
         TradingGateway.VerboseLog = request.VerboseLog;
         TradingGateway.LogSink = msg => LogReceived?.Invoke(this, msg);

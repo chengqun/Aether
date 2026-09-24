@@ -23,6 +23,9 @@ public static class CtpLeanGateway
     /// <summary>日志/信号接收口（service 转 UI）。为 null 时桥接类静默。</summary>
     public static Action<string>? LogSink { get; set; }
 
+    /// <summary>P2 实盘真实下单选项（开关 + 手数保险丝）。引擎启动前由 service 注入，brokerage PlaceOrder 读取。</summary>
+    public static CtpLiveTradingOptions TradingOptions { get; set; } = CtpLiveTradingOptions.Default;
+
     /// <summary>停止标志——算法 OnData 检测到后调 Quit() 退出引擎。</summary>
     public static volatile bool StopRequested;
 
@@ -40,6 +43,7 @@ public static class CtpLeanGateway
         MarketDataConnect = null;
         Instruments = Array.Empty<string>();
         LogSink = null;
+        TradingOptions = CtpLiveTradingOptions.Default;
         StopRequested = false;
     }
 }

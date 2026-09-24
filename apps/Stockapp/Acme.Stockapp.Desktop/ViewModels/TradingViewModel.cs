@@ -15,8 +15,8 @@ namespace Acme.Stockapp.Desktop.ViewModels;
 /// <summary>
 /// 回测 + 实盘 ViewModel（Stockapp 租户）。只依赖 Trading.Application + Runtime.Domain 枚举，
 /// 不依赖 Trading.Runtime.Lean —— 运行时无关（Lean now，未来换运行时只换 DI 注册）。
-/// 回测走 IBacktestApplicationService；实盘走 ILiveTradingApplicationService（P1：行情/信号链路通，不下单）。
-/// 镜像 AlphaAgent 的 BacktestViewModel + CtpViewModel 实盘段。
+/// 回测走 IBacktestApplicationService；实盘走 ILiveTradingApplicationService（P2：默认仅信号日志，
+/// 「真实下单」开关打开后经 CTP 真实报单——启动前二次确认）。
 /// </summary>
 public partial class TradingViewModel : ObservableObject
 {
@@ -61,6 +61,9 @@ public partial class TradingViewModel : ObservableObject
         var savedEngine = _preferences.GetAsync("trading.engine").GetAwaiter().GetResult();
         _engine = string.Equals(savedEngine, "LeanAlgorithm", StringComparison.OrdinalIgnoreCase)
             ? StrategyEngine.LeanAlgorithm : StrategyEngine.IStrategy;
+        // P2 真实下单开关 + 手数保险丝（跨重启持久化；开关默认关，绝不自动打开）
+        _liveRealOrders = ParseBool(_preferences.GetAsync("trading.liveRealOrders").GetAwaiter().GetResult());
+        _liveMaxOrderVolume = _preferences.GetAsync("trading.liveMaxVolume").GetAwaiter().GetResult() ?? "1";
         // 启动时加载当前策略的参数（构造函数设字段不触发 OnStrategyNameChanged，需显式调）
         LoadStrategyParameters(IsLiveMode ? _liveStrategy : _strategyName);
         LoadLeanAlgorithmParameters(_leanAlgorithmName);
@@ -198,7 +201,7 @@ public partial class TradingViewModel : ObservableObject
     [ObservableProperty] private string _currentStrategyDescription = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StartLiveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(RequestStartLiveCommand))]
     private bool _isRunning;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private string _error = string.Empty;
@@ -325,9 +328,36 @@ public partial class TradingViewModel : ObservableObject
     [ObservableProperty] private string _liveStrategy = "";
     [ObservableProperty] private string _liveStatusText = "未启动";
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StartLiveCommand), nameof(StopLiveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(RequestStartLiveCommand), nameof(StopLiveCommand))]
     private bool _isLiveRunning;
     [ObservableProperty] private string _liveLog = "";
+
+    // ═══ P2 真实下单（开关 + 手数保险丝 + 启动确认）═══
+
+    /// <summary>真实下单开关：false=仅信号日志（P1 行为）；true=经 CTP 真实报单。持久化，默认关。</summary>
+    [ObservableProperty] private bool _liveRealOrders;
+    /// <summary>单笔开仓手数上限（平仓不受限）。字符串绑定 TextBox，启动时 parse（非法/小于 1 回退 1）。</summary>
+    [ObservableProperty] private string _liveMaxOrderVolume = "1";
+    /// <summary>启动确认弹层显隐（镜像期货页 IsConfirmingOrder 两步确认）。</summary>
+    [ObservableProperty] private bool _isConfirmingLiveStart;
+    /// <summary>启动确认弹层摘要（合约/策略/手数上限）。</summary>
+    [ObservableProperty] private string _liveStartSummary = "";
+
+    public bool HasRealOrderWarning => LiveRealOrders;
+
+    partial void OnLiveRealOrdersChanged(bool value)
+    {
+        _preferences.SetAsync("trading.liveRealOrders", value ? "true" : "false").SafeFireAndForget();
+        OnPropertyChanged(nameof(HasRealOrderWarning));
+    }
+
+    partial void OnLiveMaxOrderVolumeChanged(string value)
+        => _preferences.SetAsync("trading.liveMaxVolume", value).SafeFireAndForget();
+
+    private int ParseMaxVolume() => int.TryParse(LiveMaxOrderVolume, out var v) && v >= 1 ? v : 1;
+
+    private static bool ParseBool(string? s) => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(s, "1", StringComparison.OrdinalIgnoreCase);
 
     private readonly StringBuilder _liveLogBuf = new();
 
@@ -345,7 +375,7 @@ public partial class TradingViewModel : ObservableObject
                 _ => status.ToString(),
             };
             IsLiveRunning = status == LiveTradingRuntimeStatus.Running;
-            StartLiveCommand.NotifyCanExecuteChanged();
+            RequestStartLiveCommand.NotifyCanExecuteChanged();
             StopLiveCommand.NotifyCanExecuteChanged();
         });
 
@@ -363,8 +393,38 @@ public partial class TradingViewModel : ObservableObject
     private bool CanStartLive => !IsLiveRunning && !IsRunning;
     private bool CanStopLive => IsLiveRunning;
 
+    /// <summary>启动入口：开关关 → 直接启动（P1 路径不变）；开关开 → 先弹二次确认（真实下单不可逆）。</summary>
     [RelayCommand(CanExecute = nameof(CanStartLive))]
-    private async Task StartLiveAsync()
+    private async Task RequestStartLiveAsync()
+    {
+        // 守卫（与启动条件一致，提前拦截避免确认后才失败）
+        if (!Connector.IsConnected) { AppendLiveLog("[实盘] CTP 未登录——请先在「期货」页登录后再启动实盘引擎"); return; }
+        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password))
+        { AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码）"); return; }
+        var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (instruments.Length == 0) { AppendLiveLog("[实盘] 请填写至少一个合约（如 ag2610）"); return; }
+
+        if (!LiveRealOrders)
+        {
+            await StartLiveCoreAsync();
+            return;
+        }
+        LiveStartSummary = $"合约 {string.Join(",", instruments)} ｜ 策略 {LiveStrategy} ｜ 单笔开仓上限 {ParseMaxVolume()} 手\n" +
+                           "真实下单模式：策略信号将直接向 CTP 报单（对手价限价），请确认风险。";
+        IsConfirmingLiveStart = true;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmStartLiveAsync()
+    {
+        IsConfirmingLiveStart = false;
+        await StartLiveCoreAsync();
+    }
+
+    [RelayCommand]
+    private void CancelStartLive() => IsConfirmingLiveStart = false;
+
+    private async Task StartLiveCoreAsync()
     {
         if (!Connector.IsConnected)
         {
@@ -379,7 +439,8 @@ public partial class TradingViewModel : ObservableObject
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (instruments.Length == 0) { AppendLiveLog("[实盘] 请填写至少一个合约（如 ag2610）"); return; }
 
-        AppendLiveLog($"[实盘] 启动：合约={string.Join(",", instruments)} 策略={LiveStrategy} 分辨率={LiveResolution}");
+        AppendLiveLog($"[实盘] 启动：合约={string.Join(",", instruments)} 策略={LiveStrategy} 分辨率={LiveResolution} " +
+                      $"真实下单={(LiveRealOrders ? $"开（单笔开仓上限 {ParseMaxVolume()} 手）" : "关（仅信号）")}");
         var input = new LiveTradingRunInput
         {
             Instruments = instruments,
@@ -390,6 +451,8 @@ public partial class TradingViewModel : ObservableObject
             StrategyParameters = BuildStrategyParameters(),
             Resolution = ParseResolution(LiveResolution),
             VerboseLog = VerboseLog,
+            EnableRealOrders = LiveRealOrders,
+            MaxOrderVolume = ParseMaxVolume(),
             MarketDataConnect = new MarketDataConnectInput
             {
                 MdFrontAddress = Connector.MdFrontAddress,
