@@ -30,7 +30,7 @@
           <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
                      Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
                      Margin="12,0,0,0" />
-          <Button Grid.Column="2" Content="+ 创建任务" Classes="primary" Click="OnAddTaskClick" Padding="14,6"
+          <Button Grid.Column="2" Content="+ 创建任务" Classes="primary" Click="OnAddTaskClick" Padding="14,4"
                   IsEnabled="{Binding !IsBusy}" />
         </Grid>
         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2" />
