@@ -99,6 +99,14 @@ public class KnowledgeObjectsScopeTests
             await Task.Delay(20);
     }
 
+    /// <summary>轮询等条件成立（切换落地页是 fire-and-forget 异步：EnsureTypeReadmeAsync 建文件 + 读盘）。</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline && !condition())
+            await Task.Delay(20);
+    }
+
     // —— 纯函数 ——
 
     [Fact]
@@ -158,6 +166,10 @@ public class KnowledgeObjectsScopeTests
             Assert.False(child.IsFolder);
             Assert.Equal("knowledge", vm.CurrentScopeDirName);
             Assert.Equal("知识对象", vm.CurrentScopeDisplay);
+            // 打开即落分区 README（启动即见语料库首页）——knowledge 的 README 是知识对象 → 表单形态
+            await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md"));
+            Assert.EndsWith("knowledge/readme.md", vm.ActivePath, StringComparison.OrdinalIgnoreCase);
+            Assert.False(vm.IsReadme);
         }
         finally { Cleanup(vm, root); }
     }
@@ -175,6 +187,7 @@ public class KnowledgeObjectsScopeTests
         try
         {
             await vm.OpenFolderAsync(root);
+            await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md")); // 打开即落 README——等就位再切（防落地竞态）
             Assert.Equal("knowledge", vm.CurrentScopeDirName);
 
             await vm.SetScopeAsync("agents");
@@ -183,13 +196,53 @@ public class KnowledgeObjectsScopeTests
             Assert.Equal("b", b.Name);
             Assert.EndsWith("agents/b.agent.md", b.Path, StringComparison.OrdinalIgnoreCase);
             Assert.Null(vm.SelectedNode); // 分区根不在树中——不选中（避免 TreeView 双绑对非树节点回写 null）
-            Assert.True(vm.IsFileCardsRoot); // 右栏经 ShowFolderContent 直驱卡片网格（不走 SelectedNode）
+            await WaitUntilAsync(() => vm.IsReadme); // 内容分区落地 = 分区 README（无 readme → 自动生成类型说明）
+            Assert.True(vm.IsReadme);
             Assert.Equal("agents", store.Values["ko.scope"]); // 持久化记住上次
 
             // wrap-around：knowledge(0) 点左 → rules(2)
             await vm.SetScopeAsync("knowledge");
             await vm.ScopeLeftCommand.ExecuteAsync(null);
             Assert.Equal("rules", vm.CurrentScopeDirName);
+        }
+        finally { Cleanup(vm, root); }
+    }
+
+    // —— 切换落地页：内容分区 README（knowledge 走知识对象表单）、管理分区保留面板 ——
+
+    [Fact]
+    public async Task SetScope_LandsOnReadmeForContentAndPanelsForManagement()
+    {
+        var root = TempRoot(
+            ("knowledge", "a.md", "# a"),
+            ("agents", "b.agent.md", "x"),
+            ("skills", null, null),
+            ("mcp-servers", "foo.json", "{}"));
+        var (vm, _) = CreateVm();
+        try
+        {
+            await vm.OpenFolderAsync(root); // 默认 knowledge——打开即落 knowledge README（表单形态）
+            await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md")); // 等就位再切（防落地竞态）
+
+            await vm.SetScopeAsync("agents"); // 内容分区 → markdown 预览形态 README
+            await WaitUntilAsync(() => vm.IsReadme);
+            Assert.True(vm.IsReadme);
+            Assert.False(vm.IsFileCardsRoot); // 卡片网格不再是切换落地页
+
+            await vm.SetScopeAsync("skills"); // 管理分区 → 技能卡片面板（唯一入口，同步置位）
+            Assert.True(vm.IsSkillsRoot);
+            Assert.False(vm.IsReadme);
+
+            await vm.SetScopeAsync("mcp-servers"); // 管理分区 → MCP 管理面板；技能面板态已清（不残留 overlay）
+            Assert.True(vm.IsMcpRoot);
+            Assert.False(vm.IsSkillsRoot);
+
+            await vm.SetScopeAsync("knowledge"); // knowledge README 是知识对象 → 表单形态（非 markdown 预览）
+            await WaitUntilAsync(() => vm.ActivePath is not null
+                && vm.ActivePath.EndsWith("readme.md", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith("knowledge/readme.md", vm.ActivePath, StringComparison.OrdinalIgnoreCase);
+            Assert.False(vm.IsReadme);
+            Assert.False(vm.IsMcpRoot); // 从 MCP 面板切走，面板态已清
         }
         finally { Cleanup(vm, root); }
     }
@@ -280,6 +333,7 @@ public class KnowledgeObjectsScopeTests
         try
         {
             await vm.OpenFolderAsync(root);
+            await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md")); // 打开即落 README——等就位再切（防落地竞态）
             Assert.Equal("knowledge", vm.CurrentScopeDirName);
 
             var file = Path.Combine(root, "mcp-servers", "foo.json");

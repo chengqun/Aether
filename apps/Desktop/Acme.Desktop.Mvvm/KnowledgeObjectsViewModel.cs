@@ -359,7 +359,7 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     }
 
     /// <summary>UI 线程应用分区树：挂分区子节点为树根集（空分区=空树，合法状态）+ 恢复（跨分区）展开态 +
-    /// 清旧选中 + 右栏直驱分区内容（<see cref="ShowFolderContent"/>——分区根不在树中）。</summary>
+    /// 清旧选中 + 右栏直驱分区落地页（<see cref="ShowScopeLanding"/>——分区根不在树中）。</summary>
     private void ApplyScopedTree(FileNode builtRoot, bool selectScopeRoot, string rootPath)
     {
         if (IsOpeningTree) return; // 打开进行中 → 让位
@@ -369,7 +369,47 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
         Roots.Clear();
         foreach (var t in treeRoots) Roots.Add(t);
         SelectedNode = null; // 旧分区选中节点已不在树中
-        if (selectScopeRoot && FindScopedNode(builtRoot) is { } scoped) ShowFolderContent(scoped);
+        if (selectScopeRoot && FindScopedNode(builtRoot) is { } scoped) ShowScopeLanding(scoped);
+    }
+
+    /// <summary>分区切换落地页（与树内点子目录的约定同构：「选中的目录 → 中间显其 README」）。
+    /// 内容分区（knowledge/agents/rules/coderules/workflows/note/策略族）显示分区 README——knowledge 的
+    /// README 本身是知识对象（走表单形态，可带 kind/links 链到成员，正好作语料库首页）；管理型分区
+    /// （skills/mcp-servers）保留各自专属面板——MCP 管理面板（server 增删/连接状态/工具清单/刷新）的唯一
+    /// 入口在此，显 README 会埋掉。内容分区不再落卡片网格（children-only 树本身就是浏览器；卡片路径在
+    /// 非 labs 根模式点类型目录仍可达）。清面板旗标是必须的——<see cref="OpenReadmeAsync"/> 等自身不清
+    /// <c>_isSkillsRoot</c>/<c>_isMcpRoot</c>（约定由调用方清），不清则从技能/MCP 面板切走时 overlay 残留。</summary>
+    private void ShowScopeLanding(FileNode scoped)
+    {
+        if (IsSkillsRootFolder(scoped) || IsMcpRootFolder(scoped))
+        {
+            ShowFolderContent(scoped); // 技能卡片 / MCP 管理面（自含面板态清理 + RaiseLayout）
+            return;
+        }
+        _isSkillsRoot = false;
+        _isMcpRoot = false;
+        _isFileCardsRoot = false;
+        _fileCardsType = null;
+        _fileCardsVm = null;
+        RaiseLayout();
+        OpenFolderReadmeAsync(scoped.Path).SafeFireAndForget();
+    }
+
+    /// <summary>打开完成 → 落当前分区落地页（打开资料库目录 / 启动恢复都经此——启动即见语料库首页，
+    /// 与切换落地同构）。watcher 重建**不**重落（<see cref="OnTreeRefreshed"/> 只刷新活动面板态——
+    /// 用户可能正在编辑文件，不能拽回 README）。</summary>
+    protected override Task OnFolderOpenedAsync(string path)
+    {
+        ShowCurrentScopeLanding();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>落当前分区落地页（打开完成钩子用）：分区根不在树中（树=其子节点），构造同路径轻量节点
+    /// 驱动——skills/mcp 谓词与 README 落地全按路径判定，与真实构建节点等价。</summary>
+    private void ShowCurrentScopeLanding()
+    {
+        if (!HasScopeSwitcher || _scopeDirName is null || string.IsNullOrEmpty(RootPath)) return;
+        ShowScopeLanding(new FileNode(_scopeDirName, Path.Combine(RootPath, _scopeDirName), isFolder: true));
     }
 
     /// <summary>树根解析：labs 切换器模式下返回当前分区目录的**子节点**（分区名已在树头切换器显示，

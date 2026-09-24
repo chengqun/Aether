@@ -64,32 +64,39 @@
       </ContextMenu>
     </Border.ContextMenu>
     <Grid RowDefinitions="Auto,*">
-      <!-- 分区切换器（‹ 当前分区 ›，居中）：labs 模式显示（自定义知识库根/未开目录整条隐藏，不留空条）。
+      <!-- 分区切换器 = "当前位置"指示（居中胶囊分段控件）：labs 模式显示（自定义知识库根/未开目录整条隐藏）。
            箭头 wrap-around 循环切换固定类型目录，树只显当前分区的子节点（分区名在此显示，树内不重复根层）。
-           箭头 Button.scm-act（伪类在 /template/ ContentPresenter 层），Path Fill 绑 Button.Foreground 随 hover 变色。 -->
-      <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+           字号/图标刻意大于树内子目录行——当前位置比列表项还小是视觉层级倒挂。胶囊用 accent 淡底 + 发丝描边
+           （主题 token，明暗自适应）；箭头 Button.scm-act（伪类在 /template/ ContentPresenter 层），
+           Path Fill 绑 Button.Foreground 随 hover 变色。 -->
+      <Border Grid.Row="0" Padding="6,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
               IsVisible="{Binding HasScopeSwitcher}">
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-          <Button Classes="scm-act" Command="{Binding ScopeLeftCommand}" ToolTip.Tip="上一个分区">
-            <Path Data="{x:Static shell:Codicons.ChevronLeft}" Stretch="Uniform" Width="13" Height="13"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                  VerticalAlignment="Center"/>
-          </Button>
-          <Grid ColumnDefinitions="Auto,Auto" Margin="4,0" VerticalAlignment="Center">
-            <Path Grid.Column="0" Data="{Binding CurrentScopeFillIcon}" Fill="{Binding CurrentScopeIconColor}"
-                  Stretch="Uniform" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center"
-                  IsVisible="{Binding HasScopeIcon}"/>
-            <TextBlock Grid.Column="1" Text="{Binding CurrentScopeDisplay}" FontSize="12"
-                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" MaxWidth="110"
-                       ToolTip.Tip="{Binding CurrentScopeDirName}"/>
-          </Grid>
-          <Button Classes="scm-act" Command="{Binding ScopeRightCommand}" ToolTip.Tip="下一个分区">
-            <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="13" Height="13"
-                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                  VerticalAlignment="Center"/>
-          </Button>
-        </StackPanel>
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AccentTintBgBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="16" Padding="3,2">
+          <StackPanel Orientation="Horizontal">
+            <Button Classes="scm-act" Command="{Binding ScopeLeftCommand}" ToolTip.Tip="上一个分区">
+              <Path Data="{x:Static shell:Codicons.ChevronLeft}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    VerticalAlignment="Center"/>
+            </Button>
+            <Grid ColumnDefinitions="Auto,Auto" Margin="6,0" VerticalAlignment="Center">
+              <Path Grid.Column="0" Data="{Binding CurrentScopeFillIcon}" Fill="{Binding CurrentScopeIconColor}"
+                    Stretch="Uniform" Width="15" Height="15" Margin="0,0,6,0" VerticalAlignment="Center"
+                    IsVisible="{Binding HasScopeIcon}"/>
+              <TextBlock Grid.Column="1" Text="{Binding CurrentScopeDisplay}" FontSize="14" FontWeight="Medium"
+                         Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" MaxWidth="130"
+                         ToolTip.Tip="{Binding CurrentScopeDirName}"/>
+            </Grid>
+            <Button Classes="scm-act" Command="{Binding ScopeRightCommand}" ToolTip.Tip="下一个分区">
+              <Path Data="{x:Static shell:Codicons.ChevronRight}" Stretch="Uniform" Width="15" Height="15"
+                    Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    VerticalAlignment="Center"/>
+            </Button>
+          </StackPanel>
+        </Border>
       </Border>
       <TreeView Grid.Row="1" x:Name="KoTree" Classes="ko-tree" Margin="4,4"
                 ItemsSource="{Binding Roots}"

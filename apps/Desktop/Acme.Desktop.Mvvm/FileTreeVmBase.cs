@@ -68,6 +68,12 @@ public abstract partial class FileTreeVmBase : ObservableObject
     /// 构造期间执行——覆写只可触声明即初始化的字段（同基类构造函数虚方法坑纪律）。</summary>
     protected virtual Task OnFolderOpeningAsync(string path) => Task.CompletedTask;
 
+    /// <summary>打开完成钩子：树挂根 + 展开后调用（try 内，异常归入打开失败）。KOVM 在此触发当前分区
+    /// 落地页（打开资料库/启动恢复即见分区 README）。默认空。经派生 ctor 的 LoadLastRootAsync
+    /// fire-and-forget 链，此钩子执行在 Task.Run 构建之后的 continuation——派生字段已就绪，
+    /// 仍遵守「只触已初始化状态」纪律。</summary>
+    protected virtual Task OnFolderOpenedAsync(string path) => Task.CompletedTask;
+
     /// <summary>树根解析钩子：OpenFolderAsync 挂根 / ApplyTreeRefresh 换根前调，返回挂进 <see cref="Roots"/>
     /// 的节点列表。默认 [builtRoot]。KOVM 在 labs 分区模式下返回当前分区目录的**子节点**——分区名已在树头
     /// 切换器显示，树内不再重复根层（RootPath 不变）。覆写不应设 IsExpanded——展开由
@@ -185,6 +191,7 @@ public abstract partial class FileTreeVmBase : ObservableObject
             foreach (var t in treeRoots) Roots.Add(t);
             if (ExpandTreeRootsOnOpen)
                 foreach (var t in treeRoots) t.IsExpanded = true;
+            await OnFolderOpenedAsync(path);
             StatusMessage = string.Empty;
             await PersistRootPathAsync(path);
         }
