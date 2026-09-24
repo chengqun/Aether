@@ -174,7 +174,16 @@ public partial class KoTreeView : UserControl
 
     private void OnRevealInFileManagerClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm?.SelectedNode is not { } node) return;
-        FileTreeOps.RevealInFileManager(node);
+        var vm = _vm;
+        if (vm is null) return;
+        if (vm.SelectedNode is { } node)
+        {
+            FileTreeOps.RevealInFileManager(node);
+            return;
+        }
+        // 无选中节点（打开/切分区后常态——落地直驱不选中）→ 回退树当前显示的目录：
+        // labs 模式=当前分区目录（所见即所得），非 labs 根=根目录。
+        if (vm.CurrentTreeDirectory is { } dir)
+            FileTreeOps.RevealInFileManager(new FileNode(dir, dir, isFolder: true));
     }
 }

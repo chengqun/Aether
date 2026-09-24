@@ -149,7 +149,7 @@
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.GoToFile}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
             <MenuItem Header="在文件管理器中显示" Click="OnRevealInFileManagerClick"
-                      IsEnabled="{Binding SelectedNode, Converter={x:Static shell:NotNullConverter.Instance}}">
+                      IsEnabled="{Binding HasRoot}">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.FolderActive}" Fill="{DynamicResource TextPrimaryBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/></MenuItem.Icon>
             </MenuItem>
             <Separator />

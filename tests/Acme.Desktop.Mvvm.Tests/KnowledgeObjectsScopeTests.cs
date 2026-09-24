@@ -166,6 +166,7 @@ public class KnowledgeObjectsScopeTests
             Assert.False(child.IsFolder);
             Assert.Equal("knowledge", vm.CurrentScopeDirName);
             Assert.Equal("知识对象", vm.CurrentScopeDisplay);
+            Assert.Equal(Path.Combine(root, "knowledge"), vm.CurrentTreeDirectory); // 无选中节点时 reveal 的回退目标=当前分区目录
             // 打开即落分区 README（启动即见语料库首页）——knowledge 的 README 是知识对象 → 表单形态
             await WaitActivePathAsync(vm, Path.Combine(root, "knowledge", "readme.md"));
             Assert.EndsWith("knowledge/readme.md", vm.ActivePath, StringComparison.OrdinalIgnoreCase);
@@ -282,6 +283,7 @@ public class KnowledgeObjectsScopeTests
             await vm.OpenFolderAsync(root);
             Assert.False(vm.HasScopeSwitcher);
             Assert.Equal(root, vm.Roots[0].Path); // 树根 = 根本身（不提升）
+            Assert.Equal(root, vm.CurrentTreeDirectory); // 非 labs 根：reveal 回退目标 = 根目录
             var names = vm.Roots[0].Children.Select(c => c.Name).ToList();
             Assert.Contains("知识对象", names); // knowledge/ 照样走入口卡改名（树行为与今日一致）
             Assert.Contains("mynotes", names); // 自建目录照常显示（裸目录名）

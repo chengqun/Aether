@@ -179,6 +179,13 @@ public partial class KnowledgeObjectsViewModel : FileTreeVmBase
     /// <summary>切换器是否显示图标（无 fill 图标的分区不占位）。</summary>
     public bool HasScopeIcon => !string.IsNullOrEmpty(CurrentScopeFillIcon);
 
+    /// <summary>树当前显示的目录（labs 模式=当前分区目录；非 labs 根=根目录；未打开=null）。
+    /// 「在文件管理器中显示」无选中节点时的回退目标——所见即所得（树正显示该目录的内容）。</summary>
+    public string? CurrentTreeDirectory
+        => HasScopeSwitcher && _scopeDirName is not null && !string.IsNullOrEmpty(RootPath)
+            ? Path.Combine(RootPath, _scopeDirName)
+            : RootPath;
+
     private KoScopeItem? CurrentScope => _scopeIndex >= 0 && _scopeIndex < _scopes.Count ? _scopes[_scopeIndex] : null;
 
     private void RaiseScopeProperties()
