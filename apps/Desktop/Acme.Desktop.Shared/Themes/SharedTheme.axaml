@@ -412,7 +412,15 @@
     <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
     <Setter Property="BorderThickness" Value="0,0,0,1"/>
-    <Setter Property="Padding" Value="20,12"/>
+    <Setter Property="Height" Value="48"/>
+    <Setter Property="Padding" Value="20,0"/>
+  </Style>
+
+  <!-- 三栏标题条统一高度（2026-09-24）：左树头（KoTree 切换器/FileTree 菜单）/ 中间页头（page-header）/
+       右聊天头（ChatView）的底部分割线落在同一水平线。固定 48 高 + 垂直 padding 归零 + 内容垂直居中
+      （高度不随内容涨；内容超 47 会裁——加高先改此处与 page-header 同步）。 -->
+  <Style Selector="Border.pane-head">
+    <Setter Property="Height" Value="48"/>
   </Style>
 
   <!-- 列表空态外壳：卡片描边 + 圆角 + 居中（Automation/Rules/Mcp/Workflows/Experts/Skill/Trace/Chat 共 8 处曾逐行重复）。

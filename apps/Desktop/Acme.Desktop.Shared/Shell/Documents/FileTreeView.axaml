@@ -46,8 +46,8 @@
   <Border Background="{DynamicResource CardBgBrush}">
     <Grid RowDefinitions="Auto,*">
       <!-- 树头：「文件」下拉菜单（项目名不显——文件树根节点已是目录名，重复无意义，同原 DocumentsView 2026-08-15 决策） -->
-      <Border Grid.Row="0" Padding="4,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-        <Menu Classes="docs-menu">
+      <Border Grid.Row="0" Classes="pane-head" Padding="4,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Menu Classes="docs-menu" VerticalAlignment="Center">
           <MenuItem Header="文件" Classes="docs-menu-item">
             <MenuItem Header="打开项目目录" Click="OnOpenFolderClick">
               <MenuItem.Icon><Path Data="{x:Static shell:Codicons.Folder}" Stretch="Uniform" Width="14" Height="14" Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></MenuItem.Icon>

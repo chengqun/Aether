@@ -537,7 +537,7 @@ VSCode 式集成终端：**B1 用户终端面板**（底部常驻 region——VS
 
 聊天只有**一个视图面：右栏紧凑 `ChatView`**（VSCode 式右栏助手）。曾有过全屏 nav 页 `ChatPage`（`ChatPageView` + `ChatInputView`），2026-09-22 按 VSCode 三栏心智（**nav=目的地、右栏=聊天助手、底部=过程遥测**）删除——它与右栏绑同一 `ChatWorkspaceViewModel`，是重复入口；聊天不进 nav rail（「网络」nav 页同批删除，见下节）。
 
-- **`ChatView` 布局**（`Shared/Shell/Chat/`，`PanelKeys.Chat`，420px 可拖宽）：头部（连接状态 + 设备配置 + 历史会话 flyout + 新聊天）+ 底部内联输入卡（plan-accept / 活动计划 / chips[对话目标/LLM/4 档模式选择器] / TextBox+发送·停止）+ `ChatMessagesView` 消息列。
+- **`ChatView` 布局**（`Shared/Shell/Chat/`，`PanelKeys.Chat`，420px 可拖宽）：头部（连接状态 + 设备配置 + 历史会话 flyout + 新聊天）+ 底部内联输入卡（plan-accept / 活动计划 / chips[对话目标/LLM/4 档模式选择器] / TextBox+发送·停止）+ `ChatMessagesView` 消息列。**三栏标题条统一 48px**（2026-09-24，`SharedTheme` 的 `Border.pane-head` + `page-header` Height=48）：左树头（KoTree 分区切换器 / FileTree 菜单）、中间页头（`page-header` 五视图 Mcp/Skill/FileCards/Automation/Experts + 文档页编辑标签条）、右聊天头的**底部分割线落在同一水平线**——固定高 + 垂直 padding 归零 + 内容垂直居中（高度不随内容涨；内容超 47 会裁，加高须两样式同步）；SCM 面板顶是「提交框+远程工具栏」功能块非标题条，不参与对齐。
 
 **消息内核**：`ChatMessagesView`（消息模板 per `ChatMessageItem`/`ChatTurnItem` + `ScrollViewer` + 贴底滚动 + 分页历史加载 `HistoryInitialBatch=10` + 浮动滚底按钮）——`WorkbenchViewRegistry` 注册 `Chat→ChatView`，vmFactory 返 `serviceProvider.GetRequiredService<MainViewModelBase>().Chat`（`ChatWorkspaceViewModel` 单例）。
 

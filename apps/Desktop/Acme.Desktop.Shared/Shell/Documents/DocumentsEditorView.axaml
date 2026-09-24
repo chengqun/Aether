@@ -72,8 +72,8 @@
   <!-- 编辑器面板（标签条 + 状态消息 + 编辑器 + 空态）。原 DocumentsView col2 拆出。 -->
   <Border Background="{DynamicResource CardBgBrush}">
     <Grid RowDefinitions="Auto,*">
-      <!-- 标签条 + 「编辑▾」菜单 + 预览切换 + 状态消息（同行） -->
-      <Border Grid.Row="0" Background="{DynamicResource SidebarBgBrush}"
+      <!-- 标签条 + 「编辑▾」菜单 + 预览切换 + 状态消息（同行）；pane-head 与左树头/右聊天头同高（分割线一水平线） -->
+      <Border Grid.Row="0" Classes="pane-head" Background="{DynamicResource SidebarBgBrush}"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
         <DockPanel>
           <!-- 「编辑▾」菜单：保存(Ctrl+S)/关闭标签（原树头菜单的编辑器项归此） -->
@@ -100,7 +100,7 @@
                      VerticalAlignment="Center" Margin="8,0,6,0"
                      Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                      IsVisible="{Binding StatusMessage, Converter={x:Static shell:NotNullConverter.Instance}}"/>
-          <ListBox Name="TabsList" Classes="docs-tabs"
+          <ListBox Name="TabsList" Classes="docs-tabs" VerticalAlignment="Center"
                    ItemsSource="{Binding Tabs}" SelectedItem="{Binding ActiveTab}"
                    SelectionMode="Single">
             <ListBox.ItemsPanel>

@@ -69,7 +69,7 @@
            字号/图标刻意大于树内子目录行——当前位置比列表项还小是视觉层级倒挂。胶囊用 accent 淡底 + 发丝描边
            （主题 token，明暗自适应）；箭头 Button.scm-act（伪类在 /template/ ContentPresenter 层），
            Path Fill 绑 Button.Foreground 随 hover 变色。 -->
-      <Border Grid.Row="0" Padding="6,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+      <Border Grid.Row="0" Classes="pane-head" Padding="6,0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
               IsVisible="{Binding HasScopeSwitcher}">
         <Border HorizontalAlignment="Center" VerticalAlignment="Center"
                 Background="{DynamicResource AccentTintBgBrush}"

@@ -17,7 +17,7 @@
   <DockPanel>
     <!-- 顶部标题栏 -->
     <Border DockPanel.Dock="Top" Classes="page-header">
-      <StackPanel Spacing="6">
+      <StackPanel Spacing="6" VerticalAlignment="Center">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Path Data="{x:Static shell:Codicons.Calendar}" Stretch="Uniform" Width="15" Height="15"
