@@ -20,7 +20,7 @@
       <StackPanel Spacing="2">
         <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
           <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-          <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port" />
+          <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port 或 sim" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
           <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port" />
@@ -41,6 +41,9 @@
           <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding AuthCode}" Margin="0,6" />
         </Grid>
         <CheckBox Content="启动时自动连接" IsChecked="{Binding AutoLogin}" Margin="100,8,0,0" FontSize="12" />
+        <TextBlock Text="提示：交易前置填 sim ⇒ 连本地仿真柜台（先启动 apps/CtpSim/Acme.Ctp.Sim.Host）；填真实前置 ⇒ 官方柜台。切换柜台 = 换地址重新登录。"
+                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                   Margin="0,10,0,0" />
       </StackPanel>
     </ScrollViewer>
 

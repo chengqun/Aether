@@ -49,6 +49,9 @@
     <Project Path="apps/Qifu/Acme.Qifu.Desktop/Acme.Qifu.Desktop.csproj" />
     <Project Path="apps/Qifu/Acme.Qifu.Mobile/Acme.Qifu.Mobile.csproj" />
   </Folder>
+  <Folder Name="/apps/CtpSim/">
+    <Project Path="apps/CtpSim/Acme.Ctp.Sim.Host/Acme.Ctp.Sim.Host.csproj" />
+  </Folder>
   <Folder Name="/server/">
     <Project Path="server/Aether.Server.Domain.Shared/Aether.Server.Domain.Shared.csproj" />
     <Project Path="server/Aether.Server.Domain/Aether.Server.Domain.csproj" />
@@ -66,6 +69,9 @@
     <Project Path="business/Ctp/Acme.Ctp.Application/Acme.Ctp.Application.csproj" />
     <Project Path="business/Ctp/Acme.Ctp.Domain/Acme.Ctp.Domain.csproj" />
     <Project Path="business/Ctp/Acme.Ctp.Infrastructure/Acme.Ctp.Infrastructure.csproj" />
+    <Project Path="business/Ctp/Acme.Ctp.Simulator/Acme.Ctp.Simulator.csproj" />
+    <Project Path="business/Ctp/Acme.Ctp.Sim/Acme.Ctp.Sim.csproj" />
+    <Project Path="business/Ctp/Acme.Ctp.Sim.Server/Acme.Ctp.Sim.Server.csproj" />
   </Folder>
   <Folder Name="/business/Llm/">
     <Project Path="business/Llm/Acme.Llm.Application/Acme.Llm.Application.csproj" />
@@ -181,6 +187,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
+    <Project Path="tests/Acme.Ctp.Simulator.Tests/Acme.Ctp.Simulator.Tests.csproj" />
     <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Notes.Infrastructure.Tests/Acme.Notes.Infrastructure.Tests.csproj" />
