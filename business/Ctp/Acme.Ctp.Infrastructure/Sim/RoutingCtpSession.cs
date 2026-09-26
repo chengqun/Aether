@@ -103,6 +103,10 @@ public sealed class RoutingCtpSession : ICtpSession, IDisposable
     public Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default)
         => _active.QueryOrderAsync(instrumentId, ct);
 
+    /// <summary>查询合约表：跟随活跃柜台（sim ⇒ host 上市表；真实 ⇒ 空表——真实链路暂无合约查询）。</summary>
+    public Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default)
+        => _active.QueryInstrumentsAsync(ct);
+
     public Task<CtpOrderInsertResult> OrderInsertAsync(CtpOrderRequest request, CancellationToken ct = default)
         => _active.OrderInsertAsync(request, ct);
 

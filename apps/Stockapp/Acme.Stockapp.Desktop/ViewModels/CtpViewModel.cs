@@ -150,8 +150,37 @@ public partial class CtpViewModel : ObservableObject
         await LoadMainFuturesAsync();
     }
 
+    /// <summary>
+    /// 加载行情板合约清单（单一漏斗——启动/证券同步重载/手动刷新共用）。<b>行情随柜台</b>：
+    /// sim 登录 ⇒ 从 host 上市合约表加载（「我就是交易所」——host 侧 <c>AETHER_CTP_SIM_BOARD</c> 自定义），
+    /// 证券同步重载经此分流不会覆盖 sim 板；真实登录 ⇒ 证券库主力合约（原路）。
+    /// sim 未登录（连接未建立）⇒ 跳过——Connected 事件后重载（见 <see cref="ApplyConnectionStatus"/>）。
+    /// </summary>
     private async Task LoadMainFuturesAsync()
     {
+        if (Connector.IsSimFront)
+        {
+            if (!Connector.IsConnected) return;   // host 上市表要活连接（RPC）；登录后 Connected 事件重载
+            try
+            {
+                var listed = await _trading.QueryInstrumentsAsync();
+                QuoteBoard.Clear();
+                _quoteBySymbol.Clear();
+                foreach (var i in listed)
+                {
+                    // sim id 已是 CTP 规整形态（不经 ToCtpInstrumentCode）；无中文名——名称列显交易所
+                    var q = new MainFutureQuote(i.InstrumentId, i.ExchangeId);
+                    QuoteBoard.Add(q);
+                    _quoteBySymbol[i.InstrumentId] = q;
+                }
+                StatusMessage = listed.Count > 0 ? $"仿真上市合约 {listed.Count} 个" : "仿真柜台无上市合约";
+                ApplySort();
+                TryAutoSubscribeAsync().SafeFireAndForget();
+            }
+            catch (Exception ex) { StatusMessage = $"加载上市合约失败: {ex.Message}"; }
+            return;
+        }
+
         try
         {
             var mains = await Task.Run(() => _securities.GetMainFuturesAsync());
@@ -227,7 +256,11 @@ public partial class CtpViewModel : ObservableObject
                 StatusMessage = "已连接";
                 var r = _trading.LoginResult;
                 LoginInfo = $"交易日={r?.TradingDay} FrontID={r?.FrontId} SessionID={r?.SessionId}";
-                if (!_autoSubscribed) TryAutoSubscribeAsync().SafeFireAndForget();
+                if (Connector.IsSimFront)
+                    // 启动期板先于 sim 登录加载（真实列表占位）——登录完成后换成 host 上市表；
+                    // 板加载尾部自动订阅（先换板再订阅，防止把旧的真实列表订阅到 sim host）
+                    LoadMainFuturesAsync().SafeFireAndForget();
+                else if (!_autoSubscribed) TryAutoSubscribeAsync().SafeFireAndForget();
                 break;
             case CtpConnectionStatus.Reconnecting:
                 StatusMessage = "重连中…";

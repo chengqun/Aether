@@ -49,6 +49,8 @@ public static class SimOps
     public const string QueryAccount = "queryAccount";
     public const string QueryPositions = "queryPositions";
     public const string QueryOrders = "queryOrders";
+    /// <summary>查询 host 上市合约表（返回 <see cref="CtpInstrument"/> 列表——行情板的「我就是交易所」数据源）。</summary>
+    public const string QueryInstruments = "queryInstruments";
     public const string InsertOrder = "insertOrder";
     public const string CancelOrder = "cancelOrder";
     public const string Subscribe = "subscribe";

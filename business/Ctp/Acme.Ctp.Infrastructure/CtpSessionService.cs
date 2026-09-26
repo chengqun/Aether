@@ -304,6 +304,10 @@ public class CtpSessionService : ICtpSession, IDisposable
         return CtpSessionMapper.ToDtoList(list);
     }
 
+    /// <summary>真实链路暂无合约查询（CtpTrader 未包装 ReqQryInstrument）——返回空表；行情板走证券库主力合约。</summary>
+    Task<IReadOnlyList<CtpInstrument>> ICtpSession.QueryInstrumentsAsync(CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CtpInstrument>>(Array.Empty<CtpInstrument>());
+
     async Task<CtpOrderInsertResult> ICtpSession.OrderInsertAsync(CtpOrderRequest request, CancellationToken ct)
     {
         var r = await OrderInsertAsync(CtpSessionMapper.ToSdk(request));

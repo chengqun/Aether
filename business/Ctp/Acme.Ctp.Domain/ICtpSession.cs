@@ -43,6 +43,12 @@ public interface ICtpSession
     /// <summary>查询报单（可选按合约过滤）。</summary>
     Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// 查询合约表。仿真柜台（前置 sim）返回 host 上架的合约（「行情随柜台」的行情板数据源）；
+    /// 真实链路暂无合约查询（<c>CtpSessionService</c> 返回空表——行情板走证券库主力合约）。
+    /// </summary>
+    Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default);
+
     /// <summary>下单。</summary>
     Task<CtpOrderInsertResult> OrderInsertAsync(CtpOrderRequest request, CancellationToken ct = default);
 

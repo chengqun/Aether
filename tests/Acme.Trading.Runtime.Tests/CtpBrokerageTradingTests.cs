@@ -295,6 +295,8 @@ public class CtpBrokerageTradingTests : IDisposable
 
         public Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<CtpOrder>>(Array.Empty<CtpOrder>());
+        public Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<CtpInstrument>>(Array.Empty<CtpInstrument>());
 
         public Task<CtpOrderInsertResult> OrderInsertAsync(CtpOrderRequest request, CancellationToken ct = default)
         {

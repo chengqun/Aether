@@ -30,6 +30,7 @@ public class OrderToolTests
         public Task<CtpAccount> QueryAccountAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<CtpPosition>> QueryPositionAsync(string? instrumentId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default) => throw new NotImplementedException();
 
         public Task<CtpOrderInsertResult> PlaceOrderAsync(CtpOrderRequest request, CancellationToken ct = default)
         {

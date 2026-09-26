@@ -14,6 +14,8 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_TICK_MS 行情推进间隔（0 = 不自动喂）
 //   AETHER_CTP_SIM_SEED    随机游走种子（默认固定 ⇒ 可复现）
 //   AETHER_CTP_SIM_BALANCE 新账户初始资金
+//   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 9 个种子合约——「我就是交易所」的自定义上架面，
+//                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
 // 行情随柜台：sim 登录的行情恒为本地合成（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -37,9 +39,11 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         server.Start();
 
         var port = server.LocalEndpoint?.Port ?? opts.Port;
+        var listed = core.QueryListedInstruments();
         Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}");
         Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
         Console.WriteLine($"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
+        Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
         Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。客户端：期货页登录前置地址填 sim 即连本柜台（无需环境变量）。");
     }
 

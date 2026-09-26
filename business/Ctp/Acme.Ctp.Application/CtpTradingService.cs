@@ -49,6 +49,9 @@ public class CtpTradingService : ICtpTradingService
     public Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default)
         => _session.QueryOrderAsync(instrumentId, ct);
 
+    public Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default)
+        => _session.QueryInstrumentsAsync(ct);
+
     public Task<CtpOrderInsertResult> PlaceOrderAsync(CtpOrderRequest request, CancellationToken ct = default)
         => _session.OrderInsertAsync(request, ct);
 

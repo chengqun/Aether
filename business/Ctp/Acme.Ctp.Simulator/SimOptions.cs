@@ -32,6 +32,13 @@ public sealed record SimOptions
     /// <summary>仿真数据库路径。null ⇒ 纯内存（不落盘，单测默认）。</summary>
     public string? DatabasePath { get; init; }
 
+    /// <summary>
+    /// 上市合约表（「我就是交易所」的自定义面）：host 上架清单，客户端行情板显示它。
+    /// null/空 ⇒ 默认 = <see cref="InstrumentCatalog"/> 种子 9 合约；自定义 id 经解析链（精确→品种派生→合成）落表。
+    /// host 环境变量 <c>AETHER_CTP_SIM_BOARD</c>（逗号分隔）。
+    /// </summary>
+    public IReadOnlyList<string>? ListedInstruments { get; init; }
+
     /// <summary>交易日历：非交易时段的报单是否直接拒绝（默认关——仿真不挑时段）。</summary>
     public bool RejectOrdersOutsideTradingTime { get; init; }
 
@@ -44,7 +51,16 @@ public sealed record SimOptions
             TickIntervalMs = EnvInt("AETHER_CTP_SIM_TICK_MS", 500),
             Seed = EnvInt("AETHER_CTP_SIM_SEED", 20260925),
             InitialBalance = EnvDouble("AETHER_CTP_SIM_BALANCE", 1_000_000),
+            ListedInstruments = ParseBoard(Environment.GetEnvironmentVariable("AETHER_CTP_SIM_BOARD")),
         };
+    }
+
+    /// <summary>上市合约表解析：逗号分割、去空格、弃空项；空白/坏值 ⇒ null（默认种子表——交易所清单坏值容忍回默认，不拒启动）。</summary>
+    private static IReadOnlyList<string>? ParseBoard(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var ids = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return ids.Length == 0 ? null : ids;
     }
 
     private static int EnvInt(string name, int fallback)

@@ -220,7 +220,7 @@ public class RoutingSessionTests
     [Fact]
     public void 环境变量缺省时取内置默认值()
     {
-        foreach (var name in new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE" })
+        foreach (var name in new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE", "AETHER_CTP_SIM_BOARD" })
             Environment.SetEnvironmentVariable(name, null);
 
         var options = SimOptions.FromEnvironment(null);
@@ -229,5 +229,27 @@ public class RoutingSessionTests
         Assert.Equal(500, options.TickIntervalMs);
         Assert.Equal(20260925, options.Seed);
         Assert.Equal(1_000_000, options.InitialBalance, 6);
+        Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落种子 9 合约
+    }
+
+    [Fact]
+    public void 上市合约表环境变量解析()
+    {
+        var names = new[] { "AETHER_CTP_SIM_BOARD" };
+        var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
+        try
+        {
+            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_BOARD", " ag2610 , IF2610 ");
+            var o = SimOptions.FromEnvironment(null);
+            Assert.Equal(new[] { "ag2610", "IF2610" }, o.ListedInstruments);   // 去空格、弃空项
+
+            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_BOARD", "   ");
+            Assert.Null(SimOptions.FromEnvironment(null).ListedInstruments);   // 坏值容忍回默认（不拒启动）
+        }
+        finally
+        {
+            for (var i = 0; i < names.Length; i++)
+                Environment.SetEnvironmentVariable(names[i], saved[i]);
+        }
     }
 }

@@ -174,6 +174,17 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
         return _client.QueryOrdersAsync(instrumentId, ct);
     }
 
+    /// <summary>
+    /// 查询 host 上市合约表（行情板数据源——「行情随柜台」）。先连 + Hello：host 未启动 ⇒
+    /// <c>CtpBusinessException(90012, 含启动命令)</c>。无登录守卫（上市表是交易所全局的）。
+    /// </summary>
+    public async Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default)
+    {
+        EnsureNotDisposed();
+        await _client.ConnectAsync(ct).ConfigureAwait(false);   // Hello——host 死 ⇒ 90012
+        return await _client.QueryInstrumentsAsync(ct).ConfigureAwait(false);
+    }
+
     /// <summary>与 Simulator.SimTradingCore.AccountIdOf 同一归一规则（空 → "sim"；分层：客户端不引 Simulator，规则复制+注释交叉引用）。</summary>
     private static string AccountKey(string? userId)
         => string.IsNullOrWhiteSpace(userId) ? "sim" : userId;

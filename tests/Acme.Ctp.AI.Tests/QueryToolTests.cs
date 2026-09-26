@@ -45,6 +45,7 @@ public class QueryToolTests
                : Task.FromResult<IReadOnlyList<CtpPosition>>(new[] { new CtpPosition { InstrumentId = "rb2601", TotalPosition = 2 } });
 
         public Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default) => throw new NotImplementedException();
 
         public Task<CtpOrderInsertResult> PlaceOrderAsync(CtpOrderRequest request, CancellationToken ct = default) => throw new NotImplementedException();
         public Task CancelOrderAsync(CtpOrderRef orderRef, CancellationToken ct = default) => throw new NotImplementedException();

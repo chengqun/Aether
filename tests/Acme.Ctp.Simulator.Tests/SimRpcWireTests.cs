@@ -191,4 +191,32 @@ public class SimRpcWireTests
         Assert.All(aTicks.Snapshot, t => Assert.Equal(SimHarness.Instrument, t.InstrumentId));
         Assert.All(bTicks.Snapshot, t => Assert.Equal("rb2610", t.InstrumentId));
     }
+
+    [Fact]
+    public async Task queryInstruments默认上市表往返()
+    {
+        using var sim = LoopbackSim.Start();
+        using var client = await LoginClientAsync(sim);
+
+        var list = await client.QueryInstrumentsAsync();
+
+        Assert.Equal(9, list.Count);   // 默认 = 种子 9 合约（「我就是交易所」的默认上架面）
+        var ag = Assert.Single(list.Where(i => i.InstrumentId == "ag2610"));
+        Assert.Equal("SHFE", ag.ExchangeId);
+        Assert.Equal(15, ag.VolumeMultiple);
+        Assert.Equal(6990, ag.PreSettlement, 6);
+    }
+
+    [Fact]
+    public async Task queryInstruments自定义上市表()
+    {
+        using var sim = LoopbackSim.Start(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } });
+        using var client = await LoginClientAsync(sim);
+
+        var list = await client.QueryInstrumentsAsync();
+
+        Assert.Equal(2, list.Count);
+        Assert.Contains(list, i => i.InstrumentId == "xx2601" && i.BasePrice == 100);   // 未知品种合成兜底
+        Assert.Contains(list, i => i.InstrumentId == "ag2610" && i.ExchangeId == "SHFE");
+    }
 }

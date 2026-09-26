@@ -25,6 +25,7 @@ public interface ICtpTradingService
     Task<CtpAccount> QueryAccountAsync(CancellationToken ct = default);
     Task<IReadOnlyList<CtpPosition>> QueryPositionAsync(string? instrumentId = null, CancellationToken ct = default);
     Task<IReadOnlyList<CtpOrder>> QueryOrderAsync(string? instrumentId = null, CancellationToken ct = default);
+    Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default);
     Task<CtpOrderInsertResult> PlaceOrderAsync(CtpOrderRequest request, CancellationToken ct = default);
     Task CancelOrderAsync(CtpOrderRef orderRef, CancellationToken ct = default);
 

@@ -197,6 +197,32 @@ public class DeterminismTests
         Assert.NotNull(core.Market.GetQuote("ag2602"));
     }
 
+    [Fact]
+    public async Task 行情订阅激活走下单同款解析链()
+    {
+        // 期货页行情板订阅全部主力合约（~250 个），绝大多数不在种子 9 合约表内——
+        // core.ActivateMarket（订阅路径）先解析（品种派生 → 合成兜底）再激活；
+        // 引擎级 Market.Activate 仍是纯查表（上例钉的语义不变）。
+        var core = await SimHarness.NewLoggedInCoreAsync(Seeded(4242));
+
+        // 同品种非种子合约：品种派生 ⇒ 激活成功（rb 品种元数据：SHFE/PriceTick=1 ⇒ 盘口价差恒 2）
+        Assert.True(core.ActivateMarket("rb2605"));
+        var q = core.Market.GetQuote("rb2605");
+        Assert.NotNull(q);
+        Assert.Equal("rb2605", q!.Value.InstrumentId);
+        Assert.Equal(2, q.Value.AskPrice - q.Value.BidPrice, 6);
+        Assert.Contains("rb2605", core.QueryInstruments().Select(i => i.InstrumentId));   // 派生结果入表
+
+        // 未知品种：默认 AcceptUnknownInstruments=true ⇒ 合成兜底激活
+        Assert.True(core.ActivateMarket("zz9999"));
+        Assert.NotNull(core.Market.GetQuote("zz9999"));
+
+        // 严格模式：拒未知**品种** ⇒ 激活失败（行情不推；拒单语义留给下单路径）；已知品种仍可派生
+        var strict = await SimHarness.NewLoggedInCoreAsync(Seeded(4242) with { AcceptUnknownInstruments = false });
+        Assert.False(strict.ActivateMarket("zz9999"));
+        Assert.True(strict.ActivateMarket("rb2605"));
+    }
+
     // —— 合成 tick 外发 ——
 
     [Fact]

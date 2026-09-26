@@ -214,6 +214,11 @@ public sealed class SimRpcClient : IDisposable
         => await NonNullAsync<List<CtpOrder>>(SimOps.QueryOrders, new InstrumentArg(instrumentId), ct)
            .ConfigureAwait(false);
 
+    /// <summary>查询 host 上市合约表（「行情随柜台」的行情板数据源；无登录守卫——与其它查询一致）。</summary>
+    public async Task<IReadOnlyList<CtpInstrument>> QueryInstrumentsAsync(CancellationToken ct = default)
+        => await NonNullAsync<List<CtpInstrument>>(SimOps.QueryInstruments, null, ct)
+           .ConfigureAwait(false);
+
     public Task<CtpOrderInsertResult> InsertOrderAsync(CtpOrderRequest request, CancellationToken ct = default)
         => NonNullAsync<CtpOrderInsertResult>(SimOps.InsertOrder, request, ct);
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -175,6 +176,19 @@ internal sealed class SimConnection
 
                 case SimOps.QueryOrders:
                     result = _core.QueryOrders(BoundAccount(), Arg<InstrumentArg>(req)?.InstrumentId);
+                    break;
+
+                case SimOps.QueryInstruments:
+                    // 上市表是交易所全局的（非账户过滤）；服务端把 Simulator 类型映射为客户端安全的 Domain DTO
+                    result = _core.QueryListedInstruments().Select(i => new CtpInstrument
+                    {
+                        InstrumentId = i.InstrumentId,
+                        ExchangeId = i.ExchangeId,
+                        VolumeMultiple = i.VolumeMultiple,
+                        PriceTick = i.PriceTick,
+                        PreSettlement = i.PreSettlement,
+                        BasePrice = i.BasePrice,
+                    }).ToList();
                     break;
 
                 case SimOps.InsertOrder:

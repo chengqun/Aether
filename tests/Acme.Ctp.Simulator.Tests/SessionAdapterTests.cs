@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Domain;
+using Acme.Ctp.Infrastructure.Sim;
 using Acme.Ctp.Simulator;
 
 namespace Acme.Ctp.Simulator.Tests;
@@ -497,6 +498,95 @@ public class SessionAdapterTests
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick(SimHarness.Instrument) is not null),
             "默认（无开关）订阅后必须收到合成行情");
         Assert.All(ticks.Snapshot, t => Assert.Equal(SimHarness.Instrument, t.InstrumentId));
+    }
+
+    [Fact]
+    public async Task 订阅非种子合约经品种派生激活行情()
+    {
+        // 期货页行情板订阅全部主力合约（~250 个），绝大多数不在种子 9 合约表内——
+        // 订阅须经下单同款解析链（品种派生/合成）补元数据，否则盘面只有零星几格有价
+        using var sim = NewLoopback(o => o with { TickIntervalMs = 25 });
+        var session = sim.Session;
+        await session.LoginAsync(LoginRequest());
+
+        await session.SubscribeMarketDataAsync(MdConnect(), ["rb2605", "zz9999"]);   // 品种派生 + 未知品种合成
+
+        Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("rb2605") is not null),
+            "同品种非种子合约（rb2605）必须经品种派生激活出行情");
+        Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("zz9999") is not null),
+            "未知品种合约（zz9999）必须经合成兜底激活出行情（AcceptUnknownInstruments 默认开）");
+    }
+
+    [Fact]
+    public async Task QueryInstrumentsAsync返回host上市表()
+    {
+        using var sim = NewLoopback();
+        var session = sim.Session;
+        await session.LoginAsync(LoginRequest());
+
+        var list = await session.QueryInstrumentsAsync();
+
+        Assert.Equal(9, list.Count);   // 默认 = 种子 9 合约
+        var ag = Assert.Single(list.Where(i => i.InstrumentId == "ag2610"));
+        Assert.Equal("SHFE", ag.ExchangeId);
+        Assert.Equal(15, ag.VolumeMultiple);
+        Assert.Equal(1, ag.PriceTick);
+        Assert.Equal(6990, ag.PreSettlement, 6);
+    }
+
+    [Fact]
+    public async Task QueryInstrumentsAsync返回自定义上市表()
+    {
+        using var sim = NewLoopback(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } });
+        var session = sim.Session;
+        await session.LoginAsync(LoginRequest());
+
+        var list = await session.QueryInstrumentsAsync();
+
+        Assert.Equal(2, list.Count);
+        Assert.Contains(list, i => i.InstrumentId == "xx2601" && i.BasePrice == 100);   // 未知品种合成兜底
+        Assert.Contains(list, i => i.InstrumentId == "ag2610" && i.ExchangeId == "SHFE");
+    }
+
+    [Fact]
+    public async Task 双客户端不同账户互为对手撮合()
+    {
+        // 用户场景 E2E：两个客户端（不同账户）连同一 host——A 挂单、B 吃单，被动方空闲中收到自己的成交推送
+        using var sim = NewLoopback();
+        sim.Core.InjectQuote(SimHarness.Instrument, SimHarness.Bid, SimHarness.Ask, SimHarness.Last);   // 确定盘口 6999/7001
+        var alice = sim.Session;
+        await alice.LoginAsync(LoginRequest(userId: "alice"));
+        using var bob = new RemoteCtpSession("127.0.0.1", sim.Server.LocalEndpoint!.Port);
+        await bob.LoginAsync(LoginRequest(userId: "bob"));
+
+        var aliceOrders = new Collector<CtpOrder>();
+        var aliceTrades = new Collector<CtpTrade>();
+        alice.OrderReceived += (_, o) => aliceOrders.Add(o);
+        alice.TradeReceived += (_, t) => aliceTrades.Add(t);
+
+        // alice 挂限价买 7000（低于卖一 7001 ⇒ 静息入簿）
+        await alice.OrderInsertAsync(SimHarness.Limit(CtpDirection.Buy, 1, 7000));
+        var resting = Assert.Single(await alice.QueryOrderAsync());
+        Assert.Equal((byte)'3', resting.OrderStatusRaw);
+
+        // bob 市价卖 ⇒ 吃 alice 的挂单（maker 价 7000）
+        await bob.OrderInsertAsync(SimHarness.Market(CtpDirection.Sell, 1));
+
+        // alice 空闲中收到被动成交推送（订单 + 成交，来自 bob 的 op 线程直写）
+        Assert.True(await Wait.UntilAsync(() => aliceTrades.Count > 0), "被动方必须收到成交推送");
+        Assert.Equal(7000, aliceTrades.Snapshot[0].Price, 6);
+        Assert.Contains(aliceOrders.Snapshot, o => o.OrderStatusRaw == (byte)'0');
+
+        // 双方三查镜像
+        var alicePosition = Assert.Single(await alice.QueryPositionAsync());
+        Assert.Equal(CtpPosiDirection.Long, alicePosition.PosiDirection);
+        Assert.Equal(1, alicePosition.TotalPosition);
+        var bobPosition = Assert.Single(await bob.QueryPositionAsync());
+        Assert.Equal(CtpPosiDirection.Short, bobPosition.PosiDirection);
+        Assert.Equal(1, bobPosition.TotalPosition);
+        var bobOrder = Assert.Single(await bob.QueryOrderAsync());
+        Assert.Equal((byte)'0', bobOrder.OrderStatusRaw);
+        Assert.Equal(1, bobOrder.VolumeTraded);
     }
 
     // —— 释放 ——
