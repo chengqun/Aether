@@ -88,7 +88,7 @@
           <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port 或 sim" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Text="行情前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-          <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port" />
+          <TextBox  Grid.Row="1" Grid.Column="1" Text="{Binding MdFrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port（sim 登录时留空）" />
 
           <TextBlock Grid.Row="2" Grid.Column="0" Text="经纪商代码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
           <TextBox  Grid.Row="2" Grid.Column="1" Text="{Binding BrokerId}" Margin="0,6" />
@@ -120,7 +120,7 @@
           <TextBox  Grid.Row="6" Grid.Column="1" Text="{Binding AuthCode}" Margin="0,6" />
         </Grid>
         <CheckBox Content="启动时自动连接" IsChecked="{Binding AutoLogin}" Margin="100,8,0,0" FontSize="12" />
-        <TextBlock Text="提示：交易前置填 sim ⇒ 连本地仿真柜台（先启动 apps/CtpSim/Acme.Ctp.Sim.Host）；填真实前置 ⇒ 官方柜台。切换柜台 = 换地址重新登录。"
+        <TextBlock Text="提示：交易前置填 sim ⇒ 连本地仿真柜台（先启动 apps/CtpSim/Acme.Ctp.Sim.Host）；填真实前置 ⇒ 官方柜台。切换柜台 = 换地址重新登录。行情随柜台：sim 登录 ⇒ 行情为仿真合成行情（行情前置留空即可）；真实前置登录 ⇒ 真实行情。"
                    FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
                    Margin="0,10,0,0" />
       </StackPanel>

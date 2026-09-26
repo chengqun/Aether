@@ -26,7 +26,6 @@ internal sealed class SimConnection
 {
     private readonly SimRpcServer _server;
     private readonly SimTradingCore _core;
-    private readonly bool _exposeTicks;
     private readonly TcpClient _tcp;
     private readonly NetworkStream _stream;
 
@@ -45,11 +44,10 @@ internal sealed class SimConnection
     /// <summary>行情订阅集（subscribe 加/unsubscribe 清；tick 路由用）。</summary>
     internal HashSet<string> Subscriptions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    internal SimConnection(SimRpcServer server, SimTradingCore core, bool exposeTicks, TcpClient tcp)
+    internal SimConnection(SimRpcServer server, SimTradingCore core, TcpClient tcp)
     {
         _server = server;
         _core = core;
-        _exposeTicks = exposeTicks;
         _tcp = tcp;
         _stream = tcp.GetStream();
     }
@@ -72,7 +70,7 @@ internal sealed class SimConnection
     internal bool SubscribedTo(string instrumentId)
     {
         lock (_stateLock)
-            return _exposeTicks && Subscriptions.Contains(instrumentId);
+            return Subscriptions.Contains(instrumentId);
     }
 
     internal void RoutePush(byte[] frame)
@@ -150,7 +148,7 @@ internal sealed class SimConnection
             switch (req.Op)
             {
                 case SimOps.Hello:
-                    result = new SimHello(1, _exposeTicks);
+                    result = new SimHello(1);
                     break;
 
                 case SimOps.Login:

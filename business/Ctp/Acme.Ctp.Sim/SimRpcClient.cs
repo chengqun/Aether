@@ -58,7 +58,7 @@ public sealed class SimRpcClient : IDisposable
     /// <summary>成交回报推送（接收线程上触发）。</summary>
     public event Action<CtpTrade>? TradePushed;
 
-    /// <summary>tick 推送（接收线程上触发；仅服务端 AETHER_CTP_SIM_MD=local 时会有）。</summary>
+    /// <summary>tick 推送（接收线程上触发；host 按订阅集路由——sim 会话行情随柜台恒推送）。</summary>
     public event Action<CtpTick>? TickPushed;
 
     /// <summary>连接断开（host 死亡/超时销毁；主动 Dispose 不触发）。</summary>

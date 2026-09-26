@@ -29,14 +29,6 @@ public sealed record SimOptions
     /// <summary>单次撮合发生部分成交的概率（0 = 一次性全成，1 = 每次最多成交 <see cref="MaxFillVolume"/> 手）。</summary>
     public double PartialFillChance { get; init; }
 
-    /// <summary>是否把随机游走产生的合成 tick 经 <c>TickReceived</c> 外发。</summary>
-    /// <remarks>
-    /// 默认 false：Phase 1 的 Md 仍走真实前置（用户决策「只换 Trader」），合成 tick 只喂内部撮合。
-    /// 置 true（<c>AETHER_CTP_SIM_MD=local</c>）⇒ 完全离线：行情也由仿真提供，
-    /// 代价是 <c>GetLatestTick</c>/<c>TickReceived</c> 的数据不再是真实行情。
-    /// </remarks>
-    public bool ExposeSyntheticTicks { get; init; }
-
     /// <summary>仿真数据库路径。null ⇒ 纯内存（不落盘，单测默认）。</summary>
     public string? DatabasePath { get; init; }
 
@@ -52,8 +44,6 @@ public sealed record SimOptions
             TickIntervalMs = EnvInt("AETHER_CTP_SIM_TICK_MS", 500),
             Seed = EnvInt("AETHER_CTP_SIM_SEED", 20260925),
             InitialBalance = EnvDouble("AETHER_CTP_SIM_BALANCE", 1_000_000),
-            ExposeSyntheticTicks = string.Equals(
-                Environment.GetEnvironmentVariable("AETHER_CTP_SIM_MD"), "local", StringComparison.OrdinalIgnoreCase),
         };
     }
 

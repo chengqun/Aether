@@ -144,11 +144,25 @@ internal sealed class LeanLiveRunner
         Config.Set("parameters", JObject.FromObject(parameters));
     }
 
-    /// <summary>MarketDataConnectInput（纯字符串）→ CtpMarketDataConnect（Ctp.Domain）。实盘行情前置独立连接。</summary>
+    /// <summary>
+    /// MarketDataConnectInput（纯字符串）→ CtpMarketDataConnect（Ctp.Domain）。实盘行情前置独立连接。
+    /// 行情随柜台：md 前置 = "sim" ⇒ 行情由 host RPC 提供，连接参数被 RemoteCtpSession 忽略——
+    /// 跳过四字段非空校验（sim 登录可不填行情前置/密码）。纯文本判定，不引 Acme.Ctp.Sim。
+    /// </summary>
     internal static CtpMarketDataConnect? MapConnect(MarketDataConnectInput? input)
     {
-        if (input == null
-            || string.IsNullOrWhiteSpace(input.MdFrontAddress)
+        if (input == null) return null;
+
+        if (string.Equals(input.MdFrontAddress?.Trim(), "sim", StringComparison.OrdinalIgnoreCase))
+            return new CtpMarketDataConnect
+            {
+                MdFrontAddress = "sim",
+                BrokerId = input.BrokerId ?? "",
+                UserId = input.UserId ?? "",
+                Password = input.Password ?? "",
+            };
+
+        if (string.IsNullOrWhiteSpace(input.MdFrontAddress)
             || string.IsNullOrWhiteSpace(input.BrokerId)
             || string.IsNullOrWhiteSpace(input.UserId)
             || string.IsNullOrWhiteSpace(input.Password))

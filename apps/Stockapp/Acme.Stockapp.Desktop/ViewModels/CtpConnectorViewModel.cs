@@ -251,6 +251,23 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
         return string.IsNullOrWhiteSpace(host) ? value : host;
     }
 
+    /// <summary>
+    /// 交易前置是否指向本地仿真柜台（镜像 <c>SimAddress.IsSimFront</c> 的纯文本判定——VM 不引 Acme.Ctp.Sim，
+    /// 先例 = <see cref="FrontTag"/>）：sim（不分大小写）或 127.0.0.1:17800（容忍 tcp:// 前缀）。
+    /// 行情随柜台：sim 登录 ⇒ 行情为 host 推送的仿真合成行情，行情前置可留空。
+    /// </summary>
+    public bool IsSimFront
+    {
+        get
+        {
+            var a = FrontAddress.Trim();
+            if (string.IsNullOrWhiteSpace(a)) return false;
+            if (string.Equals(a, "sim", StringComparison.OrdinalIgnoreCase)) return true;
+            var bare = a.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) ? a["tcp://".Length..] : a;
+            return string.Equals(bare, "127.0.0.1:17800", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private void OnConnectionStateChanged(object? sender, CtpConnectionStatus status)
     {
         IsConnected = status == CtpConnectionStatus.Connected;

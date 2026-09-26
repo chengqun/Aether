@@ -176,7 +176,7 @@ internal sealed class LoopbackSim : IDisposable
         var core = new SimTradingCore(options);
         core.InitializeAsync().GetAwaiter().GetResult();   // xunit 无同步上下文 ⇒ sync-over-async 安全
         core.StartMarketFeed();
-        var server = new SimRpcServer(core, options.ExposeSyntheticTicks, "127.0.0.1", 0);
+        var server = new SimRpcServer(core, "127.0.0.1", 0);
         server.Start();
         var session = new RemoteCtpSession("127.0.0.1", server.LocalEndpoint!.Port);
         return new LoopbackSim(core, server, session);

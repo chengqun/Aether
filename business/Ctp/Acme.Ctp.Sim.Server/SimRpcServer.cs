@@ -10,7 +10,7 @@ namespace Acme.Ctp.Sim.Server;
 /// 仿真柜台 RPC 服务端：host 内**单个** <see cref="SimTradingCore"/> 服务所有连接，按 accountId 路由推送。
 /// <para>
 /// <b>路由规则</b>：订单/成交回报 → 该账户的连接（广播给全部同账户连接——见「一账户一客户端」已知限制）；
-/// tick → 订阅集包含该合约的连接（仅 ExposeSyntheticTicks，即 AETHER_CTP_SIM_MD=local）。
+/// tick → 订阅集包含该合约的连接（行情恒推送——sim 客户端行情随柜台）。
 /// </para>
 /// <para>
 /// <b>顺序保证（关键）</b>：<see cref="SimTradingCore.InsertOrder"/> 在返回前同步抛出订单/成交事件——
@@ -29,7 +29,6 @@ namespace Acme.Ctp.Sim.Server;
 public sealed class SimRpcServer : IDisposable
 {
     private readonly SimTradingCore _core;
-    private readonly bool _exposeTicks;
     private readonly string _host;
     private readonly int _port;
     private readonly List<SimConnection> _connections = new();
@@ -40,10 +39,9 @@ public sealed class SimRpcServer : IDisposable
     private Task? _acceptLoop;
     private bool _disposed;
 
-    public SimRpcServer(SimTradingCore core, bool exposeTicks, string host, int port)
+    public SimRpcServer(SimTradingCore core, string host, int port)
     {
         _core = core;
-        _exposeTicks = exposeTicks;
         _host = host;
         _port = port;
 
@@ -104,7 +102,7 @@ public sealed class SimRpcServer : IDisposable
             catch (OperationCanceledException) { break; }
             catch (SocketException) { break; }   // listener 已停
 
-            var conn = new SimConnection(this, _core, _exposeTicks, tcp);
+            var conn = new SimConnection(this, _core, tcp);
             lock (_registryLock) _connections.Add(conn);
             conn.Run();
         }
@@ -118,7 +116,6 @@ public sealed class SimRpcServer : IDisposable
 
     private void OnTickProduced(CtpTick tick)
     {
-        if (!_exposeTicks) return;
         byte[]? frame = null;
         SimConnection[] conns;
         lock (_registryLock) conns = _connections.ToArray();

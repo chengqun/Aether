@@ -10,8 +10,8 @@ namespace Acme.Ctp.Sim;
 /// <para>
 /// 帧格式见 <see cref="SimFraming"/>（4 字节小端长度前缀 + UTF-8 JSON）。
 /// 三类帧：请求 <see cref="SimRequest"/>（客户端→服务端）、应答 <see cref="SimResponse"/>、推送 <see cref="SimPush"/>
-/// （后两类服务端→客户端）。Hello 在连接建立后立即握手——<b>MD 模式（exposeTicks）的唯一权威在服务端进程</b>，
-/// 客户端不读任何 <c>AETHER_CTP_SIM_*</c> 配置。
+/// （后两类服务端→客户端）。Hello 在连接建立后立即握手（协议版本协商位）；
+/// 行情随柜台——sim 连接的 tick 恒按订阅集推送。
 /// </para>
 /// </summary>
 public static class SimEndpointDefaults
@@ -118,8 +118,8 @@ public static class SimAddress
     }
 }
 
-/// <summary>Hello 握手结果。exposeTicks = 服务端 <c>SimOptions.ExposeSyntheticTicks</c>（AETHER_CTP_SIM_MD=local）。</summary>
-public sealed record SimHello(int ProtocolVersion, bool ExposeTicks);
+/// <summary>Hello 握手结果（协议版本；客户端不校验，仅诊断用）。</summary>
+public sealed record SimHello(int ProtocolVersion);
 
 /// <summary>错误应答载荷（服务端 catch 到的 <see cref="CtpBusinessException"/> 或传输错误）。</summary>
 public sealed record SimWireError(int Code, string Msg);

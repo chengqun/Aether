@@ -103,7 +103,7 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>成交回报。</summary>
     public event Action<string, CtpTrade>? TradeFilled;
 
-    /// <summary>合成 tick（仅在 <see cref="SimOptions.ExposeSyntheticTicks"/> 时产生）。</summary>
+    /// <summary>合成 tick（恒产生——<c>Market.TickGenerated</c> 无条件转发，host 按订阅连接路由推送）。</summary>
     public event Action<CtpTick>? TickProduced;
 
     // —— 生命周期 ——

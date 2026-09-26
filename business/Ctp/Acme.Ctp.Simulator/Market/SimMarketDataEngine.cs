@@ -17,9 +17,8 @@ public readonly record struct SimQuote(string InstrumentId, double BidPrice, dou
 /// <summary>
 /// 随机游走行情引擎。
 /// <para>
-/// <b>Phase 1 定位</b>：合成 tick **只喂内部撮合**，不作为行情源外发（<c>TickReceived</c>/<c>GetLatestTick</c>
-/// 仍由真实 <c>CtpMarketData</c> 提供——用户决策「只换 Trader」）。若显式置
-/// <see cref="SimOptions.ExposeSyntheticTicks"/>（<c>AETHER_CTP_SIM_MD=local</c>），则完全离线自给。
+/// <b>行情随柜台</b>：合成 tick **恒外发**（<see cref="TickGenerated"/>）——host 按订阅连接路由推送；
+/// sim 登录的客户端看到的行情价 = 撮合引擎用的价（同一引擎），沙盒自洽。想要真实行情 ⇒ 客户端登录真实前置。
 /// </para>
 /// <para>
 /// 价格模型：中枢价 ± 随机步（步长 = 最小变动价位 × [1, MaxWalkTicks]），夹在涨跌停板内；
@@ -37,7 +36,7 @@ public sealed class SimMarketDataEngine
     private readonly Func<string, SimInstrument?> _instrumentOf;
     private readonly Dictionary<string, Walk> _walks = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>新合成 tick（仅在 <see cref="SimOptions.ExposeSyntheticTicks"/> 时由核心转发出去）。</summary>
+    /// <summary>新合成 tick（恒产生；核心 <c>TickProduced</c> 转发，host 按订阅连接路由推送）。</summary>
     public event EventHandler<CtpTick>? TickGenerated;
 
     public SimMarketDataEngine(SimOptions options, SimClock clock, Func<string, SimInstrument?> instrumentOf)
@@ -139,7 +138,6 @@ public sealed class SimMarketDataEngine
 
     private void RaiseTick(Walk w, double bid, double ask)
     {
-        if (!_options.ExposeSyntheticTicks) return;
         var instrument = w.Instrument;
         TickGenerated?.Invoke(this, new CtpTick
         {

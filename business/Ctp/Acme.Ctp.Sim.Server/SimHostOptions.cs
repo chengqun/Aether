@@ -14,7 +14,7 @@ public sealed record SimHostOptions(string Host, int Port, SimOptions Core)
 
     /// <summary>
     /// 从环境变量构造：<c>AETHER_CTP_SIM_ADDR</c>（监听端点）、<c>AETHER_CTP_SIM_DB</c>（库路径），
-    /// 其余（tick 间隔/种子/初始资金/MD 模式）经 <see cref="SimOptions.FromEnvironment"/>。
+    /// 其余（tick 间隔/种子/初始资金）经 <see cref="SimOptions.FromEnvironment"/>。
     /// </summary>
     public static SimHostOptions FromEnvironment()
     {

@@ -179,11 +179,19 @@ public partial class CtpViewModel : ObservableObject
         await LoadMainFuturesAsync();
     }
 
-    /// <summary>自动订阅全部主力合约。行情前置独立于交易登录——主力列表就绪 + Connector 配置（md 地址/密码）就绪即订阅。幂等。</summary>
+    /// <summary>
+    /// 自动订阅全部主力合约。行情前置独立于交易登录——主力列表就绪 + Connector 配置（md 地址/密码）就绪即订阅。幂等。
+    /// 行情随柜台：sim 登录（<see cref="CtpConnectorViewModel.IsSimFront"/>）无需行情前置/密码——行情由 host RPC 推送；
+    /// 但须等登录完成（RoutingCtpSession 的 _active 初始为真实后端，登录前订阅会误路由——Connected 事件后本方法自动重试）。
+    /// </summary>
     private async Task TryAutoSubscribeAsync()
     {
         if (_autoSubscribed || QuoteBoard.Count == 0 || IsMdSubscribed) return;
-        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)) return;
+        if (Connector.IsSimFront)
+        {
+            if (!Connector.IsConnected) return;
+        }
+        else if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)) return;
         _autoSubscribed = true;
         try
         {

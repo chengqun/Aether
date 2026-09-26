@@ -14,14 +14,14 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_TICK_MS 行情推进间隔（0 = 不自动喂）
 //   AETHER_CTP_SIM_SEED    随机游走种子（默认固定 ⇒ 可复现）
 //   AETHER_CTP_SIM_BALANCE 新账户初始资金
-//   AETHER_CTP_SIM_MD=local 行情也走仿真（默认关——行情仍走客户端真实前置）
+// 行情随柜台：sim 登录的行情恒为本地合成（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
 
 var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
-var server = new SimRpcServer(core, exposeTicks: opts.Core.ExposeSyntheticTicks, opts.Host, opts.Port);
+var server = new SimRpcServer(core, opts.Host, opts.Port);
 
 builder.Services.AddHostedService(_ => new SimCounterHostedService(core, server, opts));
 await builder.Build().RunAsync();
@@ -39,7 +39,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}");
         Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
-        Console.WriteLine($"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 {(opts.Core.ExposeSyntheticTicks ? "本地合成（AETHER_CTP_SIM_MD=local）" : "客户端走真实前置")}");
+        Console.WriteLine($"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
         Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。客户端：期货页登录前置地址填 sim 即连本柜台（无需环境变量）。");
     }
 

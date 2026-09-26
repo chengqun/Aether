@@ -139,9 +139,9 @@ public class SessionAdapterTests
     }
 
     [Fact]
-    public async Task 登出保留账本持仓而合成模式的订阅标志不依赖连接()
+    public async Task 登出保留账本持仓而订阅标志不依赖连接()
     {
-        using var sim = NewLoopback(o => o with { ExposeSyntheticTicks = true });
+        using var sim = NewLoopback();
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
         await session.SubscribeMarketDataAsync(MdConnect(), [SimHarness.Instrument]);
@@ -151,8 +151,8 @@ public class SessionAdapterTests
 
         session.Logout();
 
-        // 合成模式的「已订阅」由 Hello 回答的模式决定（本地行情恒可用，不依赖任何前置连接）
-        // ⇒ 登出后仍为 true。被清掉的是订阅清单，以及**非**合成模式下的行情缓存。
+        // 「已订阅」= RPC 连接存活（Logout 不断 TCP，行情恒由 host 推送——不依赖任何前置连接）
+        // ⇒ 登出后仍为 true。被清掉的是服务端订阅清单；本地行情缓存保留（下个用例钉的正是这条语义）。
         Assert.True(session.IsMdSubscribed);
         Assert.False(session.IsConnected);
 
@@ -399,25 +399,24 @@ public class SessionAdapterTests
     // —— 行情 ——
 
     [Fact]
-    public async Task 合成模式登录后即视为已订阅且不依赖前置连接()
+    public async Task 登录后即视为已订阅且不依赖前置连接()
     {
-        using var sim = NewLoopback(o => o with { ExposeSyntheticTicks = true });
+        using var sim = NewLoopback();
         var session = sim.Session;
 
-        // Hello 之前模式未知（连接尚未建立）——与 Phase 1 的差异：须先连接/登录才谈得上「已订阅」
+        // 连接（Hello）未建立前 false——须先连接/登录才谈得上「已订阅」
         Assert.False(session.IsMdSubscribed);
         await session.LoginAsync(LoginRequest());
 
-        // 合成行情不走前置连接，Hello 确认模式后「已订阅」恒真——不依赖任何订阅动作
+        // 行情随柜台：行情由 host RPC 提供（不走任何前置连接），连接存活即「已订阅」——不依赖订阅动作
         Assert.True(session.IsMdSubscribed);
     }
 
     [Fact]
-    public async Task 合成模式下订阅即激活游走并缓存tick()
+    public async Task 订阅即激活游走并缓存tick()
     {
         using var sim = NewLoopback(o => o with
         {
-            ExposeSyntheticTicks = true,
             TickIntervalMs = 25,                                        // host 生命周期内定时器常跑
             Seed = 4242,
         });
@@ -434,7 +433,7 @@ public class SessionAdapterTests
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("rb2610") is not null), "同批订阅的第二个合约也要有行情");
 
         // 定时器在跑、行情每 tick 都在推进 ⇒ 要拿「稳定的一帧」必须先把本连接的订阅停掉再静置。
-        // Logout 清服务端订阅路由（fire-and-forget 帧）且**不清**本地行情缓存（下个用例钉的正是这条语义）。
+        // Logout 清服务端订阅路由（fire-and-forget 帧）且**不清**本地行情缓存（正是这条语义——登出后 GetLatestTick 仍可读）。
         session.Logout();
         await Wait.QuiesceAsync(() => ticks.Count);
 
@@ -462,7 +461,6 @@ public class SessionAdapterTests
     {
         using var sim = NewLoopback(o => o with
         {
-            ExposeSyntheticTicks = true,
             TickIntervalMs = 25,
             Seed = 4242,
         });
@@ -484,21 +482,21 @@ public class SessionAdapterTests
     }
 
     [Fact]
-    public async Task 非合成模式登出清空行情缓存()
+    public async Task 默认配置订阅后即收到tick推送()
     {
-        using var sim = NewLoopback(o => o with
-        {
-            // 非合成：走真实前置的那条腿不在此测（无法连真前置），只钉「登出清缓存」这条默认语义
-            ExposeSyntheticTicks = false,
-            TickIntervalMs = 0,
-        });
+        // 行情随柜台的新默认 pin：无任何开关/塑造（除定时器间隔），订阅 ⇒ host 恒推送
+        using var sim = NewLoopback(o => o with { TickIntervalMs = 25 });
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
-        Assert.False(session.IsMdSubscribed);
-        session.Logout();
-        Assert.Empty(session.GetAllLatestTicks());
-        Assert.Null(session.GetLatestTick(SimHarness.Instrument));
+        var ticks = new Collector<CtpTick>();
+        session.TickReceived += (_, t) => ticks.Add(t);
+
+        await session.SubscribeMarketDataAsync(MdConnect(), [SimHarness.Instrument]);
+
+        Assert.True(await Wait.UntilAsync(() => session.GetLatestTick(SimHarness.Instrument) is not null),
+            "默认（无开关）订阅后必须收到合成行情");
+        Assert.All(ticks.Snapshot, t => Assert.Equal(SimHarness.Instrument, t.InstrumentId));
     }
 
     // —— 释放 ——

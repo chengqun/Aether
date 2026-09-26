@@ -399,8 +399,8 @@ public partial class TradingViewModel : ObservableObject
     {
         // 守卫（与启动条件一致，提前拦截避免确认后才失败）
         if (!Connector.IsConnected) { AppendLiveLog("[实盘] CTP 未登录——请先在「期货」页登录后再启动实盘引擎"); return; }
-        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password))
-        { AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码）"); return; }
+        if (!Connector.IsSimFront && (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)))
+        { AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码；sim 登录无需）"); return; }
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (instruments.Length == 0) { AppendLiveLog("[实盘] 请填写至少一个合约（如 ag2610）"); return; }
 
@@ -431,9 +431,9 @@ public partial class TradingViewModel : ObservableObject
             AppendLiveLog("[实盘] CTP 未登录——请先在「期货」页登录后再启动实盘引擎");
             return;
         }
-        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password))
+        if (!Connector.IsSimFront && (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)))
         {
-            AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码）");
+            AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码；sim 登录无需）");
             return;
         }
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -455,7 +455,9 @@ public partial class TradingViewModel : ObservableObject
             MaxOrderVolume = ParseMaxVolume(),
             MarketDataConnect = new MarketDataConnectInput
             {
-                MdFrontAddress = Connector.MdFrontAddress,
+                // 行情随柜台：sim 登录 ⇒ md 前置传 "sim" 哨兵（LeanLiveRunner.MapConnect 直通道——
+                // 连接参数被 RemoteCtpSession 忽略，行情由 host RPC 提供）；真实登录 ⇒ 真实前置
+                MdFrontAddress = Connector.IsSimFront ? "sim" : Connector.MdFrontAddress,
                 BrokerId = Connector.BrokerId,
                 UserId = Connector.UserId,
                 Password = Connector.Password,

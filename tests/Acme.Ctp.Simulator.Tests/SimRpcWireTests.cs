@@ -34,7 +34,6 @@ public class SimRpcWireTests
         // hello
         var hello = client.Hello!;
         Assert.Equal(1, hello.ProtocolVersion);
-        Assert.False(hello.ExposeTicks);
 
         // 查询空账本
         var account = await client.QueryAccountAsync();
@@ -59,7 +58,7 @@ public class SimRpcWireTests
         var ex = await Assert.ThrowsAsync<CtpBusinessException>(() => client.CancelOrderAsync(bogus));
         Assert.Equal(SimErrorCodes.OrderNotFound, ex.ErrorId);
 
-        // 订阅（默认模式下无 tick 外发，只验往返不抛）
+        // 订阅（host 恒推送——本例 TickIntervalMs=0 无 tick，只验往返不抛）
         await client.SubscribeAsync([SimHarness.Instrument]);
     }
 
@@ -168,9 +167,9 @@ public class SimRpcWireTests
     [Fact]
     public async Task 合成tick按订阅路由到对应连接()
     {
+        // 行情随柜台（恒推送）的 wire 级 pin：无需任何开关，订阅即激活游走 + 按订阅集路由
         using var sim = LoopbackSim.Start(o => o with
         {
-            ExposeSyntheticTicks = true,
             TickIntervalMs = 25,
             Seed = 4242,
         });

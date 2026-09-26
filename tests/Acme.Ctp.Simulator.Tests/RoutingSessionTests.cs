@@ -194,15 +194,14 @@ public class RoutingSessionTests
     [Fact]
     public void 仿真选项从环境变量读取覆盖值()
     {
-        // host 侧语义（AETHER_CTP_SIM_TICK_MS/SEED/BALANCE/MD 全部由 host 进程读取）
-        var names = new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE", "AETHER_CTP_SIM_MD" };
+        // host 侧语义（AETHER_CTP_SIM_TICK_MS/SEED/BALANCE 全部由 host 进程读取）
+        var names = new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE" };
         var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
         try
         {
             Environment.SetEnvironmentVariable("AETHER_CTP_SIM_TICK_MS", "0");
             Environment.SetEnvironmentVariable("AETHER_CTP_SIM_SEED", "4242");
             Environment.SetEnvironmentVariable("AETHER_CTP_SIM_BALANCE", "500000");
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MD", "local");
 
             var options = SimOptions.FromEnvironment("/tmp/ctp-sim.db");
 
@@ -210,7 +209,6 @@ public class RoutingSessionTests
             Assert.Equal(0, options.TickIntervalMs);        // 0 ⇒ host 不起自动行情喂送
             Assert.Equal(4242, options.Seed);
             Assert.Equal(500_000, options.InitialBalance, 6);
-            Assert.True(options.ExposeSyntheticTicks);      // AETHER_CTP_SIM_MD=local ⇒ 合成行情外发
         }
         finally
         {
@@ -220,9 +218,9 @@ public class RoutingSessionTests
     }
 
     [Fact]
-    public void 环境变量缺省时取内置默认且行情不外发()
+    public void 环境变量缺省时取内置默认值()
     {
-        foreach (var name in new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE", "AETHER_CTP_SIM_MD" })
+        foreach (var name in new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE" })
             Environment.SetEnvironmentVariable(name, null);
 
         var options = SimOptions.FromEnvironment(null);
@@ -231,6 +229,5 @@ public class RoutingSessionTests
         Assert.Equal(500, options.TickIntervalMs);
         Assert.Equal(20260925, options.Seed);
         Assert.Equal(1_000_000, options.InitialBalance, 6);
-        Assert.False(options.ExposeSyntheticTicks);   // 默认：Md 走客户端真实前置，合成 tick 只喂撮合
     }
 }

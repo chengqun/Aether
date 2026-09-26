@@ -7,7 +7,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Acme.Ctp.Domain;
 using Acme.Ctp.Sim;
-using Ctp.Net.Core.MarketData;
 
 namespace Acme.Ctp.Infrastructure.Sim;
 
@@ -21,9 +20,10 @@ namespace Acme.Ctp.Infrastructure.Sim;
 /// 客户端进程不再携带仿真核心（Infrastructure 对 Simulator 的引用已删除）。
 /// </para>
 /// <para>
-/// <b>Md（行情）模式唯一权威在 host</b>：Hello 握手带回 <c>exposeTicks</c>
-/// （host 环境变量 <c>AETHER_CTP_SIM_MD=local</c>）。默认 false ⇒ 本类内部仍持一个真实
-/// <see cref="CtpMarketData"/> 走真实前置（与 Phase 1 相同）；true ⇒ 完全离线，tick 由 host 推送。
+/// <b>行情随柜台</b>：sim 登录的行情**恒由 host RPC 推送**（<c>TickPushed</c> → 泵线程外发），
+/// 本类**无本地 MD 腿**——sim 登录看到的行情价 = 撮合引擎用的价（host 侧同一 <c>SimMarketDataEngine</c>），
+/// 沙盒自洽。想要真实行情 ⇒ 登录窗口填真实前置（<c>CtpSessionService</c> 自带 MD 腿 + 断线重连）。
+/// <c>CtpMarketDataConnect</c> 参数被本实现忽略（真实后端仍需要——<see cref="RoutingCtpSession"/> 透传同一签名）。
 /// </para>
 /// <para>
 /// <b>与 Phase 1 的契约差异（消费方影响已核实）</b>：服务端风控拒单从「Task 返回前同步抛」
@@ -55,17 +55,11 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     private string? _brokerId;
     private string? _userId;
     private CtpConnectionStatus _status = CtpConnectionStatus.Disconnected;
-    private bool _exposeTicks;          // Hello 结果；连接断开即失效
     private bool _disposed;
 
-    // —— 行情：默认真实前置，ExposeTicks 时改由 host 推送 ——
-    private CtpMarketData? _md;
-    private MdCreds? _cachedMdCreds;
-    private readonly List<string> _cachedSymbols = new();
+    // —— 行情：恒由 host RPC 推送（行情随柜台；无本地 MD 腿） ——
+    private readonly List<string> _cachedSymbols = new();   // 客户端去重（省重复订阅帧）
     private readonly ConcurrentDictionary<string, CtpTick> _latestTicks = new(StringComparer.OrdinalIgnoreCase);
-    private volatile bool _mdSocketAlive;
-
-    private sealed record MdCreds(string Front, string BrokerId, string UserId, string Password);
 
     /// <summary>泵队列元素：一次外发（报单回报 / 成交回报 / 行情 / 连接状态）。</summary>
     private readonly record struct Callback(
@@ -89,14 +83,11 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
 
     public bool IsConnected { get { lock (_lock) return _loginResult is not null; } }
 
-    public bool IsMdSubscribed
-    {
-        get
-        {
-            lock (_lock)
-                return _exposeTicks && _client.IsAlive || (_md is not null && !_md.IsDisposed);
-        }
-    }
+    /// <summary>
+    /// RPC 连接是否存活（两条 pinned 语义：① Login 后即 true 且 Logout 后仍 true——Logout 不断 TCP，
+    /// 「已订阅」不依赖连接重建；② 首次 Hello 前连接未建立 ⇒ false）。
+    /// </summary>
+    public bool IsMdSubscribed => _client.IsAlive;
 
     public CtpLoginResult? LoginResult { get { lock (_lock) return _loginResult; } }
 
@@ -119,9 +110,8 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     {
         EnsureNotDisposed();
 
-        // 连接 + Hello 握手（已连接则直通；死连接则重建）。MD 模式以 Hello 为准。
-        var hello = await _client.ConnectAsync(ct).ConfigureAwait(false);
-        lock (_lock) _exposeTicks = hello.ExposeTicks;
+        // 连接 + Hello 握手（已连接则直通；死连接则重建）
+        await _client.ConnectAsync(ct).ConfigureAwait(false);
 
         var result = await _client.LoginAsync(new LoginArg(request.BrokerId, request.UserId), ct).ConfigureAwait(false);
         lock (_lock)
@@ -212,83 +202,25 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     // —— ICtpSession：行情 ——
 
     /// <summary>
-    /// 订阅行情。host 的 Hello 回答模式：默认走**真实**行情前置（与 <c>CtpSessionService</c>
-    /// 同款增量订阅语义）；<c>exposeTicks</c>（host 侧 AETHER_CTP_SIM_MD=local）时完全离线，
-    /// 只把订阅集告知 host（host 订阅即激活随机游走 + 按订阅路由 tick 推送）。
+    /// 订阅行情。行情随柜台：本会话（sim 登录）的行情恒由 host RPC 推送（同一
+    /// <c>SimMarketDataEngine</c>——看到的价 = 撮合用的价）。先连 + Hello：host 未启动 ⇒
+    /// <c>CtpBusinessException(90012, 含启动命令)</c>（行情独立于交易登录，可能先于 LoginAsync 调用）。
+    /// <paramref name="connect"/> 被本实现忽略（真实后端 <c>CtpSessionService</c> 仍需要——
+    /// <see cref="RoutingCtpSession"/> 透传同一签名）。
     /// </summary>
     public async Task SubscribeMarketDataAsync(CtpMarketDataConnect connect, IReadOnlyList<string> symbols, CancellationToken ct = default)
     {
         EnsureNotDisposed();
 
-        // 模式必须先经 Hello 得知（行情前置独立于交易登录，可能先于 LoginAsync 调用）
-        var hello = await _client.ConnectAsync(ct).ConfigureAwait(false);
-        lock (_lock) _exposeTicks = hello.ExposeTicks;
-
-        if (hello.ExposeTicks)
-        {
-            lock (_lock) _cachedSymbols.AddRange(symbols.Where(s => !_cachedSymbols.Contains(s)));
-            await _client.SubscribeAsync(symbols, ct).ConfigureAwait(false);
-            return;
-        }
-
-        List<string> toSubscribe;
-        bool needRebuild;
-        lock (_lock)
-        {
-            var creds = new MdCreds(connect.MdFrontAddress, connect.BrokerId, connect.UserId, connect.Password);
-            if (_md is not null && _mdSocketAlive && _cachedMdCreds == creds)
-            {
-                // 已连接且同一账户：增量订阅（不重建，避免覆盖已有订阅——如期货页全量 + 实盘 ag2610 累加）
-                toSubscribe = symbols.Where(s => !_cachedSymbols.Contains(s)).ToList();
-                _cachedSymbols.AddRange(toSubscribe);
-                needRebuild = false;
-            }
-            else
-            {
-                if (_md is not null)
-                {
-                    _md.TickReceived -= OnMdTick;
-                    _md.Dispose();
-                }
-                var flow = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ctp_md_flow", Guid.NewGuid().ToString("N")[..8]);
-                System.IO.Directory.CreateDirectory(flow);
-                _md = new CtpMarketData(flow);
-                _md.TickReceived += OnMdTick;
-                _cachedMdCreds = creds;
-                _cachedSymbols.Clear();
-                _cachedSymbols.AddRange(symbols);
-                toSubscribe = symbols.ToList();
-                needRebuild = true;
-            }
-        }
-
-        if (needRebuild)
-        {
-            await _md!.LoginAsync(connect.MdFrontAddress, connect.BrokerId, connect.UserId, connect.Password).ConfigureAwait(false);
-            await _md.SubscribeMarketDataAsync(toSubscribe).ConfigureAwait(false);
-            _mdSocketAlive = true;
-        }
-        else if (toSubscribe.Count > 0)
-        {
-            await _md!.SubscribeMarketDataAsync(toSubscribe).ConfigureAwait(false);
-        }
+        await _client.ConnectAsync(ct).ConfigureAwait(false);   // Hello——host 死 ⇒ 90012 含启动命令
+        lock (_lock) _cachedSymbols.AddRange(symbols.Where(s => !_cachedSymbols.Contains(s)));   // 客户端去重
+        await _client.SubscribeAsync(symbols, ct).ConfigureAwait(false);                          // 服务端 Subscriptions 是 HashSet，重复无害
     }
 
+    /// <summary>退订：清客户端去重集 + 通知 host（服务端清订阅路由）。本地 tick 缓存**故意保留**（RPC 语义——登出/退订不清盘面快照）。</summary>
     public void UnsubscribeMarketData()
     {
-        lock (_lock)
-        {
-            if (_md is not null)
-            {
-                _md.TickReceived -= OnMdTick;
-                _md.Dispose();
-            }
-            _md = null;
-            _cachedMdCreds = null;
-            _cachedSymbols.Clear();
-            _mdSocketAlive = false;
-            if (!_exposeTicks) _latestTicks.Clear();
-        }
+        lock (_lock) _cachedSymbols.Clear();
         if (_client.IsAlive) _client.Unsubscribe();   // fire-and-forget
     }
 
@@ -318,8 +250,8 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
                         if (cb.Trade is not null) TradeReceived?.Invoke(this, cb.Trade);
                         if (cb.Tick is not null)
                         {
-                            // 离线行情（AETHER_CTP_SIM_MD=local）没有 OnMdTick 那条路，缓存必须在这里写——
-                            // 否则 GetLatestTick/GetAllLatestTicks 恒为 null，「期货」页拿不到任何报价。
+                            // 全部 tick 经 RPC 推送，缓存必须写在泵里——GetLatestTick/GetAllLatestTicks
+                            // 的唯一数据源，「期货」页/AI 查询工具都从这里拿报价。
                             _latestTicks[cb.Tick.InstrumentId] = cb.Tick;
                             TickReceived?.Invoke(this, cb.Tick);
                         }
@@ -339,13 +271,6 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
         }
     }
 
-    private void OnMdTick(object? sender, TickData tick)
-    {
-        var dto = CtpSessionMapper.ToDto(tick);
-        _latestTicks[dto.InstrumentId] = dto;
-        Enqueue(new Callback(Tick: dto));
-    }
-
     private void OnConnectionLost()
     {
         lock (_lock)
@@ -353,7 +278,6 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
             _loginResult = null;
             _brokerId = null;
             _userId = null;
-            _exposeTicks = false;
         }
         SetStatus(CtpConnectionStatus.Disconnected);
     }

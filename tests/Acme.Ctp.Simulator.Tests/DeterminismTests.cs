@@ -197,19 +197,13 @@ public class DeterminismTests
         Assert.NotNull(core.Market.GetQuote("ag2602"));
     }
 
-    // —— 合成 tick 外发开关 ——
+    // —— 合成 tick 外发 ——
 
     [Fact]
-    public void 仅在开启合成行情时外发tick()
+    public void 合成tick恒外发_注入与推进各一帧()
     {
-        var off = NewEngine(new SimOptions { ExposeSyntheticTicks = false });
-        var offTicks = new List<CtpTick>();
-        off.TickGenerated += (_, t) => offTicks.Add(t);
-        off.Inject("ag2610", 6999, 7001, 7000);
-        off.Advance();
-        Assert.Empty(offTicks); // Phase 1 默认：合成 tick 只喂撮合，不外发（Md 走真实前置）
-
-        var on = NewEngine(new SimOptions { ExposeSyntheticTicks = true });
+        // 行情随柜台的新默认：无开关，tick 恒外发（host 按订阅连接路由）
+        var on = NewEngine(new SimOptions { Seed = 4242 });
         var onTicks = new List<CtpTick>();
         on.TickGenerated += (_, t) => onTicks.Add(t);
         on.Inject("ag2610", 6999, 7001, 7000);
@@ -237,7 +231,7 @@ public class DeterminismTests
     [Fact]
     public void 合成tick的累计成交量单调不减()
     {
-        var engine = NewEngine(new SimOptions { ExposeSyntheticTicks = true, Seed = 4242 });
+        var engine = NewEngine(new SimOptions { Seed = 4242 });
         var ticks = new List<CtpTick>();
         engine.TickGenerated += (_, t) => ticks.Add(t);
 
