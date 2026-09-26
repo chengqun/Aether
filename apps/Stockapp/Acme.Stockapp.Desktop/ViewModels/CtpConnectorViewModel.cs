@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Acme.Ctp.Application;
 using Acme.Ctp.Domain;
 using Acme.Desktop.Mvvm;
@@ -44,10 +45,29 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
 
     [ObservableProperty] private bool _isConnecting;
 
-    /// <summary>从存储加载已存配置到表单，刷新连接状态，若启用自动登录则自动连接。</summary>
+    /// <summary>连接标签（chip）列表：点 chip = 应用该 profile 并直接登录（见 <see cref="ApplyProfileAsync"/>）。</summary>
+    public ObservableCollection<CtpProfileItem> Profiles { get; } = new();
+
+    [ObservableProperty] private bool _hasProfiles;
+
+    /// <summary>chip → 完整 <see cref="CtpConnectionConfig"/> 查找缓存（与 <see cref="Profiles"/> 同步重建）。</summary>
+    private List<CtpConnectionConfig> _profileConfigs = new();
+
+    /// <summary>当前表单对应的 profile（仅高亮追踪；连接即建档语义见 <see cref="ConnectAsync"/>）。</summary>
+    private Guid _currentProfileId;
+
+    /// <summary>
+    /// 从存储加载 profile 列表（重建 chips）+ last-used 配置到表单，刷新连接状态，若启用自动登录则自动连接。
+    /// 入口全在 UI 线程（CtpViewModel.InitializeAsync / ExpertsViewModel.LoadAsync）——勿加 ConfigureAwait(false)。
+    /// </summary>
     public override async Task RefreshAsync()
     {
-        var cfg = await _configStore.GetAsync();
+        if (IsConnecting) return; // 连接中跳过：防重建 chips 与连接流程的保存-刷新互踩
+
+        var profiles = await _configStore.GetAllAsync();
+        RebuildProfiles(profiles);
+
+        var cfg = profiles.FirstOrDefault(p => p.IsLastUsed); // = GetAsync 语义，免二次查库
         if (cfg is not null)
         {
             FrontAddress = cfg.FrontAddress;
@@ -58,6 +78,7 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
             AppId = cfg.AppId;
             AuthCode = cfg.AuthCode;
             AutoLogin = cfg.AutoLogin;
+            MarkCurrentChip(cfg.Id);
         }
         IsConnected = _trading.IsConnected;
         StatusText = IsConnected ? "已连接" : "未连接";
@@ -81,9 +102,15 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
         StatusText = "连接中…";
         try
         {
-            // 持久化凭据
+            // 连接即自动建档：键 = 前置地址 + 用户号（命中既有 profile 复用其 Id，否则新建），
+            // 保存先于登录尝试（沿用既有语义：失败尝试也留档，误档可用 chip 上的 ✕ 删）
+            var profiles = await _configStore.GetAllAsync();
+            var id = profiles.FirstOrDefault(p =>
+                p.FrontAddress == FrontAddress && p.UserId == UserId)?.Id ?? Guid.NewGuid();
             await _configStore.SaveAsync(new CtpConnectionConfig
             {
+                Id = id,
+                Name = BuildProfileName(profiles, id, UserId, FrontAddress),
                 FrontAddress = FrontAddress,
                 MdFrontAddress = MdFrontAddress,
                 BrokerId = BrokerId,
@@ -92,7 +119,10 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
                 AppId = AppId,
                 AuthCode = AuthCode,
                 AutoLogin = AutoLogin,
+                IsLastUsed = true,
             });
+            _currentProfileId = id;
+            await LoadProfilesAsync();
 
             var result = await _trading.LoginAsync(new CtpLoginRequest
             {
@@ -133,6 +163,92 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
         {
             IsConnected = _trading.IsConnected;
         }
+    }
+
+    /// <summary>
+    /// 点连接标签 = 载入该 profile 到表单 + 直接登录。已连接时先登出：
+    /// 同柜台换账号 <c>CtpSessionService.LoginAsync</c> 会抛「已有活跃连接，请先登出」
+    /// （<c>RoutingCtpSession</c> 只自动处理跨柜台切换），故统一先 Logout 再 Login。
+    /// </summary>
+    [RelayCommand]
+    private async Task ApplyProfileAsync(CtpProfileItem? item)
+    {
+        if (item is null || IsConnecting) return;
+        var cfg = _profileConfigs.FirstOrDefault(p => p.Id == item.Id);
+        if (cfg is null) return; // chips 刚被重建的极端时序——静默跳过
+
+        FrontAddress = cfg.FrontAddress;
+        MdFrontAddress = cfg.MdFrontAddress;
+        BrokerId = cfg.BrokerId;
+        UserId = cfg.UserId;
+        Password = cfg.Password;
+        AppId = cfg.AppId;
+        AuthCode = cfg.AuthCode;
+        AutoLogin = cfg.AutoLogin;
+        MarkCurrentChip(cfg.Id);
+
+        if (IsConnected)
+        {
+            try { await _trading.LogoutAsync(); }
+            catch { /* 登出失败让后续 LoginAsync 的报错兜底 */ }
+        }
+        await ConnectAsync();
+    }
+
+    /// <summary>删除连接标签（不影响当前连接，只删档）。</summary>
+    [RelayCommand]
+    private async Task DeleteProfileAsync(CtpProfileItem? item)
+    {
+        if (item is null) return;
+        await _configStore.DeleteAsync(item.Id);
+        await LoadProfilesAsync();
+    }
+
+    /// <summary>拉取 profile 列表并重建 chips（ConnectAsync 保存后 / DeleteProfileAsync 后调用）。</summary>
+    private async Task LoadProfilesAsync()
+    {
+        var profiles = await _configStore.GetAllAsync();
+        RebuildProfiles(profiles);
+    }
+
+    private void RebuildProfiles(List<CtpConnectionConfig> profiles)
+    {
+        _profileConfigs = profiles;
+        Profiles.Clear();
+        foreach (var p in profiles)
+            Profiles.Add(new CtpProfileItem { Id = p.Id, Name = p.Name });
+        HasProfiles = Profiles.Count > 0;
+        MarkCurrentChip(_currentProfileId);
+    }
+
+    private void MarkCurrentChip(Guid id)
+    {
+        _currentProfileId = id;
+        foreach (var chip in Profiles)
+            chip.IsCurrent = chip.Id == id;
+    }
+
+    /// <summary>
+    /// 标签名：无其它 profile（Id 不同）占用该 UserId → UserId；否则加前置区分后缀（如「12345·sim」）。
+    /// 重名判定仅在建档时做一次（MVP 无改名）。
+    /// </summary>
+    private static string BuildProfileName(IReadOnlyList<CtpConnectionConfig> profiles, Guid id, string userId, string front)
+    {
+        var taken = profiles.Any(p => p.Id != id && p.UserId == userId);
+        return taken ? $"{userId}·{FrontTag(front)}" : userId;
+    }
+
+    /// <summary>前置区分标签：sim（不分大小写）→「sim」；否则剥 tcp:// 取 host；解析不出用原文。纯文本判定，不引 Infrastructure 的 SimAddress。</summary>
+    private static string FrontTag(string front)
+    {
+        var value = front.Trim();
+        if (string.Equals(value, "sim", StringComparison.OrdinalIgnoreCase)) return "sim";
+        var host = value.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase)
+            ? value["tcp://".Length..]
+            : value;
+        var colon = host.IndexOf(':');
+        if (colon > 0) host = host[..colon];
+        return string.IsNullOrWhiteSpace(host) ? value : host;
     }
 
     private void OnConnectionStateChanged(object? sender, CtpConnectionStatus status)

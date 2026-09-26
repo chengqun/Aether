@@ -187,6 +187,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
+    <Project Path="tests/Acme.Ctp.Infrastructure.Tests/Acme.Ctp.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Ctp.Simulator.Tests/Acme.Ctp.Simulator.Tests.csproj" />
     <Project Path="tests/Acme.Llm.Infrastructure.Tests/Acme.Llm.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.AppAuth.Infrastructure.Tests/Acme.AppAuth.Infrastructure.Tests.csproj" />

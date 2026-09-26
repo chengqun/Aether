@@ -6,6 +6,45 @@
         CanResize="False" WindowStartupLocation="CenterOwner"
         Background="{DynamicResource ContentBgBrush}">
 
+  <Window.Styles>
+    <!-- 连接标签 chip：镜像 term-tab/term-close 的兄弟双按钮结构（Grid Auto,Auto，非嵌套） -->
+    <Style Selector="Button.profile-chip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusSm}" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <!-- :pointerover Background 须落 /template/ ContentPresenter 层才能压过 Fluent 主题同款 setter（repo 惯例） -->
+    <Style Selector="Button.profile-chip:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentTintBgBrush}" />
+    </Style>
+    <Style Selector="Button.profile-chip.is-current">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <!-- chip 上的 ✕ 删除小按钮 -->
+    <Style Selector="Button.chip-close">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="2" />
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.chip-close:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+    </Style>
+    <Style Selector="Button.chip-close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+  </Window.Styles>
+
   <Grid RowDefinitions="Auto,*,Auto">
     <!-- 标题 -->
     <Border Grid.Row="0" Padding="20,16" Background="{DynamicResource AccentBrush}">
@@ -18,6 +57,32 @@
     <!-- 表单 -->
     <ScrollViewer Grid.Row="1" Padding="20,16">
       <StackPanel Spacing="2">
+        <!-- 连接标签（profile chips）：点 chip = 应用该 profile 并直接登录（VM 先登出再登录）；✕ 删除档案 -->
+        <ItemsControl ItemsSource="{Binding Profiles}" IsVisible="{Binding HasProfiles}" Margin="0,0,0,10">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="Auto,Auto">
+                <Button Grid.Column="0" Classes="profile-chip is-current:{Binding IsCurrent}"
+                        Click="OnProfileChipClick" Tag="{Binding}" Margin="0,0,0,4">
+                  <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                </Button>
+                <Button Grid.Column="1" Classes="chip-close" Margin="0,0,6,4"
+                        Command="{Binding $parent[Window].DataContext.DeleteProfileCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="删除此连接标签">
+                  <Path Data="{x:Static shell:Codicons.Close}" Stretch="Uniform" Width="10" Height="10"
+                        Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
           <TextBlock Grid.Row="0" Grid.Column="0" Text="交易前置" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
           <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding FrontAddress}" Margin="0,6" PlaceholderText="tcp://ip:port 或 sim" />
@@ -32,7 +97,21 @@
           <TextBox  Grid.Row="3" Grid.Column="1" Text="{Binding UserId}" Margin="0,6" />
 
           <TextBlock Grid.Row="4" Grid.Column="0" Text="密码" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
-          <TextBox  Grid.Row="4" Grid.Column="1" Text="{Binding Password}" Margin="0,6" PasswordChar="•" />
+          <Grid Grid.Row="4" Grid.Column="1" ColumnDefinitions="*,Auto">
+            <TextBox x:Name="PasswordBox" Grid.Column="0" Text="{Binding Password}" Margin="0,6" PasswordChar="•" />
+            <ToggleButton x:Name="PasswordEye" Grid.Column="1" Classes="preview-toggle"
+                          Click="OnPasswordEyeClick" ToolTip.Tip="显示/隐藏密码"
+                          VerticalAlignment="Center" Margin="4,6,0,6">
+              <Panel>
+                <Path Data="{x:Static shell:Codicons.Eye}" Stretch="Uniform" Width="14" Height="14"
+                      IsVisible="{Binding !IsChecked, ElementName=PasswordEye}"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                <Path Data="{x:Static shell:Codicons.EyeClosed}" Stretch="Uniform" Width="14" Height="14"
+                      IsVisible="{Binding IsChecked, ElementName=PasswordEye}"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+              </Panel>
+            </ToggleButton>
+          </Grid>
 
           <TextBlock Grid.Row="5" Grid.Column="0" Text="AppId" FontSize="12" VerticalAlignment="Center" Margin="0,6" />
           <TextBox  Grid.Row="5" Grid.Column="1" Text="{Binding AppId}" Margin="0,6" />
