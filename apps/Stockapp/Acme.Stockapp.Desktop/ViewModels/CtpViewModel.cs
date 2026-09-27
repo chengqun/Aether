@@ -164,6 +164,7 @@ public partial class CtpViewModel : ObservableObject
             try
             {
                 var listed = await _trading.QueryInstrumentsAsync();
+                if (!Connector.IsSimFront || !Connector.IsConnected) return;   // 加载途中切了柜台——丢弃过期结果
                 QuoteBoard.Clear();
                 _quoteBySymbol.Clear();
                 foreach (var i in listed)
@@ -184,6 +185,7 @@ public partial class CtpViewModel : ObservableObject
         try
         {
             var mains = await Task.Run(() => _securities.GetMainFuturesAsync());
+            if (Connector.IsSimFront) return;   // 加载途中切到 sim——丢弃过期结果（板将由 sim 分支重载）
             QuoteBoard.Clear();
             _quoteBySymbol.Clear();
             foreach (var s in mains)
@@ -244,6 +246,16 @@ public partial class CtpViewModel : ObservableObject
         }
     }
 
+    /// <summary>断开终态（Disconnected/Closed）重置订阅状态——订阅活在连接上，连接死亡订阅即失效；
+    /// 重置后下次 Connected 统一触发「按当前柜台重载板 + 重新订阅」。Reconnecting 刻意不重置：
+    /// 真实后端盘中重连由 CtpSessionService 用 _cachedSymbols 自行恢复订阅。</summary>
+    private void ResetSubscriptionState()
+    {
+        _autoSubscribed = false;
+        IsMdSubscribed = false;
+        _pendingTicks.Clear();
+    }
+
     private void OnConnectionStateChanged(object? sender, CtpConnectionStatus status)
         => Dispatcher.UIThread.Post(() => ApplyConnectionStatus(status));
 
@@ -256,20 +268,23 @@ public partial class CtpViewModel : ObservableObject
                 StatusMessage = "已连接";
                 var r = _trading.LoginResult;
                 LoginInfo = $"交易日={r?.TradingDay} FrontID={r?.FrontId} SessionID={r?.SessionId}";
-                if (Connector.IsSimFront)
-                    // 启动期板先于 sim 登录加载（真实列表占位）——登录完成后换成 host 上市表；
-                    // 板加载尾部自动订阅（先换板再订阅，防止把旧的真实列表订阅到 sim host）
-                    LoadMainFuturesAsync().SafeFireAndForget();
-                else if (!_autoSubscribed) TryAutoSubscribeAsync().SafeFireAndForget();
+                // 行情随柜台：任何登录成功都按当前柜台重载行情板 + 重新订阅（funnel 内按 IsSimFront 分流：
+                // sim⇒host 上市表 / 真实⇒证券库主力合约）。中途切柜台/换账号（连接器驱动，不经本页
+                // 「登出」按钮）时旧订阅已随旧连接死亡——断开终态已重置 _autoSubscribed，此处统一
+                // 「先换板再订阅」，防止把上一柜台的合约列表订阅到新柜台。盘中 Reconnecting 不重置
+                // flags：重连后 CtpSessionService 用 _cachedSymbols 自行恢复订阅，这里尾部早退、不重复订阅。
+                LoadMainFuturesAsync().SafeFireAndForget();
                 break;
             case CtpConnectionStatus.Reconnecting:
                 StatusMessage = "重连中…";
                 break;
             case CtpConnectionStatus.Closed:
+                ResetSubscriptionState();
                 StatusMessage = "闭市，已断开";
                 LoginInfo = "";
                 break;
-            default:
+            default:  // Disconnected：主动登出 / 切换柜台（连接器先 Logout 再 Login）/ 连接被拒
+                ResetSubscriptionState();
                 StatusMessage = "未连接";
                 LoginInfo = "";
                 break;
@@ -296,7 +311,8 @@ public partial class CtpViewModel : ObservableObject
     private void Logout()
     {
         _trading.LogoutAsync().SafeFireAndForget();
-        IsConnected = false; IsMdSubscribed = false; _pendingTicks.Clear(); _autoSubscribed = false;
+        IsConnected = false;
+        ResetSubscriptionState();   // 同 Disconnected 事件的重置（事件随后到达再触发一次，幂等）
         Account = null; Positions.Clear(); Orders.Clear(); Trades.Clear();
         IsConfirmingOrder = false; IsConfirmingCancel = false;
         LoginInfo = ""; StatusMessage = "已登出";
