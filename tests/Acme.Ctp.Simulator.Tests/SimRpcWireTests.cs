@@ -200,11 +200,10 @@ public class SimRpcWireTests
 
         var list = await client.QueryInstrumentsAsync();
 
-        Assert.Equal(9, list.Count);   // 默认 = 种子 9 合约（「我就是交易所」的默认上架面）
-        var ag = Assert.Single(list.Where(i => i.InstrumentId == "ag2610"));
-        Assert.Equal("SHFE", ag.ExchangeId);
-        Assert.Equal(15, ag.VolumeMultiple);
-        Assert.Equal(6990, ag.PreSettlement, 6);
+        var sim001 = Assert.Single(list);   // 默认 = sim001（本交易所自有品种——「我就是交易所」的默认上架面）
+        Assert.Equal("sim001", sim001.InstrumentId);
+        Assert.Equal("SIM", sim001.ExchangeId);
+        Assert.Equal(3798, sim001.PreSettlement, 6);
     }
 
     [Fact]

@@ -130,10 +130,12 @@ public sealed class SimTradingCore : IDisposable
                 foreach (var seed in _instruments.Values.ToList()) Persist(() => _store.SaveInstrumentAsync(seed, ct));
             }
 
-            // 上市合约表（host 上架清单）：null/空 ⇒ 默认 = 种子 9 合约；自定义 id 经解析链（精确→品种派生→合成）落表。
+            // 上市合约表（host 上架清单）：null/空 ⇒ 默认 = sim001（本交易所自有品种——「我就是交易所」；
+            // 2026-09-27 起从种子 9 合约改为单合约，价格源 = 随机游走/回放/（未来）真实转发）。
+            // 自定义 id 经解析链（精确→品种派生→合成）落表；种子 9 合约仍可用 AETHER_CTP_SIM_BOARD 上架。
             var listedIds = _options.ListedInstruments is { Count: > 0 }
                 ? _options.ListedInstruments
-                : InstrumentCatalog.Seed().Select(i => i.InstrumentId).ToList();
+                : new[] { "sim001" };
             foreach (var id in listedIds.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 ResolveMarketInstrument(id);
@@ -205,6 +207,7 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>释放（幂等）。</summary>
     public void Dispose()
     {
+        StopReplay();
         StopMarketFeed();
         FlushAsync().GetAwaiter().GetResult();
     }
@@ -492,13 +495,15 @@ public sealed class SimTradingCore : IDisposable
         Persist(() => _store.SaveInstrumentAsync(synthesized));
     }
 
-    /// <summary>手动注入行情（测试 / 未来「历史 tick 回放」用）。注入后立即重试挂单。</summary>
-    public void InjectQuote(string instrumentId, double bid, double ask, double last)
+    /// <summary>手动注入行情（测试 + <b>历史 tick 回放</b>驱动）。注入后立即重试挂单。volume（累计量）可选——回放保真用。
+    /// 注入前先经解析链补合约元数据（任意 id 可注——未登记合约静默 no-op 是坑）。</summary>
+    public void InjectQuote(string instrumentId, double bid, double ask, double last, long? volume = null)
     {
         var updates = new List<(string AccountId, SimOrderUpdate Update)>();
         lock (_gate)
         {
-            Market.Inject(instrumentId, bid, ask, last);
+            ResolveMarketInstrument(instrumentId);
+            Market.Inject(instrumentId, bid, ask, last, volume);
             foreach (var state in _states.Values)
                 foreach (var update in Match(state, instrument: null))
                     updates.Add((state.AccountId, update));
@@ -507,6 +512,35 @@ public sealed class SimTradingCore : IDisposable
         foreach (var group in updates.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
             Raise(group.Key, group.Select(x => x.Update).ToList());
     }
+
+    // —— 历史 tick 回放（「我就是交易所」的价格源之二；之一 = 随机游走，之三（未来）= 真实行情转发） ——
+
+    /// <summary>
+    /// 启动历史 tick 回放驱动：按 CSV 时间轴（<c>time,instrument,bid,ask,last[,volume]</c>）驱动
+    /// <see cref="InjectQuote"/>——注价即重试挂单，撮合/推送/行情板全复用。**自动停掉随机 feed**
+    /// （游走不再污染回放价）。速度倍率 &gt;1 快放；loop = 到文件尾停 1s 循环（沙盒常有市）。
+    /// 文件不存在/表头不符/无有效行 ⇒ <see cref="ArgumentException"/>（调用方容错回落）。
+    /// </summary>
+    public void StartReplay(string csvPath, double speed = 1, bool loop = true)
+    {
+        StopMarketFeed();   // 回放是唯一价格源——随机游走必须让位
+        StopReplay();
+        _replay = TickReplayDriver.Start(csvPath, t =>
+            InjectQuote(t.InstrumentId, t.Bid, t.Ask, t.Last, t.Volume), speed, loop);
+    }
+
+    /// <summary>停止回放驱动（价格停在最后一帧——撮合仍对最后报价可用；随机 feed 不自动恢复）。</summary>
+    public void StopReplay()
+    {
+        var driver = _replay;
+        _replay = null;
+        driver?.Dispose();
+    }
+
+    /// <summary>回放是否在跑。</summary>
+    public bool IsReplaying => _replay is not null;
+
+    private TickReplayDriver? _replay;
 
     // —— 内部：撮合 ——
 

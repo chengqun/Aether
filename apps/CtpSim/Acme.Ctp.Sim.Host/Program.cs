@@ -14,8 +14,12 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_TICK_MS 行情推进间隔（0 = 不自动喂）
 //   AETHER_CTP_SIM_SEED    随机游走种子（默认固定 ⇒ 可复现）
 //   AETHER_CTP_SIM_BALANCE 新账户初始资金
-//   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 9 个种子合约——「我就是交易所」的自定义上架面，
+//   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 sim001——「我就是交易所」的自有品种，
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
+//   AETHER_CTP_SIM_REPLAY        历史 tick 回放 CSV 路径（价格源之二——设定后随机游走让位；不设 ⇒ 随机游走）
+//   AETHER_CTP_SIM_REPLAY_SPEED  回放速度倍率（默认 1；>1 快放）
+//   AETHER_CTP_SIM_REPLAY_LOOP   回放循环（默认 true——文件尾停 1s 再来）
+//   回放 CSV 格式（首行表头）：time,instrument,bid,ask,last[,volume]——time 为 HH:mm:ss[.fff]（行间差 pacing）
 // 行情随柜台：sim 登录的行情恒为本地合成（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -35,14 +39,32 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
     public async Task StartAsync(CancellationToken ct)
     {
         await core.InitializeAsync(ct);   // 重启恢复：挂单作废、报单号/成交号序列续排（host 启动时一次）
-        core.StartMarketFeed();
+
+        // 价格源：回放 CSV（优先）或随机游走（默认）。回放启动失败（文件缺失/坏格式）⇒ 容错回落随机游走
+        var replayOn = false;
+        if (!string.IsNullOrWhiteSpace(opts.Core.ReplayPath))
+        {
+            try
+            {
+                core.StartReplay(opts.Core.ReplayPath, opts.Core.ReplaySpeed, opts.Core.ReplayLoop);
+                replayOn = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CTP-SIM] 回放启动失败（回落随机游走）：{ex.Message}");
+            }
+        }
+        if (!replayOn) core.StartMarketFeed();
+
         server.Start();
 
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var listed = core.QueryListedInstruments();
         Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}");
         Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
-        Console.WriteLine($"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
+        Console.WriteLine(replayOn
+            ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
+            : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
         Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
         Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。客户端：期货页登录前置地址填 sim 即连本柜台（无需环境变量）。");
     }

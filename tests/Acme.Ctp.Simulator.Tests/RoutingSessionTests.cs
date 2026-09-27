@@ -229,7 +229,7 @@ public class RoutingSessionTests
         Assert.Equal(500, options.TickIntervalMs);
         Assert.Equal(20260925, options.Seed);
         Assert.Equal(1_000_000, options.InitialBalance, 6);
-        Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落种子 9 合约
+        Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落默认 sim001
     }
 
     [Fact]

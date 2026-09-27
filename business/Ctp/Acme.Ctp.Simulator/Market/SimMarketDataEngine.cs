@@ -71,8 +71,11 @@ public sealed class SimMarketDataEngine
             w.Instrument.RoundToTick(w.Last));
     }
 
-    /// <summary>手动注入报价（测试用；同时更新内部中枢，使后续游走从该点继续）。</summary>
-    public void Inject(string instrumentId, double bid, double ask, double last)
+    /// <summary>
+    /// 手动注入报价（测试 + **历史 tick 回放**驱动；同时更新内部中枢，使后续游走从该点继续）。
+    /// <paramref name="volume"/>（可选累计成交量）非空时直接置位——回放保真用。
+    /// </summary>
+    public void Inject(string instrumentId, double bid, double ask, double last, long? volume = null)
     {
         var w = EnsureWalk(instrumentId);
         if (w is null) return;
@@ -82,6 +85,7 @@ public sealed class SimMarketDataEngine
         w.Highest = Math.Max(w.Highest, w.Last);
         w.Lowest = w.Lowest == 0 ? w.Last : Math.Min(w.Lowest, w.Last);
         if (w.Open == 0) w.Open = w.Last;
+        if (volume is { } v) w.Volume = v;
         RaiseTick(w, bid, ask);
     }
 

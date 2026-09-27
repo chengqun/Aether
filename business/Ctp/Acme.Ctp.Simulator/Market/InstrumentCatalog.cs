@@ -33,9 +33,14 @@ public static class InstrumentCatalog
     /// <summary>
     /// 品种级元数据（不含具体月份）——月份只影响代码，不影响乘数/保证金率/最小变动价位，
     /// 故未知月份（如用户的真实持仓 <c>ag2602</c>）能按品种自动派生。
+    /// <para>
+    /// <c>sim</c> 品种 = 本交易所自有品种（「我就是交易所」）：simNNN 系列（sim001/sim002…）按此派生，
+    /// 上市表默认 <c>sim001</c>。价格由驱动层供给：随机游走 / 历史 tick 回放 /（未来）真实行情转发——同一条注价管线。
+    /// </para>
     /// </summary>
     private static readonly Dictionary<string, SimInstrument> Varieties = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["sim"] = new SimInstrument { InstrumentId = "sim", ExchangeId = "SIM", VolumeMultiple = 10, MarginRate = 0.10, PriceTick = 1, BasePrice = 3800, PreSettlement = 3798 },
         ["ag"] = new SimInstrument { InstrumentId = "ag", ExchangeId = "SHFE", VolumeMultiple = 15, MarginRate = 0.12, PriceTick = 1, BasePrice = 7000, PreSettlement = 6990 },
         ["au"] = new SimInstrument { InstrumentId = "au", ExchangeId = "SHFE", VolumeMultiple = 1000, MarginRate = 0.10, PriceTick = 0.02, BasePrice = 560, PreSettlement = 558 },
         ["cu"] = new SimInstrument { InstrumentId = "cu", ExchangeId = "SHFE", VolumeMultiple = 5, MarginRate = 0.12, PriceTick = 10, BasePrice = 78000, PreSettlement = 77900 },

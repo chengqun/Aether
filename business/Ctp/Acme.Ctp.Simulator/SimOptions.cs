@@ -34,10 +34,19 @@ public sealed record SimOptions
 
     /// <summary>
     /// 上市合约表（「我就是交易所」的自定义面）：host 上架清单，客户端行情板显示它。
-    /// null/空 ⇒ 默认 = <see cref="InstrumentCatalog"/> 种子 9 合约；自定义 id 经解析链（精确→品种派生→合成）落表。
+    /// null/空 ⇒ 默认 = sim001（本交易所自有品种）；自定义 id 经解析链（精确→品种派生→合成）落表。
     /// host 环境变量 <c>AETHER_CTP_SIM_BOARD</c>（逗号分隔）。
     /// </summary>
     public IReadOnlyList<string>? ListedInstruments { get; init; }
+
+    /// <summary>历史 tick 回放 CSV 路径（价格源之二——按时间轴驱动注价；null ⇒ 随机游走）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY</c>。</summary>
+    public string? ReplayPath { get; init; }
+
+    /// <summary>回放速度倍率（&gt;1 快放、&lt;1 慢放；坏值 ⇒ 1）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY_SPEED</c>。</summary>
+    public double ReplaySpeed { get; init; } = 1;
+
+    /// <summary>回放到文件尾是否循环（默认 true——沙盒常有市；文件尾停 1s 再来）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY_LOOP</c>。</summary>
+    public bool ReplayLoop { get; init; } = true;
 
     /// <summary>交易日历：非交易时段的报单是否直接拒绝（默认关——仿真不挑时段）。</summary>
     public bool RejectOrdersOutsideTradingTime { get; init; }
@@ -52,7 +61,24 @@ public sealed record SimOptions
             Seed = EnvInt("AETHER_CTP_SIM_SEED", 20260925),
             InitialBalance = EnvDouble("AETHER_CTP_SIM_BALANCE", 1_000_000),
             ListedInstruments = ParseBoard(Environment.GetEnvironmentVariable("AETHER_CTP_SIM_BOARD")),
+            ReplayPath = EnvText("AETHER_CTP_SIM_REPLAY"),
+            ReplaySpeed = EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) > 0 ? EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) : 1,
+            ReplayLoop = ParseBool("AETHER_CTP_SIM_REPLAY_LOOP", defaultValue: true),
         };
+    }
+
+    private static string? EnvText(string name)
+    {
+        var v = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+    }
+
+    private static bool ParseBool(string name, bool defaultValue)
+    {
+        var v = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(v)
+            ? defaultValue
+            : v.Trim() is "1" or "true" or "on" or "yes";
     }
 
     /// <summary>上市合约表解析：逗号分割、去空格、弃空项；空白/坏值 ⇒ null（默认种子表——交易所清单坏值容忍回默认，不拒启动）。</summary>
