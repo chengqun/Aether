@@ -216,9 +216,12 @@ internal sealed class SimConnection
                     foreach (var s in sub.Symbols)
                     {
                         if (string.IsNullOrWhiteSpace(s)) continue;
-                        // 订阅即激活随机游走——否则 AdvanceMarket 不推进这些合约，行情恒空（Phase 1 同款语义）
-                        _core.ActivateMarket(s);
+                        // 先登记订阅、再激活——交易所模式下 ActivateMarket 会同步外发盘口快照 tick，
+                        // 若登记在后，快照路由时本连接的订阅集还没有该合约 ⇒ 订阅者永远收不到这唯一一帧
+                        // （walk 模式靠定时器续命无感；交易所模式空闲市场无后续事件——板恒空，2026-09-28 实测踩中）。
+                        // 先登记则快照恰好落在本 op 的 capture-during-dispatch 缓冲里，应答帧后送达（F1 顺序契约）。
                         lock (_stateLock) Subscriptions.Add(s);
+                        _core.ActivateMarket(s);   // 订阅即激活行情（walk：否则不推进；exchange：快照 + 做市进场）
                     }
                     break;
                 }

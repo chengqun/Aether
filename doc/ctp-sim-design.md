@@ -165,7 +165,7 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 | 第三方 CTP 软件连不上 | 刻意不实现线协议 | Phase 2 native ABI（§13） |
 | Phase 1 习惯的 env 变量在客户端侧被忽略 | `AETHER_CTP_SIM_DB/TICK_MS/...` 全是 host 进程的变量 | 文档已明说 |
 
-## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，167 例）
+## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，168 例）
 
 纯托管回环 ⇒ 无需 native/柜台/外部进程：
 

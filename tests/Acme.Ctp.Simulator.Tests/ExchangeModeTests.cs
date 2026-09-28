@@ -1,4 +1,5 @@
 using Acme.Ctp.Domain;
+using Acme.Ctp.Infrastructure.Sim;
 using Acme.Ctp.Simulator;
 
 namespace Acme.Ctp.Simulator.Tests;
@@ -229,5 +230,50 @@ public class ExchangeModeTests
 
         // bob 持仓浮盈 = (7010 − 7000) × 15 × 1 = 150——盯市价是**最新成交价**（不是游走值）
         Assert.Equal(150, core.QueryAccount("bob").PositionProfit, 6);
+    }
+
+    [Fact]
+    public async Task 订阅即收到做市盘口快照_wire级路由()
+    {
+        // 回归（2026-09-28 实测踩中）：交易所模式空闲市场的唯一一帧 = 订阅激活时的盘口快照。
+        // 曾因「先激活后登记订阅」被路由吞掉 ⇒ 订阅者板恒空（机器人明明在挂单）。
+        // 修法 = 先登记订阅再激活——快照落进本 op 的 capture-during-dispatch 缓冲，应答帧后送达。
+        using var sim = LoopbackSim.Start(o => o with
+        {
+            MarketMode = SimMarketMode.Exchange,
+            MarketMakerBot = true,
+            PasswordIterations = 1000,
+        });
+        await sim.Session.LoginAsync(new CtpLoginRequest
+        {
+            FrontAddress = "sim",
+            MdFrontAddress = "",
+            BrokerId = SimHarness.Broker,
+            UserId = SimHarness.Account,
+            Password = SimHarness.TestPassword,
+            AppId = "aether",
+            AuthCode = "auth",
+        });
+
+        var ticks = new Collector<CtpTick>();
+        sim.Session.TickReceived += (_, t) => ticks.Add(t);
+
+        await sim.Session.SubscribeMarketDataAsync(new CtpMarketDataConnect
+        {
+            MdFrontAddress = "tcp://127.0.0.1:40002",
+            BrokerId = SimHarness.Broker,
+            UserId = SimHarness.Account,
+            Password = SimHarness.TestPassword,
+        }, ["sim001"]);   // 默认上市合约——机器人围绕昨结算 3798 报价
+
+        // 订阅完成后必须**立即**见到做市双边盘口（无定时器续命、无后续市场事件——全靠激活快照）
+        Assert.True(
+            await Wait.UntilAsync(() => sim.Session.GetLatestTick("sim001") is { BidPrice: > 0, AskPrice: > 0 }),
+            "订阅后必须立即收到做市商的盘口快照");
+        var tick = sim.Session.GetLatestTick("sim001")!;
+        Assert.Equal(3796, tick.BidPrice, 6);   // 3798 − 2×tick1
+        Assert.Equal(3800, tick.AskPrice, 6);   // 3798 + 2×tick1
+        Assert.Equal(5, tick.BidVolume);
+        Assert.Equal(5, tick.AskVolume);
     }
 }
