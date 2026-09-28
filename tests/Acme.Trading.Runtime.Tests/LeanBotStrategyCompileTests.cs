@@ -17,7 +17,6 @@ public class LeanBotStrategyCompileTests
     private const string MarketMakerSource = """
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Acme.Trading.Domain;
 using Acme.Trading.Runtime.Lean;
 using QuantConnect;
@@ -32,9 +31,10 @@ public class MarketMakerAlgo : LeanAlgorithmBase
     private Symbol _symbol;
     private decimal _last;
     private decimal _priceTick;
-    private decimal _spread;       // 价格单位的点差（SpreadTicks × PriceTick）
+    private decimal _spread;
     private decimal _quoteVolume;
     private decimal _positionCap;
+    private OrderTicket? _bidTicket, _askTicket;
 
     public static IReadOnlyList<StrategyParameterDef> ParameterDefinitions => new[]
     {
@@ -53,20 +53,26 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         _spread = GetDecimalParam("SpreadTicks", 2m) * _priceTick;
         _quoteVolume = GetDecimalParam("QuoteVolume", 5m);
         _positionCap = GetDecimalParam("PositionCap", 200m);
-        Debug($"[MM] 初始化 {_symbol.Value}: 点差±{_spread} 单侧{_quoteVolume}手 仓限±{_positionCap}");
+        BotLog($"[MM] 初始化 {_symbol.Value}: 点差±{_spread} 单侧{_quoteVolume}手 仓限±{_positionCap}");
     }
 
     public override void OnData(Slice slice)
     {
         if (IsWarmingUp || !slice.TryGet<CtpBar>(_symbol, out var bar)) return;
+        if (_last == 0) BotLog($"[MM] 首帧行情 last={bar.Close}（自举成功——数据链已通）");
         _last = bar.Close;
         RefreshQuotes();
     }
 
     public override void OnOrderEvent(OrderEvent e)
     {
+        if (e.Status.IsClosed())
+        {
+            if (_bidTicket?.OrderId == e.OrderId) _bidTicket = null;
+            if (_askTicket?.OrderId == e.OrderId) _askTicket = null;
+        }
         if (e.Status is OrderStatus.Filled or OrderStatus.PartiallyFilled)
-            Debug($"[MM] 成交 {e.Symbol.Value} {e.FillQuantity}@{e.FillPrice}（净持仓 {Portfolio[_symbol].Quantity}）");
+            BotLog($"[MM] 成交 {e.Symbol.Value} {e.FillQuantity}@{e.FillPrice}（净持仓 {Portfolio[_symbol].Quantity}）");
     }
 
     private void RefreshQuotes()
@@ -83,19 +89,27 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         var bidCapped = pos >= _positionCap;
         var askCapped = pos <= -_positionCap;
 
-        Order? liveBid = null, liveAsk = null;
-        foreach (var o in Transactions.GetOpenOrders())
+        if (_bidTicket != null && (bidCapped || _bidTicket.Get(OrderField.LimitPrice) != desiredBid))
         {
-            if (o.Symbol != _symbol || o.Type != OrderType.Limit) continue;
-            if (o.Quantity > 0) liveBid = o;
-            else if (o.Quantity < 0) liveAsk = o;
+            BotLog($"[MM] 撤买腿 @{_bidTicket.Get(OrderField.LimitPrice)}（移心/触限）");
+            _bidTicket.Cancel();
+        }
+        if (_askTicket != null && (askCapped || _askTicket.Get(OrderField.LimitPrice) != desiredAsk))
+        {
+            BotLog($"[MM] 撤卖腿 @{_askTicket.Get(OrderField.LimitPrice)}（移心/触限）");
+            _askTicket.Cancel();
         }
 
-        if (liveBid != null && (bidCapped || liveBid.Price != desiredBid)) Transactions.CancelOrder(liveBid.Id);
-        if (liveAsk != null && (askCapped || liveAsk.Price != desiredAsk)) Transactions.CancelOrder(liveAsk.Id);
-
-        if (liveBid == null && !bidCapped) LimitOrder(_symbol, _quoteVolume, desiredBid, tag: "MM买");
-        if (liveAsk == null && !askCapped) LimitOrder(_symbol, -_quoteVolume, desiredAsk, tag: "MM卖");
+        if (_bidTicket == null && !bidCapped)
+        {
+            _bidTicket = LimitOrder(_symbol, _quoteVolume, desiredBid, tag: "MM买");
+            BotLog($"[MM] 挂买 {desiredBid} × {_quoteVolume}手（last={_last}）");
+        }
+        if (_askTicket == null && !askCapped)
+        {
+            _askTicket = LimitOrder(_symbol, -_quoteVolume, desiredAsk, tag: "MM卖");
+            BotLog($"[MM] 挂卖 {desiredAsk} × {_quoteVolume}手（last={_last}）");
+        }
     }
 
     private decimal RoundToTick(decimal price)
@@ -141,19 +155,24 @@ public class NoiseTakerAlgo : LeanAlgorithmBase
         _netCap = GetIntParam("NetCap", 3);
         _rng = new Random(GetIntParam("Seed", 42));
         Schedule.On(DateRules.EveryDay(), TimeRules.Every(TimeSpan.FromSeconds(Math.Max(1, interval))), TakeTurn);
-        Debug($"[Noise] 初始化 {_symbol.Value}: 每{interval}s 随机吃 ≤{_maxLots}手 净钳±{_netCap}");
+        BotLog($"[Noise] 初始化 {_symbol.Value}: 每{interval}s 随机吃 ≤{_maxLots}手 净钳±{_netCap}");
     }
 
     private void TakeTurn()
     {
         var security = Portfolio[_symbol];
-        if (security.Price <= 0) return;
+        if (security.Price <= 0)
+        {
+            BotLog("[Noise] 等待首帧行情（Price=0）——数据链未通则永远跳过");
+            return;
+        }
 
         var pos = security.Quantity;
         var dir = _rng.Next(2) == 0 ? 1 : -1;
         if (dir == 1 && pos >= _netCap) dir = -1;
         else if (dir == -1 && pos <= -_netCap) dir = 1;
         var lots = _rng.Next(1, _maxLots + 1);
+        BotLog($"[Noise] 吃单 {dir * lots}手（last={security.Price} 净仓{pos}）");
         MarketOrder(_symbol, dir * lots, tag: "噪声吃单");
     }
 

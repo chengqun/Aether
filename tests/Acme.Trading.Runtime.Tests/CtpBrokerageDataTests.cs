@@ -52,6 +52,9 @@ public class CtpBrokerageDataTests : IDisposable
         ActionDay = "20260928", TradingDay = "20260928",
     };
 
+    /// <summary>固定盖戳时钟（LiveTickClock 注入——分钟边界测试须可控时间，真实 UtcNow 会跨边界踩不准）。</summary>
+    private void FixClock(DateTime t) => _brokerage.LiveTickClock = () => t;
+
     [Fact]
     public void 首个tick立即成棒_交易所模式自举()
     {
@@ -125,13 +128,16 @@ public class CtpBrokerageDataTests : IDisposable
     {
         var enumerator = _brokerage.Subscribe(Config(Resolution.Minute), (_, _) => { });
 
-        // 同一分钟内的两个 tick：不产棒（bar 是时间聚合，须等边界过掉）
+        // 同一分钟内的两个 tick：不产棒（bar 是时间聚合，须等边界过掉）——盖戳时钟注入固定时间
+        FixClock(new DateTime(2026, 9, 28, 2, 0, 1, DateTimeKind.Utc));
         _session.RaiseTick(Tick(7000, "10:00:01"));
+        FixClock(new DateTime(2026, 9, 28, 2, 0, 30, DateTimeKind.Utc));
         _session.RaiseTick(Tick(7002, "10:00:30"));
         enumerator.MoveNext();
         Assert.False(enumerator.Current is CtpBar, "分钟级在边界内不应成棒");
 
         // 跨边界：上一分钟聚合棒产出（O=7000 H=7002 L=7000 C=7002）
+        FixClock(new DateTime(2026, 9, 28, 2, 1, 5, DateTimeKind.Utc));
         _session.RaiseTick(Tick(7003, "10:01:05"));
         enumerator.MoveNext();
         var bar = Assert.IsType<CtpBar>(enumerator.Current);

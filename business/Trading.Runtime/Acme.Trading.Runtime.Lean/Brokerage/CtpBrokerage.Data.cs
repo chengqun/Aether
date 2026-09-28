@@ -60,17 +60,33 @@ public partial class CtpBrokerage
         if (!IsConnected) Connect();
     }
 
-    /// <summary>CTP Tick 回报 → 查订阅 Symbol → BarBuilder 聚合 → 完成的 CtpBar 推 aggregator。</summary>
+    /// <summary>
+    /// 实盘 tick 盖戳时钟（数据时区 = UTC，见 <see cref="LeanAlgorithmBase.AddCtpData"/>）：
+    /// 用<b>客户端当前 UTC</b>，不用 host 的 UpdateTime/ActionDay（那是 host 本地墙钟——跨机器/跨时区时
+    /// 与引擎 frontier 对不上，未来时间的数据会被 FrontierAwareEnumerator 扣住永不发射——第四层死锁）。
+    /// internal 可注入：单测用固定时钟构造跨分钟边界。
+    /// </summary>
+    public Func<DateTime> LiveTickClock { get; set; } = static () => DateTime.UtcNow;
+
+    /// <summary>CTP Tick 回报 → 查订阅 Symbol → BarBuilder 聚合 → 完成的 CtpBar 推 aggregator。逐跳采样日志（排障仪表）。</summary>
     private void OnTickReceived(object? sender, CtpTick tick)
     {
+        LogTickSample(tick);
         if (_aggregator == null) return;
-        if (!_symbolByInstrument.TryGetValue(tick.InstrumentId, out var symbol)) return;   // 未订阅的合约过滤掉
+        if (!_symbolByInstrument.TryGetValue(tick.InstrumentId, out var symbol))
+        {
+            LogTickDrop(tick);   // 仪表：到达但无订阅登记（旧序竞态的指征——正常只出现在真正未订阅的合约上）
+            return;
+        }
         if (!_barBuilders.TryGetValue(symbol, out var builder)) return;
         try
         {
-            var time = ParseTickTime(tick);
-            var completed = builder.OnTick(time, (decimal)tick.LastPrice, symbol);
-            if (completed != null) _aggregator.Update(completed);
+            var completed = builder.OnTick(LiveTickClock(), (decimal)tick.LastPrice, symbol);
+            if (completed != null)
+            {
+                LogBarSample(tick.InstrumentId, completed);
+                _aggregator.Update(completed);
+            }
         }
         catch (Exception ex)
         {
@@ -83,22 +99,27 @@ public partial class CtpBrokerage
     {
         var n = System.Threading.Interlocked.Increment(ref _tickSampleCount);
         if (n <= 5 || n % 200 == 0)
-            CtpLeanGateway.Log($"[Tick] {tick.InstrumentId} last={tick.LastPrice} bid={tick.BidPrice}/{tick.BidVolume} ask={tick.AskPrice}/{tick.AskVolume} {tick.UpdateTime}.{tick.UpdateMillisec:D3} (#{n})");
+            CtpLeanGateway.Log($"[Tick] {tick.InstrumentId} last={tick.LastPrice} bid={tick.BidPrice}/{tick.BidVolume} ask={tick.AskPrice}/{tick.AskVolume} (#{n})");
+    }
+
+    private int _tickDropCount;
+    private void LogTickDrop(CtpTick tick)
+    {
+        var n = System.Threading.Interlocked.Increment(ref _tickDropCount);
+        if (n <= 5)
+            CtpLeanGateway.Log($"[Tick] 丢弃（无订阅登记）: {tick.InstrumentId} (#{n})——若为已订阅合约说明登记竞态未修复");
+    }
+
+    private int _barSampleCount;
+    private void LogBarSample(string instrumentId, CtpBar bar)
+    {
+        var n = System.Threading.Interlocked.Increment(ref _barSampleCount);
+        if (n <= 5)
+            CtpLeanGateway.Log($"[Bar] {instrumentId} close={bar.Close} time={bar.Time:HH:mm:ss} (#{n})——首棒即自举成功");
     }
 
     // OnOrderReceived/OnTradeReceived（P2 报单/成交回报 → Lean OrderEvent 翻译）实现在 CtpBrokerage.Trading.cs
-
-    private static DateTime ParseTickTime(CtpTick tick)
-    {
-        var dateStr = string.IsNullOrWhiteSpace(tick.ActionDay) ? DateTime.Now.ToString("yyyyMMdd") : tick.ActionDay;
-        var timeStr = string.IsNullOrWhiteSpace(tick.UpdateTime) ? "00:00:00" : tick.UpdateTime;
-        foreach (var fmt in new[] { "yyyyMMdd HH:mm:ss", "yyyy-MM-dd HH:mm:ss" })
-        {
-            if (DateTime.TryParseExact($"{dateStr} {timeStr}", fmt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t))
-                return t.AddMilliseconds(tick.UpdateMillisec);
-        }
-        return DateTime.Now;
-    }
+    // （旧 ParseTickTime——解析 host 墙钟——已删：跨机器/跨时区下与引擎 frontier 对不上，见 LiveTickClock 注释）
 
     /// <summary>
     /// tick → CtpBar 聚合器：按订阅分辨率（config.Increment）把 tick 聚成 OHLCV bar。
