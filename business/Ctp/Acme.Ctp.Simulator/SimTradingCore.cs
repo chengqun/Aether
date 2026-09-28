@@ -705,13 +705,14 @@ public sealed class SimTradingCore : IDisposable
             Raise(group.Key, group.Select(x => x.Update).ToList());
     }
 
-    // —— 历史 tick 回放（「我就是交易所」的价格源之二；之一 = 随机游走，之三（未来）= 真实行情转发） ——
+    // —— 历史 tick 回放（「我就是交易所」的确定性测试价格源；交易所模式（默认）= 价格发现归簿；
+    //     随机游走 = 显式退路。真实行情转发明确不做——本柜台是自己的交易所，不接外部期货行情） ——
 
     /// <summary>
     /// 启动历史 tick 回放驱动：按 CSV 时间轴（<c>time,instrument,bid,ask,last[,volume]</c>）驱动
     /// <see cref="InjectQuote"/>——注价即重试挂单，撮合/推送/行情板全复用。**自动停掉随机 feed**
     /// （游走不再污染回放价）。速度倍率 &gt;1 快放；loop = 到文件尾停 1s 循环（沙盒常有市）。
-    /// 文件不存在/表头不符/无有效行 ⇒ <see cref="ArgumentException"/>（调用方容错回落）。
+    /// 文件不存在/表头不符/无有效行 ⇒ <see cref="ArgumentException"/>（host 侧柜台退出——不静默换价格源）。
     /// </summary>
     public void StartReplay(string csvPath, double speed = 1, bool loop = true)
     {

@@ -58,7 +58,7 @@ public sealed record SimOptions
     /// </summary>
     public IReadOnlyList<string>? ListedInstruments { get; init; }
 
-    /// <summary>历史 tick 回放 CSV 路径（价格源之二——按时间轴驱动注价；null ⇒ 随机游走）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY</c>。</summary>
+    /// <summary>历史 tick 回放 CSV 路径（确定性测试的价格源——设定即回放模式，host 层强制归一 walk 撮合）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY</c>。</summary>
     public string? ReplayPath { get; init; }
 
     /// <summary>回放速度倍率（&gt;1 快放、&lt;1 慢放；坏值 ⇒ 1）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY_SPEED</c>。</summary>

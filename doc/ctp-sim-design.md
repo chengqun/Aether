@@ -1,6 +1,6 @@
 # 本地 CTP 仿真柜台设计文档（「我就是交易所」）
 
-> 状态：现行设计（2026-09-28 整理；含当日三批落地：交易所模式、做市商义务约束层、账号系统）。
+> 状态：现行设计（2026-09-28 整理；含当日四批落地：交易所模式、做市商义务约束层、账号系统、**交易所模式设为默认 + 真实行情转发明确不做**）。
 > 权威来源：代码（`business/Ctp/Acme.Ctp.{Simulator,Sim,Sim.Server}` + `apps/CtpSim/Acme.Ctp.Sim.Host` + `business/Ctp/Acme.Ctp.Infrastructure/Sim/`）+ CLAUDE.md「CTP 本地仿真柜台」节。本文档是设计综述，代码以仓库为准。
 
 ---
@@ -92,7 +92,7 @@ apps/CtpSim/Acme.Ctp.Sim.Host → Sim.Server        ← 唯一可执行文件（
 - 上市表默认 `sim001`，`AETHER_CTP_SIM_BOARD` 逗号分隔自定义；wire `queryInstruments` 供行情板。
 - **解析链**（两条入口）：下单路径（合成锚价 = 下单价）/ 行情订阅路径（锚价 0 ⇒ 基价 100）——精确命中 → 品种派生（剥数字）→ 合成兜底（`AcceptUnknownInstruments`）。
 
-## 8. 撮合与行情：两种模式、四态价格源
+## 8. 撮合与行情：交易所模式为默认的两种撮合 + 三态可用价格源
 
 ### 8.1 价格源（`SimOptions.MarketMode` + 驱动层）
 
