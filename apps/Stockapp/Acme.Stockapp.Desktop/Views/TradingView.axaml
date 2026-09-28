@@ -157,7 +157,7 @@
         <StackPanel Spacing="10" MaxWidth="480">
           <TextBlock Text="策略选择与参数" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
 
-          <!-- 引擎切换（仅回测；实盘只支持 IStrategy 壳）-->
+          <!-- 引擎切换（回测/实盘通用：IStrategy 壳 vs LeanAlgorithm 直写）-->
           <StackPanel Spacing="4" IsVisible="{Binding IsEngineSelectorVisible}">
             <TextBlock Text="引擎" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
             <ComboBox ItemsSource="{Binding EngineOptions}" SelectedItem="{Binding Engine}" HorizontalAlignment="Stretch" />
@@ -165,7 +165,7 @@
                        FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
           </StackPanel>
 
-          <!-- ── IStrategy 路径（实盘，或回测 IStrategy 引擎）── -->
+          <!-- ── IStrategy 路径（IStrategy 引擎）── -->
           <StackPanel Spacing="10" IsVisible="{Binding IsIStrategySectionVisible}">
             <StackPanel Spacing="4">
               <TextBlock Text="策略" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
@@ -191,7 +191,7 @@
                        IsVisible="{Binding !StrategyParameterRows.Count}" Margin="0,8" />
           </StackPanel>
 
-          <!-- ── Lean 算法路径（仅回测 + Lean 引擎）── -->
+          <!-- ── Lean 算法路径（Lean 引擎——回测/实盘通用）── -->
           <StackPanel Spacing="10" IsVisible="{Binding IsLeanAlgorithmSectionVisible}">
             <StackPanel Spacing="4">
               <TextBlock Text="Lean 算法" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />

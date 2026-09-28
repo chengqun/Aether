@@ -61,6 +61,7 @@ public sealed class LiveTradingApplicationService : ILiveTradingApplicationServi
         var request = new LiveTradingRuntimeRequest
         {
             Instruments = input.Instruments,
+            Engine = input.Engine,
             StrategyName = input.StrategyName,
             InitialCash = input.InitialCash,
             FastPeriod = input.FastPeriod,

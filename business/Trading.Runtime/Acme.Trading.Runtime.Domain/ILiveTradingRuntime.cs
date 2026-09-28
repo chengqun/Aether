@@ -18,6 +18,16 @@ public enum LiveTradingRuntimeStatus
     Idle, Starting, Running, Stopping, Stopped, Error,
 }
 
+/// <summary>实盘策略引擎（2026-09-28 起 LeanAlgorithm 可实盘——bots 即策略路线；此前仅 IStrategy 壳）。</summary>
+public enum LiveStrategyEngine
+{
+    /// <summary>IStrategy 壳（TradingHostAlgorithm 包装 StrategyRegistry 策略——Lean 中立）。</summary>
+    IStrategy = 0,
+
+    /// <summary>LeanAlgorithm 直写（LeanAlgorithmRegistry 编译注册的 QCAlgorithm 子类——同回测第三条路径）。</summary>
+    LeanAlgorithm = 1,
+}
+
 /// <summary>
 /// 实盘运行请求（Lean/CTP-中性）。合约以代码给出（如 ag2610），CTP 自行解析。
 /// 交易凭据由 DI 注入的 <c>ICtpSession</c>（CtpView 登录后共享）提供，不在请求里。
@@ -27,7 +37,10 @@ public sealed class LiveTradingRuntimeRequest
     /// <summary>订阅合约代码列表（如 ag2610 / rb2510）。</summary>
     public IReadOnlyList<string> Instruments { get; set; } = Array.Empty<string>();
 
-    /// <summary>策略名（StrategyRegistry 注册的 key）。P1 阶段策略只出信号不下单。</summary>
+    /// <summary>策略引擎（默认 IStrategy 壳）。</summary>
+    public LiveStrategyEngine Engine { get; set; } = LiveStrategyEngine.IStrategy;
+
+    /// <summary>策略名（按 Engine 分别指 StrategyRegistry / LeanAlgorithmRegistry 注册的 key）。</summary>
     public string StrategyName { get; set; } = "SmaCross";
 
     /// <summary>初始资金（CNY）。实盘账户真实资金由 brokerage.GetCashBalance 查询覆盖。</summary>

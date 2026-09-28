@@ -111,9 +111,9 @@ public partial class TradingViewModel : ObservableObject
 
     // ═══ 引擎切换（IStrategy 壳 vs Lean 算法直写）═══
     // 三条策略路径：CodeStrategy/Strategy 走 IStrategy 壳（Lean 中立）；LeanAlgorithm 直接写 QCAlgorithm（与 Lean 耦合）。
-    // 引擎切换只影响回测路径；实盘当前只支持 IStrategy 壳（Lean 实盘=后续）。
+    // 2026-09-28 起实盘同样支持双引擎（bots 即策略：market-maker/noise-taker 经实盘 Lean 引擎跑）。
 
-    /// <summary>回测引擎：IStrategy（壳，Lean 中立）或 LeanAlgorithm（直写 QCAlgorithm，复用 Lean 全部能力）。</summary>
+    /// <summary>策略引擎：IStrategy（壳，Lean 中立）或 LeanAlgorithm（直写 QCAlgorithm，复用 Lean 全部能力）——回测/实盘通用。</summary>
     public StrategyEngine[] EngineOptions { get; } = new[] { StrategyEngine.IStrategy, StrategyEngine.LeanAlgorithm };
 
     [ObservableProperty] private StrategyEngine _engine = StrategyEngine.IStrategy;
@@ -125,15 +125,12 @@ public partial class TradingViewModel : ObservableObject
         OnPropertyChanged(nameof(IsIStrategySectionVisible));
     }
 
-    /// <summary>Lean 引擎是否可用作实盘（当前否——Lean 实盘为后续）。</summary>
-    public bool IsLeanLiveSupported => false;
-
-    /// <summary>策略 tab：显示引擎切换（仅回测；实盘只支持 IStrategy）。</summary>
-    public bool IsEngineSelectorVisible => !IsLiveMode;
-    /// <summary>策略 tab：显示 Lean 算法选择器（仅回测 + Lean 引擎）。</summary>
-    public bool IsLeanAlgorithmSectionVisible => !IsLiveMode && Engine == StrategyEngine.LeanAlgorithm;
-    /// <summary>策略 tab：显示 IStrategy 选择器（实盘，或回测 IStrategy 引擎）。</summary>
-    public bool IsIStrategySectionVisible => IsLiveMode || Engine == StrategyEngine.IStrategy;
+    /// <summary>策略 tab：显示引擎切换（回测/实盘通用）。</summary>
+    public bool IsEngineSelectorVisible => true;
+    /// <summary>策略 tab：显示 Lean 算法选择器（Lean 引擎——回测/实盘通用）。</summary>
+    public bool IsLeanAlgorithmSectionVisible => Engine == StrategyEngine.LeanAlgorithm;
+    /// <summary>策略 tab：显示 IStrategy 选择器（IStrategy 引擎）。</summary>
+    public bool IsIStrategySectionVisible => Engine == StrategyEngine.IStrategy;
 
     // ═══ Lean 算法（直写 QCAlgorithm）═══
 
@@ -409,7 +406,7 @@ public partial class TradingViewModel : ObservableObject
             await StartLiveCoreAsync();
             return;
         }
-        LiveStartSummary = $"合约 {string.Join(",", instruments)} ｜ 策略 {LiveStrategy} ｜ 单笔开仓上限 {ParseMaxVolume()} 手\n" +
+        LiveStartSummary = $"合约 {string.Join(",", instruments)} ｜ 策略 {EffectiveLiveStrategyName}（{Engine}） ｜ 单笔开仓上限 {ParseMaxVolume()} 手\n" +
                            "真实下单模式：策略信号将直接向 CTP 报单（对手价限价），请确认风险。";
         IsConfirmingLiveStart = true;
     }
@@ -423,6 +420,9 @@ public partial class TradingViewModel : ObservableObject
 
     [RelayCommand]
     private void CancelStartLive() => IsConfirmingLiveStart = false;
+
+    /// <summary>实盘有效策略名（按引擎：LeanAlgorithm → LeanAlgorithmName；IStrategy → LiveStrategy）。</summary>
+    private string EffectiveLiveStrategyName => Engine == StrategyEngine.LeanAlgorithm ? LeanAlgorithmName : LiveStrategy;
 
     private async Task StartLiveCoreAsync()
     {
@@ -438,17 +438,20 @@ public partial class TradingViewModel : ObservableObject
         }
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (instruments.Length == 0) { AppendLiveLog("[实盘] 请填写至少一个合约（如 ag2610）"); return; }
+        if (Engine == StrategyEngine.LeanAlgorithm && string.IsNullOrWhiteSpace(LeanAlgorithmName))
+        { AppendLiveLog("[实盘] 未选择 Lean 算法（策略 tab → 引擎 Lean算法 → 选择算法）"); return; }
 
-        AppendLiveLog($"[实盘] 启动：合约={string.Join(",", instruments)} 策略={LiveStrategy} 分辨率={LiveResolution} " +
+        AppendLiveLog($"[实盘] 启动：合约={string.Join(",", instruments)} 引擎={Engine} 策略={EffectiveLiveStrategyName} 分辨率={LiveResolution} " +
                       $"真实下单={(LiveRealOrders ? $"开（单笔开仓上限 {ParseMaxVolume()} 手）" : "关（仅信号）")}");
         var input = new LiveTradingRunInput
         {
             Instruments = instruments,
-            StrategyName = LiveStrategy,
+            Engine = Engine == StrategyEngine.LeanAlgorithm ? LiveStrategyEngine.LeanAlgorithm : LiveStrategyEngine.IStrategy,
+            StrategyName = EffectiveLiveStrategyName,
             InitialCash = 1_000_000m,
             FastPeriod = 10,
             SlowPeriod = 30,
-            StrategyParameters = BuildStrategyParameters(),
+            StrategyParameters = Engine == StrategyEngine.LeanAlgorithm ? BuildLeanAlgorithmParameters() : BuildStrategyParameters(),
             Resolution = ParseResolution(LiveResolution),
             VerboseLog = VerboseLog,
             EnableRealOrders = LiveRealOrders,

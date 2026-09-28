@@ -9,6 +9,10 @@ namespace Acme.Trading.Application;
 public sealed class LiveTradingRunInput
 {
     public IReadOnlyList<string> Instruments { get; set; } = Array.Empty<string>();
+
+    /// <summary>策略引擎（默认 IStrategy 壳；LeanAlgorithm = labs 笔记直跑——bots 即策略）。</summary>
+    public LiveStrategyEngine Engine { get; set; } = LiveStrategyEngine.IStrategy;
+
     public string StrategyName { get; set; } = "SmaCross";
     public decimal InitialCash { get; set; } = 1_000_000m;
     public int FastPeriod { get; set; } = 10;

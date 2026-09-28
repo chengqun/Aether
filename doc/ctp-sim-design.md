@@ -205,6 +205,10 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 
 - 管理面：账户列表/资金调整/市场重置（core API 已有 `QueryAccounts()`，UI 后置）；部署脚本（systemd/Docker + 自包含发布）、`ctp-sim.db` 定时备份；注册门槛（开放 vs 邀请码）；连接限流。
 
+### bots 即 Lean 策略（进行中，2026-09-28 用户定调）
+
+做市商/噪声交易者的目标形态 = **labs `leanalgorithms/*.lean.cs` 策略笔记 + 独立账户**（`market-maker` / `noise-taker` 已交付，编译锁定测试在 `LeanBotStrategyCompileTests`）——服务端保持纯净交易所，机器人是普通客户端（P2 真实下单已实现：实盘 tab 勾「真实下单」）。跑法 = 桌面双实例（实盘 tab：引擎 LeanAlgorithm + 合约 sim001）；headless runner 后置。内嵌机器人过渡期保留，双 bot 验证跑通后删除。
+
 ### 策略层做市升级（异质性即真实感）
 
 - **多机器人竞争阵容**：`RunMarketMaker` 参数化（点差/量/偏斜/上限）+ 多实例——窄点差高频型 + 宽点差深度型，盘口自然长出多档、点差竞争收敛。

@@ -50,10 +50,28 @@ internal sealed class LeanLiveRunner
     {
         var resultsDir = Path.Combine(Path.GetTempPath(), "AetherCtpLean", Guid.NewGuid().ToString("N"));
 
+        // 算法解析（引擎分支）：IStrategy 壳 = TradingHostAlgorithm（本程序集）；LeanAlgorithm = 注册表编译类型
+        // （镜像 LeanAlgorithmBacktestRunner 的 algorithm-type-name/location 机制——同一 QCAlgorithm 子类回测/实盘两用）
+        string algoTypeName, algoLocation;
+        if (request.Engine == LiveStrategyEngine.LeanAlgorithm)
+        {
+            var algoType = LeanAlgorithmRegistry.GetType(request.StrategyName);
+            var algoPath = LeanAlgorithmRegistry.GetAssemblyPath(request.StrategyName);
+            if (algoType is null || algoPath is null)
+                return (AlgorithmStatus.RuntimeError, $"未注册的 Lean 算法: {request.StrategyName}（检查 labs/leanalgorithms 编译错误）");
+            algoTypeName = algoType.FullName!;
+            algoLocation = algoPath;
+        }
+        else
+        {
+            algoTypeName = "Acme.Trading.Runtime.Lean.TradingHostAlgorithm";
+            algoLocation = typeof(TradingHostAlgorithm).Assembly.Location;
+        }
+
         WorkerThread.Instance = new FreshWorkerThread();
         Composer.Instance.Reset();
 
-        ConfigureLeanLive(request, resultsDir);
+        ConfigureLeanLive(request, resultsDir, algoTypeName, algoLocation);
         // AddData<CtpBar>（Base 自定义数据）无需 market 注册/SPDB/交易时段（回测同此）——统一走自定义数据类型
 
         // 关键：在 Initializer.Start（首次触碰 Globals 触发静态构造）前显式 Reset，拾取 live-mode=true
@@ -96,17 +114,16 @@ internal sealed class LeanLiveRunner
         return (status, error);
     }
 
-    private void ConfigureLeanLive(LiveTradingRuntimeRequest request, string resultsDir)
+    private void ConfigureLeanLive(LiveTradingRuntimeRequest request, string resultsDir, string algoTypeName, string algoLocation)
     {
-        var algorithmLocation = typeof(TradingHostAlgorithm).Assembly.Location;
         var dataFolder = !string.IsNullOrWhiteSpace(_defaultDataFolder) ? _defaultDataFolder : BacktestEnvironment.LocateLeanDataFolder();
 
         Config.Set("environment", "live");
         Config.Set("live-mode", "true");
         Config.Set("object-store-root", Path.Combine(resultsDir, "storage"));
-        Config.Set("algorithm-type-name", "Acme.Trading.Runtime.Lean.TradingHostAlgorithm");
+        Config.Set("algorithm-type-name", algoTypeName);
         Config.Set("algorithm-language", "CSharp");
-        Config.Set("algorithm-location", algorithmLocation);
+        Config.Set("algorithm-location", algoLocation);
         Config.Set("data-folder", dataFolder);
         Config.Set("results-destination-folder", resultsDir);
         Config.Set("log-handler", "QuantConnect.Logging.CompositeLogHandler");
@@ -137,6 +154,9 @@ internal sealed class LeanLiveRunner
             ["slow"] = request.SlowPeriod.ToString(),
             ["resolution"] = ResolutionToLeanString(request.Resolution),
         };
+        // LeanAlgorithm 引擎：算法经 GetParameter("symbol") 订阅（同回测的 request.Symbol 契约）——首个合约即主合约
+        if (request.Engine == LiveStrategyEngine.LeanAlgorithm)
+            parameters["symbol"] = request.Instruments.FirstOrDefault() ?? "";
         // StrategyParameters（策略参数元数据）优先覆盖 fast/slow
         if (request.StrategyParameters != null)
             foreach (var kv in request.StrategyParameters)
