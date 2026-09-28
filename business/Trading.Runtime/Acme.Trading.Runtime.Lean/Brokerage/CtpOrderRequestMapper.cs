@@ -62,6 +62,7 @@ public static class CtpOrderRequestMapper
 
         // —— 价格：市价（含 MOO——Base 类型不拦 MOO，当市价处理）→ 对手价限价；Limit → 指定价 ——
         double price;
+        var timeCondition = CtpTimeCondition.GFD;
         switch (input.OrderType)
         {
             case OrderType.Market or OrderType.MarketOnOpen:
@@ -73,6 +74,9 @@ public static class CtpOrderRequestMapper
                 if (price <= 0) price = tick.PreSettlement;
                 if (price <= 0)
                     return new MapResult(Array.Empty<CtpOrderRequest>(), "行情 Ask/Bid/Last/PreSettlement 均无效，拒单");
+                // 吃单语义：IOC——未交叉的残量由交易所立即作废（'2' 部分成交不在队列），不挂簿。
+                // GFD 会把没吃到的"市价"单滞留成挂单（实测：噪声账户自己的买卖单同价互挂、自成交跳过、永不成交）。
+                timeCondition = CtpTimeCondition.IOC;
                 break;
             case OrderType.Limit:
                 if (input.LimitPrice <= 0)
@@ -95,7 +99,7 @@ public static class CtpOrderRequestMapper
                 capped = input.MaxOrderVolume;
             if (capped <= 0)
                 return new MapResult(Array.Empty<CtpOrderRequest>(), "手数上限封顶后为 0，拒单");
-            return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Open, price, capped) }, null);
+            return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Open, price, capped, timeCondition) }, null);
         }
 
         // —— 反向：平仓（绝不封顶）——
@@ -117,18 +121,19 @@ public static class CtpOrderRequestMapper
                     $"持仓今昨数据不一致（需平今 {todayUsed} > 实际今仓 {today}），拒单防错腿");
 
             var list = new List<CtpOrderRequest>(2);
-            if (ydUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseYesterday, price, ydUsed));
-            if (todayUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseToday, price, todayUsed));
+            if (ydUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseYesterday, price, ydUsed, timeCondition));
+            if (todayUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseToday, price, todayUsed, timeCondition));
             if (list.Count == 0)
                 return new MapResult(Array.Empty<CtpOrderRequest>(), "平仓量计算为 0，拒单");
             return new MapResult(list, null);
         }
 
         // 非 SHFE 系（DCE/CZCE/CFFEX/GFEX）：直接 Close（交易所自动分配今昨）
-        return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Close, price, vol) }, null);
+        return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Close, price, vol, timeCondition) }, null);
     }
 
-    private static CtpOrderRequest BuildRequest(MapInput input, CtpDirection direction, CtpOffsetFlag offset, double price, int volume) => new()
+    private static CtpOrderRequest BuildRequest(MapInput input, CtpDirection direction, CtpOffsetFlag offset, double price, int volume,
+        CtpTimeCondition timeCondition) => new()
     {
         BrokerId = input.BrokerId,
         InvestorId = input.InvestorId,
@@ -138,6 +143,6 @@ public static class CtpOrderRequestMapper
         PriceType = CtpOrderPriceType.Limit,
         LimitPrice = price,
         Volume = volume,
-        TimeCondition = CtpTimeCondition.GFD,
+        TimeCondition = timeCondition,
     };
 }

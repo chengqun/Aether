@@ -46,8 +46,12 @@ public partial class CtpBrokerage
             var instrumentId = ResolveCtpInstrument(order.Symbol.Value);
             var snapshot = _positionCache.Get(instrumentId);
             var tick = _session.GetLatestTick(instrumentId);
+            // Lean 限价族的价格在类型化属性（LimitOrder.LimitPrice）——Order.Price 对限价单恒 0
+            // （LimitOrder ctor 只设 LimitPrice 不设基类 Price；FillModel 同样读 order.LimitPrice）。
+            // 传 order.Price 给限价单 = 传 0 = 映射器拒「限价单价格无效」（2026-09-28 实测第五层）。
+            var orderPrice = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : order.Price;
             var result = CtpOrderRequestMapper.Map(new CtpOrderRequestMapper.MapInput(
-                order.Direction, order.Type, order.Price, order.Quantity, instrumentId,
+                order.Direction, order.Type, orderPrice, order.Quantity, instrumentId,
                 snapshot, tick, _session.BrokerId ?? "", _session.UserId ?? "", opts.MaxOrderVolume));
             if (result.Error != null)
             {

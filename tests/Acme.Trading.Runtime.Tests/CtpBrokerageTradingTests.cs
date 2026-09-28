@@ -80,8 +80,26 @@ public class CtpBrokerageTradingTests : IDisposable
         Assert.Equal(CtpOrderPriceType.Limit, req.PriceType);
         Assert.Equal(FakeCtpSession.AskPrice, req.LimitPrice);   // 买用 Ask
         Assert.Equal(2, req.Volume);
+        Assert.Equal(CtpTimeCondition.IOC, req.TimeCondition);   // 市价模拟 = 吃单语义：残量立即作废不挂簿
         Assert.Contains(_session.NextOrderRef, order.BrokerId);
         Assert.Equal(OrderStatus.Submitted, Assert.Single(_events).Status);
+    }
+
+    [Fact]
+    public void Limit_order_maps_typed_limit_price()
+    {
+        // 2026-09-28 实测第五层修复：Lean 限价单价格在 LimitOrder.LimitPrice（Order.Price 恒 0）——
+        // 旧代码传 order.Price 给映射器 ⇒ 限价恒 0 ⇒ 拒「限价单价格无效」（做市策略双边全被拒）。
+        CtpLeanGateway.TradingOptions = new CtpLiveTradingOptions { EnableRealOrders = true, MaxOrderVolume = 10 };
+
+        var order = new LimitOrder(Symbol.Create("ag2610", SecurityType.Base, Market.USA), 2m, 7001m, DateTime.UtcNow);
+        var ok = _brokerage.PlaceOrder(order);
+
+        Assert.True(ok, string.Join("\n", _logs));
+        var req = Assert.Single(_session.InsertCalls);
+        Assert.Equal(CtpOrderPriceType.Limit, req.PriceType);
+        Assert.Equal(7001, req.LimitPrice);   // 类型化限价——不是 0
+        Assert.Equal(CtpTimeCondition.GFD, req.TimeCondition);   // 真限价单照常挂簿
     }
 
     [Fact]

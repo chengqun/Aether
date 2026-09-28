@@ -64,7 +64,7 @@ public partial class CtpBrokerage : Brokerage, IDataQueueHandler
         CtpLeanGateway.Log("[Brokerage] CTP 会话已连接，实盘引擎就绪");
         // 数据管线版本标记（排障用）：确认日志里有这行 = 跑的是修复后的二进制（三层自举死锁修复都在内）。
         // 看不到这行 = 旧 .app/dll（dotnet build 不更新已打包的 .app——复制旧包跑的是旧代码）。
-        CtpLeanGateway.Log("[Brokerage] 数据管线 2026-09-28.v5（订阅先登记 + 快照即棒 + IBar + UTC对表/始终开市）");
+        CtpLeanGateway.Log("[Brokerage] 数据管线 2026-09-28.v6（+ 限价类型化取价 + 市价IOC）");
     }
 
     public override void Disconnect()
