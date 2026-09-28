@@ -78,9 +78,6 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>交易所模式（价格发现归簿：行情 = 簿顶 + 成交流，庄家兜底关闭）。</summary>
     private readonly bool _exchange;
 
-    /// <summary>做市商义务监测器（统计面；报价自律在策略侧——market-maker.lean.cs）。</summary>
-    private readonly MmObligationMonitor _mmMonitor = new();
-
     public SimTradingCore(
         SimOptions options,
         SimClock? clock = null,
@@ -243,8 +240,6 @@ public sealed class SimTradingCore : IDisposable
     {
         StopReplay();
         StopMarketFeed();
-        _mmMonitorTimer?.Dispose();
-        _mmMonitorTimer = null;
         FlushAsync().GetAwaiter().GetResult();
     }
 
@@ -1056,94 +1051,6 @@ public sealed class SimTradingCore : IDisposable
                 if (!SimOrderManager.CanCancel(askEntry)) book.Remove(ask.AccountId, ask.OrderRef);
 
                 if (_exchange) Market.RecordTrade(instrumentId, price, volume);   // 防御性：今日该路径仅 walk 模式可达
-            }
-        }
-    }
-
-    // —— 做市商义务监测（交易所约束层——bots 即 Lean 策略后仅存的交易所侧职能）——
-    // 2026-09-28 起做市/噪声行为迁出服务端（labs leanalgorithms + 实盘 tab 的普通客户端账户），
-    // 服务端回归纯交易所：撮合/风控/账本/行情/上市闸门/认证 + 本监测面。
-    // 监测按**约定账户名** <see cref="MarketMakerAccountId"/>（SIM-MM）：做市商用该账户登录接入即可被监测；
-    // 报价自律（价差/量/持仓限额/移心）在策略侧（market-maker.lean.cs）。
-
-    /// <summary>指定做市商账户（约定名——用该账户登录的客户端即被视为做市商，纳入义务监测）。</summary>
-    public const string MarketMakerAccountId = "SIM-MM";
-
-    private Timer? _mmMonitorTimer;
-
-    /// <summary>
-    /// 启动做市商义务监测（host 在交易所模式启动时调用；监测对象 = <see cref="MarketMakerAccountId"/> 账户）。
-    /// 监测面：每合约双边报价时间占比（触限单边期豁免不计入分母）、价差/量合规、持仓限额、违约进入次数；
-    /// <see cref="QueryMakerObligations"/> 查询。合约集从做市账户的活单派生（监测「实际在报价的合约」）。
-    /// </summary>
-    public void StartMakerObligationMonitor()
-    {
-        lock (_gate)
-        {
-            var interval = Math.Max(50, _options.MmMonitorIntervalMs);
-            _mmMonitorTimer ??= new Timer(_ => ObserveMakerObligations(), null, interval, interval);
-        }
-    }
-
-    /// <summary>做市商义务监测报告（每合约一行：双边报价占比/当前是否双边/是否达标/违约次数/持仓）。</summary>
-    public IReadOnlyList<MmObligationReport> QueryMakerObligations()
-    {
-        lock (_gate) return _mmMonitor.Report(_options.MmMinQuoteRatio);
-    }
-
-    /// <summary>义务监测采样（定时器回调；在 <c>_gate</c> 内统计——只读账/单/持仓，无变异）。</summary>
-    private void ObserveMakerObligations()
-    {
-        lock (_gate)
-        {
-            var mm = Find(MarketMakerAccountId);
-            if (mm is null) return;   // 指定做市账户未接入——无可监测
-            var limit = Math.Max(1, _options.MmPositionLimit);
-            var elapsed = Math.Max(1, _options.MmMonitorIntervalMs);
-
-            // 合约集从做市账户的活单派生（监测实际在报价的合约）
-            var instruments = new SortedSet<string>(mm.Orders.All
-                .Where(SimOrderManager.CanCancel)
-                .Select(e => e.Order.InstrumentId), StringComparer.OrdinalIgnoreCase);
-
-            foreach (var instrumentId in instruments)
-            {
-                var instrument = InstrumentOf(instrumentId);
-                if (instrument is null) continue;
-
-                var book = mm.Positions.Find(instrumentId);
-                var longLots = book?.Long.Total ?? 0;
-                var shortLots = book?.Short.Total ?? 0;
-
-                // 做市商自己的开仓向挂单 = 它的报价（价差/量义务按此判定）
-                double ownBid = 0, ownAsk = 0;
-                var bidVol = 0;
-                var askVol = 0;
-                foreach (var e in mm.Orders.All)
-                {
-                    if (!SimOrderManager.CanCancel(e)) continue;
-                    if (!string.Equals(e.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (SimRiskEngine.IsClose(e.Order.OffsetFlag)) continue;
-                    if (e.Order.Direction == CtpDirection.Buy)
-                    {
-                        ownBid = ownBid == 0 ? e.Order.LimitPrice : Math.Max(ownBid, e.Order.LimitPrice);
-                        bidVol += e.Remaining;
-                    }
-                    else
-                    {
-                        ownAsk = ownAsk == 0 ? e.Order.LimitPrice : Math.Min(ownAsk, e.Order.LimitPrice);
-                        askVol += e.Remaining;
-                    }
-                }
-
-                var twoSided = ownBid > 0 && ownAsk > 0;
-                var tick = instrument.PriceTick > 0 ? instrument.PriceTick : 1;
-                var spreadOk = !twoSided || ownAsk - ownBid <= Math.Max(2, _options.MmMaxSpreadTicks) * tick + 1e-9;
-                var volumeOk = !twoSided || (bidVol >= Math.Max(1, _options.MmMinQuoteVolume) && askVol >= Math.Max(1, _options.MmMinQuoteVolume));
-                var positionOk = Math.Max(longLots, shortLots) <= limit;
-                var exempt = longLots >= limit || shortLots >= limit;   // 触限单边报价期豁免（不计入占比分母——真实做市协议的持仓豁免条款）
-
-                _mmMonitor.Observe(instrumentId, twoSided, spreadOk, volumeOk, positionOk, exempt, longLots, shortLots, elapsed);
             }
         }
     }

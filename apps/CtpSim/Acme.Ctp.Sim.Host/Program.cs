@@ -76,7 +76,6 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         }
         else
         {
-            core.StartMakerObligationMonitor();   // 交易所义务监测（做市/噪声由外部客户端策略供给——见 leanalgorithms/）
         }
         var exchangeOn = !replayOn && opts.Core.MarketMode == SimMarketMode.Exchange;
 
@@ -90,7 +89,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         if (accounts.Count > 0)
             Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
         Console.WriteLine(exchangeOn
-            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市商义务监测：SIM-MM（价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}"
+            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}"
             : replayOn
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");

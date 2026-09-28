@@ -248,9 +248,9 @@ public class ExchangeModeTests
             PasswordIterations = 1000,
             ListedInstruments = new[] { SimHarness.Instrument },
         });
-        // 「做市商」双边挂单（SIM-MM 约定账户——直接经 core 下单，服务端视角与外部客户端经 wire 下单等价）
-        sim.Core.InsertOrder(SimTradingCore.MarketMakerAccountId, SimHarness.Limit(CtpDirection.Buy, 5, 6988));
-        sim.Core.InsertOrder(SimTradingCore.MarketMakerAccountId, SimHarness.Limit(CtpDirection.Sell, 5, 6992));
+        // 参与者双边挂单（任意普通账户——直接经 core 下单，服务端视角与外部客户端经 wire 下单等价）
+        sim.Core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Buy, 5, 6988));
+        sim.Core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Sell, 5, 6992));
 
         await sim.Session.LoginAsync(new CtpLoginRequest
         {

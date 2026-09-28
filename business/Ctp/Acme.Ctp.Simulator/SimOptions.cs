@@ -70,27 +70,7 @@ public sealed record SimOptions
     /// <summary>价格源模式（默认 = 交易所模式——「自己的交易所」；walk 为显式退路）。host 环境变量 <c>AETHER_CTP_SIM_MODE</c>。</summary>
     public SimMarketMode MarketMode { get; init; } = SimMarketMode.Exchange;
 
-    // —— 做市商义务监测（交易所约束层——策略层各家自便，交易所监测合规）——
-    // 2026-09-28 起 bots 即 Lean 策略：做市/噪声行为已迁出服务端（labs leanalgorithms + 实盘 tab 跑），
-    // 服务端只保留监测面——按约定账户名 SIM-MM 监控做市商的报价合规（价差/量/占比/持仓限额）。
-    // 报价参数（点差/单侧量/移心逻辑）在策略侧（market-maker.lean.cs 的 ParameterDefinitions）。
-
-    /// <summary>义务：最大报价价差（买一卖一总差，tick 数；&lt;2 视为 2——买卖不可同价自锁）。host 环境变量 <c>AETHER_CTP_SIM_MM_MAX_SPREAD</c>。</summary>
-    public int MmMaxSpreadTicks { get; init; } = 4;
-
-    /// <summary>义务：单侧最小报价量（手）。host 环境变量 <c>AETHER_CTP_SIM_MM_MIN_VOLUME</c>。</summary>
-    public int MmMinQuoteVolume { get; init; } = 1;
-
-    /// <summary>义务：双边连续报价时间占比目标（监测口径 0-1，仅统计不强制；触限单边期豁免不计入）。host 环境变量 <c>AETHER_CTP_SIM_MM_MIN_RATIO</c>。</summary>
-    public double MmMinQuoteRatio { get; init; } = 0.9;
-
-    /// <summary>义务：做市商持仓限额（每合约<b>单边</b>手数，监测口径——强制面在策略侧自律）。host 环境变量 <c>AETHER_CTP_SIM_MM_POS_LIMIT</c>。</summary>
-    public int MmPositionLimit { get; init; } = 200;
-
-    /// <summary>义务监测采样间隔（毫秒；测试可调小）。host 环境变量 <c>AETHER_CTP_SIM_MM_MONITOR_MS</c>。</summary>
-    public int MmMonitorIntervalMs { get; init; } = 1000;
-
-    // —— 账号系统（自助开户：首次登录设密码；密码空 = 免认证——dev/测试路径）——
+    // —— 账号系统（自助开户：首次登录设密码；密码必填——空/空白一律拒 90017）——
 
     /// <summary>密码哈希迭代数（PBKDF2-SHA256；公网部署前可调高）。仅设密/验密路径付费，空密码登录零成本。</summary>
     public int PasswordIterations { get; init; } = 50_000;
@@ -118,11 +98,6 @@ public sealed record SimOptions
             ReplaySpeed = EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) > 0 ? EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) : 1,
             ReplayLoop = ParseBool("AETHER_CTP_SIM_REPLAY_LOOP", defaultValue: true),
             MarketMode = ParseMode(Environment.GetEnvironmentVariable("AETHER_CTP_SIM_MODE")),
-            MmMaxSpreadTicks = Math.Max(2, EnvInt("AETHER_CTP_SIM_MM_MAX_SPREAD", 4)),
-            MmMinQuoteVolume = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_MIN_VOLUME", 1)),
-            MmMinQuoteRatio = Math.Clamp(EnvDouble("AETHER_CTP_SIM_MM_MIN_RATIO", 0.9), 0, 1),
-            MmPositionLimit = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_POS_LIMIT", 200)),
-            MmMonitorIntervalMs = Math.Max(50, EnvInt("AETHER_CTP_SIM_MM_MONITOR_MS", 1000)),
             LoginMaxFailures = Math.Max(1, EnvInt("AETHER_CTP_SIM_LOGIN_MAX_FAILURES", 5)),
             LoginLockoutSeconds = Math.Max(0, EnvInt("AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC", 60)),
         };

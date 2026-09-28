@@ -129,9 +129,7 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 
 「bots 即 Lean 策略」路线收尾：做市商（`market-maker.lean.cs`）与噪声交易者（`noise-taker.lean.cs`）= labs `leanalgorithms/*.lean.cs` 策略笔记 + 独立账户（推荐约定名 SIM-MM/SIM-NOISE），经桌面实盘 tab（引擎 LeanAlgorithm + 勾「真实下单」）以普通客户端身份接入——真实挂单占簿档位、留成交记录、资金守恒、价格发现仍归簿。服务端零参与者代码。
 
-### 9.2 交易所侧仅存：义务监测（`StartMakerObligationMonitor`）
-
-按**约定账户名 SIM-MM** 监测做市商合规（用该账户登录的客户端即被视为做市商）：双边报价时间占比（触限豁免）、价差 ≤ `MmMaxSpreadTicks`、单侧量 ≥ `MmMinQuoteVolume`、持仓 ≤ `MmPositionLimit`、违约进入计数；`QueryMakerObligations()` 查询。合约集从做市账户活单派生。报价自律在策略侧——交易所只监测不强制（真实做市协议：交易所监测+处罚，市商自律）。旧内嵌机器人（RunMarketMaker/RunNoiseTrade/RequestQuote）已删；env `AETHER_CTP_SIM_MM`/`_MM_SPREAD`/`_MM_VOLUME`/`_NOISE*` 废除。
+服务端**零参与者概念**（2026-09-28 二次删除：义务监测亦删——纯交易所代码。真要做做市商制度（如 SHFE 做市商管理办法式），将来做成完整功能，不留半成品观察器）。旧内嵌机器人（RunMarketMaker/RunNoiseTrade/RequestQuote/义务监测）全删；env `AETHER_CTP_SIM_MM`/`_MM_SPREAD`/`_MM_VOLUME`/`_NOISE*`/`_MM_MAX_SPREAD`/`_MM_MIN_*`/`_MM_POS_LIMIT`/`_MM_MONITOR_MS` 全部废除。
 
 ## 10. 客户端集成
 
@@ -154,7 +152,7 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 | 第三方 CTP 软件连不上 | 刻意不实现线协议 | Phase 2 native ABI（§13） |
 | Phase 1 习惯的 env 变量在客户端侧被忽略 | `AETHER_CTP_SIM_DB/TICK_MS/...` 全是 host 进程的变量 | 文档已明说 |
 
-## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，164 例）
+## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，162 例）
 
 纯托管回环 ⇒ 无需 native/柜台/外部进程：
 
