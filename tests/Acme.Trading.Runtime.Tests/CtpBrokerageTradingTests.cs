@@ -281,6 +281,7 @@ public class CtpBrokerageTradingTests : IDisposable
 
         public void RaiseOrder(CtpOrder order) => OrderReceived?.Invoke(this, order);
         public void RaiseTrade(CtpTrade trade) => TradeReceived?.Invoke(this, trade);
+        public void RaiseTick(CtpTick tick) => TickReceived?.Invoke(this, tick);
 
         public Task<CtpLoginResult> LoginAsync(CtpLoginRequest request, CancellationToken ct = default)
             => Task.FromResult(LoginResult!);

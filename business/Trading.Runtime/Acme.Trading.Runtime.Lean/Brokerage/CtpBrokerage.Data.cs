@@ -96,9 +96,13 @@ public partial class CtpBrokerage
     }
 
     /// <summary>
-    /// tick → CtpBar 聚合器：按订阅分辨率（config.Increment）把 tick 聚成 OHLCV bar，跨边界时产出一根完成的 bar。
+    /// tick → CtpBar 聚合器：按订阅分辨率（config.Increment）把 tick 聚成 OHLCV bar。
     /// 回测 CSV 是预聚合 bar，实盘用本类把实时 tick 聚成同形态 bar——算法 slice.Get&lt;CtpBar&gt;() 两边一致。
     /// P1 不跟踪 volume（CTP Volume 是日累计，非 per-bar；SMA 策略只用 close 价）。
+    /// <para><b>成棒时机（2026-09-28 修）</b>：tick/second 分辨率（&lt;1 分钟）每 tick 即一根单点 bar，<b>立即外发</b>；
+    /// ≥分钟级仍是跨边界关棒（bar 是时间聚合，须等边界过掉）。原因：交易所模式的行情是<b>事件驱动</b>
+    /// （挂单/撤单/成交才有 tick）——若等下一 tick 才产出上一根 bar，订阅快照（空闲市场的唯一一帧）永远不成棒
+    /// ⇒ OnData 不触发 ⇒ 策略不下单 ⇒ 再无事件——市场自举死锁（实测：双 bot 启动后零交易）。</para>
     /// </summary>
     private sealed class BarBuilder
     {
@@ -112,6 +116,19 @@ public partial class CtpBrokerage
         public CtpBar? OnTick(DateTime time, decimal price, Symbol symbol)
         {
             var boundary = Truncate(time, _increment);
+
+            // tick/second：单点 bar 立即外发（见类注释——事件驱动行情的自举要求）
+            if (_increment < TimeSpan.FromMinutes(1))
+            {
+                _barTime = boundary; _open = _high = _low = _close = price; _hasData = true;
+                return new CtpBar
+                {
+                    Symbol = symbol, Time = _barTime, EndTime = _barTime.Add(_increment),
+                    Open = _open, High = _high, Low = _low, Close = _close, Volume = 0, Value = _close,
+                };
+            }
+
+            // ≥分钟级：跨边界时关上一根（原有语义）
             CtpBar? completed = null;
             if (_hasData && boundary != _barTime)
             {

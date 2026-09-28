@@ -245,6 +245,8 @@ AETHER_CTP_SIM_MODE=walk dotnet run --project apps/CtpSim/Acme.Ctp.Sim.Host
 dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 ```
 
+**桌面端多开（双 bot 需要）**：应用本身无单实例锁——macOS 下 `.app` bundle 双击第二次只是激活已有实例，**多开用 `open -n`**（`-n` = 强制新实例）：`open -n Stockapp.app`；开发期直接两个终端各跑一次 `dotnet run`。多实例共享同一 tenant 数据目录（`~/Library/Application Support/Aether/Desktop-Stockapp`），注意：①SQLite 全部 WAL + busy_timeout，多进程并发安全；②`ctp_profile` 的「上次使用」会被实例互写——自动登录可能登到对方账户，多开时建议手动选账户；③**绝不要两个实例登同一个 sim 账户**（一账户一客户端限制 ⇒ OrderRef 撞号）——双 bot 场景本来就要求 SIM-MM / SIM-NOISE 不同账户；④两实例各跑一个 Lean 实盘引擎没问题（进程隔离，各自连 sim host）。
+
 1. 期货页登录窗口：前置地址填 `sim`、用户号 `alice`、**密码必填**（首登即开户设密）。
 2. 行情 tab 自动订阅——板显示上市合约（默认 `sim001`），价 = 做市机器人围绕昨结算的双边报价。
 3. 下单 → 状态经 `OrderReceived` 逐级推、成交经 `TradeReceived`；资金/持仓/委托三查返回仿真账本。
