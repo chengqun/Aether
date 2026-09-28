@@ -1,5 +1,19 @@
 namespace Acme.Ctp.Simulator;
 
+/// <summary>价格源模式（host 环境变量 <c>AETHER_CTP_SIM_MODE</c>）。</summary>
+public enum SimMarketMode
+{
+    /// <summary>随机游走（默认）——定时器推进中枢价，庄家兜底用游走报价撮合（既有行为）。</summary>
+    Walk = 0,
+
+    /// <summary>
+    /// 交易所模式——**价格发现归簿**：bid/ask = 订单簿顶（真实挂单），last = 最新成交价（首笔前 = 昨结算基准），
+    /// tick 事件驱动（挂单/撤单/成交即推）。庄家兜底关闭（市价单空簿拒单、市价残量作废不挂单），
+    /// 流动性由做市机器人供给（<see cref="SimOptions.MarketMakerBot"/>，默认开）。
+    /// </summary>
+    Exchange = 1,
+}
+
 /// <summary>
 /// 仿真柜台参数（全部有可用默认值；宿主可用环境变量覆盖，见 <c>AETHER_CTP_SIM_*</c>）。
 /// </summary>
@@ -48,6 +62,22 @@ public sealed record SimOptions
     /// <summary>回放到文件尾是否循环（默认 true——沙盒常有市；文件尾停 1s 再来）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY_LOOP</c>。</summary>
     public bool ReplayLoop { get; init; } = true;
 
+    /// <summary>价格源模式（默认随机游走；<c>exchange</c> = 订单簿驱动行情——价格发现归簿）。host 环境变量 <c>AETHER_CTP_SIM_MODE</c>。</summary>
+    public SimMarketMode MarketMode { get; init; }
+
+    /// <summary>
+    /// 交易所模式下的做市机器人（默认开——纯簿模式无人报价时市场全死）。它是**普通账户**走完整
+    /// 风控/清算，围绕最新成交价在簿两侧挂<b>可见限价单</b>——区别于旧「庄家兜底」（无限流动性 +
+    /// 游走随机价的暗对手）：占真实簿档位、留成交记录、资金守恒，价格发现仍归簿。host 环境变量 <c>AETHER_CTP_SIM_MM</c>。
+    /// </summary>
+    public bool MarketMakerBot { get; init; } = true;
+
+    /// <summary>做市机器人报价点差（以最小变动价位计，围绕最新成交价 ±N；默认 2）。host 环境变量 <c>AETHER_CTP_SIM_MM_SPREAD</c>。</summary>
+    public int MmSpreadTicks { get; init; } = 2;
+
+    /// <summary>做市机器人单侧挂单手数（默认 5）。host 环境变量 <c>AETHER_CTP_SIM_MM_VOLUME</c>。</summary>
+    public int MmVolume { get; init; } = 5;
+
     /// <summary>交易日历：非交易时段的报单是否直接拒绝（默认关——仿真不挑时段）。</summary>
     public bool RejectOrdersOutsideTradingTime { get; init; }
 
@@ -64,6 +94,10 @@ public sealed record SimOptions
             ReplayPath = EnvText("AETHER_CTP_SIM_REPLAY"),
             ReplaySpeed = EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) > 0 ? EnvDouble("AETHER_CTP_SIM_REPLAY_SPEED", 1) : 1,
             ReplayLoop = ParseBool("AETHER_CTP_SIM_REPLAY_LOOP", defaultValue: true),
+            MarketMode = ParseMode(Environment.GetEnvironmentVariable("AETHER_CTP_SIM_MODE")),
+            MarketMakerBot = ParseBool("AETHER_CTP_SIM_MM", defaultValue: true),
+            MmSpreadTicks = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_SPREAD", 2)),
+            MmVolume = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_VOLUME", 5)),
         };
     }
 
@@ -72,6 +106,12 @@ public sealed record SimOptions
         var v = Environment.GetEnvironmentVariable(name);
         return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
     }
+
+    /// <summary>价格源模式解析：只认 <c>exchange</c>（大小写不敏感）；空白/坏值 ⇒ Walk（不拒启动）。</summary>
+    private static SimMarketMode ParseMode(string? v)
+        => string.Equals(v?.Trim(), "exchange", StringComparison.OrdinalIgnoreCase)
+            ? SimMarketMode.Exchange
+            : SimMarketMode.Walk;
 
     private static bool ParseBool(string name, bool defaultValue)
     {

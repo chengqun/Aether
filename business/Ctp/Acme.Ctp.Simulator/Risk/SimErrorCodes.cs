@@ -37,6 +37,8 @@ public static class SimErrorCodes
     public const int NotTradingTime = 90010;
     /// <summary>参数非法（方向/开平标志不合法组合）。</summary>
     public const int InvalidParameter = 90011;
+    /// <summary>无对手价：交易所模式下市价单对手侧簿空（无庄家兜底——真实交易所语义）。90012-90015 为传输层保留段，故从 90016 续。</summary>
+    public const int NoCounterparty = 90016;
 }
 
 /// <summary>风控判定结果。</summary>

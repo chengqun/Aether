@@ -14,17 +14,23 @@ public readonly record struct SimQuote(string InstrumentId, double BidPrice, dou
         => direction == CtpDirection.Buy ? AskPrice : BidPrice;
 }
 
+/// <summary>订单簿顶快照（交易所模式的行情源）。空侧价格为 0（真实 CTP 语义：单边市场/无对手）。</summary>
+public readonly record struct BookTop(double BidPrice, int BidVolume, double AskPrice, int AskVolume);
+
 /// <summary>
-/// 随机游走行情引擎。
+/// 行情引擎（两种价格模型，由 <see cref="SimOptions.MarketMode"/> 决定）：
+/// <list type="bullet">
+/// <item><b>随机游走</b>（默认）：中枢价 ± 随机步，买一/卖一 = 中枢 ∓ 1 tick，定时器推进——庄家兜底用游走报价撮合。</item>
+/// <item><b>交易所模式</b>：价格发现归簿——bid/ask = 订单簿顶（经 <see cref="BindBook"/> 注入的簿顶回调），
+/// last = 最新成交价（首笔前 = 昨结算基准），tick 事件驱动（<see cref="RecordTrade"/>/<see cref="OnBookChanged"/>）。
+/// 成交不驱动游走是 walk 模式的既有行为（pinned）；交易所模式下成交即行情。</item>
+/// </list>
 /// <para>
-/// <b>行情随柜台</b>：合成 tick **恒外发**（<see cref="TickGenerated"/>）——host 按订阅连接路由推送；
+/// <b>行情随柜台</b>：tick **恒外发**（<see cref="TickGenerated"/>）——host 按订阅连接路由推送；
 /// sim 登录的客户端看到的行情价 = 撮合引擎用的价（同一引擎），沙盒自洽。想要真实行情 ⇒ 客户端登录真实前置。
 /// </para>
 /// <para>
-/// 价格模型：中枢价 ± 随机步（步长 = 最小变动价位 × [1, MaxWalkTicks]），夹在涨跌停板内；
-/// 买一/卖一 = 中枢 ∓ 1 tick。**无对手方流量**——故撮合以「中枢价」为可成交基准（见 <see cref="SimpleMatchingEngine"/>）。
-/// </para>
-/// <para>
+/// walk 价格模型：中枢价 ± 随机步（步长 = 最小变动价位 × [1, MaxWalkTicks]），夹在涨跌停板内。
 /// 可复现：每个合约一个独立 <see cref="Random"/>，种子 = <see cref="SimOptions.Seed"/> ^ 合约名稳定哈希
 /// （**不用 <c>string.GetHashCode</c>**——它每进程随机化，会破坏可复现性）。
 /// </para>
@@ -35,6 +41,11 @@ public sealed class SimMarketDataEngine
     private readonly SimClock _clock;
     private readonly Func<string, SimInstrument?> _instrumentOf;
     private readonly Dictionary<string, Walk> _walks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly bool _exchange;
+
+    /// <summary>交易所模式的簿顶/持仓量提供者（核心持有簿，引擎持回调——<b>回调须在核心 <c>_gate</c> 内调用</b>）。</summary>
+    private Func<string, BookTop?>? _bookTopOf;
+    private Func<string, double>? _openInterestOf;
 
     /// <summary>新合成 tick（恒产生；核心 <c>TickProduced</c> 转发，host 按订阅连接路由推送）。</summary>
     public event EventHandler<CtpTick>? TickGenerated;
@@ -44,6 +55,14 @@ public sealed class SimMarketDataEngine
         _options = options;
         _clock = clock;
         _instrumentOf = instrumentOf;
+        _exchange = options.MarketMode == SimMarketMode.Exchange;
+    }
+
+    /// <summary>绑定订单簿顶/持仓量提供者（交易所模式行情源；核心构造时接线）。</summary>
+    public void BindBook(Func<string, BookTop?>? bookTopOf, Func<string, double>? openInterestOf)
+    {
+        _bookTopOf = bookTopOf;
+        _openInterestOf = openInterestOf;
     }
 
     private sealed class Walk
@@ -58,11 +77,22 @@ public sealed class SimMarketDataEngine
         public long Volume { get; set; }
     }
 
-    /// <summary>取某合约当前报价（首次访问时按合约元数据初始化中枢价）。</summary>
+    /// <summary>
+    /// 取某合约当前报价（首次访问时按合约元数据初始化）。交易所模式：bid/ask = 簿顶（空侧 0）、last = 最新成交价。
+    /// </summary>
     public SimQuote? GetQuote(string instrumentId)
     {
         var w = EnsureWalk(instrumentId);
         if (w is null) return null;
+        if (_exchange)
+        {
+            var top = _bookTopOf?.Invoke(instrumentId);
+            return new SimQuote(
+                w.Instrument.InstrumentId,
+                top?.BidPrice ?? 0,
+                top?.AskPrice ?? 0,
+                w.Instrument.RoundToTick(w.Last));
+        }
         var tick = w.Instrument.PriceTick > 0 ? w.Instrument.PriceTick : 1;
         return new SimQuote(
             w.Instrument.InstrumentId,
@@ -90,6 +120,45 @@ public sealed class SimMarketDataEngine
     }
 
     /// <summary>
+    /// 交易所模式：成交回报驱动行情——最新价/最高/最低/开市价/累计量更新 + 立即外发 tick（含成交后簿顶）。
+    /// walk 模式无操作（成交不驱动游走——既有行为，pinned 测试锁死）。
+    /// </summary>
+    public void RecordTrade(string instrumentId, double price, int volume)
+    {
+        if (!_exchange) return;
+        var w = EnsureWalk(instrumentId);
+        if (w is null) return;
+        if (price > 0)
+        {
+            w.Last = price;
+            w.Highest = Math.Max(w.Highest, price);
+            w.Lowest = w.Lowest == 0 ? price : Math.Min(w.Lowest, price);
+            if (w.Open == 0) w.Open = price;
+        }
+        if (volume > 0) w.Volume += volume;
+        EmitExchangeTick(w);
+    }
+
+    /// <summary>
+    /// 交易所模式：簿变更（新挂单/撤单/成交离簿）后外发快照 tick（bid/ask = 新簿顶）。
+    /// 未激活（无人订阅、没人碰过）的合约不推。walk 模式无操作。
+    /// </summary>
+    public void OnBookChanged(string instrumentId)
+    {
+        if (!_exchange) return;
+        if (!_walks.TryGetValue(instrumentId, out var w)) return;
+        EmitExchangeTick(w);
+    }
+
+    /// <summary>交易所模式的 tick：簿顶（含同价档聚合量）+ 成交流统计 + 持仓量。调用方语义上应持核心 <c>_gate</c>。</summary>
+    private void EmitExchangeTick(Walk w)
+    {
+        var id = w.Instrument.InstrumentId;
+        var top = _bookTopOf?.Invoke(id);
+        RaiseTick(w, top?.BidPrice ?? 0, top?.AskPrice ?? 0, top?.BidVolume ?? 0, top?.AskVolume ?? 0);
+    }
+
+    /// <summary>
     /// 激活合约的行情游走（创建 <c>walk</c>，不改价格）。
     /// <para>
     /// <b>订阅即须激活</b>：<see cref="Advance"/> 只推进**已存在**的 walk，而 walk 何时诞生取决于
@@ -101,9 +170,10 @@ public sealed class SimMarketDataEngine
     /// <returns>合约元数据存在则 true（激活成功）。</returns>
     public bool Activate(string instrumentId) => EnsureWalk(instrumentId) is not null;
 
-    /// <summary>推进一个 tick（全部已激活合约）。返回推进后的报价表。</summary>
+    /// <summary>推进一个 tick（全部已激活合约）。返回推进后的报价表。交易所模式无游走——恒空表。</summary>
     public IReadOnlyList<SimQuote> Advance()
     {
+        if (_exchange) return Array.Empty<SimQuote>();
         var result = new List<SimQuote>();
         // 排序保证推进顺序确定（单测可复现）
         foreach (var key in _walks.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList())
@@ -140,7 +210,7 @@ public sealed class SimMarketDataEngine
         w.Volume += w.Rng.Next(1, 50);
     }
 
-    private void RaiseTick(Walk w, double bid, double ask)
+    private void RaiseTick(Walk w, double bid, double ask, int bidVolume = 1, int askVolume = 1)
     {
         var instrument = w.Instrument;
         TickGenerated?.Invoke(this, new CtpTick
@@ -154,9 +224,10 @@ public sealed class SimMarketDataEngine
             LastPrice = instrument.RoundToTick(w.Last),
             Volume = w.Volume,
             BidPrice = bid,
-            BidVolume = 1,
+            BidVolume = bidVolume,
             AskPrice = ask,
-            AskVolume = 1,
+            AskVolume = askVolume,
+            OpenInterest = _exchange ? _openInterestOf?.Invoke(instrument.InstrumentId) ?? 0 : 0,
             PreSettlement = instrument.PreSettlement > 0 ? instrument.PreSettlement : instrument.BasePrice,
             PreClose = instrument.PreSettlement > 0 ? instrument.PreSettlement : instrument.BasePrice,
             OpenPrice = instrument.RoundToTick(w.Open),
@@ -178,9 +249,9 @@ public sealed class SimMarketDataEngine
             Rng = new Random(unchecked(_options.Seed ^ StableHash(instrumentId))),
             Mid = start,
             Last = start,
-            Open = start,
-            Highest = start,
-            Lowest = start,
+            Open = _exchange ? 0 : start,      // 交易所模式：开市价/最高/最低从首笔成交起算（真实口径）
+            Highest = _exchange ? 0 : start,
+            Lowest = _exchange ? 0 : start,
         };
         _walks[instrumentId] = w;
         return w;
