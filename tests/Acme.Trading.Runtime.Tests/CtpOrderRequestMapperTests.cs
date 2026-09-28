@@ -148,15 +148,51 @@ public class CtpOrderRequestMapperTests
     }
 
     [Fact]
-    public void Reversal_order_is_rejected()
+    public void Reversal_order_splits_into_close_and_open_legs()
     {
-        // 持多 5，卖 10 → 平 5 + 开 5 = 反转单，拒绝
-        var r = CtpOrderRequestMapper.Map(Input(-10m,
-            pos: Pos("DCE", longT: 5, longToday: 5)));
+        // 2026-09-28 修：Lean 策略以净仓位思考（持多 3 卖 5 = 净空 2）——映射到 CTP 拆「平 3 + 开 2」两腿。
+        // 旧版直接拒反转单：做市策略被动吃单攒出净仓后，反向报价腿全被拒 ⇒ 簿单边化。
+        // 非 SHFE 系（DCE）：平仓单腿 Close + 开腿 Open。
+        var r = CtpOrderRequestMapper.Map(Input(-5m,
+            pos: Pos("DCE", longT: 3, longToday: 3, longYd: 0), maxVolume: 10));
 
-        Assert.NotNull(r.Error);
-        Assert.Contains("反转", r.Error);
-        Assert.Empty(r.Requests);
+        Assert.Null(r.Error);
+        Assert.Equal(2, r.Requests.Count);
+        Assert.Equal(CtpOffsetFlag.Close, r.Requests[0].OffsetFlag);
+        Assert.Equal(3, r.Requests[0].Volume);              // 平全部净仓（不封顶）
+        Assert.Equal(CtpOffsetFlag.Open, r.Requests[1].OffsetFlag);
+        Assert.Equal(2, r.Requests[1].Volume);              // 开超额
+    }
+
+    [Fact]
+    public void Reversal_order_shfe_splits_yd_today_and_open()
+    {
+        // SHFE 系反转：平昨/平今拆腿 + 开腿（三腿全拆）
+        var r = CtpOrderRequestMapper.Map(Input(-5m,
+            pos: Pos("SHFE", longT: 3, longToday: 1, longYd: 2), maxVolume: 10));   // 多3 = 昨2+今1
+
+        Assert.Null(r.Error);
+        Assert.Equal(3, r.Requests.Count);
+        Assert.Equal(CtpOffsetFlag.CloseYesterday, r.Requests[0].OffsetFlag);
+        Assert.Equal(2, r.Requests[0].Volume);
+        Assert.Equal(CtpOffsetFlag.CloseToday, r.Requests[1].OffsetFlag);
+        Assert.Equal(1, r.Requests[1].Volume);
+        Assert.Equal(CtpOffsetFlag.Open, r.Requests[2].OffsetFlag);
+        Assert.Equal(2, r.Requests[2].Volume);
+    }
+
+    [Fact]
+    public void Reversal_open_leg_respects_fuse()
+    {
+        // 反转开腿受保险丝封顶（平仓腿绝不封顶）：持多 3 卖 10、保险丝 2 ⇒ 平 3 + 开 2
+        var r = CtpOrderRequestMapper.Map(Input(-10m,
+            pos: Pos("DCE", longT: 3, longToday: 3, longYd: 0), maxVolume: 2));
+
+        Assert.Null(r.Error);
+        Assert.Equal(2, r.Requests.Count);
+        Assert.Equal(3, r.Requests[0].Volume);              // 平腿不受限
+        Assert.Equal(CtpOffsetFlag.Open, r.Requests[1].OffsetFlag);
+        Assert.Equal(2, r.Requests[1].Volume);              // 开腿封顶到 2
     }
 
     [Fact]

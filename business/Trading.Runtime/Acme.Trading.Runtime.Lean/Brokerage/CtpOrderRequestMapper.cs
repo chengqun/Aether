@@ -102,34 +102,40 @@ public static class CtpOrderRequestMapper
             return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Open, price, capped, timeCondition) }, null);
         }
 
-        // —— 反向：平仓（绝不封顶）——
+        // —— 反向：平仓（绝不封顶）；超量 = 反转（平净仓 + 开超额，2026-09-28 起支持拆腿）——
+        // Lean 策略以净仓位思考（持多 3 卖 5 = 净空 2）——映射到 CTP 须拆「平 3 + 开 2」两腿。
+        // 旧版直接拒反转单：做市策略被动吃单攒出净仓后，反向报价腿全被拒 ⇒ 簿单边化、市场退化。
         var net = Math.Abs(pos.Net);
-        if (vol > net)
-            return new MapResult(Array.Empty<CtpOrderRequest>(),
-                $"反转单（平 {net} 手 + 开 {vol - net} 手）暂不支持——请先平仓再开仓");
+        var reversalOpen = vol > net ? vol - net : 0;
+        if (reversalOpen > 0 && input.MaxOrderVolume > 0 && reversalOpen > input.MaxOrderVolume)
+            reversalOpen = input.MaxOrderVolume;   // 开腿受保险丝封顶（平仓腿绝不封顶）；封顶后 actual<requested 有日志
 
         // 平多用 Long 侧记录，平空用 Short 侧
         var (yd, today) = pos.Net > 0 ? (pos.LongYd, pos.LongToday) : (pos.ShortYd, pos.ShortToday);
+        var closeVolume = reversalOpen > 0 ? net : vol;   // 反转平腿 = 全部净仓；纯平仓 = vol
 
         if (IsShfeFamily(pos.ExchangeId))
         {
             // 平昨优先：closeVolume <= Yd → 单腿 CloseYesterday；否则拆 CloseYesterday(Yd)+CloseToday(余)
-            var ydUsed = Math.Min(vol, yd);
-            var todayUsed = vol - ydUsed;
+            var ydUsed = Math.Min(closeVolume, yd);
+            var todayUsed = closeVolume - ydUsed;
             if (todayUsed > today)
                 return new MapResult(Array.Empty<CtpOrderRequest>(),
                     $"持仓今昨数据不一致（需平今 {todayUsed} > 实际今仓 {today}），拒单防错腿");
 
-            var list = new List<CtpOrderRequest>(2);
+            var list = new List<CtpOrderRequest>(3);
             if (ydUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseYesterday, price, ydUsed, timeCondition));
             if (todayUsed > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.CloseToday, price, todayUsed, timeCondition));
+            if (reversalOpen > 0) list.Add(BuildRequest(input, direction, CtpOffsetFlag.Open, price, reversalOpen, timeCondition));
             if (list.Count == 0)
                 return new MapResult(Array.Empty<CtpOrderRequest>(), "平仓量计算为 0，拒单");
             return new MapResult(list, null);
         }
 
-        // 非 SHFE 系（DCE/CZCE/CFFEX/GFEX）：直接 Close（交易所自动分配今昨）
-        return new MapResult(new[] { BuildRequest(input, direction, CtpOffsetFlag.Close, price, vol, timeCondition) }, null);
+        // 非 SHFE 系（DCE/CZCE/CFFEX/GFEX/SIM）：直接 Close（交易所自动分配今昨）+ 反转开腿
+        var requests = new List<CtpOrderRequest>(2) { BuildRequest(input, direction, CtpOffsetFlag.Close, price, closeVolume, timeCondition) };
+        if (reversalOpen > 0) requests.Add(BuildRequest(input, direction, CtpOffsetFlag.Open, price, reversalOpen, timeCondition));
+        return new MapResult(requests, null);
     }
 
     private static CtpOrderRequest BuildRequest(MapInput input, CtpDirection direction, CtpOffsetFlag offset, double price, int volume,
