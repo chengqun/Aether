@@ -104,6 +104,23 @@ public class CtpBrokerageDataTests : IDisposable
     }
 
     [Fact]
+    public void CtpBar实现IBar_Security价格随数据更新()
+    {
+        // 自举死锁第三层的修复 pin（2026-09-28 实测第三轮）：SecurityCache.ProcessDataPoint 对非 tick
+        // 数据走 data as IBar 更新 Price=Close——CtpBar 未实现 IBar 时 Price 恒 0，
+        // 策略的 Price<=0 守卫拦死一切下单（引擎/订阅/回填全正常、零报错——最难排查的一层）。
+        var t = new DateTime(2026, 9, 28, 10, 0, 0);
+        var cache = new QuantConnect.Securities.SecurityCache();
+        cache.AddData(new CtpBar
+        {
+            Symbol = Symbol.Create("ag2610", SecurityType.Base, Market.USA),
+            Time = t, EndTime = t,
+            Open = 7000m, High = 7002m, Low = 6999m, Close = 7001m, Value = 7001m,
+        });
+        Assert.Equal(7001m, cache.Price);
+    }
+
+    [Fact]
     public void 分钟级仍是跨边界成棒()
     {
         var enumerator = _brokerage.Subscribe(Config(Resolution.Minute), (_, _) => { });
