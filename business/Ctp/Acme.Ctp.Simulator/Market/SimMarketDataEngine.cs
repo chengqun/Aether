@@ -121,13 +121,13 @@ public sealed class SimMarketDataEngine
 
     /// <summary>
     /// 交易所模式：成交回报驱动行情——最新价/最高/最低/开市价/累计量更新 + 立即外发 tick（含成交后簿顶）。
-    /// walk 模式无操作（成交不驱动游走——既有行为，pinned 测试锁死）。
+    /// <b>返回发出的这帧 tick</b>（调用方落盘——真实交易消息；walk 模式无操作返回 null）。
     /// </summary>
-    public void RecordTrade(string instrumentId, double price, int volume)
+    public CtpTick? RecordTrade(string instrumentId, double price, int volume)
     {
-        if (!_exchange) return;
+        if (!_exchange) return null;
         var w = EnsureWalk(instrumentId);
-        if (w is null) return;
+        if (w is null) return null;
         if (price > 0)
         {
             w.Last = price;
@@ -136,7 +136,7 @@ public sealed class SimMarketDataEngine
             if (w.Open == 0) w.Open = price;
         }
         if (volume > 0) w.Volume += volume;
-        EmitExchangeTick(w);
+        return EmitExchangeTick(w);
     }
 
     /// <summary>
@@ -150,12 +150,24 @@ public sealed class SimMarketDataEngine
         EmitExchangeTick(w);
     }
 
+    /// <summary>重启恢复：用最后一条落盘成交 tick 续上会话统计（最新价/累计量/开高低）——不归零回昨结算基准。</summary>
+    public void Restore(string instrumentId, CtpTick tick)
+    {
+        var w = EnsureWalk(instrumentId);
+        if (w is null) return;
+        if (tick.LastPrice > 0) { w.Last = tick.LastPrice; w.Mid = tick.LastPrice; }
+        if (tick.Volume > 0) w.Volume = tick.Volume;
+        if (tick.OpenPrice > 0) w.Open = tick.OpenPrice;
+        if (tick.Highest > 0) w.Highest = tick.Highest;
+        if (tick.Lowest > 0) w.Lowest = tick.Lowest;
+    }
+
     /// <summary>交易所模式的 tick：簿顶（含同价档聚合量）+ 成交流统计 + 持仓量。调用方语义上应持核心 <c>_gate</c>。</summary>
-    private void EmitExchangeTick(Walk w)
+    private CtpTick? EmitExchangeTick(Walk w)
     {
         var id = w.Instrument.InstrumentId;
         var top = _bookTopOf?.Invoke(id);
-        RaiseTick(w, top?.BidPrice ?? 0, top?.AskPrice ?? 0, top?.BidVolume ?? 0, top?.AskVolume ?? 0);
+        return RaiseTick(w, top?.BidPrice ?? 0, top?.AskPrice ?? 0, top?.BidVolume ?? 0, top?.AskVolume ?? 0);
     }
 
     /// <summary>
@@ -210,10 +222,10 @@ public sealed class SimMarketDataEngine
         w.Volume += w.Rng.Next(1, 50);
     }
 
-    private void RaiseTick(Walk w, double bid, double ask, int bidVolume = 1, int askVolume = 1)
+    private CtpTick RaiseTick(Walk w, double bid, double ask, int bidVolume = 1, int askVolume = 1)
     {
         var instrument = w.Instrument;
-        TickGenerated?.Invoke(this, new CtpTick
+        var tick = new CtpTick
         {
             InstrumentId = instrument.InstrumentId,
             ExchangeId = instrument.ExchangeId,
@@ -233,7 +245,9 @@ public sealed class SimMarketDataEngine
             OpenPrice = instrument.RoundToTick(w.Open),
             Highest = instrument.RoundToTick(w.Highest),
             Lowest = instrument.RoundToTick(w.Lowest),
-        });
+        };
+        TickGenerated?.Invoke(this, tick);
+        return tick;
     }
 
     private Walk? EnsureWalk(string instrumentId)

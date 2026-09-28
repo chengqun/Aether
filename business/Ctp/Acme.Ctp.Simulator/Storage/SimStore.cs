@@ -7,8 +7,10 @@ namespace Acme.Ctp.Simulator.Storage;
 /// <summary>
 /// SQLite 落盘的 <see cref="ISimStore"/>（继承仓库共享的 <see cref="SqliteStoreBase"/>：
 /// 连接串校验 / busy_timeout / WAL / 幂等建表 / 迁移 hook 全部现成）。
-/// <para>5 张表：<c>sim_account</c> / <c>sim_position</c> / <c>sim_order</c> / <c>sim_trade</c> / <c>sim_instrument</c>。
-/// 全部用 <c>INSERT OR REPLACE</c> 语义的 upsert（账户/持仓覆盖式；订单/成交以 (account, orderRef/tradeId) 为主键幂等重写）。</para>
+/// <para>6 张表：<c>sim_account</c> / <c>sim_position</c> / <c>sim_order</c> / <c>sim_trade</c> / <c>sim_instrument</c> / <c>sim_tick</c>
+/// （成交 tick——真实交易消息，2026-09-28 起：交易所模式每笔成交的完整快照，重启恢复行情状态的读侧）。
+/// 前 5 张用 <c>INSERT OR REPLACE</c> 语义的 upsert（账户/持仓覆盖式；订单/成交以 (account, orderRef/tradeId) 为主键幂等重写）；
+/// <c>sim_tick</c> 追加式日志（无主键——按 rowid 序即时间序）。</para>
 /// <para><b>不像真柜台那样加密</b>：仿真数据无敏感内容（不是真资金、不是真凭据），不引入加密成本。</para>
 /// </summary>
 public sealed class SimStore : SqliteStoreBase, ISimStore
@@ -82,6 +84,25 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             commission_rate REAL NOT NULL,
             limit_rate      REAL NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sim_tick (
+            instrument_id   TEXT NOT NULL,
+            trading_day     TEXT NOT NULL DEFAULT '',
+            action_day      TEXT NOT NULL DEFAULT '',
+            update_time     TEXT NOT NULL,
+            update_millisec INTEGER NOT NULL,
+            last_price      REAL NOT NULL,
+            volume          INTEGER NOT NULL,
+            bid_price       REAL NOT NULL,
+            bid_volume      INTEGER NOT NULL,
+            ask_price       REAL NOT NULL,
+            ask_volume      INTEGER NOT NULL,
+            open_interest   REAL NOT NULL,
+            open_price      REAL NOT NULL,
+            highest         REAL NOT NULL,
+            lowest          REAL NOT NULL,
+            pre_settlement  REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sim_tick_instrument ON sim_tick(instrument_id);
         """;
 
     public SimStore(string connectionString) : base(connectionString) { }
@@ -336,8 +357,7 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
     {
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        await using var cmd = conn.CreateCommand();        cmd.CommandText = """
             INSERT INTO sim_instrument (instrument_id, exchange_id, volume_multiple, margin_rate, price_tick, base_price, pre_settlement, commission_rate, limit_rate)
             VALUES (@i, @e, @vm, @mr, @pt, @bp, @ps, @cr, @lr)
             ON CONFLICT(instrument_id) DO UPDATE SET
@@ -356,5 +376,78 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         cmd.Parameters.AddWithValue("@cr", i.CommissionRate);
         cmd.Parameters.AddWithValue("@lr", i.LimitRate);
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>追加一条成交 tick（真实交易消息——交易所模式每笔成交的完整快照）。追加式日志，无主键。</summary>
+    public async Task SaveTickAsync(CtpTick t, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO sim_tick (instrument_id, trading_day, action_day, update_time, update_millisec,
+                last_price, volume, bid_price, bid_volume, ask_price, ask_volume,
+                open_interest, open_price, highest, lowest, pre_settlement)
+            VALUES (@i, @td, @ad, @ut, @ums, @lp, @v, @bp, @bv, @ap, @av, @oi, @op, @h, @l, @ps)
+            """;
+        cmd.Parameters.AddWithValue("@i", t.InstrumentId);
+        cmd.Parameters.AddWithValue("@td", t.TradingDay);
+        cmd.Parameters.AddWithValue("@ad", t.ActionDay);
+        cmd.Parameters.AddWithValue("@ut", t.UpdateTime);
+        cmd.Parameters.AddWithValue("@ums", t.UpdateMillisec);
+        cmd.Parameters.AddWithValue("@lp", t.LastPrice);
+        cmd.Parameters.AddWithValue("@v", t.Volume);
+        cmd.Parameters.AddWithValue("@bp", t.BidPrice);
+        cmd.Parameters.AddWithValue("@bv", t.BidVolume);
+        cmd.Parameters.AddWithValue("@ap", t.AskPrice);
+        cmd.Parameters.AddWithValue("@av", t.AskVolume);
+        cmd.Parameters.AddWithValue("@oi", t.OpenInterest);
+        cmd.Parameters.AddWithValue("@op", t.OpenPrice);
+        cmd.Parameters.AddWithValue("@h", t.Highest);
+        cmd.Parameters.AddWithValue("@l", t.Lowest);
+        cmd.Parameters.AddWithValue("@ps", t.PreSettlement);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>读某合约最近 <paramref name="limit"/> 条成交 tick（<b>时间升序</b>——末位 = 最新；重启恢复取 limit=1）。</summary>
+    public async Task<IReadOnlyList<CtpTick>> LoadRecentTicksAsync(string instrumentId, int limit, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT instrument_id, trading_day, action_day, update_time, update_millisec,
+                last_price, volume, bid_price, bid_volume, ask_price, ask_volume,
+                open_interest, open_price, highest, lowest, pre_settlement
+            FROM sim_tick WHERE instrument_id = @i ORDER BY rowid DESC LIMIT @n
+            """;
+        cmd.Parameters.AddWithValue("@i", instrumentId);
+        cmd.Parameters.AddWithValue("@n", Math.Max(1, limit));
+        var list = new List<CtpTick>();
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new CtpTick
+            {
+                InstrumentId = r.GetString(0),
+                TradingDay = r.GetString(1),
+                ActionDay = r.GetString(2),
+                UpdateTime = r.GetString(3),
+                UpdateMillisec = r.GetInt32(4),
+                LastPrice = r.GetDouble(5),
+                Volume = r.GetInt64(6),
+                BidPrice = r.GetDouble(7),
+                BidVolume = r.GetInt32(8),
+                AskPrice = r.GetDouble(9),
+                AskVolume = r.GetInt32(10),
+                OpenInterest = r.GetDouble(11),
+                OpenPrice = r.GetDouble(12),
+                Highest = r.GetDouble(13),
+                Lowest = r.GetDouble(14),
+                PreSettlement = r.GetDouble(15),
+            });
+        }
+        list.Reverse();   // 查询 DESC 取最近 N 条 ⇒ 反转为时间升序（末位最新）
+        return list;
     }
 }

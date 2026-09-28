@@ -206,6 +206,24 @@ public sealed class SimTradingCore : IDisposable
             }
         }
 
+        // 重启恢复行情会话统计（2026-09-28 tick 落盘的读侧）：从最后一条成交 tick 续上最新价/累计量/开高低——
+        // 不归零回昨结算基准（成交是真实交易消息，跨重启延续；walk 模式无 tick ⇒ 天然无操作）。
+        // 恢复先于 RecomputePositionProfit——持仓浮盈按恢复后的最新价盯市。
+        List<SimInstrument> knownInstruments;
+        lock (_gate) knownInstruments = _instruments.Values.ToList();
+        foreach (var instrument in knownInstruments)
+        {
+            try
+            {
+                var last = await _store.LoadRecentTicksAsync(instrument.InstrumentId, 1, ct).ConfigureAwait(false);
+                if (last.Count > 0) lock (_gate) Market.Restore(instrument.InstrumentId, last[0]);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[CTP-SIM] 行情恢复读取失败（忽略）：{ex.Message}");
+            }
+        }
+
         RecomputePositionProfit();
     }
 
@@ -942,8 +960,12 @@ public sealed class SimTradingCore : IDisposable
             ApplyFillAccounting(state, instrument, ua);
             updates.Add((state.AccountId, ua));
 
-            // 交易所模式：成交即行情——最新价/累计量更新 + 立即外发含新簿顶的 tick
-            if (_exchange) Market.RecordTrade(instrument.InstrumentId, price, volume);
+            // 交易所模式：成交即行情——最新价/累计量更新 + 立即外发含新簿顶的 tick；成交 tick 落盘（真实交易消息）
+            if (_exchange)
+            {
+                var tick = Market.RecordTrade(instrument.InstrumentId, price, volume);
+                if (tick is not null) Persist(() => _store.SaveTickAsync(tick));
+            }
         }
 
         return updates;

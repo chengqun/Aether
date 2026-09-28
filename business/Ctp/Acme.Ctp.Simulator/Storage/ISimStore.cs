@@ -62,6 +62,12 @@ public interface ISimStore
     Task SaveOrderAsync(string accountId, CtpOrder order, CancellationToken ct = default);
     Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default);
     Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default);
+
+    /// <summary>追加一条成交 tick（真实交易消息——交易所模式每笔成交的完整快照：价/量/盘口/开高低）。</summary>
+    Task SaveTickAsync(CtpTick tick, CancellationToken ct = default);
+
+    /// <summary>读某合约最近 <paramref name="limit"/> 条成交 tick（时间升序——末位最新；重启恢复取 limit=1）。</summary>
+    Task<IReadOnlyList<CtpTick>> LoadRecentTicksAsync(string instrumentId, int limit, CancellationToken ct = default);
 }
 
 /// <summary>不落盘（默认）——单测与「纯内存仿真」用。</summary>
@@ -85,4 +91,7 @@ public sealed class NullSimStore : ISimStore
     public Task SaveOrderAsync(string accountId, CtpOrder order, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default) => Task.CompletedTask;
+    public Task SaveTickAsync(CtpTick tick, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<IReadOnlyList<CtpTick>> LoadRecentTicksAsync(string instrumentId, int limit, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<CtpTick>>(Array.Empty<CtpTick>());
 }

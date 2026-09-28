@@ -1,6 +1,7 @@
 using Acme.Ctp.Domain;
 using Acme.Ctp.Infrastructure.Sim;
 using Acme.Ctp.Simulator;
+using Acme.Ctp.Simulator.Storage;
 
 namespace Acme.Ctp.Simulator.Tests;
 
@@ -55,6 +56,42 @@ public class ExchangeModeTests
         Assert.Equal(SimErrorCodes.UnknownInstrument, ex.ErrorId);
         Assert.Contains("未上市", ex.ErrorMsg);
         Assert.Empty(core.QueryOrders("bob", null));
+    }
+
+    [Fact]
+    public async Task 成交tick落盘并跨重启恢复行情状态()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"sim-tick-{Guid.NewGuid():N}.db");
+        try
+        {
+            var options = ExchangeOptions() with { DatabasePath = db };
+            var core = new SimTradingCore(options);
+            await core.InitializeAsync();
+            core.ActivateMarket(SimHarness.Instrument);                            // 做市进场（6988/6992）
+            core.InsertOrder("alice", SimHarness.Market(CtpDirection.Buy, 2));    // 成交 @6992 ×2
+            core.Dispose();                                                        // 同步 flush
+
+            // 落盘可查：store 直读，最新一条 = 该笔成交的快照（真实交易消息）
+            var store = SimStore.ForFile(db);
+            await store.InitializeAsync();
+            var ticks = await store.LoadRecentTicksAsync(SimHarness.Instrument, 10);
+            Assert.NotEmpty(ticks);
+            Assert.Equal(6992, ticks[^1].LastPrice, 6);
+            Assert.Equal(2, ticks[^1].Volume);
+
+            // 重启恢复：最新价从最后成交续上（不回昨结算基准 6990）
+            var revived = new SimTradingCore(options);
+            await revived.InitializeAsync();
+            Assert.Equal(6992, revived.Market.GetQuote(SimHarness.Instrument)!.Value.LastPrice, 6);
+
+            // 累计量延续：重启后激活的快照帧携带恢复后的累计成交量（不归零）
+            var after = new Collector<CtpTick>();
+            revived.TickProduced += after.Add;
+            revived.ActivateMarket(SimHarness.Instrument);
+            var snapshotTick = after.Snapshot.Last(t => t.InstrumentId == SimHarness.Instrument);
+            Assert.Equal(2, snapshotTick.Volume);
+        }
+        finally { try { File.Delete(db); } catch { } }
     }
 
     [Fact]
