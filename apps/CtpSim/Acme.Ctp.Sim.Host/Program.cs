@@ -78,8 +78,11 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
 
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var listed = core.QueryListedInstruments();
+        var accounts = core.QueryAccounts();
         Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}");
         Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
+        if (accounts.Count > 0)
+            Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
         Console.WriteLine(exchangeOn
             ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）| 义务约束：价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边（触限停加仓侧、超限自动平仓）" : "关（纯净簿——无人挂单即无对手价）")} | 新账户初始资金 {opts.Core.InitialBalance}"
             : replayOn

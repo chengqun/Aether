@@ -96,6 +96,17 @@ public sealed record SimOptions
     /// <summary>义务监测采样间隔（毫秒；测试可调小）。host 环境变量 <c>AETHER_CTP_SIM_MM_MONITOR_MS</c>。</summary>
     public int MmMonitorIntervalMs { get; init; } = 1000;
 
+    // —— 账号系统（自助开户：首次登录设密码；密码空 = 免认证——dev/测试路径）——
+
+    /// <summary>密码哈希迭代数（PBKDF2-SHA256；公网部署前可调高）。仅设密/验密路径付费，空密码登录零成本。</summary>
+    public int PasswordIterations { get; init; } = 50_000;
+
+    /// <summary>防爆破：连续登录失败 N 次锁定。host 环境变量 <c>AETHER_CTP_SIM_LOGIN_MAX_FAILURES</c>。</summary>
+    public int LoginMaxFailures { get; init; } = 5;
+
+    /// <summary>防爆破：锁定时长（秒，按 SimClock 计）。host 环境变量 <c>AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC</c>。</summary>
+    public int LoginLockoutSeconds { get; init; } = 60;
+
     /// <summary>交易日历：非交易时段的报单是否直接拒绝（默认关——仿真不挑时段）。</summary>
     public bool RejectOrdersOutsideTradingTime { get; init; }
 
@@ -121,6 +132,8 @@ public sealed record SimOptions
             MmMinQuoteRatio = Math.Clamp(EnvDouble("AETHER_CTP_SIM_MM_MIN_RATIO", 0.9), 0, 1),
             MmPositionLimit = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_POS_LIMIT", 200)),
             MmMonitorIntervalMs = Math.Max(50, EnvInt("AETHER_CTP_SIM_MM_MONITOR_MS", 1000)),
+            LoginMaxFailures = Math.Max(1, EnvInt("AETHER_CTP_SIM_LOGIN_MAX_FAILURES", 5)),
+            LoginLockoutSeconds = Math.Max(0, EnvInt("AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC", 60)),
         };
     }
 

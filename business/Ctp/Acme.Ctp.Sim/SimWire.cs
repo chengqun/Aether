@@ -127,7 +127,8 @@ public sealed record SimHello(int ProtocolVersion);
 public sealed record SimWireError(int Code, string Msg);
 
 /// <summary>登录参数。刻意只带 brokerId/userId——仿真核心不校验凭据，密码不出客户端进程。</summary>
-public sealed record LoginArg(string BrokerId, string UserId);
+/// <summary>登录参数（字段对齐真实 CTP 客户端登录的核心三件：经纪商/投资者/密码——AppId/AuthCode 仍留客户端侧不消费）。</summary>
+public sealed record LoginArg(string BrokerId, string UserId, string? Password = null);
 
 /// <summary>查询参数（可选按合约过滤）。</summary>
 public sealed record InstrumentArg(string? InstrumentId);

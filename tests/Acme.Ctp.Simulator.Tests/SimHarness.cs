@@ -36,6 +36,9 @@ internal static class SimHarness
 
     public const double InitialBalance = 1_000_000;
 
+    /// <summary>测试登录密码（密码必填——2026-09-28 起 `Login` 无密码一律拒 90017）。</summary>
+    public const string TestPassword = "test-pw";
+
     /// <summary>默认参数：不自动跑行情、不落盘。</summary>
     public static SimOptions Options() => new() { TickIntervalMs = 0, DatabasePath = null };
 
@@ -50,7 +53,7 @@ internal static class SimHarness
         return core;
     }
 
-    public static CtpLoginResult Login(SimTradingCore core) => core.Login(Broker, Account);
+    public static CtpLoginResult Login(SimTradingCore core) => core.Login(Broker, Account, TestPassword);
 
     /// <summary>已登录 + 已注入盘口的核心（绝大多数用例的起点）。</summary>
     public static async Task<SimTradingCore> NewLoggedInCoreAsync(SimOptions? options = null, DateTime? now = null)

@@ -39,6 +39,8 @@ public static class SimErrorCodes
     public const int InvalidParameter = 90011;
     /// <summary>无对手价：交易所模式下市价单对手侧簿空（无庄家兜底——真实交易所语义）。90012-90015 为传输层保留段，故从 90016 续。</summary>
     public const int NoCounterparty = 90016;
+    /// <summary>凭据不匹配 / 登录锁定（已设密码的账户密码错误，或连续失败触发防爆破锁定）。</summary>
+    public const int BadCredentials = 90017;
 }
 
 /// <summary>风控判定结果。</summary>

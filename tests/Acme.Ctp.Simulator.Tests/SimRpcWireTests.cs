@@ -21,7 +21,7 @@ public class SimRpcWireTests
     {
         var client = new SimRpcClient("127.0.0.1", sim.Server.LocalEndpoint!.Port);
         await client.ConnectAsync();
-        await client.LoginAsync(new LoginArg(SimHarness.Broker, userId));
+        await client.LoginAsync(new LoginArg(SimHarness.Broker, userId, SimHarness.TestPassword));
         return client;
     }
 

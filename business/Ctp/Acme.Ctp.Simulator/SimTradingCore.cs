@@ -244,22 +244,130 @@ public sealed class SimTradingCore : IDisposable
     // —— 登录 / 登出 ——
 
     /// <summary>
-    /// 仿真登录：不做任何网络/凭据校验（仿真柜台的目的是「连得上」而非「认证」），
-    /// 只为该投资者建账并返回可被客户端 <c>int.Parse</c> 的 <c>MaxOrderRef</c>。
+    /// 仿真登录（账号系统：自助开户 + 密码认证——**密码必填**）：
+    /// <list type="bullet">
+    /// <item><b>密码必填</b>（2026-09-28 用户拍板：不能不填——免认证路径关闭，账户从出生即受保护）：
+    /// 空/空白密码 ⇒ <see cref="SimErrorCodes.BadCredentials"/>，开新户也不例外。</item>
+    /// <item><b>首次登录 = 开户</b>：密码入档（PBKDF2 哈希）。</item>
+    /// <item><b>已设密码的账户</b>：密码必须匹配——不匹配抛 <see cref="SimErrorCodes.BadCredentials"/>。</item>
+    /// <item><b>存量无密码账户</b>（升级前的库）：首次带密码登录 = 补设密码（平滑迁移——这是无密码账户唯一的存在来源）。</item>
+    /// <item><b>防爆破</b>：连续 <see cref="SimOptions.LoginMaxFailures"/> 次失败锁定
+    /// <see cref="SimOptions.LoginLockoutSeconds"/> 秒（按 <see cref="SimClock"/> 计——可测），锁定期内登录即拒。</item>
+    /// <item><paramref name="brokerId"/> 记为账户元数据（身份键仍是 userId——单一交易所内经纪商是形式字段）。</item>
+    /// </list>
+    /// 成功返回可被客户端 <c>int.Parse</c> 的 <c>MaxOrderRef</c>。
     /// </summary>
-    public CtpLoginResult Login(string brokerId, string userId)
+    public CtpLoginResult Login(string brokerId, string userId, string? password = null)
     {
         var accountId = AccountIdOf(userId);
         lock (_gate)
         {
+            // 防爆破锁定检查（先于任何账户操作）
+            if (_loginFailures.TryGetValue(accountId, out var f) && _clock.Now < f.LockedUntil)
+            {
+                var remain = (int)Math.Ceiling((f.LockedUntil - _clock.Now).TotalSeconds);
+                throw new CtpBusinessException(SimErrorCodes.BadCredentials,
+                    $"账户 {accountId} 登录失败次数过多，已锁定（剩余 {remain} 秒）。");
+            }
+
+            // 密码必填——空/空白一律拒（开新户也不例外；账户从出生即受保护）
+            if (string.IsNullOrWhiteSpace(password))
+                throw new CtpBusinessException(SimErrorCodes.BadCredentials, "密码不能为空（所有账户必须设密码）。");
+
             _sessionId = _sessionId == 0 ? 1 : _sessionId;
-            var state = GetOrCreate(accountId);
+            var state = Find(accountId);
+            if (state is null)
+            {
+                state = GetOrCreate(accountId);   // 首次登录 = 开户
+                state.Account.PasswordHash = HashPassword(password);
+            }
+            else if (!string.IsNullOrEmpty(state.Account.PasswordHash))
+            {
+                if (!VerifyPassword(password, state.Account.PasswordHash))
+                {
+                    RegisterLoginFailure(accountId);
+                    throw new CtpBusinessException(SimErrorCodes.BadCredentials,
+                        $"账户 {accountId} 凭据不匹配。");
+                }
+            }
+            else
+            {
+                state.Account.PasswordHash = HashPassword(password);   // 存量无密码账户：带密首登补设（迁移路径）
+            }
+
+            _loginFailures.Remove(accountId);   // 成功 ⇒ 清失败计数
+            state.Account.BrokerId = brokerId;
+
             // MaxOrderRef 必须是可解析的整数：CtpTrader.LoginAsync 拿它做下一单号起点
             var maxOrderRef = state.NextOrderRefSeq.ToString(CultureInfo.InvariantCulture);
             var result = new CtpLoginResult(_clock.TradingDay, _clock.TimeOfDay, _frontId, _sessionId, maxOrderRef);
 
             Persist(() => _store.SaveAccountAsync(state.Account.ToSnapshot()));
             return result;
+        }
+    }
+
+    /// <summary>连续失败计数 + 锁定（内存态——重启清零；按 <see cref="SimClock"/> 计时可测）。</summary>
+    private readonly Dictionary<string, (int Failures, DateTime LockedUntil)> _loginFailures = new(StringComparer.OrdinalIgnoreCase);
+
+    private void RegisterLoginFailure(string accountId)
+    {
+        var failures = (_loginFailures.TryGetValue(accountId, out var f) ? f.Failures : 0) + 1;
+        if (failures >= Math.Max(1, _options.LoginMaxFailures))
+        {
+            _loginFailures[accountId] = (0, _clock.Now.AddSeconds(Math.Max(0, _options.LoginLockoutSeconds)));
+            Trace.WriteLine($"[CTP-SIM] 账户 {accountId} 连续登录失败 {failures} 次，锁定 {_options.LoginLockoutSeconds} 秒。");
+        }
+        else
+        {
+            _loginFailures[accountId] = (failures, DateTime.MinValue);
+        }
+    }
+
+    /// <summary>密码哈希（PBKDF2-SHA256，自描述格式 <c>pbkdf2$迭代$盐hex$哈希hex</c>——单列存储免拆 schema）。</summary>
+    private string HashPassword(string password)
+    {
+        var salt = System.Security.Cryptography.RandomNumberGenerator.GetBytes(16);
+        var iterations = Math.Max(1000, _options.PasswordIterations);
+        var hash = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2(
+            password, salt, iterations, System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
+        return $"pbkdf2${iterations}${Convert.ToHexString(salt)}${Convert.ToHexString(hash)}";
+    }
+
+    private bool VerifyPassword(string password, string stored)
+    {
+        var parts = stored.Split('$');
+        if (parts.Length != 4 || parts[0] != "pbkdf2" || !int.TryParse(parts[1], out var iterations))
+            return false;
+        byte[] salt, expected;
+        try
+        {
+            salt = Convert.FromHexString(parts[2]);
+            expected = Convert.FromHexString(parts[3]);
+        }
+        catch (FormatException) { return false; }
+        var actual = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2(
+            password, salt, iterations, System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(actual, expected);
+    }
+
+    /// <summary>账户列表（管理面——资金/持仓/活单汇总 + 是否已设密码）。</summary>
+    public IReadOnlyList<SimAccountSummary> QueryAccounts()
+    {
+        lock (_gate)
+        {
+            return _states.Values
+                .OrderBy(s => s.AccountId, StringComparer.Ordinal)
+                .Select(s => new SimAccountSummary(
+                    s.AccountId,
+                    s.Account.BrokerId,
+                    s.Account.PasswordHash is not null,
+                    s.Account.Balance,
+                    s.Account.Available,
+                    s.Positions.Books.Sum(b => b.Long.Total),
+                    s.Positions.Books.Sum(b => b.Short.Total),
+                    s.Orders.All.Count(SimOrderManager.CanCancel)))
+                .ToList();
         }
     }
 

@@ -103,8 +103,9 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     // —— ICtpSession：登录 / 登出 ——
 
     /// <summary>
-    /// 仿真登录：host 不校验凭据（仿真的目的是「连得上」），返回可被 <c>int.Parse</c> 解析的
-    /// <c>MaxOrderRef</c>。host 未启动 ⇒ <c>CtpBusinessException(90012)</c>，消息带启动命令。
+    /// 仿真登录（账号系统）：首次登录 = 开户（带密码则密码入档）；已设密码的账户密码不匹配 ⇒
+    /// <c>CtpBusinessException(90017)</c>。返回可被 <c>int.Parse</c> 解析的 <c>MaxOrderRef</c>。
+    /// host 未启动 ⇒ <c>CtpBusinessException(90012)</c>，消息带启动命令。
     /// </summary>
     public async Task<CtpLoginResult> LoginAsync(CtpLoginRequest request, CancellationToken ct = default)
     {
@@ -113,7 +114,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
         // 连接 + Hello 握手（已连接则直通；死连接则重建）
         await _client.ConnectAsync(ct).ConfigureAwait(false);
 
-        var result = await _client.LoginAsync(new LoginArg(request.BrokerId, request.UserId), ct).ConfigureAwait(false);
+        var result = await _client.LoginAsync(new LoginArg(request.BrokerId, request.UserId, request.Password), ct).ConfigureAwait(false);
         lock (_lock)
         {
             _loginResult = result;

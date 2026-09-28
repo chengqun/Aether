@@ -2,7 +2,7 @@ using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.Simulator.Storage;
 
-/// <summary>资金账户快照（落盘行）。</summary>
+/// <summary>资金账户快照（落盘行）。<paramref name="PasswordHash"/> null = 未设密码（免认证——dev/测试路径）。</summary>
 public sealed record SimAccountSnapshot(
     string AccountId,
     double StaticBalance,
@@ -11,7 +11,9 @@ public sealed record SimAccountSnapshot(
     double FrozenCash,
     double Commission,
     double CloseProfit,
-    double PositionProfit);
+    double PositionProfit,
+    string? PasswordHash = null,
+    string? BrokerId = null);
 
 /// <summary>持仓快照（落盘行）。<paramref name="Direction"/> 为 <c>"L"</c>/<c>"S"</c>。</summary>
 public sealed record SimPositionSnapshot(

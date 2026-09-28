@@ -22,7 +22,9 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             frozen_cash      REAL NOT NULL,
             commission       REAL NOT NULL,
             close_profit     REAL NOT NULL,
-            position_profit  REAL NOT NULL
+            position_profit  REAL NOT NULL,
+            password_hash    TEXT NOT NULL DEFAULT '',
+            broker_id        TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS sim_position (
             account_id    TEXT NOT NULL,
@@ -88,22 +90,34 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
 
     public Task InitializeAsync(CancellationToken ct = default) => EnsureSchemaAsync(CreateSql, ct);
 
+    /// <summary>存量库幂等补列（2026-09-28 账号系统：密码哈希 + 经纪商元数据）。</summary>
+    protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        await SqliteMigrations.AddColumnAsync(connection, "sim_account", "password_hash", "TEXT NOT NULL DEFAULT ''", ct);
+        await SqliteMigrations.AddColumnAsync(connection, "sim_account", "broker_id", "TEXT NOT NULL DEFAULT ''", ct);
+    }
+
     public async Task<IReadOnlyList<SimAccountSnapshot>> LoadAccountsAsync(CancellationToken ct = default)
     {
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit FROM sim_account";
+        cmd.CommandText = "SELECT account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id FROM sim_account";
         var list = new List<SimAccountSnapshot>();
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
         {
             list.Add(new SimAccountSnapshot(
                 r.GetString(0), r.GetDouble(1), r.GetDouble(2), r.GetDouble(3),
-                r.GetDouble(4), r.GetDouble(5), r.GetDouble(6), r.GetDouble(7)));
+                r.GetDouble(4), r.GetDouble(5), r.GetDouble(6), r.GetDouble(7),
+                NullIfEmpty(r.GetString(8)), NullIfEmpty(r.GetString(9))));
         }
         return list;
     }
+
+    private static string? NullIfEmpty(string v) => string.IsNullOrEmpty(v) ? null : v;
+
+    private static string EmptyIfNull(string? v) => v ?? "";
 
     public async Task<IReadOnlyList<SimPositionSnapshot>> LoadPositionsAsync(string accountId, CancellationToken ct = default)
     {
@@ -190,13 +204,14 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO sim_account (account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit)
-            VALUES (@a, @s, @c, @f, @fc, @cm, @cp, @pp)
+            INSERT INTO sim_account (account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id)
+            VALUES (@a, @s, @c, @f, @fc, @cm, @cp, @pp, @ph, @b)
             ON CONFLICT(account_id) DO UPDATE SET
                 static_balance=excluded.static_balance, curr_margin=excluded.curr_margin,
                 frozen_margin=excluded.frozen_margin, frozen_cash=excluded.frozen_cash,
                 commission=excluded.commission, close_profit=excluded.close_profit,
-                position_profit=excluded.position_profit
+                position_profit=excluded.position_profit,
+                password_hash=excluded.password_hash, broker_id=excluded.broker_id
             """;
         cmd.Parameters.AddWithValue("@a", s.AccountId);
         cmd.Parameters.AddWithValue("@s", s.StaticBalance);
@@ -206,6 +221,8 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         cmd.Parameters.AddWithValue("@cm", s.Commission);
         cmd.Parameters.AddWithValue("@cp", s.CloseProfit);
         cmd.Parameters.AddWithValue("@pp", s.PositionProfit);
+        cmd.Parameters.AddWithValue("@ph", EmptyIfNull(s.PasswordHash));
+        cmd.Parameters.AddWithValue("@b", EmptyIfNull(s.BrokerId));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

@@ -3,6 +3,17 @@ using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.Simulator;
 
+/// <summary>账户汇总（管理面 <see cref="SimTradingCore.QueryAccounts"/> 的行）。</summary>
+public sealed record SimAccountSummary(
+    string AccountId,
+    string? BrokerId,
+    bool HasPassword,
+    double Balance,
+    double Available,
+    int LongLots,
+    int ShortLots,
+    int LiveOrders);
+
 /// <summary>
 /// 资金账户（仿真账本口径，逐笔精确）。
 /// <para>
@@ -33,6 +44,12 @@ public sealed class SimAccount
     }
 
     public string AccountId { get; }
+
+    /// <summary>登录密码哈希（<c>pbkdf2$迭代$盐$哈希</c>；null = 未设——免认证，dev/测试路径）。</summary>
+    public string? PasswordHash { get; internal set; }
+
+    /// <summary>最近一次登录的经纪商代码（元数据——账户身份键仍是 <see cref="AccountId"/>，单一交易所内经纪商是形式字段）。</summary>
+    public string? BrokerId { get; internal set; }
 
     /// <summary>静态权益（入金 + 平仓盈亏 − 手续费）。</summary>
     public double StaticBalance { get; private set; }
@@ -135,7 +152,8 @@ public sealed class SimAccount
 
     /// <summary>落盘快照。</summary>
     public Storage.SimAccountSnapshot ToSnapshot() => new(
-        AccountId, StaticBalance, CurrMargin, FrozenMargin, FrozenCash, Commission, CloseProfit, PositionProfit);
+        AccountId, StaticBalance, CurrMargin, FrozenMargin, FrozenCash, Commission, CloseProfit, PositionProfit,
+        PasswordHash, BrokerId);
 
     /// <summary>从快照恢复。</summary>
     public static SimAccount FromSnapshot(Storage.SimAccountSnapshot s) => new(s.AccountId, s.StaticBalance)
@@ -146,6 +164,8 @@ public sealed class SimAccount
         Commission = s.Commission,
         CloseProfit = s.CloseProfit,
         PositionProfit = s.PositionProfit,
+        PasswordHash = s.PasswordHash,
+        BrokerId = s.BrokerId,
     };
 
     /// <summary>金额四舍五入到分（浮点累加误差不泄漏到 UI/落盘）。</summary>
