@@ -25,19 +25,14 @@ using Microsoft.Extensions.Hosting;
 //                                 行情 = 簿顶 + 最新成交价，tick 事件驱动；庄家兜底关闭）——**默认**（2026-09-28
 //                                 用户定调「我实际就是做一个交易所」）；walk = 随机游走（显式退路，旧行为）。
 //                                 真实行情转发（接外部期货行情）明确不做——本柜台是自己的交易所。
-//   AETHER_CTP_SIM_MM            交易所模式做市机器人（默认 on——纯簿模式无人报价时市场全死；off = 纯净交易所）
-//   AETHER_CTP_SIM_MM_SPREAD     做市报价点差（最小变动价位数，围绕最新成交价 ±N；默认 2）
-//   AETHER_CTP_SIM_MM_VOLUME     做市单侧挂单手数（默认 5）
 //   —— 做市商义务（交易所约束层：策略层机器人自便，约束层人人须守）——
-//   AETHER_CTP_SIM_MM_MAX_SPREAD 最大报价价差（tick 数，默认 4——机器人想挂更宽也会被钳到该值）
-//   AETHER_CTP_SIM_MM_MIN_VOLUME 单侧最小报价量（手，默认 1）
+//   AETHER_CTP_SIM_MM_MAX_SPREAD 义务监测：最大报价价差（tick 数，默认 4）
+//   AETHER_CTP_SIM_MM_MIN_VOLUME 义务监测：单侧最小报价量（手，默认 1）
 //   AETHER_CTP_SIM_MM_MIN_RATIO  双边连续报价时间占比目标（监测口径，默认 0.9；触限单边期豁免）
 //   AETHER_CTP_SIM_MM_POS_LIMIT  做市商持仓限额（每合约单边手数，默认 200——触限停挂加仓侧、超限自动平仓减仓）
 //   AETHER_CTP_SIM_MM_MONITOR_MS 义务监测采样间隔（毫秒，默认 1000）
-//   —— 模拟成交（噪声交易者：随机吃做市流动力的程序化参与者——真实下单真实成交，价格经真实成交移动）——
-//   AETHER_CTP_SIM_NOISE          模拟成交开关（默认 on；off = 静市——无人交易则盘口不动）
-//   AETHER_CTP_SIM_NOISE_MS       噪声交易间隔毫秒（默认 2500，下限 500）
-//   AETHER_CTP_SIM_NOISE_MAX_LOTS 噪声交易单笔手数上限（默认 3；净持仓软钳同值——持仓/OI 有界）
+//   —— 做市商义务监测（2026-09-28 起 bots 即 Lean 策略：做市/噪声 = labs leanalgorithms 客户端策略，
+//      经实盘 tab 勾「真实下单」接入；服务端纯交易所，只监测约定账户 SIM-MM 的报价合规）——
 // 行情随柜台：sim 登录的行情恒为本地产生（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -81,7 +76,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         }
         else
         {
-            core.StartMarketMakerBot();   // 默认：交易所模式（做市机器人 AETHER_CTP_SIM_MM=off 可关——纯净交易所）
+            core.StartMakerObligationMonitor();   // 交易所义务监测（做市/噪声由外部客户端策略供给——见 leanalgorithms/）
         }
         var exchangeOn = !replayOn && opts.Core.MarketMode == SimMarketMode.Exchange;
 
@@ -95,7 +90,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         if (accounts.Count > 0)
             Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
         Console.WriteLine(exchangeOn
-            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）| 义务约束：价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边（触限停加仓侧、超限自动平仓）" : "关（纯净簿——无人挂单即无对手价）")}{(opts.Core.MarketMakerBot && opts.Core.NoiseTrading ? $" | 模拟成交 噪声交易者（每 {Math.Max(500, opts.Core.NoiseIntervalMs)}ms 随机吃 ≤{opts.Core.NoiseMaxLots} 手）" : "")} | 新账户初始资金 {opts.Core.InitialBalance}"
+            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市商义务监测：SIM-MM（价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}"
             : replayOn
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");

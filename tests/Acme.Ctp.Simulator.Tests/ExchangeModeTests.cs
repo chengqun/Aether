@@ -7,25 +7,24 @@ namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
 /// 交易所模式（<see cref="SimMarketMode.Exchange"/>——价格发现归簿）：行情 = 订单簿顶 + 成交流、
-/// 成交驱动最新价、市价单空簿拒单、市价残量作废、做市机器人双边报价。
+/// 成交驱动最新价、市价单空簿拒单、市价残量作废（2026-09-28 起做市/噪声 = 外部客户端策略，服务端无内嵌机器人）。
 /// 与 walk 模式（随机游走 + 庄家兜底）互斥——全部既有用例存活即 walk 行为未变。
 /// ag2610 种子元数据：昨结算 6990 / tick 1 / 乘数 15 / 保证金率 12%（做市报价断言的确定性来源）。
 /// </summary>
 public class ExchangeModeTests
 {
-    private static SimOptions ExchangeOptions(bool mm = true) => new()
+    private static SimOptions ExchangeOptions() => new()
     {
         TickIntervalMs = 0,
         DatabasePath = null,
         MarketMode = SimMarketMode.Exchange,
-        MarketMakerBot = mm,
         ListedInstruments = new[] { SimHarness.Instrument },   // 交易所模式：上市表 = 可交易集合（ag2610 上架）
     };
 
-    /// <summary>交易所模式核心（已激活 ag2610；MM 开时激活即触发做市双边报价）。</summary>
-    private static async Task<SimTradingCore> NewExchangeCoreAsync(bool mm = true)
+    /// <summary>交易所模式核心（已激活 ag2610——做市报价由外部客户端策略供给，2026-09-28 起服务端无内嵌机器人）。</summary>
+    private static async Task<SimTradingCore> NewExchangeCoreAsync()
     {
-        var core = await SimHarness.NewCoreAsync(ExchangeOptions(mm), injectQuote: false);
+        var core = await SimHarness.NewCoreAsync(ExchangeOptions(), injectQuote: false);
         core.ActivateMarket(SimHarness.Instrument);
         return core;
     }
@@ -33,7 +32,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 市价单对手侧空簿被拒()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
 
         var ex = Assert.Throws<CtpBusinessException>(
             () => core.InsertOrder("bob", SimHarness.Market(CtpDirection.Buy, 1)));
@@ -67,8 +66,9 @@ public class ExchangeModeTests
             var options = ExchangeOptions() with { DatabasePath = db };
             var core = new SimTradingCore(options);
             await core.InitializeAsync();
-            core.ActivateMarket(SimHarness.Instrument);                            // 做市进场（6988/6992）
-            core.InsertOrder("alice", SimHarness.Market(CtpDirection.Buy, 2));    // 成交 @6992 ×2
+            core.ActivateMarket(SimHarness.Instrument);
+            core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Sell, 2, 6992));   // 对手挂单（做市商角色——外部客户端语义）
+            core.InsertOrder("bob", SimHarness.Market(CtpDirection.Buy, 2));           // 成交 @6992 ×2
             core.Dispose();                                                        // 同步 flush
 
             // 落盘可查：store 直读，最新一条 = 该笔成交的快照（真实交易消息）
@@ -95,19 +95,18 @@ public class ExchangeModeTests
     }
 
     [Fact]
-    public async Task 未上市合约订阅不激活_询价不响应()
+    public async Task 未上市合约订阅不激活()
     {
         var core = await NewExchangeCoreAsync();
 
         Assert.False(core.ActivateMarket("rb2701"));   // 不激活 ⇒ 无行情状态
         Assert.Null(core.Market.GetQuote("rb2701"));
-        Assert.False(core.RequestQuote("rb2701"));     // 询价同样只认上市表
     }
 
     [Fact]
     public async Task 自己的挂单不算对手_市价单仍被拒()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
 
         // bob 自己挂卖——自成交跳过 ⇒ 对 bob 的市价买而言仍无对手
         core.InsertOrder("bob", SimHarness.Limit(CtpDirection.Sell, 1, 7000));
@@ -119,7 +118,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 挂单入簿即推tick_簿顶是真实挂单()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
         var ticks = new Collector<CtpTick>();
         core.TickProduced += ticks.Add;
 
@@ -137,7 +136,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 成交驱动最新价_累计量为真实成交()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
         var ticks = new Collector<CtpTick>();
         core.TickProduced += ticks.Add;
 
@@ -154,7 +153,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 市价单无界吃全簿多档()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
@@ -174,7 +173,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task FOK簿量不足整单作废()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
@@ -191,7 +190,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 市价残量作废不挂单()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
 
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Sell, 2, 7000));
         core.InsertOrder("bob", SimHarness.Market(CtpDirection.Buy, 5));   // 簿只有 2 手——残量 3 手作废（不挂单）
@@ -205,67 +204,9 @@ public class ExchangeModeTests
     }
 
     [Fact]
-    public async Task 做市机器人双边报价围绕昨结算()
-    {
-        var core = await NewExchangeCoreAsync(mm: true);
-        var ticks = new Collector<CtpTick>();
-        core.TickProduced += ticks.Add;
-
-        core.ActivateMarket(SimHarness.Instrument);   // 再触发一次（幂等——机器人已有报价不重复挂）
-
-        var last = ticks.Snapshot.Last(t => t.InstrumentId == SimHarness.Instrument);
-        Assert.Equal(6988, last.BidPrice, 6);    // 6990 − 2×tick1
-        Assert.Equal(6992, last.AskPrice, 6);    // 6990 + 2×tick1
-        Assert.Equal(5, last.BidVolume);         // MmVolume
-        Assert.Equal(5, last.AskVolume);
-        Assert.Equal(6990, last.LastPrice, 6);   // 首笔成交前 = 昨结算基准
-
-        // 机器人的单是真实挂单（普通账户、'3' 静息、双边各一）——不是无限流动性暗对手
-        var mmOrders = core.QueryOrders(SimTradingCore.MarketMakerAccountId, SimHarness.Instrument);
-        Assert.Equal(2, mmOrders.Count);
-        Assert.All(mmOrders, o => Assert.Equal(SimOrderStatus.NoTradeQueueing, o.OrderStatusRaw));
-    }
-
-    [Fact]
-    public async Task 吃做市商后最新价上移_机器人移心重挂()
-    {
-        var core = await NewExchangeCoreAsync(mm: true);
-        var trades = new Collector<(string AccountId, CtpTrade Trade)>();
-        core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
-
-        core.InsertOrder("bob", SimHarness.Market(CtpDirection.Buy, 5));   // 吃机器人卖一 6992
-
-        Assert.Equal(6992, trades.Snapshot.Single(t => t.AccountId == "bob").Trade.Price, 6);
-        Assert.Equal(6992, core.Market.GetQuote(SimHarness.Instrument)!.Value.LastPrice, 6);   // 成交驱动最新价
-
-        // 机器人围绕新最新价移心重挂：6992 ∓ 2 tick，双边各 5 手仍在
-        var q = core.Market.GetQuote(SimHarness.Instrument)!.Value;
-        Assert.Equal(6990, q.BidPrice, 6);
-        Assert.Equal(6994, q.AskPrice, 6);
-        var mmLive = core.QueryOrders(SimTradingCore.MarketMakerAccountId, SimHarness.Instrument)
-            .Where(o => o.OrderStatusRaw == SimOrderStatus.NoTradeQueueing).ToList();
-        Assert.Equal(2, mmLive.Count);
-        Assert.All(mmLive, o => Assert.Equal(5, o.VolumeTotal));   // 静息挂单余量 = MmVolume
-    }
-
-    [Fact]
-    public async Task 用户挂单优于做市商成为簿顶()
-    {
-        var core = await NewExchangeCoreAsync(mm: true);
-
-        // 用户买价 6989 优于机器人 6988——价格发现归簿，顶档是用户的单
-        core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 5, 6989));
-
-        var q = core.Market.GetQuote(SimHarness.Instrument)!.Value;
-        Assert.Equal(6989, q.BidPrice, 6);
-        var last = core.Market.GetQuote(SimHarness.Instrument)!.Value;   // GetQuote 二次取，稳定
-        Assert.Equal(6989, last.BidPrice, 6);
-    }
-
-    [Fact]
     public async Task 订阅即推当前快照tick()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
 
         // 订阅前簿里已有挂单（挂单时的 tick 没人听）
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 5, 7000));
@@ -283,7 +224,7 @@ public class ExchangeModeTests
     [Fact]
     public async Task 持仓盈亏按最新成交价()
     {
-        var core = await NewExchangeCoreAsync(mm: false);
+        var core = await NewExchangeCoreAsync();
 
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Sell, 1, 7000));
         core.InsertOrder("bob", SimHarness.Market(CtpDirection.Buy, 1));       // bob 多头 @7000
@@ -295,17 +236,22 @@ public class ExchangeModeTests
     }
 
     [Fact]
-    public async Task 订阅即收到做市盘口快照_wire级路由()
+    public async Task 订阅即收到盘口快照_wire级路由()
     {
         // 回归（2026-09-28 实测踩中）：交易所模式空闲市场的唯一一帧 = 订阅激活时的盘口快照。
-        // 曾因「先激活后登记订阅」被路由吞掉 ⇒ 订阅者板恒空（机器人明明在挂单）。
+        // 曾因「先激活后登记订阅」被路由吞掉 ⇒ 订阅者板恒空（挂单明明在簿里）。
         // 修法 = 先登记订阅再激活——快照落进本 op 的 capture-during-dispatch 缓冲，应答帧后送达。
+        // 做市商以外部客户端身份接入（2026-09-28 起 bots 即 Lean 策略）——此处经 core 直下等价模拟其挂单。
         using var sim = LoopbackSim.Start(o => o with
         {
             MarketMode = SimMarketMode.Exchange,
-            MarketMakerBot = true,
             PasswordIterations = 1000,
+            ListedInstruments = new[] { SimHarness.Instrument },
         });
+        // 「做市商」双边挂单（SIM-MM 约定账户——直接经 core 下单，服务端视角与外部客户端经 wire 下单等价）
+        sim.Core.InsertOrder(SimTradingCore.MarketMakerAccountId, SimHarness.Limit(CtpDirection.Buy, 5, 6988));
+        sim.Core.InsertOrder(SimTradingCore.MarketMakerAccountId, SimHarness.Limit(CtpDirection.Sell, 5, 6992));
+
         await sim.Session.LoginAsync(new CtpLoginRequest
         {
             FrontAddress = "sim",
@@ -326,15 +272,15 @@ public class ExchangeModeTests
             BrokerId = SimHarness.Broker,
             UserId = SimHarness.Account,
             Password = SimHarness.TestPassword,
-        }, ["sim001"]);   // 默认上市合约——机器人围绕昨结算 3798 报价
+        }, [SimHarness.Instrument]);
 
-        // 订阅完成后必须**立即**见到做市双边盘口（无定时器续命、无后续市场事件——全靠激活快照）
+        // 订阅完成后必须立即见到做市双边盘口（无定时器续命、无后续市场事件——全靠激活快照）
         Assert.True(
-            await Wait.UntilAsync(() => sim.Session.GetLatestTick("sim001") is { BidPrice: > 0, AskPrice: > 0 }),
-            "订阅后必须立即收到做市商的盘口快照");
-        var tick = sim.Session.GetLatestTick("sim001")!;
-        Assert.Equal(3796, tick.BidPrice, 6);   // 3798 − 2×tick1
-        Assert.Equal(3800, tick.AskPrice, 6);   // 3798 + 2×tick1
+            await Wait.UntilAsync(() => sim.Session.GetLatestTick(SimHarness.Instrument) is { BidPrice: > 0, AskPrice: > 0 }),
+            "订阅后必须立即收到盘口快照");
+        var tick = sim.Session.GetLatestTick(SimHarness.Instrument)!;
+        Assert.Equal(6988, tick.BidPrice, 6);
+        Assert.Equal(6992, tick.AskPrice, 6);
         Assert.Equal(5, tick.BidVolume);
         Assert.Equal(5, tick.AskVolume);
     }

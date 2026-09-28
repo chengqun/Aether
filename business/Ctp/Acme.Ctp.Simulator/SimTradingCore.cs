@@ -78,16 +78,8 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>交易所模式（价格发现归簿：行情 = 簿顶 + 成交流，庄家兜底关闭）。</summary>
     private readonly bool _exchange;
 
-    /// <summary>做市机器人重入守卫（机器人下单会再触发市场事件——抑制递归报价）。</summary>
-    private bool _mmQuoting;
-
-    /// <summary>做市机器人覆盖的合约集（义务监测的采样范围）。</summary>
-    private readonly HashSet<string> _mmInstruments = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>做市商义务监测器（统计面；强制面在 <see cref="RunMarketMaker"/> 的钳制/闸门）。</summary>
+    /// <summary>做市商义务监测器（统计面；报价自律在策略侧——market-maker.lean.cs）。</summary>
     private readonly MmObligationMonitor _mmMonitor = new();
-
-    private Timer? _mmMonitorTimer;
 
     public SimTradingCore(
         SimOptions options,
@@ -102,7 +94,6 @@ public sealed class SimTradingCore : IDisposable
         _matching = matching ?? new SimpleMatchingEngine(options);
         _store = store ?? StoreOf(options);
         _exchange = options.MarketMode == SimMarketMode.Exchange;
-        _noiseRng = new Random(unchecked(options.Seed ^ 0x4E015E));   // 噪声随机源（独立于游走/撮合的种子）
 
         Market = new SimMarketDataEngine(options, _clock, InstrumentOf);
         Market.TickGenerated += (_, tick) => TickProduced?.Invoke(tick);
@@ -254,8 +245,6 @@ public sealed class SimTradingCore : IDisposable
         StopMarketFeed();
         _mmMonitorTimer?.Dispose();
         _mmMonitorTimer = null;
-        _noiseTimer?.Dispose();
-        _noiseTimer = null;
         FlushAsync().GetAwaiter().GetResult();
     }
 
@@ -491,7 +480,7 @@ public sealed class SimTradingCore : IDisposable
     }
 
     /// <summary>
-    /// 下单主体（调用须持 <see cref="_gate"/>；做市机器人复用同一路径——走完整风控/清算/簿，与用户单同权同责）。
+    /// 下单主体（调用须持 <see cref="_gate"/>——所有账户同权同责走完整风控/清算/簿）。
     /// </summary>
     private CtpOrderInsertResult InsertOrderLocked(string accountId, CtpOrderRequest request,
         List<(string AccountId, SimOrderUpdate Update)> perAccount)
@@ -562,9 +551,6 @@ public sealed class SimTradingCore : IDisposable
             if (s is not null) PersistOrder(s, update);
         }
 
-        // 交易所模式：成交可能吃掉做市商的报价/移动最新价 ⇒ 维护双边报价（用户单的尾部触发）
-        if (_exchange) RunMarketMaker(perAccount, instrument.InstrumentId);
-
         return result;
     }
 
@@ -607,7 +593,7 @@ public sealed class SimTradingCore : IDisposable
         Raise(accountId, updates.Select(x => x.Update).ToList());
     }
 
-    /// <summary>撤单主体（调用须持锁；做市机器人换价撤旧复用）。出簿 + 交易所模式下推簿顶快照。</summary>
+    /// <summary>撤单主体（调用须持锁）。出簿 + 交易所模式下推簿顶快照。</summary>
     private void CancelLocked(SimAccountState state, SimOrderEntry entry,
         List<(string AccountId, SimOrderUpdate Update)> perAccount)
     {
@@ -679,10 +665,7 @@ public sealed class SimTradingCore : IDisposable
             ResolveMarketInstrument(instrumentId);
             ok = Market.Activate(instrumentId);
             if (ok && _exchange)
-            {
-                RunMarketMaker(perAccount, instrumentId);
-                Market.OnBookChanged(instrumentId);
-            }
+                Market.OnBookChanged(instrumentId);   // 订阅即推快照（此后 tick 全事件驱动——做市报价由外部客户端策略供给）
         }
         foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
             Raise(group.Key, group.Select(x => x.Update).ToList());
@@ -1077,40 +1060,29 @@ public sealed class SimTradingCore : IDisposable
         }
     }
 
-    // —— 做市机器人（交易所模式的流动性来源——旧「庄家兜底」的交易所化替身）——
+    // —— 做市商义务监测（交易所约束层——bots 即 Lean 策略后仅存的交易所侧职能）——
+    // 2026-09-28 起做市/噪声行为迁出服务端（labs leanalgorithms + 实盘 tab 的普通客户端账户），
+    // 服务端回归纯交易所：撮合/风控/账本/行情/上市闸门/认证 + 本监测面。
+    // 监测按**约定账户名** <see cref="MarketMakerAccountId"/>（SIM-MM）：做市商用该账户登录接入即可被监测；
+    // 报价自律（价差/量/持仓限额/移心）在策略侧（market-maker.lean.cs）。
 
-    /// <summary>做市机器人账户 id（**普通账户**——走完整风控/清算，与用户单同权同责；占真实簿档位、留成交记录）。</summary>
+    /// <summary>指定做市商账户（约定名——用该账户登录的客户端即被视为做市商，纳入义务监测）。</summary>
     public const string MarketMakerAccountId = "SIM-MM";
 
-    /// <summary>做市资金（一次性补足到该额——用户持续单边吃盘时机器人不断积仓，要够用）。</summary>
-    private const double MarketMakerFunding = 1_000_000_000;
+    private Timer? _mmMonitorTimer;
 
     /// <summary>
-    /// 启动做市机器人：对上市表全部合约挂双边报价（订阅激活的合约由 <see cref="ActivateMarket"/> 增量报价、
-    /// 成交/最新价变化由 <see cref="InsertOrderLocked"/> 尾部维护）+ 启动义务监测采样（<see cref="SimOptions.MmMonitorIntervalMs"/>）。
-    /// 交易所模式专用；walk 模式 no-op（庄家兜底语义不变）。
+    /// 启动做市商义务监测（host 在交易所模式启动时调用；监测对象 = <see cref="MarketMakerAccountId"/> 账户）。
+    /// 监测面：每合约双边报价时间占比（触限单边期豁免不计入分母）、价差/量合规、持仓限额、违约进入次数；
+    /// <see cref="QueryMakerObligations"/> 查询。合约集从做市账户的活单派生（监测「实际在报价的合约」）。
     /// </summary>
-    public void StartMarketMakerBot()
+    public void StartMakerObligationMonitor()
     {
-        if (!_exchange) return;
-        var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
         lock (_gate)
         {
-            foreach (var i in _listedBoard.ToList())
-                RunMarketMaker(perAccount, i.InstrumentId);
-
             var interval = Math.Max(50, _options.MmMonitorIntervalMs);
             _mmMonitorTimer ??= new Timer(_ => ObserveMakerObligations(), null, interval, interval);
-
-            // 模拟成交（噪声交易者）——默认开：随机吃做市流动性，让盘口有成交、价格会动（关：AETHER_CTP_SIM_NOISE=off）
-            if (_options.NoiseTrading)
-            {
-                var noiseInterval = Math.Max(500, _options.NoiseIntervalMs);
-                _noiseTimer ??= new Timer(_ => RunNoiseTrade(), null, noiseInterval, noiseInterval);
-            }
         }
-        foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
-            Raise(group.Key, group.Select(x => x.Update).ToList());
     }
 
     /// <summary>做市商义务监测报告（每合约一行：双边报价占比/当前是否双边/是否达标/违约次数/持仓）。</summary>
@@ -1119,69 +1091,35 @@ public sealed class SimTradingCore : IDisposable
         lock (_gate) return _mmMonitor.Report(_options.MmMinQuoteRatio);
     }
 
-    /// <summary>
-    /// 询价（报价义务「询价回应」的最小实现）：触发做市商对该合约<b>即时</b>双边报价，返回当前是否已双边。
-    /// 机器人关闭 / 触限单边报价 / 未知合约 ⇒ false。walk 模式恒 false（无做市商）。
-    /// </summary>
-    public bool RequestQuote(string instrumentId)
-    {
-        var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
-        bool twoSided;
-        lock (_gate)
-        {
-            if (_exchange && !_listedIds.Contains(instrumentId ?? "")) return false;   // 未上市：不响应询价
-            ResolveMarketInstrument(instrumentId);
-            var ok = Market.Activate(instrumentId);
-            if (ok) RunMarketMaker(perAccount, instrumentId);
-            twoSided = ok && MakerTwoSidedLocked(instrumentId);
-            if (twoSided) Market.OnBookChanged(instrumentId);   // 询价方（若已订阅）立即见到新盘口
-        }
-        foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
-            Raise(group.Key, group.Select(x => x.Update).ToList());
-        return twoSided;
-    }
-
-    /// <summary>做市商当前是否双边报价（开仓向活单两侧皆有；平仓减仓单不算）。调用须持锁。</summary>
-    private bool MakerTwoSidedLocked(string instrumentId)
-    {
-        var bot = Find(MarketMakerAccountId);
-        if (bot is null) return false;
-        var hasBid = false;
-        var hasAsk = false;
-        foreach (var e in bot.Orders.All)
-        {
-            if (!SimOrderManager.CanCancel(e)) continue;
-            if (!string.Equals(e.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
-            if (SimRiskEngine.IsClose(e.Order.OffsetFlag)) continue;
-            if (e.Order.Direction == CtpDirection.Buy) hasBid = true; else hasAsk = true;
-        }
-        return hasBid && hasAsk;
-    }
-
-    /// <summary>义务监测采样（定时器回调；在 <c>_gate</c> 内统计——只读簿/单/持仓，无变异）。</summary>
+    /// <summary>义务监测采样（定时器回调；在 <c>_gate</c> 内统计——只读账/单/持仓，无变异）。</summary>
     private void ObserveMakerObligations()
     {
         lock (_gate)
         {
-            var bot = Find(MarketMakerAccountId);
-            if (bot is null) return;
+            var mm = Find(MarketMakerAccountId);
+            if (mm is null) return;   // 指定做市账户未接入——无可监测
             var limit = Math.Max(1, _options.MmPositionLimit);
             var elapsed = Math.Max(1, _options.MmMonitorIntervalMs);
 
-            foreach (var instrumentId in _mmInstruments.ToList())
+            // 合约集从做市账户的活单派生（监测实际在报价的合约）
+            var instruments = new SortedSet<string>(mm.Orders.All
+                .Where(SimOrderManager.CanCancel)
+                .Select(e => e.Order.InstrumentId), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var instrumentId in instruments)
             {
                 var instrument = InstrumentOf(instrumentId);
                 if (instrument is null) continue;
 
-                var book = bot.Positions.Find(instrumentId);
+                var book = mm.Positions.Find(instrumentId);
                 var longLots = book?.Long.Total ?? 0;
                 var shortLots = book?.Short.Total ?? 0;
 
-                // 机器人自己的开仓向挂单 = 它的报价（价差/量义务按此判定）
+                // 做市商自己的开仓向挂单 = 它的报价（价差/量义务按此判定）
                 double ownBid = 0, ownAsk = 0;
                 var bidVol = 0;
                 var askVol = 0;
-                foreach (var e in bot.Orders.All)
+                foreach (var e in mm.Orders.All)
                 {
                     if (!SimOrderManager.CanCancel(e)) continue;
                     if (!string.Equals(e.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
@@ -1208,223 +1146,6 @@ public sealed class SimTradingCore : IDisposable
                 _mmMonitor.Observe(instrumentId, twoSided, spreadOk, volumeOk, positionOk, exempt, longLots, shortLots, elapsed);
             }
         }
-    }
-
-    /// <summary>
-    /// 做市机器人报价维护（调用须持锁；<see cref="InsertOrderLocked"/> 尾部 + <see cref="ActivateMarket"/> 触发，
-    /// <see cref="_mmQuoting"/> 重入守卫——机器人自己的单不再触发报价）：围绕最新成交价挂双边 GFD 限价单
-    /// ——价位过期撤旧、缺边补边。机器人的单走正常撮合（可被吃、也可吃人）——价格发现仍归簿。
-    /// <para>
-    /// <b>交易所约束层（真实做市协议条款的强制面）</b>：①价差钳制——双侧总差 ≤
-    /// <see cref="SimOptions.MmMaxSpreadTicks"/>；②量钳制——单侧 ≥ <see cref="SimOptions.MmMinQuoteVolume"/>；
-    /// ③持仓限额——单边手数触限 ⇒ 停挂<b>加仓侧</b>（「超限禁止开仓」的等价，也是库存偏斜的最简形态：
-    /// 多头触限只剩卖报价、空头触限只剩买报价）；④超限 ⇒ 自动挂平仓单减仓（交易所强平的沙盒等价——
-    /// 机器人自己朝对手侧最优价挂平仓单，吃得到才减）。平仓减仓单不算报价、不被闸门拉（它在卸库存）。
-    /// </para>
-    /// </summary>
-    private void RunMarketMaker(List<(string AccountId, SimOrderUpdate Update)> perAccount, string instrumentId)
-    {
-        if (!_exchange || !_options.MarketMakerBot || _mmQuoting) return;
-        var instrument = InstrumentOf(instrumentId);
-        if (instrument is null) return;
-
-        _mmQuoting = true;
-        try
-        {
-            var bot = GetOrCreate(MarketMakerAccountId);
-            if (bot.Account.StaticBalance < MarketMakerFunding)
-                bot.Account.Deposit(MarketMakerFunding - bot.Account.StaticBalance);   // 一次性补足（幂等）
-            _mmInstruments.Add(instrumentId);
-
-            var book = bot.Positions.Find(instrumentId);
-            var longLots = book?.Long.Total ?? 0;
-            var shortLots = book?.Short.Total ?? 0;
-            var limit = Math.Max(1, _options.MmPositionLimit);
-
-            var last = Market.GetQuote(instrumentId)?.LastPrice ?? 0;
-            if (last <= 0) last = instrument.PreSettlement > 0 ? instrument.PreSettlement : instrument.BasePrice;
-            if (last <= 0) return;
-            var tick = instrument.PriceTick > 0 ? instrument.PriceTick : 1;
-
-            // 义务①②：价差/量钳制（策略想要更宽的点差也不行——交易所说了算）
-            var half = Math.Max(1, Math.Min(Math.Max(1, _options.MmSpreadTicks), Math.Max(2, _options.MmMaxSpreadTicks) / 2));
-            var spread = half * tick;
-            var volume = Math.Max(Math.Max(1, _options.MmVolume), Math.Max(1, _options.MmMinQuoteVolume));
-            var desiredBid = instrument.RoundToTick(last - spread);
-            var desiredAsk = instrument.RoundToTick(last + spread);
-            if (desiredBid <= 0 || desiredAsk <= 0) return;
-
-            // 义务④：超限 ⇒ 自动减仓（先于报价——卸库存优先）
-            if (shortLots > limit) TryFlattenInventory(bot, instrument, CtpDirection.Buy, shortLots - limit, perAccount);
-            if (longLots > limit) TryFlattenInventory(bot, instrument, CtpDirection.Sell, longLots - limit, perAccount);
-
-            // 义务③：持仓限额闸门——加仓侧触限即停（「超限禁止开仓」）
-            var bidCapped = longLots >= limit;
-            var askCapped = shortLots >= limit;
-
-            var hasBid = false;
-            var hasAsk = false;
-            foreach (var entry in bot.Orders.All.Where(SimOrderManager.CanCancel).ToList())
-            {
-                if (!string.Equals(entry.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
-                if (SimRiskEngine.IsClose(entry.Order.OffsetFlag)) continue;   // 平仓减仓单：不算报价、不被闸门拉（它在卸库存）
-                var isBid = entry.Order.Direction == CtpDirection.Buy;
-                if (isBid) hasBid = true; else hasAsk = true;
-                var desired = isBid ? desiredBid : desiredAsk;
-                if ((isBid ? bidCapped : askCapped) || Math.Abs(entry.Order.LimitPrice - desired) > 1e-9)
-                {
-                    CancelLocked(bot, entry, perAccount);   // 侧被闸/价位过期 ⇒ 撤旧（下方按闸门补新）
-                    if (isBid) hasBid = false; else hasAsk = false;
-                }
-            }
-
-            if (!hasBid && !bidCapped)
-                InsertOrderLocked(MarketMakerAccountId, MmQuote(CtpDirection.Buy, instrumentId, desiredBid, volume), perAccount);
-            if (!hasAsk && !askCapped)
-                InsertOrderLocked(MarketMakerAccountId, MmQuote(CtpDirection.Sell, instrumentId, desiredAsk, volume), perAccount);
-        }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"[CTP-SIM] 做市商报价失败（忽略）：{ex.Message}");   // 机器人故障绝不影响用户下单链路
-        }
-        finally { _mmQuoting = false; }
-    }
-
-    /// <summary>
-    /// 超限减仓（调用须持锁；<see cref="RunMarketMaker"/> 内）：朝对手侧最优价挂<b>平仓限价单</b>（挂上即交叉，
-    /// 由簿立即撮合）——真实交易所的强平由交易所执行，沙盒里由机器人自办（吃得到才减：对手侧空/只有自己的单
-    /// ⇒ 跳过，等下一个市场事件再试）。同向已有活平仓单 ⇒ 不重复挂（防减仓单堆积）。
-    /// </summary>
-    private void TryFlattenInventory(SimAccountState bot, SimInstrument instrument, CtpDirection direction,
-        int excess, List<(string AccountId, SimOrderUpdate Update)> perAccount)
-    {
-        if (excess <= 0) return;
-
-        // 已有同合约同向活平仓单 ⇒ 等它吃（不堆积）
-        var hasClose = bot.Orders.All.Any(e =>
-            SimOrderManager.CanCancel(e)
-            && SimRiskEngine.IsClose(e.Order.OffsetFlag)
-            && e.Order.Direction == direction
-            && string.Equals(e.Order.InstrumentId, instrument.InstrumentId, StringComparison.OrdinalIgnoreCase));
-        if (hasClose) return;
-
-        if (!_books.TryGetValue(instrument.InstrumentId, out var book) || book.Count == 0) return;
-        var opposite = direction == CtpDirection.Buy ? book.AskSide() : book.BidSide();
-        foreach (var be in opposite)
-        {
-            if (string.Equals(be.AccountId, MarketMakerAccountId, StringComparison.OrdinalIgnoreCase)) continue;   // 自成交禁令
-            var state = Find(be.AccountId);
-            var entry = state?.Orders.Find(be.OrderRef);
-            if (entry is null || !SimOrderManager.CanCancel(entry) || entry.Remaining <= 0) continue;   // 陈旧条目防御
-            // 平仓限价单钉对手最优价（挂上即交叉——WalkBook 立即吃；吃不完的残量留在簿里等对手）
-            InsertOrderLocked(MarketMakerAccountId, MmFlatten(direction, instrument.InstrumentId, be.Price, excess), perAccount);
-            return;
-        }
-    }
-
-    private static CtpOrderRequest MmFlatten(CtpDirection direction, string instrumentId, double price, int volume) => new()
-    {
-        BrokerId = "SIM",
-        InvestorId = MarketMakerAccountId,
-        InstrumentId = instrumentId,
-        Direction = direction,
-        OffsetFlag = CtpOffsetFlag.Close,   // 减仓单：不冻保证金、只冻手续费；不算报价义务、不被限额闸门拉
-        PriceType = CtpOrderPriceType.Limit,
-        LimitPrice = price,
-        Volume = volume,
-        TimeCondition = CtpTimeCondition.GFD,
-    };
-
-    private static CtpOrderRequest MmQuote(CtpDirection direction, string instrumentId, double price, int volume) => new()
-    {
-        BrokerId = "SIM",
-        InvestorId = MarketMakerAccountId,
-        InstrumentId = instrumentId,
-        Direction = direction,
-        OffsetFlag = CtpOffsetFlag.Open,
-        PriceType = CtpOrderPriceType.Limit,
-        LimitPrice = price,
-        Volume = volume,
-        TimeCondition = CtpTimeCondition.GFD,
-    };
-
-    // —— 噪声交易者（模拟成交——让行情「活着」的程序化参与者）——
-
-    /// <summary>噪声交易者账户（模拟市场活动：随机吃做市流动性——真实下单、真实成交、真实记账）。</summary>
-    public const string NoiseAccountId = "SIM-NOISE";
-
-    /// <summary>噪声交易者资金（与做市商同款一次性补足）。</summary>
-    private const double NoiseFunding = 1_000_000_000;
-
-    private Timer? _noiseTimer;
-
-    /// <summary>噪声随机源（种子 = Seed ^ 'N'015E——固定 ⇒ 序列可复现）。</summary>
-    private readonly Random _noiseRng;
-
-    /// <summary>
-    /// 跑一轮噪声交易（host 定时器回调 + 测试直调）：从做市覆盖的合约里随机挑一个，随机方向<b>市价</b>吃流动性
-    /// （量 1..<see cref="SimOptions.NoiseMaxLots"/>）——真实下单、真实成交、真实记账；成交 ⇒ 最新价动 ⇒
-    /// 做市商移心重挂（<see cref="InsertOrderLocked"/> 尾部自动触发）⇒ 盘口持续刷新。
-    /// <para>
-    /// 持仓有界（否则 OI 无限膨胀）：净持仓软钳 <paramref name="NoiseMaxLots"/>——超界即反转方向；
-    /// 有可平的仓则<b>平仓</b>（控 OI），无仓才开仓。无对手流动性（做市缺席/单边触限）⇒ 本轮跳过。
-    /// 交易所模式专用；walk/回放模式 no-op（那两态有自己的行情驱动）。
-    /// </para>
-    /// </summary>
-    public void RunNoiseTrade()
-    {
-        if (!_exchange) return;
-        var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
-        lock (_gate)
-        {
-            RunNoiseTradeLocked(perAccount);
-        }
-        foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
-            Raise(group.Key, group.Select(x => x.Update).ToList());
-    }
-
-    /// <summary>噪声交易主体（调用须持锁）。合约选择按 Ordinal 排序后随机取——同种子可复现。</summary>
-    private void RunNoiseTradeLocked(List<(string AccountId, SimOrderUpdate Update)> perAccount)
-    {
-        if (_mmInstruments.Count == 0) return;
-        var instrumentId = _mmInstruments.OrderBy(i => i, StringComparer.Ordinal).ToList()[_noiseRng.Next(_mmInstruments.Count)];
-        var instrument = InstrumentOf(instrumentId);
-        if (instrument is null) return;
-
-        var noise = GetOrCreate(NoiseAccountId);
-        if (noise.Account.StaticBalance < NoiseFunding)
-            noise.Account.Deposit(NoiseFunding - noise.Account.StaticBalance);
-
-        // 方向：随机，净持仓软钳（超界反转 ⇒ 持仓/OI 有界、方向自动回归）
-        var maxLots = Math.Max(1, _options.NoiseMaxLots);
-        var book = noise.Positions.Find(instrumentId);
-        var net = (book?.Long.Total ?? 0) - (book?.Short.Total ?? 0);
-        var direction = _noiseRng.Next(2) == 0 ? CtpDirection.Buy : CtpDirection.Sell;
-        if (direction == CtpDirection.Buy && net >= maxLots) direction = CtpDirection.Sell;
-        else if (direction == CtpDirection.Sell && net <= -maxLots) direction = CtpDirection.Buy;
-
-        // 开平：有可平的仓则平（控 OI），无仓才开
-        var closable = direction == CtpDirection.Buy ? book?.Short.Total ?? 0 : book?.Long.Total ?? 0;
-        var offset = closable > 0 ? CtpOffsetFlag.Close : CtpOffsetFlag.Open;
-        var volume = _noiseRng.Next(1, maxLots + 1);
-        if (offset == CtpOffsetFlag.Close && volume > closable) volume = closable;
-        if (volume <= 0) return;
-
-        // 无对手流动性（做市缺席/单边触限）⇒ 本轮跳过（不硬吃 90016）
-        if (!HasOppositeLiquidity(NoiseAccountId, instrumentId, direction)) return;
-
-        InsertOrderLocked(NoiseAccountId, new CtpOrderRequest
-        {
-            BrokerId = "SIM",
-            InvestorId = NoiseAccountId,
-            InstrumentId = instrumentId,
-            Direction = direction,
-            OffsetFlag = offset,
-            PriceType = CtpOrderPriceType.Market,
-            LimitPrice = 0,
-            Volume = volume,
-            TimeCondition = CtpTimeCondition.GFD,
-        }, perAccount);
     }
 
     // —— 交易所模式行情源回调（引擎经 BindBook 持有；全部在 _gate 内调用）——
