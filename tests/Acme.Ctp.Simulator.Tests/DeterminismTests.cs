@@ -30,6 +30,7 @@ public class DeterminismTests
     {
         TickIntervalMs = 0,
         DatabasePath = null,
+        MarketMode = SimMarketMode.Walk,   // 游走确定性测试——显式 pin（MarketMode 默认已是 Exchange）
         Seed = seed,
         MaxWalkTicks = maxWalkTicks,
     };
@@ -229,7 +230,7 @@ public class DeterminismTests
     public void 合成tick恒外发_注入与推进各一帧()
     {
         // 行情随柜台的新默认：无开关，tick 恒外发（host 按订阅连接路由）
-        var on = NewEngine(new SimOptions { Seed = 4242 });
+        var on = NewEngine(new SimOptions { Seed = 4242, MarketMode = SimMarketMode.Walk });
         var onTicks = new List<CtpTick>();
         on.TickGenerated += (_, t) => onTicks.Add(t);
         on.Inject("ag2610", 6999, 7001, 7000);
@@ -257,7 +258,7 @@ public class DeterminismTests
     [Fact]
     public void 合成tick的累计成交量单调不减()
     {
-        var engine = NewEngine(new SimOptions { Seed = 4242 });
+        var engine = NewEngine(new SimOptions { Seed = 4242, MarketMode = SimMarketMode.Walk });
         var ticks = new List<CtpTick>();
         engine.TickGenerated += (_, t) => ticks.Add(t);
 
@@ -273,7 +274,7 @@ public class DeterminismTests
     public void 时段闸门关闭时闭市也照常推进()
     {
         // 2026-09-26 03:00 是周六凌晨（闭市）——GateByTradingTime 默认 false ⇒ 照常游走
-        var lenient = NewEngine(new SimOptions { Seed = 4242 }, new DateTime(2026, 9, 26, 3, 0, 0));
+        var lenient = NewEngine(new SimOptions { Seed = 4242, MarketMode = SimMarketMode.Walk }, new DateTime(2026, 9, 26, 3, 0, 0));
         lenient.Activate("ag2610");
         var before = lenient.GetQuote("ag2610")!.Value.LastPrice;
         lenient.Advance();
@@ -281,7 +282,7 @@ public class DeterminismTests
 
         // 开启闸门：同一时刻价格原地不动（仿真默认不挑时段，闸门是 opt-in）
         var strict = NewEngine(
-            new SimOptions { Seed = 4242, GateByTradingTime = true }, new DateTime(2026, 9, 26, 3, 0, 0));
+            new SimOptions { Seed = 4242, GateByTradingTime = true, MarketMode = SimMarketMode.Walk }, new DateTime(2026, 9, 26, 3, 0, 0));
         strict.Activate("ag2610");
         var frozen = strict.GetQuote("ag2610")!.Value.LastPrice;
         strict.Advance();

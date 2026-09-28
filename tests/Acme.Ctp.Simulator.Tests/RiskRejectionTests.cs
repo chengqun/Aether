@@ -53,7 +53,7 @@ public class RiskRejectionTests
     public async Task 未知合约被拒()
     {
         var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, AcceptUnknownInstruments = false });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, AcceptUnknownInstruments = false, MarketMode = SimMarketMode.Walk });
 
         RejectedWith(core, SimHarness.Market(CtpDirection.Buy, 1, instrument: "zz9999"),
             SimErrorCodes.UnknownInstrument);
@@ -213,14 +213,14 @@ public class RiskRejectionTests
     {
         // 默认（RejectOrdersOutsideTradingTime = false）：任意时刻都能下单——离线回放要的就是这个
         var lenient = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null },
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk },
             now: new DateTime(2026, 9, 26, 3, 0, 0)); // 周六凌晨
         Assert.NotNull(lenient.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 1)));
 
         // 开启闸门：同一时刻被拒
         var strict = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, RejectOrdersOutsideTradingTime = true },
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, RejectOrdersOutsideTradingTime = true, MarketMode = SimMarketMode.Walk },
             now: new DateTime(2026, 9, 26, 3, 0, 0));
         RejectedWith(strict, SimHarness.Market(CtpDirection.Buy, 1), SimErrorCodes.NotTradingTime);
     }

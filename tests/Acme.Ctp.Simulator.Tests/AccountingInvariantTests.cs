@@ -130,7 +130,7 @@ public class AccountingInvariantTests
     public async Task 部分成交的冻结摊销与释放总额等于初始冻结()
     {
         var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1 });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
 
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));
         var part = core.QueryAccount(SimHarness.Account);
@@ -203,7 +203,7 @@ public class AccountingInvariantTests
     public async Task 混合操作后恒等式仍成立()
     {
         var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1 });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
 
         // 一串真实策略会做出的操作：挂单 → 部分成交 → 平掉 → 撤单 → 反手开仓
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));

@@ -16,12 +16,15 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_BALANCE 新账户初始资金
 //   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 sim001——「我就是交易所」的自有品种，
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
-//   AETHER_CTP_SIM_REPLAY        历史 tick 回放 CSV 路径（walk 模式下的价格源之二；交易所模式下被忽略）
+//   AETHER_CTP_SIM_REPLAY        历史 tick 回放 CSV 路径（确定性测试的价格源——设定即回放模式，优先于 MODE；
+//                                 SimHostOptions 强制归一 walk（回放骑 walk 撮合机制）；启动失败 ⇒ 柜台退出不静默换源）
 //   AETHER_CTP_SIM_REPLAY_SPEED  回放速度倍率（默认 1；>1 快放）
 //   AETHER_CTP_SIM_REPLAY_LOOP   回放循环（默认 true——文件尾停 1s 再来）
 //   回放 CSV 格式（首行表头）：time,instrument,bid,ask,last[,volume]——time 为 HH:mm:ss[.fff]（行间差 pacing）
 //   AETHER_CTP_SIM_MODE          价格源模式：exchange = 交易所模式（订单簿驱动行情——价格发现归簿；
-//                                 行情 = 簿顶 + 最新成交价，tick 事件驱动；庄家兜底关闭）。默认 walk（随机游走）。
+//                                 行情 = 簿顶 + 最新成交价，tick 事件驱动；庄家兜底关闭）——**默认**（2026-09-28
+//                                 用户定调「我实际就是做一个交易所」）；walk = 随机游走（显式退路，旧行为）。
+//                                 真实行情转发（接外部期货行情）明确不做——本柜台是自己的交易所。
 //   AETHER_CTP_SIM_MM            交易所模式做市机器人（默认 on——纯簿模式无人报价时市场全死；off = 纯净交易所）
 //   AETHER_CTP_SIM_MM_SPREAD     做市报价点差（最小变动价位数，围绕最新成交价 ±N；默认 2）
 //   AETHER_CTP_SIM_MM_VOLUME     做市单侧挂单手数（默认 5）
@@ -51,16 +54,10 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
     {
         await core.InitializeAsync(ct);   // 重启恢复：挂单作废、报单号/成交号序列续排（host 启动时一次）
 
-        // 价格源三选一（互斥，优先级：交易所模式 > 回放 > 随机游走）
-        var exchangeOn = opts.Core.MarketMode == SimMarketMode.Exchange;
+        // 价格源三选一（互斥，显式程度优先：REPLAY（给了 CSV 就是回放）> MODE=walk（显式退路）> 默认交易所模式）。
+        // 回放失败 ⇒ 柜台退出（不静默换价格源——回放是显式意图，静默换成别的源会毁掉确定性测试）。
         var replayOn = false;
-        if (exchangeOn)
-        {
-            if (!string.IsNullOrWhiteSpace(opts.Core.ReplayPath))
-                Console.WriteLine($"[CTP-SIM] 已设 AETHER_CTP_SIM_REPLAY，但交易所模式优先——回放忽略：{opts.Core.ReplayPath}");
-            core.StartMarketMakerBot();   // 做市机器人（AETHER_CTP_SIM_MM=off 关——纯净交易所）
-        }
-        else if (!string.IsNullOrWhiteSpace(opts.Core.ReplayPath))
+        if (!string.IsNullOrWhiteSpace(opts.Core.ReplayPath))
         {
             try
             {
@@ -69,10 +66,20 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CTP-SIM] 回放启动失败（回落随机游走）：{ex.Message}");
+                Console.Error.WriteLine($"[CTP-SIM] 回放启动失败，柜台未启动（不静默换价格源）：{ex.Message}");
+                Console.Error.WriteLine("[CTP-SIM] 请检查 AETHER_CTP_SIM_REPLAY 的 CSV 路径与表头格式（time,instrument,bid,ask,last[,volume]）。");
+                Environment.Exit(1);
             }
         }
-        if (!exchangeOn && !replayOn) core.StartMarketFeed();
+        else if (opts.Core.MarketMode == SimMarketMode.Walk)
+        {
+            core.StartMarketFeed();   // 显式退路：随机游走（旧行为）
+        }
+        else
+        {
+            core.StartMarketMakerBot();   // 默认：交易所模式（做市机器人 AETHER_CTP_SIM_MM=off 可关——纯净交易所）
+        }
+        var exchangeOn = !replayOn && opts.Core.MarketMode == SimMarketMode.Exchange;
 
         server.Start();
 

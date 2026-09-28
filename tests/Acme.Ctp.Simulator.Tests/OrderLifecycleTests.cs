@@ -89,7 +89,7 @@ public class OrderLifecycleTests
     public async Task 部分成交后GFD留挂并随行情推进补足()
     {
         var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1 });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
 
         var inserted = core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));
 
@@ -125,7 +125,7 @@ public class OrderLifecycleTests
     public async Task IOC未成交部分转部分成交不排队并退款()
     {
         var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1 });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
 
         core.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 3, timeCondition: CtpTimeCondition.IOC));
@@ -148,7 +148,7 @@ public class OrderLifecycleTests
     public async Task FOK成交量不足则整单不成交并全额退款()
     {
         var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1 });
+            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
 
         core.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 3, timeCondition: CtpTimeCondition.FOK));

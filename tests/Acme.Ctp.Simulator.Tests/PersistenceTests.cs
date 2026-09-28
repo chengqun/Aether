@@ -19,7 +19,7 @@ public class PersistenceTests
         => Path.Combine(Path.GetTempPath(), $"aether-ctp-sim-{Guid.NewGuid():N}", "ctp-sim.db");
 
     /// <summary>不自动喂行情（价格只由注入决定 ⇒ 撮合价可预期）+ 落盘到指定文件。</summary>
-    private static SimOptions OptionsFor(string dbPath) => new() { DatabasePath = dbPath, TickIntervalMs = 0 };
+    private static SimOptions OptionsFor(string dbPath) => new() { DatabasePath = dbPath, TickIntervalMs = 0, MarketMode = SimMarketMode.Walk };
 
     private static async Task<SimTradingCore> OpenCoreAsync(string dbPath)
     {
@@ -251,7 +251,7 @@ public class PersistenceTests
         {
             // DatabasePath 为 null ⇒ 核心内部取 NullSimStore：跑完一整套交易也不该有任何文件产生
             var core = new SimTradingCore(
-                new SimOptions { TickIntervalMs = 0, DatabasePath = null },
+                new SimOptions { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk },
                 new SimClock(() => SimHarness.TradingNow));
             await core.InitializeAsync();
             core.InjectQuote(SimHarness.Instrument, SimHarness.Bid, SimHarness.Ask, SimHarness.Last);

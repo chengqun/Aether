@@ -17,6 +17,7 @@ public class AccountAuthTests
     {
         TickIntervalMs = 0,
         DatabasePath = null,
+        MarketMode = SimMarketMode.Walk,   // 认证与模式无关——显式 pin 与其余 walk 用例一致
         PasswordIterations = 1000,   // 测试提速（仅迭代数——哈希格式/验证不受影响）
         LoginMaxFailures = maxFailures,
         LoginLockoutSeconds = lockoutSec,

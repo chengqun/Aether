@@ -39,8 +39,8 @@ internal static class SimHarness
     /// <summary>测试登录密码（密码必填——2026-09-28 起 `Login` 无密码一律拒 90017）。</summary>
     public const string TestPassword = "test-pw";
 
-    /// <summary>默认参数：不自动跑行情、不落盘。</summary>
-    public static SimOptions Options() => new() { TickIntervalMs = 0, DatabasePath = null };
+    /// <summary>默认参数：不自动跑行情、不落盘、**显式 walk**（MarketMode 默认已是 Exchange——2026-09-28 翻转；本 harness 大量用例测 walk 撮合语义）。</summary>
+    public static SimOptions Options() => new() { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk };
 
     public static async Task<SimTradingCore> NewCoreAsync(
         SimOptions? options = null,

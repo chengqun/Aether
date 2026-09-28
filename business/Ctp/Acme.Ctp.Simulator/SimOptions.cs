@@ -3,15 +3,20 @@ namespace Acme.Ctp.Simulator;
 /// <summary>价格源模式（host 环境变量 <c>AETHER_CTP_SIM_MODE</c>）。</summary>
 public enum SimMarketMode
 {
-    /// <summary>随机游走（默认）——定时器推进中枢价，庄家兜底用游走报价撮合（既有行为）。</summary>
-    Walk = 0,
-
     /// <summary>
-    /// 交易所模式——**价格发现归簿**：bid/ask = 订单簿顶（真实挂单），last = 最新成交价（首笔前 = 昨结算基准），
-    /// tick 事件驱动（挂单/撤单/成交即推）。庄家兜底关闭（市价单空簿拒单、市价残量作废不挂单），
+    /// 交易所模式（**默认**，2026-09-28 用户定调「我实际就是做一个交易所」）——**价格发现归簿**：
+    /// bid/ask = 订单簿顶（真实挂单），last = 最新成交价（首笔前 = 昨结算基准），tick 事件驱动
+    /// （挂单/撤单/成交即推）。庄家兜底关闭（市价单空簿拒单、市价残量作废不挂单），
     /// 流动性由做市机器人供给（<see cref="SimOptions.MarketMakerBot"/>，默认开）。
     /// </summary>
-    Exchange = 1,
+    Exchange = 0,
+
+    /// <summary>
+    /// 随机游走——**显式退路**（`AETHER_CTP_SIM_MODE=walk`，旧行为）：定时器推进中枢价，庄家兜底用游走报价撮合。
+    /// 也是历史 tick 回放的宿主机制（回放经 <c>InjectQuote</c> 注价——交易所模式下 no-op，
+    /// 故 <c>SimHostOptions</c> 在 REPLAY 设定时强制归一到本模式）。
+    /// </summary>
+    Walk = 1,
 }
 
 /// <summary>
@@ -62,8 +67,8 @@ public sealed record SimOptions
     /// <summary>回放到文件尾是否循环（默认 true——沙盒常有市；文件尾停 1s 再来）。host 环境变量 <c>AETHER_CTP_SIM_REPLAY_LOOP</c>。</summary>
     public bool ReplayLoop { get; init; } = true;
 
-    /// <summary>价格源模式（默认随机游走；<c>exchange</c> = 订单簿驱动行情——价格发现归簿）。host 环境变量 <c>AETHER_CTP_SIM_MODE</c>。</summary>
-    public SimMarketMode MarketMode { get; init; }
+    /// <summary>价格源模式（默认 = 交易所模式——「自己的交易所」；walk 为显式退路）。host 环境变量 <c>AETHER_CTP_SIM_MODE</c>。</summary>
+    public SimMarketMode MarketMode { get; init; } = SimMarketMode.Exchange;
 
     /// <summary>
     /// 交易所模式下的做市机器人（默认开——纯簿模式无人报价时市场全死）。它是**普通账户**走完整
@@ -143,11 +148,16 @@ public sealed record SimOptions
         return string.IsNullOrWhiteSpace(v) ? null : v.Trim();
     }
 
-    /// <summary>价格源模式解析：只认 <c>exchange</c>（大小写不敏感）；空白/坏值 ⇒ Walk（不拒启动）。</summary>
+    /// <summary>价格源模式解析：空白 ⇒ Exchange（默认）；<c>exchange</c>/<c>walk</c>（大小写不敏感）⇒ 对应值；
+    /// 其它非空值 ⇒ <see cref="ArgumentException"/>（两值枚举打错字宁可知晓——静默落错市场比拒启动更糟）。</summary>
     private static SimMarketMode ParseMode(string? v)
-        => string.Equals(v?.Trim(), "exchange", StringComparison.OrdinalIgnoreCase)
-            ? SimMarketMode.Exchange
-            : SimMarketMode.Walk;
+    {
+        var t = v?.Trim();
+        if (string.IsNullOrEmpty(t)) return SimMarketMode.Exchange;
+        if (string.Equals(t, "exchange", StringComparison.OrdinalIgnoreCase)) return SimMarketMode.Exchange;
+        if (string.Equals(t, "walk", StringComparison.OrdinalIgnoreCase)) return SimMarketMode.Walk;
+        throw new ArgumentException($"AETHER_CTP_SIM_MODE 格式非法：\"{v}\"（应为 exchange 或 walk；不设 = 默认 exchange）");
+    }
 
     private static bool ParseBool(string name, bool defaultValue)
     {
