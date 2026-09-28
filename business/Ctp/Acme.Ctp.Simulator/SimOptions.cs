@@ -78,6 +78,24 @@ public sealed record SimOptions
     /// <summary>做市机器人单侧挂单手数（默认 5）。host 环境变量 <c>AETHER_CTP_SIM_MM_VOLUME</c>。</summary>
     public int MmVolume { get; init; } = 5;
 
+    // —— 做市商义务（交易所约束层——真实做市协议的核心条款；策略层各家自便，约束层人人须守）——
+
+    /// <summary>义务：最大报价价差（买一卖一总差，tick 数；&lt;2 视为 2——买卖不可同价自锁）。host 环境变量 <c>AETHER_CTP_SIM_MM_MAX_SPREAD</c>。</summary>
+    public int MmMaxSpreadTicks { get; init; } = 4;
+
+    /// <summary>义务：单侧最小报价量（手）。host 环境变量 <c>AETHER_CTP_SIM_MM_MIN_VOLUME</c>。</summary>
+    public int MmMinQuoteVolume { get; init; } = 1;
+
+    /// <summary>义务：双边连续报价时间占比目标（监测口径 0-1，仅统计不强制；触限单边期豁免不计入）。host 环境变量 <c>AETHER_CTP_SIM_MM_MIN_RATIO</c>。</summary>
+    public double MmMinQuoteRatio { get; init; } = 0.9;
+
+    /// <summary>义务：做市商持仓限额（每合约<b>单边</b>手数）——触限停挂加仓侧（「超限禁开」等价）、
+    /// 超限自动挂平仓单减仓（交易所强平的沙盒等价）。host 环境变量 <c>AETHER_CTP_SIM_MM_POS_LIMIT</c>。</summary>
+    public int MmPositionLimit { get; init; } = 200;
+
+    /// <summary>义务监测采样间隔（毫秒；测试可调小）。host 环境变量 <c>AETHER_CTP_SIM_MM_MONITOR_MS</c>。</summary>
+    public int MmMonitorIntervalMs { get; init; } = 1000;
+
     /// <summary>交易日历：非交易时段的报单是否直接拒绝（默认关——仿真不挑时段）。</summary>
     public bool RejectOrdersOutsideTradingTime { get; init; }
 
@@ -98,6 +116,11 @@ public sealed record SimOptions
             MarketMakerBot = ParseBool("AETHER_CTP_SIM_MM", defaultValue: true),
             MmSpreadTicks = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_SPREAD", 2)),
             MmVolume = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_VOLUME", 5)),
+            MmMaxSpreadTicks = Math.Max(2, EnvInt("AETHER_CTP_SIM_MM_MAX_SPREAD", 4)),
+            MmMinQuoteVolume = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_MIN_VOLUME", 1)),
+            MmMinQuoteRatio = Math.Clamp(EnvDouble("AETHER_CTP_SIM_MM_MIN_RATIO", 0.9), 0, 1),
+            MmPositionLimit = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_POS_LIMIT", 200)),
+            MmMonitorIntervalMs = Math.Max(50, EnvInt("AETHER_CTP_SIM_MM_MONITOR_MS", 1000)),
         };
     }
 

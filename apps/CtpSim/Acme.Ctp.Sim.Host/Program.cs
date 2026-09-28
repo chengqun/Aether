@@ -25,6 +25,12 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_MM            交易所模式做市机器人（默认 on——纯簿模式无人报价时市场全死；off = 纯净交易所）
 //   AETHER_CTP_SIM_MM_SPREAD     做市报价点差（最小变动价位数，围绕最新成交价 ±N；默认 2）
 //   AETHER_CTP_SIM_MM_VOLUME     做市单侧挂单手数（默认 5）
+//   —— 做市商义务（交易所约束层：策略层机器人自便，约束层人人须守）——
+//   AETHER_CTP_SIM_MM_MAX_SPREAD 最大报价价差（tick 数，默认 4——机器人想挂更宽也会被钳到该值）
+//   AETHER_CTP_SIM_MM_MIN_VOLUME 单侧最小报价量（手，默认 1）
+//   AETHER_CTP_SIM_MM_MIN_RATIO  双边连续报价时间占比目标（监测口径，默认 0.9；触限单边期豁免）
+//   AETHER_CTP_SIM_MM_POS_LIMIT  做市商持仓限额（每合约单边手数，默认 200——触限停挂加仓侧、超限自动平仓减仓）
+//   AETHER_CTP_SIM_MM_MONITOR_MS 义务监测采样间隔（毫秒，默认 1000）
 // 行情随柜台：sim 登录的行情恒为本地产生（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -75,7 +81,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}");
         Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
         Console.WriteLine(exchangeOn
-            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）" : "关（纯净簿——无人挂单即无对手价）")} | 新账户初始资金 {opts.Core.InitialBalance}"
+            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）| 义务约束：价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边（触限停加仓侧、超限自动平仓）" : "关（纯净簿——无人挂单即无对手价）")} | 新账户初始资金 {opts.Core.InitialBalance}"
             : replayOn
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");

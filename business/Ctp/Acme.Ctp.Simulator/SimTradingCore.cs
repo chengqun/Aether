@@ -78,6 +78,14 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>做市机器人重入守卫（机器人下单会再触发市场事件——抑制递归报价）。</summary>
     private bool _mmQuoting;
 
+    /// <summary>做市机器人覆盖的合约集（义务监测的采样范围）。</summary>
+    private readonly HashSet<string> _mmInstruments = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>做市商义务监测器（统计面；强制面在 <see cref="RunMarketMaker"/> 的钳制/闸门）。</summary>
+    private readonly MmObligationMonitor _mmMonitor = new();
+
+    private Timer? _mmMonitorTimer;
+
     public SimTradingCore(
         SimOptions options,
         SimClock? clock = null,
@@ -218,6 +226,8 @@ public sealed class SimTradingCore : IDisposable
     {
         StopReplay();
         StopMarketFeed();
+        _mmMonitorTimer?.Dispose();
+        _mmMonitorTimer = null;
         FlushAsync().GetAwaiter().GetResult();
     }
 
@@ -936,7 +946,8 @@ public sealed class SimTradingCore : IDisposable
 
     /// <summary>
     /// 启动做市机器人：对上市表全部合约挂双边报价（订阅激活的合约由 <see cref="ActivateMarket"/> 增量报价、
-    /// 成交/最新价变化由 <see cref="InsertOrderLocked"/> 尾部维护）。交易所模式专用；walk 模式 no-op（庄家兜底语义不变）。
+    /// 成交/最新价变化由 <see cref="InsertOrderLocked"/> 尾部维护）+ 启动义务监测采样（<see cref="SimOptions.MmMonitorIntervalMs"/>）。
+    /// 交易所模式专用；walk 模式 no-op（庄家兜底语义不变）。
     /// </summary>
     public void StartMarketMakerBot()
     {
@@ -946,16 +957,121 @@ public sealed class SimTradingCore : IDisposable
         {
             foreach (var i in _listedBoard.ToList())
                 RunMarketMaker(perAccount, i.InstrumentId);
+
+            var interval = Math.Max(50, _options.MmMonitorIntervalMs);
+            _mmMonitorTimer ??= new Timer(_ => ObserveMakerObligations(), null, interval, interval);
         }
         foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
             Raise(group.Key, group.Select(x => x.Update).ToList());
     }
 
+    /// <summary>做市商义务监测报告（每合约一行：双边报价占比/当前是否双边/是否达标/违约次数/持仓）。</summary>
+    public IReadOnlyList<MmObligationReport> QueryMakerObligations()
+    {
+        lock (_gate) return _mmMonitor.Report(_options.MmMinQuoteRatio);
+    }
+
+    /// <summary>
+    /// 询价（报价义务「询价回应」的最小实现）：触发做市商对该合约<b>即时</b>双边报价，返回当前是否已双边。
+    /// 机器人关闭 / 触限单边报价 / 未知合约 ⇒ false。walk 模式恒 false（无做市商）。
+    /// </summary>
+    public bool RequestQuote(string instrumentId)
+    {
+        var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
+        bool twoSided;
+        lock (_gate)
+        {
+            ResolveMarketInstrument(instrumentId);
+            var ok = Market.Activate(instrumentId);
+            if (ok) RunMarketMaker(perAccount, instrumentId);
+            twoSided = ok && MakerTwoSidedLocked(instrumentId);
+            if (twoSided) Market.OnBookChanged(instrumentId);   // 询价方（若已订阅）立即见到新盘口
+        }
+        foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
+            Raise(group.Key, group.Select(x => x.Update).ToList());
+        return twoSided;
+    }
+
+    /// <summary>做市商当前是否双边报价（开仓向活单两侧皆有；平仓减仓单不算）。调用须持锁。</summary>
+    private bool MakerTwoSidedLocked(string instrumentId)
+    {
+        var bot = Find(MarketMakerAccountId);
+        if (bot is null) return false;
+        var hasBid = false;
+        var hasAsk = false;
+        foreach (var e in bot.Orders.All)
+        {
+            if (!SimOrderManager.CanCancel(e)) continue;
+            if (!string.Equals(e.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (SimRiskEngine.IsClose(e.Order.OffsetFlag)) continue;
+            if (e.Order.Direction == CtpDirection.Buy) hasBid = true; else hasAsk = true;
+        }
+        return hasBid && hasAsk;
+    }
+
+    /// <summary>义务监测采样（定时器回调；在 <c>_gate</c> 内统计——只读簿/单/持仓，无变异）。</summary>
+    private void ObserveMakerObligations()
+    {
+        lock (_gate)
+        {
+            var bot = Find(MarketMakerAccountId);
+            if (bot is null) return;
+            var limit = Math.Max(1, _options.MmPositionLimit);
+            var elapsed = Math.Max(1, _options.MmMonitorIntervalMs);
+
+            foreach (var instrumentId in _mmInstruments.ToList())
+            {
+                var instrument = InstrumentOf(instrumentId);
+                if (instrument is null) continue;
+
+                var book = bot.Positions.Find(instrumentId);
+                var longLots = book?.Long.Total ?? 0;
+                var shortLots = book?.Short.Total ?? 0;
+
+                // 机器人自己的开仓向挂单 = 它的报价（价差/量义务按此判定）
+                double ownBid = 0, ownAsk = 0;
+                var bidVol = 0;
+                var askVol = 0;
+                foreach (var e in bot.Orders.All)
+                {
+                    if (!SimOrderManager.CanCancel(e)) continue;
+                    if (!string.Equals(e.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (SimRiskEngine.IsClose(e.Order.OffsetFlag)) continue;
+                    if (e.Order.Direction == CtpDirection.Buy)
+                    {
+                        ownBid = ownBid == 0 ? e.Order.LimitPrice : Math.Max(ownBid, e.Order.LimitPrice);
+                        bidVol += e.Remaining;
+                    }
+                    else
+                    {
+                        ownAsk = ownAsk == 0 ? e.Order.LimitPrice : Math.Min(ownAsk, e.Order.LimitPrice);
+                        askVol += e.Remaining;
+                    }
+                }
+
+                var twoSided = ownBid > 0 && ownAsk > 0;
+                var tick = instrument.PriceTick > 0 ? instrument.PriceTick : 1;
+                var spreadOk = !twoSided || ownAsk - ownBid <= Math.Max(2, _options.MmMaxSpreadTicks) * tick + 1e-9;
+                var volumeOk = !twoSided || (bidVol >= Math.Max(1, _options.MmMinQuoteVolume) && askVol >= Math.Max(1, _options.MmMinQuoteVolume));
+                var positionOk = Math.Max(longLots, shortLots) <= limit;
+                var exempt = longLots >= limit || shortLots >= limit;   // 触限单边报价期豁免（不计入占比分母——真实做市协议的持仓豁免条款）
+
+                _mmMonitor.Observe(instrumentId, twoSided, spreadOk, volumeOk, positionOk, exempt, longLots, shortLots, elapsed);
+            }
+        }
+    }
+
     /// <summary>
     /// 做市机器人报价维护（调用须持锁；<see cref="InsertOrderLocked"/> 尾部 + <see cref="ActivateMarket"/> 触发，
-    /// <see cref="_mmQuoting"/> 重入守卫——机器人自己的单不再触发报价）：围绕最新成交价
-    /// ± <see cref="SimOptions.MmSpreadTicks"/> 挂双边 GFD 限价单——价位过期撤旧、缺边补边。
-    /// 机器人的单走正常撮合（可被吃、也可吃人）——价格发现仍归簿。
+    /// <see cref="_mmQuoting"/> 重入守卫——机器人自己的单不再触发报价）：围绕最新成交价挂双边 GFD 限价单
+    /// ——价位过期撤旧、缺边补边。机器人的单走正常撮合（可被吃、也可吃人）——价格发现仍归簿。
+    /// <para>
+    /// <b>交易所约束层（真实做市协议条款的强制面）</b>：①价差钳制——双侧总差 ≤
+    /// <see cref="SimOptions.MmMaxSpreadTicks"/>；②量钳制——单侧 ≥ <see cref="SimOptions.MmMinQuoteVolume"/>；
+    /// ③持仓限额——单边手数触限 ⇒ 停挂<b>加仓侧</b>（「超限禁止开仓」的等价，也是库存偏斜的最简形态：
+    /// 多头触限只剩卖报价、空头触限只剩买报价）；④超限 ⇒ 自动挂平仓单减仓（交易所强平的沙盒等价——
+    /// 机器人自己朝对手侧最优价挂平仓单，吃得到才减）。平仓减仓单不算报价、不被闸门拉（它在卸库存）。
+    /// </para>
     /// </summary>
     private void RunMarketMaker(List<(string AccountId, SimOrderUpdate Update)> perAccount, string instrumentId)
     {
@@ -969,34 +1085,53 @@ public sealed class SimTradingCore : IDisposable
             var bot = GetOrCreate(MarketMakerAccountId);
             if (bot.Account.StaticBalance < MarketMakerFunding)
                 bot.Account.Deposit(MarketMakerFunding - bot.Account.StaticBalance);   // 一次性补足（幂等）
+            _mmInstruments.Add(instrumentId);
+
+            var book = bot.Positions.Find(instrumentId);
+            var longLots = book?.Long.Total ?? 0;
+            var shortLots = book?.Short.Total ?? 0;
+            var limit = Math.Max(1, _options.MmPositionLimit);
 
             var last = Market.GetQuote(instrumentId)?.LastPrice ?? 0;
             if (last <= 0) last = instrument.PreSettlement > 0 ? instrument.PreSettlement : instrument.BasePrice;
             if (last <= 0) return;
             var tick = instrument.PriceTick > 0 ? instrument.PriceTick : 1;
-            var spread = Math.Max(1, _options.MmSpreadTicks) * tick;
+
+            // 义务①②：价差/量钳制（策略想要更宽的点差也不行——交易所说了算）
+            var half = Math.Max(1, Math.Min(Math.Max(1, _options.MmSpreadTicks), Math.Max(2, _options.MmMaxSpreadTicks) / 2));
+            var spread = half * tick;
+            var volume = Math.Max(Math.Max(1, _options.MmVolume), Math.Max(1, _options.MmMinQuoteVolume));
             var desiredBid = instrument.RoundToTick(last - spread);
             var desiredAsk = instrument.RoundToTick(last + spread);
             if (desiredBid <= 0 || desiredAsk <= 0) return;
-            var volume = Math.Max(1, _options.MmVolume);
+
+            // 义务④：超限 ⇒ 自动减仓（先于报价——卸库存优先）
+            if (shortLots > limit) TryFlattenInventory(bot, instrument, CtpDirection.Buy, shortLots - limit, perAccount);
+            if (longLots > limit) TryFlattenInventory(bot, instrument, CtpDirection.Sell, longLots - limit, perAccount);
+
+            // 义务③：持仓限额闸门——加仓侧触限即停（「超限禁止开仓」）
+            var bidCapped = longLots >= limit;
+            var askCapped = shortLots >= limit;
 
             var hasBid = false;
             var hasAsk = false;
             foreach (var entry in bot.Orders.All.Where(SimOrderManager.CanCancel).ToList())
             {
                 if (!string.Equals(entry.Order.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase)) continue;
-                if (entry.Order.Direction == CtpDirection.Buy) hasBid = true; else hasAsk = true;
-                var desired = entry.Order.Direction == CtpDirection.Buy ? desiredBid : desiredAsk;
-                if (Math.Abs(entry.Order.LimitPrice - desired) > 1e-9)
+                if (SimRiskEngine.IsClose(entry.Order.OffsetFlag)) continue;   // 平仓减仓单：不算报价、不被闸门拉（它在卸库存）
+                var isBid = entry.Order.Direction == CtpDirection.Buy;
+                if (isBid) hasBid = true; else hasAsk = true;
+                var desired = isBid ? desiredBid : desiredAsk;
+                if ((isBid ? bidCapped : askCapped) || Math.Abs(entry.Order.LimitPrice - desired) > 1e-9)
                 {
-                    CancelLocked(bot, entry, perAccount);   // 价位过期 ⇒ 撤旧（下方补新）
-                    if (entry.Order.Direction == CtpDirection.Buy) hasBid = false; else hasAsk = false;
+                    CancelLocked(bot, entry, perAccount);   // 侧被闸/价位过期 ⇒ 撤旧（下方按闸门补新）
+                    if (isBid) hasBid = false; else hasAsk = false;
                 }
             }
 
-            if (!hasBid)
+            if (!hasBid && !bidCapped)
                 InsertOrderLocked(MarketMakerAccountId, MmQuote(CtpDirection.Buy, instrumentId, desiredBid, volume), perAccount);
-            if (!hasAsk)
+            if (!hasAsk && !askCapped)
                 InsertOrderLocked(MarketMakerAccountId, MmQuote(CtpDirection.Sell, instrumentId, desiredAsk, volume), perAccount);
         }
         catch (Exception ex)
@@ -1005,6 +1140,51 @@ public sealed class SimTradingCore : IDisposable
         }
         finally { _mmQuoting = false; }
     }
+
+    /// <summary>
+    /// 超限减仓（调用须持锁；<see cref="RunMarketMaker"/> 内）：朝对手侧最优价挂<b>平仓限价单</b>（挂上即交叉，
+    /// 由簿立即撮合）——真实交易所的强平由交易所执行，沙盒里由机器人自办（吃得到才减：对手侧空/只有自己的单
+    /// ⇒ 跳过，等下一个市场事件再试）。同向已有活平仓单 ⇒ 不重复挂（防减仓单堆积）。
+    /// </summary>
+    private void TryFlattenInventory(SimAccountState bot, SimInstrument instrument, CtpDirection direction,
+        int excess, List<(string AccountId, SimOrderUpdate Update)> perAccount)
+    {
+        if (excess <= 0) return;
+
+        // 已有同合约同向活平仓单 ⇒ 等它吃（不堆积）
+        var hasClose = bot.Orders.All.Any(e =>
+            SimOrderManager.CanCancel(e)
+            && SimRiskEngine.IsClose(e.Order.OffsetFlag)
+            && e.Order.Direction == direction
+            && string.Equals(e.Order.InstrumentId, instrument.InstrumentId, StringComparison.OrdinalIgnoreCase));
+        if (hasClose) return;
+
+        if (!_books.TryGetValue(instrument.InstrumentId, out var book) || book.Count == 0) return;
+        var opposite = direction == CtpDirection.Buy ? book.AskSide() : book.BidSide();
+        foreach (var be in opposite)
+        {
+            if (string.Equals(be.AccountId, MarketMakerAccountId, StringComparison.OrdinalIgnoreCase)) continue;   // 自成交禁令
+            var state = Find(be.AccountId);
+            var entry = state?.Orders.Find(be.OrderRef);
+            if (entry is null || !SimOrderManager.CanCancel(entry) || entry.Remaining <= 0) continue;   // 陈旧条目防御
+            // 平仓限价单钉对手最优价（挂上即交叉——WalkBook 立即吃；吃不完的残量留在簿里等对手）
+            InsertOrderLocked(MarketMakerAccountId, MmFlatten(direction, instrument.InstrumentId, be.Price, excess), perAccount);
+            return;
+        }
+    }
+
+    private static CtpOrderRequest MmFlatten(CtpDirection direction, string instrumentId, double price, int volume) => new()
+    {
+        BrokerId = "SIM",
+        InvestorId = MarketMakerAccountId,
+        InstrumentId = instrumentId,
+        Direction = direction,
+        OffsetFlag = CtpOffsetFlag.Close,   // 减仓单：不冻保证金、只冻手续费；不算报价义务、不被限额闸门拉
+        PriceType = CtpOrderPriceType.Limit,
+        LimitPrice = price,
+        Volume = volume,
+        TimeCondition = CtpTimeCondition.GFD,
+    };
 
     private static CtpOrderRequest MmQuote(CtpDirection direction, string instrumentId, double price, int volume) => new()
     {
