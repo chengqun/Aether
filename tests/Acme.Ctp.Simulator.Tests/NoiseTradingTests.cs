@@ -18,6 +18,7 @@ public class NoiseTradingTests
         MarketMakerBot = true,
         NoiseTrading = noise,
         NoiseMaxLots = maxLots,
+        ListedInstruments = new[] { SimHarness.Instrument },   // 交易所模式：上市表 = 可交易集合
         PasswordIterations = 1000,
     };
 

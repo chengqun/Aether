@@ -90,7 +90,8 @@ apps/CtpSim/Acme.Ctp.Sim.Host → Sim.Server        ← 唯一可执行文件（
 
 - `InstrumentCatalog`：SIM 自有品种（sim001 系列：乘数 10/保证金 10%/tick 1/基准 3800）+ 9 个真实品种元数据（ag/au/cu/rb SHFE、m/i DCE、ta CZCE、IF CFFEX、sc INE）。
 - 上市表默认 `sim001`，`AETHER_CTP_SIM_BOARD` 逗号分隔自定义；wire `queryInstruments` 供行情板。
-- **解析链**（两条入口）：下单路径（合成锚价 = 下单价）/ 行情订阅路径（锚价 0 ⇒ 基价 100）——精确命中 → 品种派生（剥数字）→ 合成兜底（`AcceptUnknownInstruments`）。
+- **解析链**（两条入口）：下单路径（合成锚价 = 下单价）/ 行情订阅路径（锚价 0 ⇒ 基价 100）——精确命中 → 品种派生（剥数字）→ 合成兜底（`AcceptUnknownInstruments`，walk 沙盒语义）。
+- **交易所模式的上市闸门**（2026-09-28，用户实测踩中「不存在的合约可下单」后补）：**上市表 = 唯一可交易/可订阅集合**——下单未上市 ⇒ 拒 90002「未上市」（品种可派生也不行，上架是显式决定）；订阅/询价未上市 ⇒ 不激活不响应。上市表自身解析保留完整链条**含合成**（`BOARD` 写什么都能上——上架自由）。walk 模式不受闸门约束（客户端行情板来自证券库，需解析链自由）。
 
 ## 8. 撮合与行情：交易所模式为默认的两种撮合 + 三态可用价格源
 
@@ -174,7 +175,7 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 | 第三方 CTP 软件连不上 | 刻意不实现线协议 | Phase 2 native ABI（§13） |
 | Phase 1 习惯的 env 变量在客户端侧被忽略 | `AETHER_CTP_SIM_DB/TICK_MS/...` 全是 host 进程的变量 | 文档已明说 |
 
-## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，172 例）
+## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，174 例）
 
 纯托管回环 ⇒ 无需 native/柜台/外部进程：
 

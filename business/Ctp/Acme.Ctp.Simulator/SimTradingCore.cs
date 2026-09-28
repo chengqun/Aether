@@ -68,6 +68,9 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>上市合约表（host 上架清单——wire <c>queryInstruments</c> 的数据源；与全量表 <see cref="QueryInstruments"/> 区分）。</summary>
     private readonly List<SimInstrument> _listedBoard = new();
 
+    /// <summary>上市合约 id 集（交易所模式的可交易/可订阅闸门——上市表 = 唯一入口）。</summary>
+    private readonly HashSet<string> _listedIds = new(StringComparer.OrdinalIgnoreCase);
+
     private Timer? _feedTimer;
     private int _frontId = 1;
     private int _sessionId;
@@ -158,7 +161,11 @@ public sealed class SimTradingCore : IDisposable
             {
                 ResolveMarketInstrument(id);
                 var meta = InstrumentOf(id);
-                if (meta is not null) _listedBoard.Add(meta);
+                if (meta is not null)
+                {
+                    _listedBoard.Add(meta);
+                    _listedIds.Add(id);
+                }
             }
         }
 
@@ -637,20 +644,20 @@ public sealed class SimTradingCore : IDisposable
 
     /// <summary>
     /// 激活合约的行情（订阅时调用）。
-    /// <para>walk 模式：<see cref="AdvanceMarket"/> 只推进已激活的合约——只订阅不激活则行情永远不来。</para>
-    /// <para>交易所模式：订阅即推当前快照 tick（此后 tick 全事件驱动——没有快照，订阅后要等下一个簿/成交事件才有价）；
+    /// <para><b>交易所模式：上市闸门</b>——未上市 ⇒ false（不激活、无行情、做市不进场；上市表 = 唯一可订阅集合）。</para>
+    /// <para>walk 模式：<see cref="AdvanceMarket"/> 只推进已激活的合约——只订阅不激活则行情永远不来；
+    /// 按下单同款解析链（精确 → 品种派生 → 合成兜底）补齐元数据（期货页行情板订阅 ~250 个主力合约，绝大多数不在种子表内）。</para>
+    /// <para>交易所模式（已上市）：订阅即推当前快照 tick（此后 tick 全事件驱动——没有快照，订阅后要等下一个簿/成交事件才有价）；
     /// 并让做市机器人对合约挂双边报价（先报价再快照——首帧就有价）。</para>
-    /// <para>先按**下单同款解析链**（精确 → 品种派生 → 合成兜底）补齐合约元数据：期货页行情板订阅的是
-    /// 全部主力合约（~250 个），绝大多数不在种子 9 合约表内——不解析则盘面只有零星几格有价
-    /// （`Market` 引擎的元数据回调只做精确查表，不派生）。</para>
     /// </summary>
-    /// <returns>激活成功与否（严格模式下未知品种 ⇒ false，行情不推）。</returns>
+    /// <returns>激活成功与否（未上市 / 严格模式下未知品种 ⇒ false，行情不推）。</returns>
     public bool ActivateMarket(string instrumentId)
     {
         var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
         bool ok;
         lock (_gate)
         {
+            if (_exchange && !_listedIds.Contains(instrumentId ?? "")) return false;   // 未上市：不激活（perAccount 空——raise 空转）
             ResolveMarketInstrument(instrumentId);
             ok = Market.Activate(instrumentId);
             if (ok && _exchange)
@@ -1100,6 +1107,7 @@ public sealed class SimTradingCore : IDisposable
         bool twoSided;
         lock (_gate)
         {
+            if (_exchange && !_listedIds.Contains(instrumentId ?? "")) return false;   // 未上市：不响应询价
             ResolveMarketInstrument(instrumentId);
             var ok = Market.Activate(instrumentId);
             if (ok) RunMarketMaker(perAccount, instrumentId);
@@ -1488,10 +1496,16 @@ public sealed class SimTradingCore : IDisposable
     private SimAccountState? Find(string accountId)
         => _states.TryGetValue(accountId ?? "", out var s) ? s : null;
 
-    /// <summary>合约解析：精确 → 按品种派生 → 合成（或按 <see cref="SimOptions.AcceptUnknownInstruments"/> 拒绝）。</summary>
+    /// <summary>
+    /// 合约解析：**交易所模式先过上市闸门**（未上市 ⇒ 拒 90002——上市表是唯一可交易集合，上架是显式决定）；
+    /// 然后精确 → 按品种派生 → 合成（或按 <see cref="SimOptions.AcceptUnknownInstruments"/> 拒绝——walk 沙盒语义）。
+    /// </summary>
     private SimInstrument ResolveInstrument(CtpOrderRequest request)
     {
         var id = request.InstrumentId ?? "";
+        if (_exchange && !_listedIds.Contains(id))
+            throw new CtpBusinessException(SimErrorCodes.UnknownInstrument,
+                $"未上市：{id} 不在上市合约表（上市清单见行情板；host 经 AETHER_CTP_SIM_BOARD 自定义上架）。");
         if (_instruments.TryGetValue(id, out var exact)) return exact;
 
         var derived = InstrumentCatalog.DeriveByVariety(id, _instruments);

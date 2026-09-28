@@ -18,6 +18,7 @@ public class ExchangeModeTests
         DatabasePath = null,
         MarketMode = SimMarketMode.Exchange,
         MarketMakerBot = mm,
+        ListedInstruments = new[] { SimHarness.Instrument },   // 交易所模式：上市表 = 可交易集合（ag2610 上架）
     };
 
     /// <summary>交易所模式核心（已激活 ag2610；MM 开时激活即触发做市双边报价）。</summary>
@@ -40,6 +41,30 @@ public class ExchangeModeTests
         // 拒单 = 未接受——bob 无报单无持仓
         Assert.Empty(core.QueryOrders("bob", null));
         Assert.Empty(core.QueryPositions("bob", null));
+    }
+
+    [Fact]
+    public async Task 未上市合约下单被拒_即便品种可派生()
+    {
+        // 交易所模式：上市表 = 唯一可交易集合——rb2701 虽可从 rb 品种派生元数据，但未上架 ⇒ 拒 90002。
+        // （旧「下单即合成合约」的沙盒语义只保留在 walk 显式退路。）
+        var core = await NewExchangeCoreAsync();   // 上市表 = [ag2610]
+
+        var ex = Assert.Throws<CtpBusinessException>(
+            () => core.InsertOrder("bob", SimHarness.Limit(CtpDirection.Buy, 1, 7000, instrument: "rb2701")));
+        Assert.Equal(SimErrorCodes.UnknownInstrument, ex.ErrorId);
+        Assert.Contains("未上市", ex.ErrorMsg);
+        Assert.Empty(core.QueryOrders("bob", null));
+    }
+
+    [Fact]
+    public async Task 未上市合约订阅不激活_询价不响应()
+    {
+        var core = await NewExchangeCoreAsync();
+
+        Assert.False(core.ActivateMarket("rb2701"));   // 不激活 ⇒ 无行情状态
+        Assert.Null(core.Market.GetQuote("rb2701"));
+        Assert.False(core.RequestQuote("rb2701"));     // 询价同样只认上市表
     }
 
     [Fact]

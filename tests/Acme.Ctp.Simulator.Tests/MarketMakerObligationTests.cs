@@ -19,6 +19,7 @@ public class MarketMakerObligationTests
         MarketMode = SimMarketMode.Exchange,
         MarketMakerBot = true,
         NoiseTrading = false,   // 监测统计要的是「静置观测」——噪声定时器不参与（避免慢机上断言期落成交）
+        ListedInstruments = new[] { SimHarness.Instrument },   // 交易所模式：上市表 = 可交易集合
         MmSpreadTicks = spread,
         MmMaxSpreadTicks = maxSpread,
         MmVolume = volume,
