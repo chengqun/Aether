@@ -31,11 +31,16 @@ public partial class CtpBrokerage
             return null!;
         }
         var enumerator = _aggregator.Add(dataConfig, newDataAvailableHandler);
-        _subscriptionManager!.Subscribe(dataConfig);
-        // 捕获 Symbol + 建按分辨率的 bar 聚合器
+
+        // 先登记 Symbol/聚合器，再触发 CTP 订阅（镜像服务端订阅 op 的顺序修复）：
+        // 订阅应答与订阅快照 tick 几乎同拍到达，快照在接收线程触发 OnTickReceived——
+        // 若登记晚一拍（旧序：先 _subscriptionManager.Subscribe 再写字典），空闲市场的唯一一帧
+        // 会被 TryGetValue 丢弃 ⇒ OnData 永不触发 ⇒ 策略不下单 ⇒ 市场自举死锁（2026-09-28 实测第二轮）。
         var sym = dataConfig.Symbol;
         _symbolByInstrument[sym.Value] = sym;
         _barBuilders[sym] = new BarBuilder(dataConfig.Increment);
+
+        _subscriptionManager!.Subscribe(dataConfig);
         CtpLeanGateway.Log($"[Data] 订阅 {sym.Value} 增量={dataConfig.Increment}");
         return enumerator;
     }

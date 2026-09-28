@@ -66,6 +66,25 @@ public class CtpBrokerageDataTests : IDisposable
     }
 
     [Fact]
+    public void 订阅快照在订阅往返内到达不被丢弃()
+    {
+        // 竞态回归（2026-09-28 实测第二轮）：服务端在订阅应答同拍推送快照 tick（接收线程触发
+        // OnTickReceived）——旧序「先触发 CTP 订阅、后登记 _symbolByInstrument」会把它 TryGetValue 丢弃。
+        // 注入钩子让 fake 在 SubscribeMarketDataAsync 返回前同步推一帧 = 确定性复现该时序。
+        _session.OnSubscribe = (_, _) =>
+        {
+            _session.RaiseTick(Tick(7000, "10:00:00"));
+            return Task.CompletedTask;
+        };
+
+        var enumerator = _brokerage.Subscribe(Config(Resolution.Second), (_, _) => { });
+
+        enumerator.MoveNext();
+        var bar = Assert.IsType<CtpBar>(enumerator.Current);   // 快照未被丢弃且立即成棒
+        Assert.Equal(7000m, bar.Close);
+    }
+
+    [Fact]
     public void 后续tick各成单点棒_无延迟()
     {
         var enumerator = _brokerage.Subscribe(Config(Resolution.Second), (_, _) => { });

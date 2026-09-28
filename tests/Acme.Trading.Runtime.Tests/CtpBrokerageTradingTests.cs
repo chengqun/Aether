@@ -314,8 +314,11 @@ public class CtpBrokerageTradingTests : IDisposable
             return Task.CompletedTask;
         }
 
+        /// <summary>订阅钩子（测试注入：模拟服务端在订阅往返期间同步推送订阅快照 tick——竞态回归用）。</summary>
+        public Func<CtpMarketDataConnect, IReadOnlyList<string>, Task>? OnSubscribe { get; set; }
+
         public Task SubscribeMarketDataAsync(CtpMarketDataConnect connect, IReadOnlyList<string> symbols, CancellationToken ct = default)
-            => Task.CompletedTask;
+            => OnSubscribe?.Invoke(connect, symbols) ?? Task.CompletedTask;
 
         public void UnsubscribeMarketData() { }
 
