@@ -18,6 +18,7 @@ public class MarketMakerObligationTests
         DatabasePath = null,
         MarketMode = SimMarketMode.Exchange,
         MarketMakerBot = true,
+        NoiseTrading = false,   // 监测统计要的是「静置观测」——噪声定时器不参与（避免慢机上断言期落成交）
         MmSpreadTicks = spread,
         MmMaxSpreadTicks = maxSpread,
         MmVolume = volume,

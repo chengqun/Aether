@@ -144,6 +144,15 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 - **询价回应**：`RequestQuote(instrumentId)` 触发即时双边报价（wire 化给客户端按钮是后续小活）。
 - 未做（策略层升级项）：连续库存偏斜、动态点差、多机器人竞争阵容——见 §13。
 
+### 9.3 噪声交易者（模拟成交——让行情「活着」）
+
+交易所模式纯事件驱动：无人交易则盘口冻结（做市挂单不动、最新价/成交量停摆——用户实测踩中「打开 app 行情不动」）。**噪声交易者**补上这块：
+
+- 账户 `SIM-NOISE`（普通账户、补足 1e9）——**随机吃做市流动力的程序化参与者**：每 `NoiseIntervalMs`（默认 2500ms）随机挑一个做市覆盖的合约、随机方向**市价**吃单（量 1..`NoiseMaxLots` 默认 3 手）。
+- **真实下单、真实成交、真实记账**——成交 ⇒ 最新价动 ⇒ 做市商移心重挂 ⇒ 盘口持续刷新。价格经**真实成交**移动（区别于旧随机游走的凭空画价：每一跳都有成交记录和账本变动背书）。
+- 持仓/OI 有界：净持仓软钳（超界反转方向）+ 有仓平仓无仓开仓；无对手流动性（做市缺席/单边触限）⇒ 静默跳过。
+- 固定种子可复现（`Seed ^ 0x4E015E`）；`AETHER_CTP_SIM_NOISE=off` 关（静市）；walk/回放 no-op（那两态有自己的行情驱动）。
+
 ## 10. 客户端集成
 
 - `RoutingCtpSession`（唯一 `ICtpSession` 注册）：前置 `sim` / `127.0.0.1:17800` ⇒ `RemoteCtpSession`；真实前置 ⇒ `CtpSessionService`。**切柜台 = 换前置地址重新登录**，无环境变量无重启。
@@ -165,7 +174,7 @@ host 优先级（显式程度优先）：`REPLAY`（给了 CSV 就是回放）> 
 | 第三方 CTP 软件连不上 | 刻意不实现线协议 | Phase 2 native ABI（§13） |
 | Phase 1 习惯的 env 变量在客户端侧被忽略 | `AETHER_CTP_SIM_DB/TICK_MS/...` 全是 host 进程的变量 | 文档已明说 |
 
-## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，168 例）
+## 12. 测试（`tests/Acme.Ctp.Simulator.Tests/`，172 例）
 
 纯托管回环 ⇒ 无需 native/柜台/外部进程：
 
@@ -237,4 +246,4 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 4. 多用户：各桌面实例用**不同账户**登录——挂单互为对手（maker 价成交）、双账户持仓镜像资金对账。
 5. 切回真实柜台：前置地址改回真实前置重新登录（旧会话自动登出，行情板回证券库主力列表）。
 
-**host 环境变量全表**：`AETHER_CTP_SIM_ADDR`（监听端点，默认 127.0.0.1:17800）/ `_DB`（库路径，默认 `~/.aether/ctp-sim.db`）/ `_TICK_MS`（walk tick 间隔）/ `_SEED` / `_BALANCE` / `_BOARD`（上市表）/ `_REPLAY`/`_REPLAY_SPEED`/`_REPLAY_LOOP`（回放）/ `_MODE`（exchange）/ `_MM`/`_MM_SPREAD`/`_MM_VOLUME`（做市）/ `_MM_MAX_SPREAD`/`_MM_MIN_VOLUME`/`_MM_MIN_RATIO`/`_MM_POS_LIMIT`/`_MM_MONITOR_MS`（做市义务）/ `_LOGIN_MAX_FAILURES`/`_LOGIN_LOCKOUT_SEC`（防爆破）。客户端侧零必设项（柜台由前置地址选）。
+**host 环境变量全表**：`AETHER_CTP_SIM_ADDR`（监听端点，默认 127.0.0.1:17800）/ `_DB`（库路径，默认 `~/.aether/ctp-sim.db`）/ `_TICK_MS`（walk tick 间隔）/ `_SEED` / `_BALANCE` / `_BOARD`（上市表）/ `_REPLAY`/`_REPLAY_SPEED`/`_REPLAY_LOOP`（回放）/ `_MODE`（exchange 默认 / walk 退路）/ `_MM`/`_MM_SPREAD`/`_MM_VOLUME`（做市）/ `_MM_MAX_SPREAD`/`_MM_MIN_VOLUME`/`_MM_MIN_RATIO`/`_MM_POS_LIMIT`/`_MM_MONITOR_MS`（做市义务）/ `_NOISE`/`_NOISE_MS`/`_NOISE_MAX_LOTS`（模拟成交）/ `_LOGIN_MAX_FAILURES`/`_LOGIN_LOCKOUT_SEC`（防爆破）。客户端侧零必设项（柜台由前置地址选）。

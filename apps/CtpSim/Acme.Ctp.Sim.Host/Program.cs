@@ -34,6 +34,10 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_MM_MIN_RATIO  双边连续报价时间占比目标（监测口径，默认 0.9；触限单边期豁免）
 //   AETHER_CTP_SIM_MM_POS_LIMIT  做市商持仓限额（每合约单边手数，默认 200——触限停挂加仓侧、超限自动平仓减仓）
 //   AETHER_CTP_SIM_MM_MONITOR_MS 义务监测采样间隔（毫秒，默认 1000）
+//   —— 模拟成交（噪声交易者：随机吃做市流动力的程序化参与者——真实下单真实成交，价格经真实成交移动）——
+//   AETHER_CTP_SIM_NOISE          模拟成交开关（默认 on；off = 静市——无人交易则盘口不动）
+//   AETHER_CTP_SIM_NOISE_MS       噪声交易间隔毫秒（默认 2500，下限 500）
+//   AETHER_CTP_SIM_NOISE_MAX_LOTS 噪声交易单笔手数上限（默认 3；净持仓软钳同值——持仓/OI 有界）
 // 行情随柜台：sim 登录的行情恒为本地产生（按订阅推送）——无环境变量开关。
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -91,7 +95,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         if (accounts.Count > 0)
             Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
         Console.WriteLine(exchangeOn
-            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）| 义务约束：价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边（触限停加仓侧、超限自动平仓）" : "关（纯净簿——无人挂单即无对手价）")} | 新账户初始资金 {opts.Core.InitialBalance}"
+            ? $"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市机器人 {(opts.Core.MarketMakerBot ? $"开（点差 ±{opts.Core.MmSpreadTicks} tick × {opts.Core.MmVolume} 手）| 义务约束：价差≤{opts.Core.MmMaxSpreadTicks}t 量≥{opts.Core.MmMinQuoteVolume}手 占比≥{opts.Core.MmMinQuoteRatio:P0} 仓限{opts.Core.MmPositionLimit}/边（触限停加仓侧、超限自动平仓）" : "关（纯净簿——无人挂单即无对手价）")}{(opts.Core.MarketMakerBot && opts.Core.NoiseTrading ? $" | 模拟成交 噪声交易者（每 {Math.Max(500, opts.Core.NoiseIntervalMs)}ms 随机吃 ≤{opts.Core.NoiseMaxLots} 手）" : "")} | 新账户初始资金 {opts.Core.InitialBalance}"
             : replayOn
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");

@@ -83,6 +83,21 @@ public sealed record SimOptions
     /// <summary>做市机器人单侧挂单手数（默认 5）。host 环境变量 <c>AETHER_CTP_SIM_MM_VOLUME</c>。</summary>
     public int MmVolume { get; init; } = 5;
 
+    // —— 噪声交易者（模拟成交——让行情「活着」的程序化参与者）——
+
+    /// <summary>
+    /// 模拟成交（默认开）：随机吃做市流动力的程序化参与者（账户 <c>SIM-NOISE</c>）——**真实下单、真实成交、
+    /// 真实记账**，价格经真实成交移动（区别于旧随机游走的凭空画价）。让盘口有成交、最新价/成交量持续更新。
+    /// host 环境变量 <c>AETHER_CTP_SIM_NOISE</c>。
+    /// </summary>
+    public bool NoiseTrading { get; init; } = true;
+
+    /// <summary>噪声交易间隔（毫秒，默认 2500；host 侧下限 500）。host 环境变量 <c>AETHER_CTP_SIM_NOISE_MS</c>。</summary>
+    public int NoiseIntervalMs { get; init; } = 2500;
+
+    /// <summary>噪声交易单笔手数上限（默认 3；净持仓软钳同值——超界反转方向 ⇒ 持仓/OI 有界）。host 环境变量 <c>AETHER_CTP_SIM_NOISE_MAX_LOTS</c>。</summary>
+    public int NoiseMaxLots { get; init; } = 3;
+
     // —— 做市商义务（交易所约束层——真实做市协议的核心条款；策略层各家自便，约束层人人须守）——
 
     /// <summary>义务：最大报价价差（买一卖一总差，tick 数；&lt;2 视为 2——买卖不可同价自锁）。host 环境变量 <c>AETHER_CTP_SIM_MM_MAX_SPREAD</c>。</summary>
@@ -137,6 +152,9 @@ public sealed record SimOptions
             MmMinQuoteRatio = Math.Clamp(EnvDouble("AETHER_CTP_SIM_MM_MIN_RATIO", 0.9), 0, 1),
             MmPositionLimit = Math.Max(1, EnvInt("AETHER_CTP_SIM_MM_POS_LIMIT", 200)),
             MmMonitorIntervalMs = Math.Max(50, EnvInt("AETHER_CTP_SIM_MM_MONITOR_MS", 1000)),
+            NoiseTrading = ParseBool("AETHER_CTP_SIM_NOISE", defaultValue: true),
+            NoiseIntervalMs = EnvInt("AETHER_CTP_SIM_NOISE_MS", 2500),
+            NoiseMaxLots = Math.Max(1, EnvInt("AETHER_CTP_SIM_NOISE_MAX_LOTS", 3)),
             LoginMaxFailures = Math.Max(1, EnvInt("AETHER_CTP_SIM_LOGIN_MAX_FAILURES", 5)),
             LoginLockoutSeconds = Math.Max(0, EnvInt("AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC", 60)),
         };

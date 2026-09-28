@@ -99,6 +99,7 @@ public sealed class SimTradingCore : IDisposable
         _matching = matching ?? new SimpleMatchingEngine(options);
         _store = store ?? StoreOf(options);
         _exchange = options.MarketMode == SimMarketMode.Exchange;
+        _noiseRng = new Random(unchecked(options.Seed ^ 0x4E015E));   // 噪声随机源（独立于游走/撮合的种子）
 
         Market = new SimMarketDataEngine(options, _clock, InstrumentOf);
         Market.TickGenerated += (_, tick) => TickProduced?.Invoke(tick);
@@ -228,6 +229,8 @@ public sealed class SimTradingCore : IDisposable
         StopMarketFeed();
         _mmMonitorTimer?.Dispose();
         _mmMonitorTimer = null;
+        _noiseTimer?.Dispose();
+        _noiseTimer = null;
         FlushAsync().GetAwaiter().GetResult();
     }
 
@@ -1069,6 +1072,13 @@ public sealed class SimTradingCore : IDisposable
 
             var interval = Math.Max(50, _options.MmMonitorIntervalMs);
             _mmMonitorTimer ??= new Timer(_ => ObserveMakerObligations(), null, interval, interval);
+
+            // 模拟成交（噪声交易者）——默认开：随机吃做市流动性，让盘口有成交、价格会动（关：AETHER_CTP_SIM_NOISE=off）
+            if (_options.NoiseTrading)
+            {
+                var noiseInterval = Math.Max(500, _options.NoiseIntervalMs);
+                _noiseTimer ??= new Timer(_ => RunNoiseTrade(), null, noiseInterval, noiseInterval);
+            }
         }
         foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
             Raise(group.Key, group.Select(x => x.Update).ToList());
@@ -1307,6 +1317,85 @@ public sealed class SimTradingCore : IDisposable
         Volume = volume,
         TimeCondition = CtpTimeCondition.GFD,
     };
+
+    // —— 噪声交易者（模拟成交——让行情「活着」的程序化参与者）——
+
+    /// <summary>噪声交易者账户（模拟市场活动：随机吃做市流动性——真实下单、真实成交、真实记账）。</summary>
+    public const string NoiseAccountId = "SIM-NOISE";
+
+    /// <summary>噪声交易者资金（与做市商同款一次性补足）。</summary>
+    private const double NoiseFunding = 1_000_000_000;
+
+    private Timer? _noiseTimer;
+
+    /// <summary>噪声随机源（种子 = Seed ^ 'N'015E——固定 ⇒ 序列可复现）。</summary>
+    private readonly Random _noiseRng;
+
+    /// <summary>
+    /// 跑一轮噪声交易（host 定时器回调 + 测试直调）：从做市覆盖的合约里随机挑一个，随机方向<b>市价</b>吃流动性
+    /// （量 1..<see cref="SimOptions.NoiseMaxLots"/>）——真实下单、真实成交、真实记账；成交 ⇒ 最新价动 ⇒
+    /// 做市商移心重挂（<see cref="InsertOrderLocked"/> 尾部自动触发）⇒ 盘口持续刷新。
+    /// <para>
+    /// 持仓有界（否则 OI 无限膨胀）：净持仓软钳 <paramref name="NoiseMaxLots"/>——超界即反转方向；
+    /// 有可平的仓则<b>平仓</b>（控 OI），无仓才开仓。无对手流动性（做市缺席/单边触限）⇒ 本轮跳过。
+    /// 交易所模式专用；walk/回放模式 no-op（那两态有自己的行情驱动）。
+    /// </para>
+    /// </summary>
+    public void RunNoiseTrade()
+    {
+        if (!_exchange) return;
+        var perAccount = new List<(string AccountId, SimOrderUpdate Update)>();
+        lock (_gate)
+        {
+            RunNoiseTradeLocked(perAccount);
+        }
+        foreach (var group in perAccount.GroupBy(x => x.AccountId, StringComparer.OrdinalIgnoreCase))
+            Raise(group.Key, group.Select(x => x.Update).ToList());
+    }
+
+    /// <summary>噪声交易主体（调用须持锁）。合约选择按 Ordinal 排序后随机取——同种子可复现。</summary>
+    private void RunNoiseTradeLocked(List<(string AccountId, SimOrderUpdate Update)> perAccount)
+    {
+        if (_mmInstruments.Count == 0) return;
+        var instrumentId = _mmInstruments.OrderBy(i => i, StringComparer.Ordinal).ToList()[_noiseRng.Next(_mmInstruments.Count)];
+        var instrument = InstrumentOf(instrumentId);
+        if (instrument is null) return;
+
+        var noise = GetOrCreate(NoiseAccountId);
+        if (noise.Account.StaticBalance < NoiseFunding)
+            noise.Account.Deposit(NoiseFunding - noise.Account.StaticBalance);
+
+        // 方向：随机，净持仓软钳（超界反转 ⇒ 持仓/OI 有界、方向自动回归）
+        var maxLots = Math.Max(1, _options.NoiseMaxLots);
+        var book = noise.Positions.Find(instrumentId);
+        var net = (book?.Long.Total ?? 0) - (book?.Short.Total ?? 0);
+        var direction = _noiseRng.Next(2) == 0 ? CtpDirection.Buy : CtpDirection.Sell;
+        if (direction == CtpDirection.Buy && net >= maxLots) direction = CtpDirection.Sell;
+        else if (direction == CtpDirection.Sell && net <= -maxLots) direction = CtpDirection.Buy;
+
+        // 开平：有可平的仓则平（控 OI），无仓才开
+        var closable = direction == CtpDirection.Buy ? book?.Short.Total ?? 0 : book?.Long.Total ?? 0;
+        var offset = closable > 0 ? CtpOffsetFlag.Close : CtpOffsetFlag.Open;
+        var volume = _noiseRng.Next(1, maxLots + 1);
+        if (offset == CtpOffsetFlag.Close && volume > closable) volume = closable;
+        if (volume <= 0) return;
+
+        // 无对手流动性（做市缺席/单边触限）⇒ 本轮跳过（不硬吃 90016）
+        if (!HasOppositeLiquidity(NoiseAccountId, instrumentId, direction)) return;
+
+        InsertOrderLocked(NoiseAccountId, new CtpOrderRequest
+        {
+            BrokerId = "SIM",
+            InvestorId = NoiseAccountId,
+            InstrumentId = instrumentId,
+            Direction = direction,
+            OffsetFlag = offset,
+            PriceType = CtpOrderPriceType.Market,
+            LimitPrice = 0,
+            Volume = volume,
+            TimeCondition = CtpTimeCondition.GFD,
+        }, perAccount);
+    }
 
     // —— 交易所模式行情源回调（引擎经 BindBook 持有；全部在 _gate 内调用）——
 
