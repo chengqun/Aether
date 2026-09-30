@@ -85,7 +85,22 @@ public class CtpSessionService : ICtpSession, IDisposable
         trader.FrontConnected += OnTraderFrontConnected;
         trader.FrontDisconnected += OnTraderFrontDisconnected;
 
-        var result = await trader.LoginAsync(request);
+        LoginResult result;
+        try
+        {
+            result = await trader.LoginAsync(request);
+        }
+        catch
+        {
+            // 登录失败即弃 native 会话：SDK 失败后仍按前置地址后台自动重连+自动重登
+            // （_hadLoggedIn=false 只挡本服务的重登，挡不住 SDK 自身）——不 Dispose 会留下
+            // 永久重连的孤儿连接（连接泄漏 + 柜台日志刷屏 + 幽灵重登与后续手动登录互踩）。
+            // 先摘事件再释放（镜像 ReconnectAsync 的释放序）。
+            try { trader.FrontConnected -= OnTraderFrontConnected; } catch { }
+            try { trader.FrontDisconnected -= OnTraderFrontDisconnected; } catch { }
+            try { trader.Dispose(); } catch { }
+            throw;
+        }
 
         lock (_lock)
         {

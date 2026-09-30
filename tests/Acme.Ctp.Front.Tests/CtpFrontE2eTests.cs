@@ -90,4 +90,39 @@ public sealed class CtpFrontE2eTests : IDisposable
         var login2 = await trader2.LoginAsync(Connect(_sim, User6B, "twice-pass"));
         Assert.Equal("20260923", login2.TradingDay);
     }
+
+    /// <summary>
+    /// 桌面端连接器实测踩中的形态（2026-09-30：连接器表单 AppId/AuthCode 留空 + 4 字符用户号
+    /// ⇒ 连接失败）。修复前 ⑥ 的 18B AppId 槽 + ⑥⑧⑩⑫ 的 6B user 槽被变长替换缩帧 ⇒ SDK
+    /// 记录遍历失步 ⇒ LoginAsync 超时。修复 = 模板 <c>F()</c> 等宽归一化（截断/右补空格到抓包
+    /// 槽宽）——任意宽度用户/AppId 都归一到抓包帧形状。注意不断言 AccountId 精确值（4 字符
+    /// 用户在 ⑯ 回显为补空格的 6 字符——回显仅语义展示，账户身份以核心账本为准）。
+    /// </summary>
+    [Fact]
+    public async Task 桌面端连接器形态_空AppId短用户_等宽归一化后全链路()
+    {
+        var flowDir = NewFlowDir();
+        Directory.CreateDirectory(flowDir);
+        using var trader = new CtpTrader(flowDir);
+
+        var login = await trader.LoginAsync(new CtpConnectRequest
+        {
+            FrontAddress = _sim.FrontAddress,
+            BrokerId = FrontLoopback.Broker,
+            UserId = "tst1",            // 4 字符——短于抓包 6B user 槽
+            Password = "desk-pass",
+            AppId = "",                 // 桌面端连接器表单留空——⑥ 的 18B AppId 槽
+            AuthCode = "",
+        });
+        Assert.Equal("20260923", login.TradingDay);
+        Assert.True(int.Parse(login.MaxOrderRef) >= 0, $"MaxOrderRef 非数值: {login.MaxOrderRef}");
+
+        await trader.ConfirmSettlementAsync(FrontLoopback.Broker, "tst1");
+
+        var account = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, "tst1");
+        Assert.Equal(FrontLoopback.InitialBalance, account.Balance);
+
+        var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, "tst1");
+        Assert.DoesNotContain(positions, p => p.TotalPosition != 0 || p.TodayPosition != 0 || p.YdPosition != 0);
+    }
 }

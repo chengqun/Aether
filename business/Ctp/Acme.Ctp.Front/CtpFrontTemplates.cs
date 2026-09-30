@@ -21,6 +21,15 @@ internal static class CtpFrontTemplates
     /// <summary>ASCII 字符串值 → 字节（协议字段值为 ASCII）。</summary>
     internal static byte[] A(string s) => Encoding.ASCII.GetBytes(s);
 
+    /// <summary>等宽归一化：值截断/右补空格到抓包槽宽再转 ASCII。verbatim 模板对字段宽度敏感——
+    /// 变长替换缩/撑 payload 曾致 SDK 记录遍历失步挂死（>6 字符用户/空 AppId 均实测）；
+    /// 任意宽度 broker/user/AppId/账户都归一到抓包形状。回显字段仅语义展示，账户身份以核心账本为准。</summary>
+    internal static byte[] F(string s, int width)
+    {
+        var v = s.Length > width ? s[..width] : s.PadRight(width, ' ');
+        return Encoding.ASCII.GetBytes(v);
+    }
+
     /// <summary>资金字段值：大端 double（8B）。</summary>
     internal static byte[] Money(double v)
     {
@@ -83,9 +92,9 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildAuthRsp(string brokerId, string userId, string appId, byte reqId) =>
         Apply(AuthRspTemplate,
             new Edit(12, 1, [reqId]),
-            new Edit(17, 4, A(brokerId)),
-            new Edit(22, 6, A(userId)),
-            new Edit(159, 18, A(appId))
+            new Edit(17, 4, F(brokerId, 4)),
+            new Edit(22, 6, F(userId, 6)),
+            new Edit(159, 18, F(appId, 18))
         );
 
     // ===== 帧 ⑧ 登录预响应（77B payload：broker/user 替换） =====
@@ -96,8 +105,8 @@ internal static class CtpFrontTemplates
     /// <summary>⑧ 登录预响应（SDK 收 ⑧ 后自动发 ⑨ 系统信息请求）。</summary>
     internal static byte[] BuildLoginRsp(string brokerId, string userId) =>
         Apply(LoginRspTemplate,
-            new Edit(30, 4, A(brokerId)),
-            new Edit(35, 6, A(userId))
+            new Edit(30, 4, F(brokerId, 4)),
+            new Edit(35, 6, F(userId, 6))
         );
 
     // ===== 帧 ⑩ 登录结果主帧（206B payload：loginReqId/broker/user/交易日×2 替换） =====
@@ -109,10 +118,10 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildSysInfoRsp(string brokerId, string userId, byte loginReqId, string tradingDay) =>
         Apply(SysInfoRspTemplate,
             new Edit(12, 1, [loginReqId]),
-            new Edit(59, 4, A(brokerId)),
-            new Edit(64, 6, A(userId)),
-            new Edit(41, 8, A(tradingDay)),
-            new Edit(185, 8, A(tradingDay))
+            new Edit(59, 4, F(brokerId, 4)),
+            new Edit(64, 6, F(userId, 6)),
+            new Edit(41, 8, F(tradingDay, 8)),
+            new Edit(185, 8, F(tradingDay, 8))
         );
 
     /// <summary>⑩ 伴随帧（42B payload + 4B 头 = 46B 整帧——与主帧同一次 TCP 写出）。</summary>
@@ -130,9 +139,9 @@ internal static class CtpFrontTemplates
         Apply(SettleRspTemplate,
             new Edit(10, 1, [instance]),
             new Edit(16, 1, [reqId]),
-            new Edit(34, 4, A(brokerId)),
-            new Edit(39, 6, A(userId)),
-            new Edit(46, 8, A(tradingDay))
+            new Edit(34, 4, F(brokerId, 4)),
+            new Edit(39, 6, F(userId, 6)),
+            new Edit(46, 8, F(tradingDay, 8))
         );
 
     // ===== 帧 ⑯ 资金应答（134B payload：reqId/broker/账户×2/交易日 + 6 个 E0 转义大端余额字段） =====
@@ -144,10 +153,10 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildQryAccountRsp(byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
         Apply(QryAccountRspTemplate,
             new Edit(16, 1, [reqId]),
-            new Edit(21, 4, A(brokerId)),
+            new Edit(21, 4, F(brokerId, 4)),
             new Edit(26, 5, A(accountId.Length >= 5 ? accountId[..5] : accountId.PadLeft(5, '0'))),
-            new Edit(32, 6, A(accountId)),
-            new Edit(99, 8, A(tradingDay)),
+            new Edit(32, 6, F(accountId, 6)),
+            new Edit(99, 8, F(tradingDay, 8)),
             new Edit(46, 9, EscapedMoney(balance)),
             new Edit(55, 9, EscapedMoney(balance)),
             new Edit(71, 9, EscapedMoney(balance)),

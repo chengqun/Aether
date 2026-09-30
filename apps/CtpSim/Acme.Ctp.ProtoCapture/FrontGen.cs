@@ -93,27 +93,27 @@ internal static class FrontGen
         var e6 = new (int Off, int Len, string Expr)[]
         {
             LocFull(p6, Hx("E43011E502015BE3"), 1, "[reqId]", "⑥ reqId"),
-            LocVal(p6, Hx("FE"), Asc(broker), "A(brokerId)", "⑥ broker"),
-            LocVal(p6, Hx("E7"), Asc(user), "A(userId)", "⑥ user"),
-            LocVal(p6, Hx("E5"), Asc(appId), "A(appId)", "⑥ AppID"),
+            LocVal(p6, Hx("FE"), Asc(broker), $"F(brokerId, {broker.Length})", "⑥ broker"),
+            LocVal(p6, Hx("E7"), Asc(user), $"F(userId, {user.Length})", "⑥ user"),
+            LocVal(p6, Hx("E5"), Asc(appId), $"F(appId, {appId.Length})", "⑥ AppID"),
         };
         CheckDisjoint("⑥", e6);
 
         var p8 = Payload(frames, 8);
         var e8 = new (int Off, int Len, string Expr)[]
         {
-            LocVal(p8, Hx("FE"), Asc(broker), "A(brokerId)", "⑧ broker"),
-            LocVal(p8, Hx("E7"), Asc(user), "A(userId)", "⑧ user"),
+            LocVal(p8, Hx("FE"), Asc(broker), $"F(brokerId, {broker.Length})", "⑧ broker"),
+            LocVal(p8, Hx("E7"), Asc(user), $"F(userId, {user.Length})", "⑧ user"),
         };
         CheckDisjoint("⑧", e8);
 
         var e10 = new (int Off, int Len, string Expr)[]
         {
             LocFull(p10a, Hx("E503018DE3"), 1, "[loginReqId]", "⑩ loginReqId"),
-            LocVal(p10a, Hx("E1"), Asc(broker), "A(brokerId)", "⑩ broker"),
-            LocVal(p10a, Hx("E7"), Asc(user), "A(userId)", "⑩ user"),
-            LocVal(p10a, Hx("1010030124"), Asc(day), "A(tradingDay)", "⑩ 交易日#1"),
-            LocVal(p10a, Hx("E401E301"), Asc(day), "A(tradingDay)", "⑩ 交易日#2"),
+            LocVal(p10a, Hx("E1"), Asc(broker), $"F(brokerId, {broker.Length})", "⑩ broker"),
+            LocVal(p10a, Hx("E7"), Asc(user), $"F(userId, {user.Length})", "⑩ user"),
+            LocVal(p10a, Hx("1010030124"), Asc(day), $"F(tradingDay, {day.Length})", "⑩ 交易日#1"),
+            LocVal(p10a, Hx("E401E301"), Asc(day), $"F(tradingDay, {day.Length})", "⑩ 交易日#2"),
         };
         CheckDisjoint("⑩", e10);
 
@@ -122,9 +122,9 @@ internal static class FrontGen
         {
             LocFull(p12, Hx("E101E24014E3"), 1, "[instance]", "⑫ instance"),
             LocFull(p12, Hx("E19CE3"), 1, "[reqId]", "⑫ reqId"),
-            LocVal(p12, Hx("E13F"), Asc(broker), "A(brokerId)", "⑫ broker"),
-            LocVal(p12, Hx("E7"), Asc(user), "A(userId)", "⑫ user"),
-            LocVal(p12, Hx("E7"), Asc(day), "A(tradingDay)", "⑫ 交易日"),
+            LocVal(p12, Hx("E13F"), Asc(broker), $"F(brokerId, {broker.Length})", "⑫ broker"),
+            LocVal(p12, Hx("E7"), Asc(user), $"F(userId, {user.Length})", "⑫ user"),
+            LocVal(p12, Hx("E7"), Asc(day), $"F(tradingDay, {day.Length})", "⑫ 交易日"),
         };
         CheckDisjoint("⑫", e12);
 
@@ -153,14 +153,14 @@ internal static class FrontGen
             // 实文核验: 帧16 op 后 `E301 E101 018E E3 05`，05 = qryAcct reqId 回显）。
             // 注: Python 原版 needle "E18EE3" 是从未执行过的转录笔误（字节不在帧内），此处已修正。
             LocFull(p16, Hx("E101018EE3"), 1, "[reqId]", "⑯ reqId"),
-            LocVal(p16, Hx("E10C018A"), Asc(broker), "A(brokerId)", "⑯ broker"),
+            LocVal(p16, Hx("E10C018A"), Asc(broker), $"F(brokerId, {broker.Length})", "⑯ broker"),
             // 账户#1（抓包值 = 用户名去尾 5 字符，语义未知；oracle 实证 AccountID=槽#2 非此处）：
             // 等宽守卫——恰好 5 字符进出，任意宽 accountId 不撑大 payload
             //（+1 增长曾把 E1 推到槽#2 值位 ⇒ SDK 读出空 AccountID）。
             LocValSur(p16, Hx("E1"), Asc(acctShort), Hx("E1"),
                 $"A(accountId.Length >= {acctShort.Length} ? accountId[..{acctShort.Length}] : accountId.PadLeft({acctShort.Length}, '0'))", "⑯ 账户#1"),
-            LocValSur(p16, Hx("E1"), Asc(user), Hx("E1"), "A(accountId)", "⑯ 账户#2"),
-            LocVal(p16, Hx("E8"), Asc(day), "A(tradingDay)", "⑯ 交易日"),
+            LocValSur(p16, Hx("E1"), Asc(user), Hx("E1"), $"F(accountId, {user.Length})", "⑯ 账户#2"),
+            LocVal(p16, Hx("E8"), Asc(day), $"F(tradingDay, {day.Length})", "⑯ 交易日"),
         };
         e16.AddRange(balOffsets.Select(o => (o, balWireLen, "EscapedMoney(balance)")));
         CheckDisjoint("⑯", e16.ToArray());
@@ -458,6 +458,15 @@ internal static class FrontGen
         sb.AppendLine();
         sb.AppendLine("    /// <summary>ASCII 字符串值 → 字节（协议字段值为 ASCII）。</summary>");
         sb.AppendLine("    internal static byte[] A(string s) => Encoding.ASCII.GetBytes(s);");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>等宽归一化：值截断/右补空格到抓包槽宽再转 ASCII。verbatim 模板对字段宽度敏感——");
+        sb.AppendLine("    /// 变长替换缩/撑 payload 曾致 SDK 记录遍历失步挂死（>6 字符用户/空 AppId 均实测）；");
+        sb.AppendLine("    /// 任意宽度 broker/user/AppId/账户都归一到抓包形状。回显字段仅语义展示，账户身份以核心账本为准。</summary>");
+        sb.AppendLine("    internal static byte[] F(string s, int width)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var v = s.Length > width ? s[..width] : s.PadRight(width, ' ');");
+        sb.AppendLine("        return Encoding.ASCII.GetBytes(v);");
+        sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>资金字段值：大端 double（8B）。</summary>");
         sb.AppendLine("    internal static byte[] Money(double v)");

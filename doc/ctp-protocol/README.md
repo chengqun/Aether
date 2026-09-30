@@ -187,9 +187,14 @@ dotnet run --project apps/CtpSim/Acme.Ctp.ProtoCapture -- gen [trade.txt路径] 
 
 已知边界（M1）：FrontID/SessionID/MaxOrderRef verbatim 回放抓包值；
 服务端心跳发射未做（短会话够用，长会话待 M2 观察 SDK 超时行为）；
-**等宽用户约束**——模板对 user 字段的 Edit 槽宽 = 抓包值 "247163" 的 6 字符（⑥/⑧/⑩/⑫），
-⑯ 账户#1 槽已做等宽守卫（`accountId[..5]` 截断）；真实用户 ID 常为 7~8 位 ⇒ 终局方案需
-生成器层重算长度字段（8 字符用户实测 ⑥ 挂死——SDK 对超宽替换的记录遍历失步）。
+**等宽归一化（2026-09-30 桌面端实测修复）**——verbatim 模板对字段宽度敏感：变长替换缩/撑
+payload 会致 SDK 记录遍历失步**无限挂死**（8 字符用户 / 空AppId+4字符用户双实测——桌面端
+连接器 AppId 留空即踩中，⑥ 的 18B AppId 槽缩帧后 SDK 连 ⑦ 都不发）。修复 = 生成器发射
+`F(value, width)` 等宽归一化（截断/右补空格到抓包槽宽）：broker=4/user=6/AppId=18/交易日=8
+全部归一，任意宽度值可登录（>6 字符用户回显截断到 6——回显仅语义展示，账户身份以核心账本
+为准）；E2E `桌面端连接器形态_空AppId短用户_等宽归一化后全链路` 钉住（修复前该测试无限
+挂死 = 桌面端症状复现）。**变长支持（任意宽度不截断回显）仍需生成器层重算帧内长度字段**
+（终局方案，未做）。
 
 ## 抓包工具
 
@@ -198,7 +203,7 @@ dotnet run --project apps/CtpSim/Acme.Ctp.ProtoCapture -- \
   --front tcp://<真实前置> --mdfront tcp://<真实行情前置> \
   --user <账号> --password <密码> --broker <经纪商代码>
 
-# 直连验收（里程碑 1）——首参 tcp: 前缀即直连模式（账号须 ≤6 字符，等宽约束见已知边界）：
+# 直连验收（里程碑 1）——首参 tcp: 前缀即直连模式（任意宽度账号可登录——模板已等宽归一化，见已知边界）：
 dotnet run --project apps/CtpSim/Acme.Ctp.ProtoCapture -- tcp://127.0.0.1:17801 <账号> <密码>
 ```
 
