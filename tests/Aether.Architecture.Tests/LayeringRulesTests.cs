@@ -26,11 +26,15 @@ public class LayeringRulesTests
         ("Acme.Trading.AI", "Acme.Trading.Runtime.Domain"),
     };
 
-    /// <summary>允许引用 externals/ 的项目：Ctp.Net.Core（native 包装）唯一消费方 + Lean 引擎唯一桥接层（CLAUDE.md「Trading + Lean」节）。</summary>
+    /// <summary>允许引用 externals/ 的项目：Ctp.Net.Core（native 包装）唯一消费方 + Lean 引擎唯一桥接层（CLAUDE.md「Trading + Lean」节）
+    /// + ProtoCapture（CTP 协议抓包/直连验收工具——全部用途就是驱动官方 SDK，见 CLAUDE.md「CTP 线协议前置」节）
+    /// + Acme.Ctp.Front.Tests（CTP 前置 E2E——官方 SDK 客户端 CtpTrader 即裁判，同上节）。</summary>
     private static readonly HashSet<string> ExternalsWhitelist = new(StringComparer.Ordinal)
     {
         "business/Ctp/Acme.Ctp.Infrastructure/Acme.Ctp.Infrastructure.csproj",
         "business/Trading.Runtime/Acme.Trading.Runtime.Lean/Acme.Trading.Runtime.Lean.csproj",
+        "apps/CtpSim/Acme.Ctp.ProtoCapture/Acme.Ctp.ProtoCapture.csproj",
+        "tests/Acme.Ctp.Front.Tests/Acme.Ctp.Front.Tests.csproj",
     };
 
     // ────────────────────────── business/ 层规则 ──────────────────────────
@@ -270,7 +274,7 @@ public class LayeringRulesTests
                 .Where(r => r.StartsWith("externals/", StringComparison.Ordinal))
                 .Select(r => (p, r)))
             .Where(x => !ExternalsWhitelist.Contains(x.p.RelativePath))
-            .Select(x => $"{x.p.RelativePath} → {x.r}（externals 只允许 Ctp.Infrastructure（Ctp.Net.Core）与 Trading.Runtime.Lean（Lean 引擎桥）引用）")
+            .Select(x => $"{x.p.RelativePath} → {x.r}（externals 只经白名单项目进入：Ctp.Infrastructure（Ctp.Net.Core）/ Trading.Runtime.Lean（Lean 引擎桥）/ ProtoCapture 与 Front.Tests（官方 SDK 驱动），全表见 ExternalsWhitelist）")
             .ToList();
 
         Assert.True(violations.Count == 0,

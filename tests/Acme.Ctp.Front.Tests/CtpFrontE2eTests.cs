@@ -1,0 +1,93 @@
+using System.Runtime.CompilerServices;
+using Ctp.Net.Core.Trader;
+
+namespace Acme.Ctp.Front.Tests;
+
+/// <summary>
+/// M1 全链路 E2E：官方 CTP SDK 客户端（<see cref="CtpTrader"/>——P/Invoke 官方 C++ 库）直连
+/// <c>CtpFrontServer</c>，走 握手→挑战→认证→登录→结算→查资金→查持仓 全链路。
+/// <para>
+/// 验收语义 = <b>SDK 即裁判</b>：官方 C++ SDK 自己解析我们回放的帧，字段值对不上/帧形状错
+/// ⇒ 回调不触发 ⇒ <c>CtpTrader</c> 15~30s 超时抛异常 ⇒ 测试失败。这就是
+/// 「让所有 CTP Client 认为自己连的是真实 CTP Front」的机器判定。
+/// </para>
+/// </summary>
+public sealed class CtpFrontE2eTests : IDisposable
+{
+    // xunit 每测试方法新建类实例 ⇒ 逐测试独立的 FrontLoopback（核心+端口互不污染）
+    private readonly FrontLoopback _sim = FrontLoopback.Start();
+
+    public void Dispose() => _sim.Dispose();
+
+    /// <summary>每个 CtpTrader 实例一个全新流文件目录（CTP SDK 落流文件；复用目录会重放旧流）。</summary>
+    private static string NewFlowDir([CallerMemberName] string test = "")
+        => Path.Combine(Path.GetTempPath(), "ctp-front-e2e", test, Guid.NewGuid().ToString("N"));
+
+    // 用户名长度是承重约束：模板对 user 字段的 Edit 槽宽 = 抓包值 "247163" 的 6 字符
+    // （⑥/⑧/⑩/⑫ 的 user Edit 均 OldLen=6）。等宽用户下这些替换零增长；更长/更短的用户
+    // 会撑大/缩短 payload——若帧内有内部长度/计数字段未同步，SDK 记录遍历会失步挂死。
+    // 真实用户 ID 常为 7~8 位 ⇒ 终局方案需生成器层重算长度字段，等宽只是本实验的隔离变量。
+    // （⑯ 资金应答槽#1 已由生成器做等宽守卫：accountId[..5] 截断，5 进 5 出零增长。）
+    private const string User6 = "e2eusr";
+    private const string User6B = "twiceu";
+
+    private static CtpConnectRequest Connect(FrontLoopback sim, string user, string password) => new()
+    {
+        FrontAddress = sim.FrontAddress,
+        BrokerId = FrontLoopback.Broker,
+        UserId = user,
+        Password = password,
+        AppId = "simnow_client_test",
+        AuthCode = "0000000000000000",
+    };
+
+    [Fact]
+    public async Task 官方SDK直连前置_登录结算资金持仓全链路()
+    {
+        var flowDir = NewFlowDir();
+        Directory.CreateDirectory(flowDir);
+        using var trader = new CtpTrader(flowDir);
+
+        // 登录（SDK 内部：⑤认证→⑦登录→⑧预响应→⑨系统信息→⑩登录结果→⑪自动结算确认）
+        var login = await trader.LoginAsync(Connect(_sim, User6, "e2e-pass"));
+        Assert.Equal("20260923", login.TradingDay);
+        // 客户端契约：MaxOrderRef 必须可 int.Parse（登录后拿它做起始单号）
+        Assert.True(int.Parse(login.MaxOrderRef) >= 0, $"MaxOrderRef 非数值: {login.MaxOrderRef}");
+
+        // 显式结算确认（⑬→⑭，DirectTest 同款流程；instance 自增 ②）
+        await trader.ConfirmSettlementAsync(FrontLoopback.Broker, User6);
+
+        // 资金查询（⑮→⑯：六个余额字段全 ← Balance，E0 转义大端 double——tag 字母表字节前插 E0；
+        // 首登开户 = InitialBalance）
+        var account = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, User6);
+        Assert.Equal(User6, account.AccountId);
+        Assert.Equal(FrontLoopback.InitialBalance, account.Balance);
+
+        // 持仓查询（⑰→⑱：空表——新账户无持仓）。
+        // 真实前置的空表行为（SDK 即裁判实证）：⑱ 是真 SimNow 对无持仓账户的原样应答，
+        // 官方 SDK 解析后回调一次「非空指针但全零」的持仓结构体（isLast=true），包装层
+        // 无条件入列 ⇒ 空表呈现为 1 条全零占位记录而非 0 条。语义断言 = 无任何记录持有实际仓位。
+        var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, User6);
+        Assert.DoesNotContain(positions, p => p.TotalPosition != 0 || p.TodayPosition != 0 || p.YdPosition != 0);
+    }
+
+    [Fact]
+    public async Task 同账户同密码二次登录_固定挑战密文当哈希匹配()
+    {
+        // 第一次登录 = 开户（密文 hex 前缀存档为账户密码）
+        var dir1 = NewFlowDir();
+        Directory.CreateDirectory(dir1);
+        using (var trader1 = new CtpTrader(dir1))
+        {
+            var login1 = await trader1.LoginAsync(Connect(_sim, User6B, "twice-pass"));
+            Assert.Equal("20260923", login1.TradingDay);
+        }
+
+        // 第二次登录（全新流文件目录 = 全新 SDK 实例）：固定挑战 ⇒ 同密码同密文 ⇒ 存档比对通过
+        var dir2 = NewFlowDir();
+        Directory.CreateDirectory(dir2);
+        using var trader2 = new CtpTrader(dir2);
+        var login2 = await trader2.LoginAsync(Connect(_sim, User6B, "twice-pass"));
+        Assert.Equal("20260923", login2.TradingDay);
+    }
+}
