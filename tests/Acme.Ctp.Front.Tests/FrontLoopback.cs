@@ -21,18 +21,25 @@ public sealed class FrontLoopback : IDisposable
 
     public CtpFrontServer Server { get; }
 
+    /// <summary>行情腿前置直连地址（M3 E2E 用——CtpMarketData SDK 客户端）。</summary>
+    public string MdAddress { get; }
+
     /// <summary>官方 SDK 直连地址（tcp:// 前缀——<c>CtpConnectRequest.FrontAddress</c> 契约）。</summary>
     public string FrontAddress { get; }
 
     /// <summary>服务端逐帧日志的实时落盘路径（xunit 会扣留 Console 输出到测试结束——挂死时唯一诊断面）。</summary>
     public string LogPath { get; }
 
-    private FrontLoopback(SimTradingCore core, CtpFrontServer server, string frontAddress, string logPath)
+    private CtpFrontMdServer? _mdServer;
+
+    private FrontLoopback(SimTradingCore core, CtpFrontServer server, string frontAddress, string logPath, CtpFrontMdServer mdServer, string mdAddress)
     {
         Core = core;
         Server = server;
         FrontAddress = frontAddress;
         LogPath = logPath;
+        MdAddress = mdAddress;
+        _mdServer = mdServer;
     }
 
     public static FrontLoopback Start()
@@ -60,12 +67,21 @@ public sealed class FrontLoopback : IDisposable
         server.Start();
         var port = (server.LocalEndpoint as IPEndPoint)?.Port
             ?? throw new InvalidOperationException("CtpFrontServer 未绑定端口");
-        return new FrontLoopback(core, server, $"tcp://127.0.0.1:{port}", logPath);
+        var mdServer = new CtpFrontMdServer(core, "127.0.0.1", 0, msg =>
+        {
+            Console.WriteLine($"[CTP-Front-MD] {msg}");
+            logWriter.WriteLine(msg);
+        });
+        mdServer.Start();
+        var mdPort = (mdServer.LocalEndpoint as IPEndPoint)?.Port
+            ?? throw new InvalidOperationException("CtpFrontMdServer 未绑定端口");
+        return new FrontLoopback(core, server, $"tcp://127.0.0.1:{port}", logPath, mdServer, $"tcp://127.0.0.1:{mdPort}");
     }
 
     public void Dispose()
     {
         try { Server.Dispose(); } catch { }
+        try { _mdServer?.Dispose(); } catch { }
         try { Core.Dispose(); } catch { }
         Console.WriteLine($"[CTP-Front] 本测试服务端日志: {LogPath}");
     }

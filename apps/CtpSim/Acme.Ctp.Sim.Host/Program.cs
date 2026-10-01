@@ -44,12 +44,14 @@ var core = new SimTradingCore(opts.Core);
 var server = new SimRpcServer(core, opts.Host, opts.Port);
 var ctpFrontPort = int.TryParse(Environment.GetEnvironmentVariable("AETHER_CTP_FRONT_PORT"), out var fp) ? fp : 17801;
 var ctpFront = new CtpFrontServer(core, opts.Host, ctpFrontPort, msg => Console.WriteLine($"[CTP-Front] {msg}"));
+var ctpMdPort = int.TryParse(Environment.GetEnvironmentVariable("AETHER_CTP_MD_FRONT_PORT"), out var mfp) ? mfp : 17802;
+var ctpMdFront = new CtpFrontMdServer(core, opts.Host, ctpMdPort, msg => Console.WriteLine($"[CTP-Front-MD] {msg}"));
 
-builder.Services.AddHostedService(_ => new SimCounterHostedService(core, server, opts, ctpFront));
+builder.Services.AddHostedService(_ => new SimCounterHostedService(core, server, opts, ctpFront, ctpMdFront));
 await builder.Build().RunAsync();
 
 /// <summary>柜台生命周期：启动 = 恢复账本 + 起行情 feed + 双协议监听（JSON RPC + CTP 前置）；停止 = 关连接 + 落盘。</summary>
-internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts, CtpFrontServer ctpFront)
+internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts, CtpFrontServer ctpFront, CtpFrontMdServer ctpMdFront)
     : IHostedService
 {
     public async Task StartAsync(CancellationToken ct)
@@ -83,7 +85,8 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         var exchangeOn = !replayOn && opts.Core.MarketMode == SimMarketMode.Exchange;
 
         server.Start();
-        ctpFront.Start();   // CTP 协议前置（第三方客户端接入——快期/文华/官方 SDK 直连）
+        ctpFront.Start();   // CTP 协议前置·交易腿（第三方客户端接入——快期/文华/官方 SDK 直连）
+        ctpMdFront.Start(); // CTP 协议前置·行情腿（M3：官方 SDK 行情订阅 + tick 推送）
 
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var ctpPort = ctpFront.LocalEndpoint?.Port ?? 17801;
@@ -99,13 +102,14 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
         Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
-        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：前置地址填 tcp://<本机IP>:" + ctpPort);
+        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：交易腿 tcp://<本机IP>:" + ctpPort + "，行情腿 tcp://<本机IP>:" + ctpMdPort);
     }
 
     public async Task StopAsync(CancellationToken ct)
     {
         await server.StopAsync();
         await ctpFront.StopAsync();
+        await ctpMdFront.StopAsync();
         core.Dispose();   // 停 feed + 同步 flush（重启续用靠这里落盘）
         Console.WriteLine("[CTP-SIM] 已退出，账本已落盘。");
     }

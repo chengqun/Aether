@@ -431,6 +431,88 @@ internal static class FrontGen
         EmitBuilder(sb, "㉒-F004 撤单错误回报（payload；会话层与 4007 拼接一次写）。",
             "BuildErrRtnOrderAction(byte instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef)", "ErrRtnOrderActionTemplate", e22b);
 
+        // ═══════════════ M3 模板（行情腿——2026-10-01 v2 抓包 md.txt）═══════════════
+        // MD 腿信封与交易腿同款（握手/挑战/确认复用）；⑤ MD 登录 op E4 30 E6 03；⑦ 订阅 op E4 44 01；
+        // tick 推送 op E4 F1 01——多合约分节（每合约 A 块 + E1 回显 + B 块），取首合约完整节做单合约模板。
+        var mdPaths = capturePaths.Select(p => Path.Combine(Path.GetDirectoryName(p)!, "md.txt")).Where(File.Exists).ToList();
+        var mdPayloads = new List<byte[]>();
+        var mdByFile = new List<List<byte[]>>();
+        foreach (var path in mdPaths)
+        {
+            var filePayloads = new List<byte[]>();
+            foreach (var (raw, _) in ParseCaptureRaw(path))
+            {
+                try { filePayloads.AddRange(SplitWrite(raw)); }
+                catch { /* 截断/心跳写跳过 */ }
+            }
+            mdByFile.Add(filePayloads);
+            mdPayloads.AddRange(filePayloads);
+        }
+        var pMdLogin = mdPayloads.FirstOrDefault(p => p.Length is > 9 and < 100
+                && p.AsSpan(4, 5).SequenceEqual(Hx("E43001E502"))
+                && p.AsSpan().IndexOf(Hx("4E6F204572726F72")) >= 0)   // "No Error"（区别于交易腿 ⑩ 同 op 前缀）
+            ?? throw Fail("MdLoginRsp 未捕获（op E43001 + No Error + <100B）——补抓包需含 MD 登录会话");
+        var eMdLogin = new List<(int, int, string)>();
+        foreach (var off in AllHits(pMdLogin, Asc(day))) eMdLogin.Add((off, day.Length, "A(tradingDay)"));
+        CheckDisjoint("MdLoginRsp", eMdLogin.ToArray());
+
+        // tick 帧：验证驱动选择——多抓包各有一帧（价格快照不同），needle 断言当帧验证器，通过者胜出。
+        // 截断点：首个与首节合约不同的 E1-合约 run（分节边界）——单合约模板。
+        // 价格槽（捕获值 needle——换抓包须同步）：40AA38 ×2 = [0]LastPrice（首价，A 块）/[1]AskPrice（时间后 E7 内）；
+        // 40AA36 = BidPrice（时间后 E5）。结构序（DepthMarketDataField）：…UpdateTime, UpdateMillisec, BidPrice1, BidVolume1, AskPrice1…
+        List<(int, int, string)>? eTick = null;
+        var pTick = Array.Empty<byte>();
+        List<byte[]> tickSource = mdPayloads;
+        foreach (var filePayloads in mdByFile)
+        foreach (var cand in filePayloads.Where(p => p.Length > 9 && p.AsSpan(4, 4).SequenceEqual(Hx("E4F101E5")))
+                     .OrderByDescending(p => p.Length))
+        {
+            var insts1 = TaggedRuns(cand, 0xE1).Where(r => IsInstrumentRun(cand.AsSpan(r.Off, r.Len).ToArray())).ToList();
+            if (insts1.Count < 2) continue;
+            var fi = cand[insts1[0].Off..(insts1[0].Off + insts1[0].Len)];
+            var cut2 = insts1.FirstOrDefault(r => !cand.AsSpan(r.Off, r.Len).SequenceEqual(fi));
+            if (cut2.Off <= 0) continue;
+            // 截到本节完整闭合（E1 合约 + 尾部 EF 串）——下一节的引导段（E9 120214day，11B run + 1B tag）
+            // 残留会让 SDK 解析器等下一节未果而无限重发本节回调（E2E 实证 10M 次）。
+            var t = cand[..(cut2.Off - 1)];
+            var la = AllHits(t, Hx("40AA38"));
+            var bd = AllHits(t, Hx("40AA36"));
+            var tm = AllHits(t, Asc("10:50:36"));
+            if (la.Count != 2 || bd.Count != 1 || tm.Count != 1) continue;   // 快照价格不同的帧跳过——needle 即验证器
+            var e = new List<(int, int, string)>();
+            foreach (var off in AllHits(t, Asc(day))) e.Add((off, day.Length, "A(tradingDay)"));
+            var ti = TaggedRuns(t, 0xE1).Where(r => IsInstrumentRun(t.AsSpan(r.Off, r.Len).ToArray())).ToList();
+            if (ti.Count != 2) continue;
+            foreach (var r in ti) e.Add((r.Off, r.Len, $"F(instrumentId, {r.Len})"));
+            e.Add((tm[0], 8, "A(updateTime)"));
+            e.Add((la[0], 3, "PadTrimmedDouble(lastPrice, 3)"));
+            e.Add((la[1], 3, "PadTrimmedDouble(askPrice, 3)"));
+            e.Add((bd[0], 3, "PadTrimmedDouble(bidPrice, 3)"));
+            CheckDisjoint("MdTick", e.ToArray());
+            eTick = e;
+            pTick = t;
+            tickSource = filePayloads;
+            break;
+        }
+        if (eTick is null) throw Fail("tick 推送帧（op E4F101）未捕获或价格 needle 未命中——补抓包需含订阅后的行情推送，且快照价与 needle 同步更新");
+
+        // 订阅应答：捕获帧 verbatim（E44402 + 回显合约块——SDK 无应答会断连，2026-10-01 E2E 实证）。
+        // 边界：多合约订阅的回显是捕获的 4 合约块（首块 m2701/DCE 与测试匹配；幻影 ack 无害——wrapper 不校验）。
+        // 与 tick 模板同文件（同一真实会话——异会话的计数器致 SDK 失步挂死）且回显块含 tick 首节合约
+        var tickInstNeedle = pTick.Skip(TaggedRuns(pTick, 0xE1).Where(r => IsInstrumentRun(pTick.AsSpan(r.Off, r.Len).ToArray())).First().Off).Take(5).ToArray();
+        var pMdSubRsp = tickSource.Where(p => p.Length > 9 && p.AsSpan(4, 3).SequenceEqual(Hx("E44402"))
+                && p.AsSpan().IndexOf(tickInstNeedle) >= 0).OrderByDescending(p => p.Length).FirstOrDefault()
+            ?? throw Fail("MdSubscribeRsp（op E44402）未捕获——补抓包需含订阅会话");
+        Console.WriteLine($"[Gen] M3 帧长: MdLoginRsp={pMdLogin.Length} MdTick={pTick.Length} MdSubscribeRsp={pMdSubRsp.Length}（多合约帧截取首节）");
+        EmitTemplate(sb, $"M3 帧 MdSubscribeRsp（{pMdSubRsp.Length}B payload：订阅应答——捕获 verbatim，回显块边界见注释）", "MdSubscribeRspTemplate", pMdSubRsp);
+
+        EmitTemplate(sb, $"M3 帧 MdLoginRsp（{pMdLogin.Length}B payload：MD 登录应答——交易日编辑）", "MdLoginRspTemplate", pMdLogin);
+        EmitBuilder(sb, "MD 登录应答（凭据不校验——行情订阅无账户语义）。",
+            "BuildMdLoginRsp(string tradingDay)", "MdLoginRspTemplate", eMdLogin);
+        EmitTemplate(sb, $"M3 帧 MdTick（{pTick.Length}B payload：单合约 tick 推送——多合约帧截取首节；价格等宽填充）", "MdTickTemplate", pTick);
+        EmitBuilder(sb, "tick 推送（LastPrice/BidPrice/AskPrice 等宽填充；Volume/OI 等保留捕获 verbatim）。",
+            "BuildMdTick(string instrumentId, string tradingDay, string updateTime, double lastPrice, double bidPrice, double askPrice)", "MdTickTemplate", eTick);
+
         sb.AppendLine("}");
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
@@ -628,6 +710,21 @@ internal static class FrontGen
     }
 
     // ── 抓包解析 ──
+
+    /// <summary>宽松抓包解析（无 M1 会话形状断言——行情腿 md.txt 仅 8 帧且不查方向交替）。</summary>
+    private static List<(byte[] Raw, string Dir)> ParseCaptureRaw(string path)
+    {
+        if (!File.Exists(path)) throw Fail($"抓包文件不存在: {path}");
+        var frames = new List<(byte[] Raw, string Dir)>();
+        foreach (var line in File.ReadLines(path))
+        {
+            if (line.Length == 0) continue;
+            var m = LineRe.Match(line);
+            if (!m.Success) continue;
+            frames.Add((Convert.FromHexString(m.Groups[2].Value), m.Groups[1].Value));
+        }
+        return frames;
+    }
 
     private static List<(byte[] Raw, string Dir)> ParseCapture(string path)
     {
@@ -828,6 +925,13 @@ internal static class FrontGen
         sb.AppendLine("        var i = 0;");
         sb.AppendLine("        foreach (var p in parts) { p.CopyTo(r, i); i += p.Length; }");
         sb.AppendLine("        return r;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>价格槽等宽填充：TrimmedDouble 右补零到槽宽（解析侧右补零到 8B 还原同值——M3 实证变宽即失步）。</summary>");
+        sb.AppendLine("    internal static byte[] PadTrimmedDouble(double v, int width)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var t = TrimmedDouble(v);");
+        sb.AppendLine("        return t.Length >= width ? t[..width] : Cat(t, new byte[width - t.Length]);");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>");

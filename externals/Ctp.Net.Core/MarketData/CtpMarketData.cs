@@ -36,6 +36,9 @@ public sealed class CtpMarketData : IDisposable
     public event EventHandler? FrontConnected;
     public event EventHandler<int>? FrontDisconnected;
     public event EventHandler<TickData>? TickReceived;
+
+    /// <summary>订阅/退订应答（M3 E2E 用——SDK 即裁判的订阅链路断言面）。</summary>
+    public event EventHandler<(string InstrumentId, int ErrorId, string ErrorMsg, bool IsLast)>? SubMarketDataResult;
     public event EventHandler<RspErrorEventArgs>? RspError;
 
     public bool IsDisposed => _handle == IntPtr.Zero;
@@ -153,6 +156,7 @@ public sealed class CtpMarketData : IDisposable
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = field != IntPtr.Zero ? Marshal.PtrToStructure<SpecificInstrumentField>(field) : default;
         Console.WriteLine($"[ctp-md] 订阅响应 InstrumentID={f.InstrumentID} ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} isLast={isLast}");
+        Self(ctx).SubMarketDataResult?.Invoke(Self(ctx), (f.InstrumentID, i.ErrorID, DecodeMsg(i.ErrorMsg), isLast));
     }
 
     private void OnRspUnSubMarketDataCb(IntPtr ctx, IntPtr field, IntPtr info, int requestId, bool isLast)

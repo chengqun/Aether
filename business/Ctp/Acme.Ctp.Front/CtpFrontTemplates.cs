@@ -69,6 +69,13 @@ internal static class CtpFrontTemplates
         return r;
     }
 
+    /// <summary>价格槽等宽填充：TrimmedDouble 右补零到槽宽（解析侧右补零到 8B 还原同值——M3 实证变宽即失步）。</summary>
+    internal static byte[] PadTrimmedDouble(double v, int width)
+    {
+        var t = TrimmedDouble(v);
+        return t.Length >= width ? t[..width] : Cat(t, new byte[width - t.Length]);
+    }
+
     /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>
     internal static byte[] TrimmedDouble(double v)
     {
@@ -432,5 +439,40 @@ internal static class CtpFrontTemplates
             new Edit(66, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
             new Edit(96, 25, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+        );
+
+    // ===== M3 帧 MdSubscribeRsp（195B payload：订阅应答——捕获 verbatim，回显块边界见注释） =====
+    internal static readonly byte[] MdSubscribeRspTemplate = H(
+        "0103344CE44402E5050229E755E44354503A4E6F204572726F72EFEFEFEFE92441E170C8E0E2960CE170E2B0E0E1960CE170E2F0E0E1960CE170E201E66D32373031EFEFEFEFEFE12441E170C8E0E2960CE170E2B0E0E1960CE170E2F0E0E1960CE170E201E66932373031EFEFEFEFEFE12441E170C8E0E2960CE170E2B0E0E1960CE170E2F0E0E1960CE170E201E6746132373031EFEFEFEFEF2441E170C8E0E2960CE170E2B0E0E1960CE170E2F0E0E1960CE170E201E6494632363132EFEFEFEFEF"
+    );
+
+    // ===== M3 帧 MdLoginRsp（62B payload：MD 登录应答——交易日编辑） =====
+    internal static readonly byte[] MdLoginRspTemplate = H(
+        "0103344CE43001E5020181E755E44354503A4E6F204572726F72EFEFEFEFE9100301243230323630393239EFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEE"
+    );
+
+    /// <summary>MD 登录应答（凭据不校验——行情订阅无账户语义）。</summary>
+    internal static byte[] BuildMdLoginRsp(string tradingDay) =>
+        Apply(MdLoginRspTemplate,
+            new Edit(35, 8, A(tradingDay))
+        );
+
+    // ===== M3 帧 MdTick（163B payload：单合约 tick 推送——多合约帧截取首节；价格等宽填充） =====
+    internal static readonly byte[] MdTickTemplate = H(
+        "0103344CE4F101E5030648E51202143230323630393239E16D32373031EFEFEFEFE640AA38E540AA74E540AA46E54143A56D80E340AA3EE540AA48E540A9FEE6103AD0422091D64A4CE241432ECCEFE540AC0AE540A8DEEFE631303A35303A3336E540AA36E706B840AA38E8C6EFEFEFEFEFEFE640E0E055CAE0EF5A31783230323630393239E16D32373031EFEFEFEFEFEFEFEFEFEFEFE91202143230323630393239"
+    );
+
+    /// <summary>tick 推送（LastPrice/BidPrice/AskPrice 等宽填充；Volume/OI 等保留捕获 verbatim）。</summary>
+    internal static byte[] BuildMdTick(string instrumentId, string tradingDay, string updateTime, double lastPrice, double bidPrice, double askPrice) =>
+        Apply(MdTickTemplate,
+            new Edit(15, 8, A(tradingDay)),
+            new Edit(126, 8, A(tradingDay)),
+            new Edit(155, 8, A(tradingDay)),
+            new Edit(24, 5, F(instrumentId, 5)),
+            new Edit(135, 5, F(instrumentId, 5)),
+            new Edit(89, 8, A(updateTime)),
+            new Edit(34, 3, PadTrimmedDouble(lastPrice, 3)),
+            new Edit(104, 3, PadTrimmedDouble(askPrice, 3)),
+            new Edit(98, 3, PadTrimmedDouble(bidPrice, 3))
         );
 }

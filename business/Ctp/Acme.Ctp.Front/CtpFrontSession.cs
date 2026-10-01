@@ -242,7 +242,7 @@ internal sealed class CtpFrontSession : IDisposable
     /// 固定挑战 payload——从 SimNow 真实抓包帧②逐字节提取（175B，含完整 ~128B 加密 nonce）。
     /// 服务端发固定挑战 ⇒ 同密码+同挑战 ⇒ 同密文 ⇒ 存密文当哈希比对（无需逆向加密算法）。
     /// </summary>
-    private static readonly byte[] ChallengePayload = Convert.FromHexString(
+    internal static readonly byte[] ChallengePayload = Convert.FromHexString(
         "0103344ce43026e5020192e755efefefefefea40330135e3802094e0e753222cf1d8ce9a2a3782e0e51bcba2e0ea43a6b6f3759f278ca11ebdf1a3d062cd86d13f38a655c65492307ee0eb99c7b76424bda606bf81207fe0e40d280796f81730fb3731051d0980f1d2ddf3797f356c91e0ec3eae3de0e7e0e022a99ec108f57ab42d3ab0fb7ce0e869c93d8e32fdfe4f64e0e06a5084b72d7ac89141b868ae34f1b40cefefefefefefefefefefefec");
 
     // —— ③ 挑战响应 → ④ 连接确认（verbatim 复刻）——
