@@ -458,9 +458,9 @@ public partial class TradingViewModel : ObservableObject
             MaxOrderVolume = ParseMaxVolume(),
             MarketDataConnect = new MarketDataConnectInput
             {
-                // 行情随柜台：sim 登录 ⇒ md 前置传 "sim" 哨兵（LeanLiveRunner.MapConnect 直通道——
-                // 连接参数被 RemoteCtpSession 忽略，行情由 host RPC 提供）；真实登录 ⇒ 真实前置
-                MdFrontAddress = Connector.IsSimFront ? "sim" : Connector.MdFrontAddress,
+                // 行情前置恒传连接器配置的真实地址（本地柜台 = tcp://127.0.0.1:17802——"sim" 哨兵已随
+                // sim 直连退役，2026-10-01；行情随前置端口）
+                MdFrontAddress = Connector.MdFrontAddress,
                 BrokerId = Connector.BrokerId,
                 UserId = Connector.UserId,
                 Password = Connector.Password,

@@ -184,7 +184,7 @@ internal sealed class CtpFrontMdSession : IDisposable
     {
         var letters = 0;
         while (letters < r.Length && char.IsAsciiLetter((char)r[letters])) letters++;
-        return letters is >= 1 and <= 2 && r.Length - letters is >= 3 and <= 4
+        return letters is >= 1 and <= 2 && r.Length - letters is >= 3 and <= 4   // 1-2 字母（官方命名；本地品种 zx 对齐）
             && r[letters..].ToArray().All(b => b is >= (byte)'0' and <= (byte)'9');
     }
 

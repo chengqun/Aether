@@ -11,11 +11,10 @@ namespace Acme.Ctp.Infrastructure.DependencyInjection;
 /// DI entry point for the CTP infrastructure layer. Registers the CTP session
 /// (the connection to the CTP broker) + the SQLite config store for credentials.
 /// <para>
-/// <b>「用前置地址选柜台」</b>：<see cref="ICtpSession"/> 唯一注册为 <see cref="RoutingCtpSession"/>——
-/// 前置地址填 <c>sim</c>（或默认仿真端点 127.0.0.1:17800，判据 <see cref="SimAddress.IsSimFront"/>）⇒
-/// 连独立 host 进程（<c>dotnet run --project apps/CtpSim/Acme.Ctp.Sim.Host</c>）；填真实前置 ⇒ 官方链路。
-/// 无环境变量、无重启——切柜台 = 换前置地址重新登录（地址随凭据存 ctp.db，自动登录自动记住）。
-/// 仿真核心的配置（DB/种子/tick/初始资金/MD 模式）在 **host 进程**侧读。
+/// <b>一律官方 SDK 链路</b>（2026-10-01 起）：<see cref="ICtpSession"/> 直连 <see cref="CtpSessionService"/>——
+/// 本地仿真柜台填前置 <c>tcp://127.0.0.1:17801</c>（交易）/ <c>tcp://127.0.0.1:17802</c>（行情，host 进程
+/// <c>dotnet run --project apps/CtpSim/Acme.Ctp.Sim.Host</c>）；真实前置（SimNow 等）同一链路。
+/// 旧 <c>sim</c> 关键字 JSON-RPC 直连已退役（RoutingCtpSession/RemoteCtpSession 不再进 DI）。
 /// </para>
 /// </summary>
 public static class CtpInfrastructureExtensions
@@ -32,12 +31,11 @@ public static class CtpInfrastructureExtensions
             ?? Environment.GetEnvironmentVariable("CTP_DB_PATH")
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aether", "ctp.db");
 
-        // 两个后端都常驻（构造全惰性：不起连接、不 P/Invoke），由 RoutingCtpSession 按登录地址逐次路由
+        // 2026-10-01 用户定调：桌面端砍掉 sim 关键字直连（JSON-RPC），一律走前置端口——
+        // ICtpSession 直连官方 SDK 链路（本地前置 tcp://127.0.0.1:17801/17802 或真实 SimNow 同链路）。
+        // RoutingCtpSession/RemoteCtpSession 退役出 DI（类保留——host 侧 E2E 测试仍直接构造使用）。
         services.AddSingleton<CtpSessionService>();
-        services.AddSingleton(_ => new RemoteCtpSession(ClientSimEndpoint().Host, ClientSimEndpoint().Port));
-        services.AddSingleton<ICtpSession>(sp => new RoutingCtpSession(
-            sp.GetRequiredService<CtpSessionService>(),
-            sp.GetRequiredService<RemoteCtpSession>()));
+        services.AddSingleton<ICtpSession>(sp => sp.GetRequiredService<CtpSessionService>());
 
         services.AddSingleton<ICtpConfigStore>(_ => SqliteCtpConfigStore.ForFile(dbPath));
         return services;

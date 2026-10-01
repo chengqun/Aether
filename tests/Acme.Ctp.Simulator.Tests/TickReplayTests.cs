@@ -14,9 +14,9 @@ public class TickReplayTests
     {
         var path = WriteReplayCsv("""
             time,instrument,bid,ask,last,volume
-            09:00:00,sim001,3798,3800,3799,100
-            09:00:01,sim001,3799,3801,3800,220
-            09:00:03,sim001,3800,3802,3801,350
+            09:00:00,zx001,3798,3800,3799,100
+            09:00:01,zx001,3799,3801,3800,220
+            09:00:03,zx001,3800,3802,3801,350
             """);
         try
         {
@@ -32,9 +32,9 @@ public class TickReplayTests
             Assert.Equal(3800, snapshot[1].LastPrice, 6);
             Assert.Equal(3801, snapshot[2].LastPrice, 6);
             Assert.Equal(220, snapshot[1].Volume);              // 累计量回放保真
-            Assert.All(snapshot, t => Assert.Equal("sim001", t.InstrumentId));
+            Assert.All(snapshot, t => Assert.Equal("zx001", t.InstrumentId));
 
-            var q = core.Market.GetQuote("sim001");
+            var q = core.Market.GetQuote("zx001");
             Assert.Equal(3800, q!.Value.BidPrice, 6);           // 终态 = 最后一帧
             Assert.Equal(3802, q.Value.AskPrice, 6);
         }
@@ -46,8 +46,8 @@ public class TickReplayTests
     {
         var path = WriteReplayCsv("""
             time,instrument,bid,ask,last
-            09:00:00,sim001,3798,3800,3799
-            09:00:01,sim001,3799,3801,3800
+            09:00:00,zx001,3798,3800,3799
+            09:00:01,zx001,3799,3801,3800
             """);
         try
         {
@@ -69,8 +69,8 @@ public class TickReplayTests
         // TickIntervalMs=25 的随机 feed 本该持续产 tick——StartReplay 必须让它让位（否则游走在回放价上加噪）
         var path = WriteReplayCsv("""
             time,instrument,bid,ask,last
-            09:00:00,sim001,3798,3800,3799
-            09:00:01,sim001,3799,3801,3800
+            09:00:00,zx001,3798,3800,3799
+            09:00:01,zx001,3799,3801,3800
             """);
         try
         {
@@ -90,7 +90,7 @@ public class TickReplayTests
     [Fact]
     public async Task 回放文件坏表头抛参数异常()
     {
-        var path = WriteReplayCsv("not,a,header\n09:00:00,sim001,1,2,3\n");
+        var path = WriteReplayCsv("not,a,header\n09:00:00,zx001,1,2,3\n");
         try
         {
             var core = await SimHarness.NewCoreAsync();

@@ -55,72 +55,17 @@ public class RoutingSessionTests
     // —— DI 组合 ——
 
     [Fact]
-    public void ICtpSession唯一注册为路由会话且后端可各自解析()
+    public void ICtpSession直连官方SDK链路_路由会话已退役出DI()
     {
         using var provider = new ServiceCollection().AddCtpInfrastructure(TempDbPath()).BuildServiceProvider();
 
+        // 2026-10-01 用户定调：桌面端砍掉 sim 关键字直连——ICtpSession 直连 CtpSessionService
+        //（本地前置 tcp://127.0.0.1:17801/17802 或真实 SimNow 同链路；RoutingCtpSession 不再进 DI）
         var session = provider.GetRequiredService<ICtpSession>();
-
-        Assert.IsType<RoutingCtpSession>(session);
-
-        // 两个后端常驻单例、构造全惰性（不起连接不 P/Invoke）——纯真实用户也安全解析
-        var real = Assert.IsType<CtpSessionService>(provider.GetRequiredService<CtpSessionService>());
-        var sim = Assert.IsType<RemoteCtpSession>(provider.GetRequiredService<RemoteCtpSession>());
+        var real = Assert.IsType<CtpSessionService>(session);
+        Assert.Same(real, provider.GetRequiredService<CtpSessionService>());   // 同一单例
         Assert.False(session.IsConnected);
-        Assert.False(((RoutingCtpSession)session).IsSimulationActive);   // 初始路由到真实柜台
-        Assert.False(sim.IsConnected);
         Assert.Null(real.LoginResult);
-    }
-
-    // —— 路由 E2E（回环 host）——
-
-    [Fact]
-    public async Task 前置地址sim登录路由到仿真柜台并可交易()
-    {
-        using var sim = LoopbackSim.Start();
-        using var real = new CtpSessionService();
-        using var router = new RoutingCtpSession(real, sim.Session);
-
-        Assert.False(router.IsSimulationActive);   // 初始 = 真实
-
-        var result = await router.LoginAsync(LoginRequest("sim"));
-
-        // 路由生效：进了仿真后端，前置地址随便填也能登录（仿真不校验）
-        Assert.True(router.IsSimulationActive);
-        Assert.True(router.IsConnected);
-        Assert.True(int.TryParse(result.MaxOrderRef, out _), "MaxOrderRef 必须可解析（客户端单号起点）");
-
-        // 经路由下单/查询走仿真账本
-        var inserted = await router.OrderInsertAsync(SimHarness.Market(CtpDirection.Buy, 1));
-        Assert.Equal("000000000001", inserted.OrderRef);
-        var account = await router.QueryAccountAsync();
-        Assert.Equal(SimHarness.Account, account.AccountId);
-        Assert.True(account.CurrMargin > 0, "仿真成交应有保证金占用");
-
-        router.Logout();
-        Assert.False(router.IsConnected);
-    }
-
-    [Fact]
-    public async Task 切换柜台时旧后端先被登出()
-    {
-        using var sim = LoopbackSim.Start();
-        using var real = new CtpSessionService();
-        using var router = new RoutingCtpSession(real, sim.Session);
-
-        var states = new Collector<CtpConnectionStatus>();
-        router.ConnectionStateChanged += (_, s) => states.Add(s);
-
-        await router.LoginAsync(LoginRequest("sim"));
-        Assert.True(router.IsSimulationActive);
-
-        // 登出仿真 → 再以真实前置登录：真实后端必然连不上（无前置），但**路由必须已切到真实**
-        router.Logout();
-        var ex = await Assert.ThrowsAnyAsync<Exception>(() => router.LoginAsync(LoginRequest("tcp://10.255.255.1:41205")));
-        Assert.False(router.IsSimulationActive);   // 连接失败也已完成路由决策
-
-        // 状态事件成对且有序（Connected → Disconnected；真实登录失败不发状态——与 CtpSessionService 语义一致）
-        Assert.Equal(new[] { CtpConnectionStatus.Connected, CtpConnectionStatus.Disconnected }, states.Snapshot.ToArray());
     }
 
     // —— 端点解析（两端共用） ——
@@ -229,7 +174,7 @@ public class RoutingSessionTests
         Assert.Equal(500, options.TickIntervalMs);
         Assert.Equal(20260925, options.Seed);
         Assert.Equal(1_000_000, options.InitialBalance, 6);
-        Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落默认 sim001
+        Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落默认 zx001
         Assert.Equal(SimMarketMode.Exchange, options.MarketMode);   // 默认 = 交易所模式（2026-09-28 用户定调）
 
         var host = SimHostOptions.FromEnvironment();

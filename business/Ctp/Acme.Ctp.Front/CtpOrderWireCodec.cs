@@ -28,14 +28,15 @@ internal static class CtpOrderWireCodec
         var price = RunAfter(body, 0xE4, r => r.Length is >= 2 and <= 8 && r.ToArray().Any(b => b >= 0x80));
         var vol = RunAfter(body, 0xE8, r => r.Length is >= 2 and <= 5
             && r[^1] is (byte)'1' or (byte)'2' or (byte)'3' && r[..^1].ToArray().Any(b => b < 0x20));
-        // 严格合约形状 ^[A-Za-z]{1,2}\d{3,4}$（排除用户名/交易所码——"m2user" 类字母数字混合曾误中）
-        var inst = RunAfter(body, 0, r =>
+        // 合约形状 ^[A-Za-z]{1,2}\d{3,4}$（官方命名——1-2 字母；本地品种已改名 zx 对齐，排除用户名/交易所码）
+        // 取**最后一个**匹配（合约近帧尾、用户近帧头——避免 3 字母+3 数字的用户名误中）
+        var inst = RunLast(body, 0, r =>
         {
             var letters = 0;
             while (letters < r.Length && char.IsAsciiLetter((char)r[letters])) letters++;
             return letters is >= 1 and <= 2 && r.Length - letters is >= 3 and <= 4
                 && r[letters..].ToArray().All(IsDigit);
-        }, what: "合约");
+        });
         if (reqId is null || orderRef is null || enums is null || price is null || vol is null || inst is null) return null;
         return new ParsedOrderInsert(reqId.Value, Encoding.ASCII.GetString(orderRef), Encoding.ASCII.GetString(inst),
             (char)enums[0], (char)enums[1], (char)enums[2],
@@ -56,6 +57,26 @@ internal static class CtpOrderWireCodec
         var needle = Convert.FromHexString(needleHex);
         var hit = body.IndexOf(needle);
         return hit >= 0 && hit + needle.Length < body.Length ? body[hit + needle.Length] : null;
+    }
+
+    /// <summary>任意 tag 下满足形状谓词的**最后一个** run（合约字段近帧尾——用户字段近帧头的形状冲突防误中）。</summary>
+    private static byte[]? RunLast(ReadOnlySpan<byte> body, byte tag, Func<ReadOnlySpan<byte>, bool> match)
+    {
+        byte[]? last = null;
+        for (var i = 0; i < body.Length; i++)
+        {
+            if (tag != 0 ? body[i] != tag : !IsTag(body[i])) continue;
+            var j = i + 1;
+            while (j < body.Length)
+            {
+                if (body[j] == 0xE0 && j + 1 < body.Length) { j += 2; continue; }
+                if (IsTag(body[j])) break;
+                j++;
+            }
+            if (j > i + 1 && match(body[(i + 1)..j])) last = body[(i + 1)..j].ToArray();
+            i = j - 1;
+        }
+        return last;
     }
 
     /// <summary>tag（0 = 任意 tag）后满足形状谓词的第一个 run（E0 转义感知；值长 = tag 到下一 tag）。</summary>

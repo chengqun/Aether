@@ -147,7 +147,7 @@ public sealed class SimTradingCore : IDisposable
             // 自定义 id 经解析链（精确→品种派生→合成）落表；种子 9 合约仍可用 AETHER_CTP_SIM_BOARD 上架。
             var listedIds = _options.ListedInstruments is { Count: > 0 }
                 ? _options.ListedInstruments
-                : new[] { "sim001" };
+                : new[] { "zx001" };
             foreach (var id in listedIds.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 ResolveMarketInstrument(id);

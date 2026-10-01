@@ -15,7 +15,7 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_TICK_MS 行情推进间隔（0 = 不自动喂）
 //   AETHER_CTP_SIM_SEED    随机游走种子（默认固定 ⇒ 可复现）
 //   AETHER_CTP_SIM_BALANCE 新账户初始资金
-//   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 sim001——「我就是交易所」的自有品种，
+//   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 zx001——「我就是交易所」的自有品种（2 字母官方命名合规），
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
 //   AETHER_CTP_SIM_REPLAY        历史 tick 回放 CSV 路径（确定性测试的价格源——设定即回放模式，优先于 MODE；
 //                                 SimHostOptions 强制归一 walk（回放骑 walk 撮合机制）；启动失败 ⇒ 柜台退出不静默换源）
@@ -102,7 +102,7 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
                 ? $"[CTP-SIM]   行情 历史 tick 回放：{opts.Core.ReplayPath}（速度 ×{opts.Core.ReplaySpeed}，{(opts.Core.ReplayLoop ? "循环" : "单遍")}）"
                 : $"[CTP-SIM]   tick 间隔 {opts.Core.TickIntervalMs}ms | 种子 {opts.Core.Seed} | 新账户初始资金 {opts.Core.InitialBalance} | 行情 本地合成（按订阅推送——行情随柜台）");
         Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
-        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：交易腿 tcp://<本机IP>:" + ctpPort + "，行情腿 tcp://<本机IP>:" + ctpMdPort);
+        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：交易腿 tcp://<本机IP>:" + ctpPort + "，行情腿 tcp://<本机IP>:" + (ctpMdFront.LocalEndpoint?.Port ?? 17802));
     }
 
     public async Task StopAsync(CancellationToken ct)

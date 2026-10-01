@@ -526,8 +526,8 @@ public class SessionAdapterTests
 
         var list = await session.QueryInstrumentsAsync();
 
-        var sim001 = Assert.Single(list);   // 默认 = sim001（本交易所自有品种——「我就是交易所」）
-        Assert.Equal("sim001", sim001.InstrumentId);
+        var sim001 = Assert.Single(list);   // 默认 = zx001（本交易所自有品种——官方命名合规）
+        Assert.Equal("zx001", sim001.InstrumentId);
         Assert.Equal("SIM", sim001.ExchangeId);
         Assert.Equal(10, sim001.VolumeMultiple);
         Assert.Equal(1, sim001.PriceTick);

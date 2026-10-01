@@ -53,7 +53,7 @@ public sealed record SimOptions
 
     /// <summary>
     /// 上市合约表（「我就是交易所」的自定义面）：host 上架清单，客户端行情板显示它。
-    /// null/空 ⇒ 默认 = sim001（本交易所自有品种）；自定义 id 经解析链（精确→品种派生→合成）落表。
+    /// null/空 ⇒ 默认 = zx001（本交易所自有品种，官方命名合规 2 字母+3 数字）；自定义 id 经解析链（精确→品种派生→合成）落表。
     /// host 环境变量 <c>AETHER_CTP_SIM_BOARD</c>（逗号分隔）。
     /// </summary>
     public IReadOnlyList<string>? ListedInstruments { get; init; }
