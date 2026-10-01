@@ -115,6 +115,7 @@ typedef struct CtpOrderInsertRequest {
     double LimitPrice;
     int  VolumeTotalOriginal;
     char TimeCondition;   // '3' GFD / '1' IOC / '2' FOK
+    char ExchangeID[9];   // 2026-10-01 M2 抓包补：SimNow 等前置要求非空（空 ⇒ "无效的ExchangeID字段"拒单）；尾部追加保 ABI 兼容
 } CtpOrderInsertRequest;
 
 /* 回调约定：由 CTP 内部线程触发，wrapper 原样转发。

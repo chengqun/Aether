@@ -207,6 +207,7 @@ public sealed class CtpTrader : IDisposable
             LimitPrice = req.LimitPrice,
             VolumeTotalOriginal = req.Volume,
             TimeCondition = (byte)req.TimeCondition,
+            ExchangeID = req.ExchangeId ?? "",
         };
         int rc = NativeMethods.CtpTrader_OrderInsert(_handle, ref pod, reqId);
         if (rc != 0) throw new CtpException($"ReqOrderInsert 发送失败 rc={rc}");

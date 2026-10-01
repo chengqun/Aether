@@ -135,6 +135,10 @@ public sealed class CtpOrderRequest
     public required double LimitPrice { get; init; }
     public required int Volume { get; init; }
     public CtpTimeCondition TimeCondition { get; init; } = CtpTimeCondition.GFD;
+
+    /// <summary>客户端报单号直通（CTP 前置路径 M2）：⑲ 里客户端自产的 OrderRef（D12 十二位零填充）——
+    /// 客户端按它匹配 OnRtnOrder/OnRtnTrade 回报、撤单也按它定位。null/空 = 核心自分配（JSON-RPC 路径行为不变）。</summary>
+    public string? OrderRef { get; init; }
 }
 
 /// <summary>下单结果。</summary>

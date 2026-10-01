@@ -216,4 +216,5 @@ public struct CtpOrderInsertRequest
     public double LimitPrice;
     public int VolumeTotalOriginal;
     public byte TimeCondition;   // '3' GFD / '1' IOC / '2' FOK
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 9)] public string ExchangeID;   // M2 抓包补：SimNow 等前置要求非空（尾部追加，与 ctp_api.h 同步；构造点显式赋值）
 }

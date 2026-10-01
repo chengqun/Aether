@@ -519,7 +519,17 @@ public sealed class SimTradingCore : IDisposable
         });
         if (!risk.Ok) throw new CtpBusinessException(risk.ErrorId, risk.Message);
 
-        var orderRef = NextOrderRef(state);
+        // M2 前置路径：直通客户端 OrderRef（⑲ 里客户端自产号——回报匹配/撤单定位都靠它）。
+        // 用过外部号后推进序列：NextOrderRef 是前置自增（++seq 再用），置 max(seq, ref) ⇒ 下一号 = ref+1，
+        // 不撞不跳（与重启恢复的推进同式）。重复号拒绝（同账户多连接并行下单的防御——已知限制）。
+        if (!string.IsNullOrEmpty(request.OrderRef))
+        {
+            if (state.Orders.Find(request.OrderRef) is not null)
+                throw new CtpBusinessException(SimErrorCodes.InvalidParameter,
+                    $"报单号重复：{request.OrderRef}（同账户多连接并行下单会撞号，见已知限制）");
+            state.NextOrderRefSeq = Math.Max(state.NextOrderRefSeq, ParseOrderRefSeq(request.OrderRef));
+        }
+        var orderRef = string.IsNullOrEmpty(request.OrderRef) ? NextOrderRef(state) : request.OrderRef;
         var u = state.Orders.Accept(request, orderRef, _frontId, _sessionId, instrument.ExchangeId,
             _clock.TimeOfDay, requiredMargin, requiredFee);
         state.Account.FreezeForOrder(requiredMargin, requiredFee);

@@ -45,6 +45,8 @@ public sealed class FrontLoopback : IDisposable
         };
         var core = new SimTradingCore(options, new SimClock(() => TradingNow));
         core.InitializeAsync().GetAwaiter().GetResult(); // xunit 无同步上下文，安全
+        // M2：Walk 模式庄家报价（激进限价在 InsertOrder 内同步全成、成交价=Ask——OrderLifecycleTests 先例）
+        core.InjectQuote("m2701", 2999, 3001, 3000);   // m2701 = 5 字符（推送模板捕获槽宽，等宽纪律）
 
         // 双写日志：Console（xunit 测试结束时随结果输出）+ 实时文件（xunit 扣留 Console 到测试结束——
         // 测试挂死时文件是唯一的诊断面；服务端逐帧日志是「模板偏移错/签名漏配」定位依据）。

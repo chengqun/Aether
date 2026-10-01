@@ -335,6 +335,7 @@ CTP_API int CtpTrader_OrderInsert(CtpTraderHandle h, const CtpOrderInsertRequest
     f.MinVolume = 1;
     f.ContingentCondition = '1';              // Immediately
     f.ForceCloseReason = '0';                 // NotForceClose
+    copyStr(f.ExchangeID, req->ExchangeID, sizeof(f.ExchangeID));   // M2：SimNow 等前置要求非空（镜像 OrderAction L352）
     return h->api->ReqOrderInsert(&f, requestId);
 }
 

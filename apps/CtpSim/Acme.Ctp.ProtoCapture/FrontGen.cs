@@ -30,11 +30,18 @@ internal static class FrontGen
         @"^\d\d:\d\d:\d\d\.\d+ #\d+ (C→S|S→C) \[\d+ bytes\] ([0-9A-F]+)",
         RegexOptions.Compiled);
 
-    public static void Run(string? capturePath, string? outPath)
+    public static void Run(string?[] args)
     {
         try
         {
-            Generate(capturePath, outPath);
+            // 参数：`gen [抓包trade.txt ...] [输出.cs]`——.cs 结尾者（或最后一个）为输出，其余为抓包源。
+            // M1 模板取第 1 个抓包（031656 固定源——挑战/token/交易日等 verbatim 基准）；
+            // M2 模板（推送/撤单对/拒绝对）从**全部**抓包按 op 签名定位（v2 有推送、v1 有 ⑳ 拒绝对）。
+            var outPath = args.LastOrDefault(a => a is not null && a.EndsWith(".cs", StringComparison.OrdinalIgnoreCase));
+            if (outPath is null && args.Length > 1) outPath = args[^1];
+            var captures = args.Where(a => a is not null && !a.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .Select(a => a!).ToList();
+            Generate(captures, outPath);
         }
         catch (Exception ex)
         {
@@ -43,16 +50,20 @@ internal static class FrontGen
         }
     }
 
-    private static void Generate(string? capturePath, string? outPath)
+    private static void Generate(List<string> capturePaths, string? outPath)
     {
-        capturePath ??= LatestCapture();
+        if (capturePaths.Count == 0)
+            capturePaths.Add(LatestCapture());
         outPath ??= FindRepoRoot() is { } root
             ? Path.Combine(root, "business", "Ctp", "Acme.Ctp.Front", "CtpFrontTemplates.cs")
             : throw Fail("未找到仓库根（向上未遇 Aether.AI.Platform.slnx）——显式传输出路径");
 
-        Console.WriteLine($"[Gen] 抓包: {capturePath}");
-        var frames = ParseCapture(capturePath);
-        Console.WriteLine($"[Gen] 解析: {frames.Count} 帧");
+        Console.WriteLine($"[Gen] 抓包源: {string.Join(" + ", capturePaths)}");
+        var frames = ParseCapture(capturePaths[0]);
+        Console.WriteLine($"[Gen] M1 源解析: {frames.Count} 帧");
+        // M2 帧池：全部抓包展平（op 签名定位，来源无关）
+        var m2frames = capturePaths.SelectMany(ParseCapture).ToList();
+        Console.WriteLine($"[Gen] M2 帧池: {m2frames.Count} 帧");
 
         // ── 派生常量：broker/user 取自 ⑤（认证请求 FE/E7 字段）、appId 取自 ⑦（E5 字段）、
         //    交易日取自 ⑩（1010030124 前缀后 8 位数字）——本源码不含任何账号字面量。
@@ -71,7 +82,7 @@ internal static class FrontGen
         var companionFrame = raw10[210..];
 
         var day = ExtractDay(p10a);
-        var dirName = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(capturePath)));
+        var dirName = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(capturePaths[0])));
         if (dirName is { Length: >= 8 })
         {
             var dirDay = dirName[..8];
@@ -114,6 +125,9 @@ internal static class FrontGen
             LocVal(p10a, Hx("E7"), Asc(user), $"F(userId, {user.Length})", "⑩ user"),
             LocVal(p10a, Hx("1010030124"), Asc(day), $"F(tradingDay, {day.Length})", "⑩ 交易日#1"),
             LocVal(p10a, Hx("E401E301"), Asc(day), $"F(tradingDay, {day.Length})", "⑩ 交易日#2"),
+            // MaxOrderRef（M2）：M1 verbatim 回放抓包值 "1" 的断层修复——换成核心真实序列（客户端拿它起算 OrderRef）。
+            // 变长（多位数变宽）——SDK 容忍度由 E2E T7 裁决；不支持则回退服务端 ref 重映射（计划 R1 降级路）。
+            LocVal(p10a, Hx("EFEF012DAF7B02"), Asc("1"), "A(maxOrderRef)", "⑩ MaxOrderRef"),
         };
         CheckDisjoint("⑩", e10);
 
@@ -171,7 +185,7 @@ internal static class FrontGen
 
         // ── 生成输出 ──
         var sb = new StringBuilder();
-        EmitHeader(sb, capturePath, frames.Count);
+        EmitHeader(sb, capturePaths[0], frames.Count);
         EmitHelpers(sb);
 
         EmitTemplate(sb, "帧 ④ 连接确认（19B payload——verbatim 无替换）", "ConfirmPayload", p4);
@@ -186,7 +200,7 @@ internal static class FrontGen
 
         EmitTemplate(sb, $"帧 ⑩ 登录结果主帧（{p10a.Length}B payload：loginReqId/broker/user/交易日×2 替换）", "SysInfoRspTemplate", p10a);
         EmitBuilder(sb, "⑩ 登录结果主帧（交易日/FrontID/SessionID/MaxOrderRef——⑩ 到达即完成 OnRspUserLogin）。",
-            "BuildSysInfoRsp(string brokerId, string userId, byte loginReqId, string tradingDay)", "SysInfoRspTemplate", e10);
+            "BuildSysInfoRsp(string brokerId, string userId, byte loginReqId, string tradingDay, string maxOrderRef)", "SysInfoRspTemplate", e10);
 
         sb.AppendLine();
         sb.AppendLine("    /// <summary>⑩ 伴随帧（42B payload + 4B 头 = 46B 整帧——与主帧同一次 TCP 写出）。</summary>");
@@ -205,6 +219,217 @@ internal static class FrontGen
         EmitTemplate(sb, $"帧 ⑱ 持仓应答·空表（{p18.Length}B payload：仅尾字节 reqId 替换）", "QryPositionEmptyRspTemplate", p18);
         EmitBuilder(sb, "⑱ 持仓应答（空表——M1 恒空；非空持仓需 M2 结构）。",
             "BuildQryPositionEmptyRsp(byte reqId)", "QryPositionEmptyRspTemplate", e18);
+
+        // ═══════════════ M2 模板（2026-10-01 补抓包：推送 + ⑳/㉒ 应答对）═══════════════
+        // 帧族（payload[4..] op 前缀）：F001=OnRtnOrder / F002=OnRtnTrade / F003=OnErrRtnOrderInsert /
+        // F004=OnErrRtnOrderAction / 4001=OnRspOrderInsert / 4007=OnRspOrderAction。
+        // 推送跨状态字节重排（'3' 的状态字节在 EA 段、'0' 的在 E9 段）⇒ 按状态分模板，各自 verbatim + Edit。
+        var allPayloads = new List<byte[]>();
+        foreach (var (raw, _) in m2frames)
+        {
+            try { allPayloads.AddRange(SplitWrite(raw)); }
+            catch { /* 截断写（031656 的 ⑳）与心跳等非标准写跳过 */ }
+        }
+        Console.WriteLine($"[Gen] M2 帧池展平: {allPayloads.Count} payload");
+
+        // 推送/回显帧携带的会话 FrontID+SessionID（补抓包会话 01+C8E0E69C，5B）——Edit 成 M1 ⑩ 的
+        // verbatim 012DAF7B+02（同为 5B 零增长；D6：客户端按 ⑩ 值匹配回报/撤单定位，两边必须同源）。
+        var capFrontSession = Hx("01C8E0E69C");
+
+        byte[] RtnOrderByNeedle(string needleHex, string what)
+        {
+            var op = Hx("E102E2F001");
+            var needle = Hx(needleHex);
+            return allPayloads.FirstOrDefault(p => p.Length > 4 + op.Length
+                && p.AsSpan(4, op.Length).SequenceEqual(op)
+                && p.AsSpan().IndexOf(needle) >= 0)
+                ?? throw Fail($"{what}: F001 帧内未找到 needle {needleHex}（抓包会话形状与假设不符）");
+        }
+        var pRtn3 = RtnOrderByNeedle("EA33E8", "OnRtnOrder '3'（未成交在队）");
+        var pRtn0 = RtnOrderByNeedle("E9303030", "OnRtnOrder '0'（全部成交）");
+        var pRtnT = FramesWithOp(allPayloads, "E102E2F002").SingleOrDefault()
+            ?? throw Fail("OnRtnTrade（F002）未捕获——补抓包需含成交场景");
+        // ⑳ 拒绝对 = v1 抓包的「无效的ExchangeID」失败对（ErrorID 0x94；成功报单不发 ⑳——D3 实证）；
+        // ㉒ 对 = 推送源会话的撤单失败对（回显携带 capFrontSession——排除 v1 的另一会话）。
+        var w20 = WriteContaining(m2frames, "E101E24001",
+            p => p.AsSpan().IndexOf(Hx("E355E394")) >= 0, "⑳ 拒绝对（ExchangeID 错误）");
+        var p20a = w20[0];   // 4001 OnRspOrderInsert（C# 层不可见但真实——复刻）
+        var p20b = w20[1];   // F003 OnErrRtnOrderInsert（拒单唯一可见信号 → RspError）
+        var w22 = WriteContaining(m2frames, "E101E24007",
+            p => p.AsSpan().IndexOf(capFrontSession) >= 0, "㉒ 撤单对（推送源会话）");
+        var p22a = w22[0];   // 4007 OnRspOrderAction（OrderActionAsync 阻塞等它）
+        var p22b = w22[1];   // F004 OnErrRtnOrderAction
+        Console.WriteLine($"[Gen] M2 帧长: Rtn3={pRtn3.Length} Rtn0={pRtn0.Length} RtnTrade={pRtnT.Length} ⑳={p20a.Length}+{p20b.Length} ㉒={p22a.Length}+{p22b.Length}");
+
+        // —— Edit 收集器：报单族帧（推送/⑳）公共可变字段 ——
+        // 变长替换仅限 SDK 自编码可变的字段（合约/价格/量/TradeId/ErrorMsg——客户端 ⑲ 自带可变宽度实证）；
+        // user/broker 等宽归一化 F()（⑥ 前科：未知帧上的变长替换有挂死风险）。
+        // 时间/OrderLocalID/OrderSysID 序列字段保留 verbatim（陈旧值无害——显示用，边界记录于 README）。
+        List<(int Off, int Len, string Expr)> OrderFrameEdits(byte[] p, string name, string opHex)
+        {
+            var e = new List<(int, int, string)>();
+            var op = Hx(opHex);
+            e.Add(LocFull(p, Cat(op, [0xE3]), 1, "[instance]", $"{name} instance"));
+            var or_ = ShapedRuns(p, r => r.Length == 12 && AllAsciiDigits(r));
+            if (or_.Count != 1) throw Fail($"{name}: OrderRef run 命中 {or_.Count} 处（期望 1）");
+            e.Add((or_[0].Off, 12, "A(orderRef)"));
+            var en = TaggedRuns(p, 0xEA).Where(r => r.Len == 3 && p.AsSpan(r.Off, 3).ToArray().All(b => b is >= (byte)'0' and <= (byte)'4')).ToList();
+            if (en.Count != 1) throw Fail($"{name}: 枚举 run 命中 {en.Count} 处（期望 1）");
+            e.Add((en[0].Off, 3, "A($\"{priceType}{direction}{offsetFlag}\")"));
+            var pr = TaggedRuns(p, 0xE4).Where(r => r.Len is >= 2 and <= 8 && p.AsSpan(r.Off, r.Len).ToArray().Any(b => b >= 0x80)).ToList();
+            if (pr.Count != 1) throw Fail($"{name}: 价格 run 命中 {pr.Count} 处（期望 1）");
+            e.Add((pr[0].Off, pr[0].Len, "TrimmedDouble(limitPrice)"));
+            var vol = TaggedRuns(p, 0xE8).Where(r => r.Len is >= 2 and <= 5
+                && p[r.Off + r.Len - 1] is (byte)'1' or (byte)'2' or (byte)'3'
+                && p.AsSpan(r.Off, r.Len - 1).ToArray().Any(b => b < 0x20)).ToList();
+            if (vol.Count != 1) throw Fail($"{name}: 量+TC run 命中 {vol.Count} 处（期望 1）");
+            e.Add((vol[0].Off, vol[0].Len, "Cat(MinimalInt(volume), A(timeCondition.ToString()))"));
+            // FrontID/SessionID 编辑整段移除（2026-10-01 实证）：替换破坏 E0 转义结构的逻辑长度 ⇒ SDK
+            // 解析失步（InstrumentID 读空）。保留捕获 verbatim——客户端回报匹配按 OrderRef（wrapper 实证
+            // 不看 FrontID/SessionID），⑩ 与推送的会话值不一致是已知边界（README 记录）。
+            var uh = AllHits(p, Asc(user));
+            if (uh.Count == 0) throw Fail($"{name}: user 未命中");
+            foreach (var off in uh) e.Add((off, user.Length, $"F(userId, {user.Length})"));
+            var bh = AllHits(p, Asc(broker));
+            if (bh.Count == 0) throw Fail($"{name}: broker 未命中");
+            foreach (var off in bh) e.Add((off, broker.Length, $"F(brokerId, {broker.Length})"));
+            var ins = ShapedRuns(p, IsInstrumentRun);
+            if (ins.Count == 0) throw Fail($"{name}: 合约 run 未命中");
+            // 等宽 F（实证：推送帧变宽即 SDK 失步——ag2610@6B 进 m2701@5B 槽字段错位；超长截断为边界）
+            foreach (var (off, len) in ins) e.Add((off, len, $"F(instrumentId, {len})"));
+            foreach (var off in AllHits(p, Asc(day))) e.Add((off, day.Length, "A(tradingDay)"));
+            CheckDisjoint(name, e.ToArray());
+            return e;
+        }
+
+        // RspInfo 定位：E3 55 <id-tag E3> <1B id> <E0 转义 GBK run> → 替换区 = [E3 id gbk]（变长——
+        // 真前置错误消息长度可变实证：v1 两种 ⑳ 长度不同 ⇒ SDK 容忍该帧族变长）。
+        (int Off, int Len) LocateRspInfo(byte[] p, string name)
+        {
+            var hits = AllHits(p, Hx("E355E3"));
+            if (hits.Count < 1) throw Fail($"{name}: RspInfo E355E3 未命中");
+            var off = hits[0];
+            var k = off + 4;
+            while (k < p.Length)
+            {
+                if (p[k] == 0xE0 && k + 1 < p.Length) { k += 2; continue; }
+                if (IsTagByte(p[k])) break;
+                k++;
+            }
+            return (off + 2, k - (off + 2));
+        }
+
+        var eRtn3 = OrderFrameEdits(pRtn3, "RtnOrder3", "E102E2F001");
+        var eRtn0 = OrderFrameEdits(pRtn0, "RtnOrder0", "E102E2F001");
+        var eRtnT = new List<(int, int, string)>();
+        {
+            eRtnT.Add(LocFull(pRtnT, Cat(Hx("E102E2F002"), [0xE3]), 1, "[instance]", "RtnTrade instance"));
+            var or_ = ShapedRuns(pRtnT, r => r.Length == 12 && AllAsciiDigits(r));
+            if (or_.Count != 1) throw Fail($"RtnTrade: OrderRef 命中 {or_.Count}");
+            eRtnT.Add((or_[0].Off, 12, "A(orderRef)"));
+            var tid = TaggedRuns(pRtnT, 0xE6).Where(r => r.Len is >= 1 and <= 12 && AllAsciiDigits(pRtnT.AsSpan(r.Off, r.Len).ToArray())).ToList();
+            if (tid.Count != 1) throw Fail($"RtnTrade: TradeID 命中 {tid.Count}");
+            eRtnT.Add((tid[0].Off, tid[0].Len, $"F(tradeId, {tid[0].Len})"));   // 等宽（实证：变宽即失步；超长截断为边界）
+            // 价格：EB + 二进制 run（"01"前缀 + 尾剥零价格）——前缀 verbatim（方向/开平回显保留捕获形状，边界见 README）
+            var px = TaggedRuns(pRtnT, 0xEB).Where(r => r.Len is >= 3 and <= 10
+                && pRtnT.AsSpan(r.Off, r.Len).ToArray().Any(b => b >= 0x80)).ToList();
+            if (px.Count != 1) throw Fail($"RtnTrade: 价格 run 命中 {px.Count}");
+            eRtnT.Add((px[0].Off + 2, px[0].Len - 2, "TrimmedDouble(price)"));
+            // 量：E4 + 短二进制 run（≤0x09）
+            var vol = TaggedRuns(pRtnT, 0xE4).Where(r => r.Len is 1 or 2 && pRtnT.AsSpan(r.Off, r.Len).ToArray().All(b => b <= 0x09)).ToList();
+            if (vol.Count != 1) throw Fail($"RtnTrade: 量 run 命中 {vol.Count}");
+            eRtnT.Add((vol[0].Off, vol[0].Len, "MinimalInt(volume)"));
+            // FrontID/SessionID 不编辑（同上——E0 转义结构保护）
+            foreach (var off in AllHits(pRtnT, Asc(user))) eRtnT.Add((off, user.Length, $"F(userId, {user.Length})"));
+            foreach (var off in AllHits(pRtnT, Asc(broker))) eRtnT.Add((off, broker.Length, $"F(brokerId, {broker.Length})"));
+            foreach (var (off, len) in ShapedRuns(pRtnT, IsInstrumentRun)) eRtnT.Add((off, len, $"F(instrumentId, {len})"));
+            foreach (var off in AllHits(pRtnT, Asc(day))) eRtnT.Add((off, day.Length, "A(tradingDay)"));
+            CheckDisjoint("RtnTrade", eRtnT.ToArray());
+        }
+
+        // '5'（已撤销）合成：'3' 模板 + 状态字节 EA33→EA35 + 状态消息（未成交→已撤销，同宽 6B GBK）
+        var statusOff = AllHits(pRtn3, Hx("EA33"));
+        if (statusOff.Count != 1) throw Fail($"RtnOrder3: 状态字节 EA33 命中 {statusOff.Count} 处");
+        var msgOff = AllHits(pRtn3, Hx("CEB4B3C9BDBB"));
+        if (msgOff.Count != 1) throw Fail($"RtnOrder3: 状态消息（未成交）命中 {msgOff.Count} 处");
+        var eRtn5 = new List<(int, int, string)>(eRtn3)
+        {
+            (statusOff[0] + 1, 1, "[(byte)'5']"),
+            (msgOff[0], 6, "EscapedGbk(\"已撤销\")"),
+        };
+
+        // ⑳ 拒绝对（4001：instance/reqId/RspInfo/回显族；F003：instance/RspInfo/回显族——reqId 回显保留 verbatim）
+        var e20a = OrderFrameEdits(p20a, "⑳-4001", "E101E24001");
+        e20a.Add(LocFull(p20a, Hx("E10201E0E5E3"), 1, "[reqId]", "⑳-4001 reqId"));
+        var rsp20a = LocateRspInfo(p20a, "⑳-4001");
+        e20a.Add((rsp20a.Off, rsp20a.Len, "Cat(H(\"E3\"), MinimalInt(errorId), EscapedGbk(errorMsg))"));
+        CheckDisjoint("⑳-4001", e20a.ToArray());
+        var e20b = OrderFrameEdits(p20b, "⑳-F003", "E102E2F003");
+        var rsp20b = LocateRspInfo(p20b, "⑳-F003");
+        e20b.Add((rsp20b.Off, rsp20b.Len, "Cat(H(\"E3\"), MinimalInt(errorId), EscapedGbk(errorMsg))"));
+        CheckDisjoint("⑳-F003", e20b.ToArray());
+
+        // ㉒ 对（4007：instance/reqId/RspInfo + OrderRef/FrontSession/user/broker 回显；F004：instance/RspInfo/回显）
+        List<(int, int, string)> ActionFrameEdits(byte[] p, string name, string opHex)
+        {
+            var e = new List<(int, int, string)>();
+            var op = Hx(opHex);
+            e.Add(LocFull(p, Cat(op, [0xE3]), 1, "[instance]", $"{name} instance"));
+            var or_ = ShapedRuns(p, r => r.Length == 12 && AllAsciiDigits(r));
+            if (or_.Count != 1) throw Fail($"{name}: OrderRef 命中 {or_.Count}");
+            e.Add((or_[0].Off, 12, "A(orderRef)"));
+            foreach (var off in AllHits(p, Asc(user))) e.Add((off, user.Length, $"F(userId, {user.Length})"));
+            foreach (var off in AllHits(p, Asc(broker))) e.Add((off, broker.Length, $"F(brokerId, {broker.Length})"));
+            return e;
+        }
+        var e22a = ActionFrameEdits(p22a, "㉒-4007", "E101E24007");
+        // 4007 的 reqId：E1 02 01 A5 E3 后 1B（OrderActionAsync 按它完成 pending——必须回显；抓包实证形状）
+        e22a.Add(LocFull(p22a, Hx("E10201A5E3"), 1, "[reqId]", "㉒-4007 reqId"));
+        var rsp22 = LocateRspInfo(p22a, "㉒-4007");
+        var e22aErr = new List<(int, int, string)>(e22a)
+        {
+            (rsp22.Off, rsp22.Len, "Cat(H(\"E3\"), MinimalInt(errorId), EscapedGbk(errorMsg))"),
+        };
+        CheckDisjoint("㉒-4007", e22aErr.ToArray());
+        var e22aOk = new List<(int, int, string)>(e22a)
+        {
+            // 成功 RspInfo = E4 + GBK「正确」的 ASCII hex 串（⑫⑭ 实证）——变长（错误区→9B）
+            (rsp22.Off, rsp22.Len, "Cat(H(\"E4\"), A(\"D5FDC8B7\"))"),
+        };
+        var e22b = ActionFrameEdits(p22b, "㉒-F004", "E102E2F004");
+        var rsp22b = LocateRspInfo(p22b, "㉒-F004");
+        e22b.Add((rsp22b.Off, rsp22b.Len, "Cat(H(\"E3\"), MinimalInt(errorId), EscapedGbk(errorMsg))"));
+        CheckDisjoint("㉒-F004", e22b.ToArray());
+
+        // —— 发射 M2 模板 + 构造器 + 常量 ——
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>M1 ⑩ verbatim 会话身份（FrontID+SessionID，5B）——推送/回显帧 Edit 用（D6：与 ⑩ 同源）。</summary>");
+        sb.AppendLine("    internal static readonly byte[] SessionFrontIdSessionId = H(\"012DAF7B02\");");
+        EmitTemplate(sb, $"M2 帧 OnRtnOrder '3'（{pRtn3.Length}B payload：未成交在队推送——F001）", "RtnOrder3Template", pRtn3);
+        EmitBuilder(sb, "OnRtnOrder '3'（未成交在队——受理/挂单状态推送）。",
+            "BuildRtnOrder3(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay)", "RtnOrder3Template", eRtn3);
+        EmitTemplate(sb, $"M2 帧 OnRtnOrder '0'（{pRtn0.Length}B payload：全部成交推送——F001；VolumeTraded 保留捕获值 1，>1 手的全成回报成交量失真（边界））", "RtnOrder0Template", pRtn0);
+        EmitBuilder(sb, "OnRtnOrder '0'（全部成交推送）。",
+            "BuildRtnOrder0(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay)", "RtnOrder0Template", eRtn0);
+        EmitBuilder(sb, "OnRtnOrder '5'（已撤销——'3' 模板合成：状态字节/状态消息替换）。",
+            "BuildRtnOrder5(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay)", "RtnOrder3Template", eRtn5);
+        EmitTemplate(sb, $"M2 帧 OnRtnTrade（{pRtnT.Length}B payload：成交回报推送——F002）", "RtnTradeTemplate", pRtnT);
+        EmitBuilder(sb, "OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。",
+            "BuildRtnTrade(byte instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay)", "RtnTradeTemplate", eRtnT);
+        EmitTemplate(sb, $"M2 帧 ⑳-4001（{p20a.Length}B payload：OnRspOrderInsert 拒绝——C# 层不可见但真实，复刻）", "OrderInsertRspErrTemplate", p20a);
+        EmitBuilder(sb, "⑳-4001 拒绝（payload；会话层与 F003 各自 BuildFrame 后拼接一次写）。",
+            "BuildOrderInsertRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition)", "OrderInsertRspErrTemplate", e20a);
+        EmitTemplate(sb, $"M2 帧 ⑳-F003（{p20b.Length}B payload：OnErrRtnOrderInsert——拒单在 C# 层唯一可见信号 → RspError）", "ErrRtnOrderInsertTemplate", p20b);
+        EmitBuilder(sb, "⑳-F003 报单错误回报（拒单 → RspError 事件）。",
+            "BuildErrRtnOrderInsert(byte instance, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition)", "ErrRtnOrderInsertTemplate", e20b);
+        EmitTemplate(sb, $"M2 帧 ㉒-4007（{p22a.Length}B payload：OnRspOrderAction——OrderActionAsync 阻塞等它）", "OrderActionRspTemplate", p22a);
+        EmitBuilder(sb, "㉒-4007 撤单应答·失败（RspInfo ← 核心错误码/消息）。",
+            "BuildOrderActionRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef)", "OrderActionRspTemplate", e22aErr);
+        EmitBuilder(sb, "㉒-4007 撤单应答·成功（RspInfo → E4 +「正确」——成功撤单不发 F004）。",
+            "BuildOrderActionRspOk(byte instance, byte reqId, string userId, string brokerId, string orderRef)", "OrderActionRspTemplate", e22aOk);
+        EmitTemplate(sb, $"M2 帧 ㉒-F004（{p22b.Length}B payload：OnErrRtnOrderAction 撤单错误回报）", "ErrRtnOrderActionTemplate", p22b);
+        EmitBuilder(sb, "㉒-F004 撤单错误回报（payload；会话层与 4007 拼接一次写）。",
+            "BuildErrRtnOrderAction(byte instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef)", "ErrRtnOrderActionTemplate", e22b);
 
         sb.AppendLine("}");
 
@@ -277,6 +502,104 @@ internal static class FrontGen
         }
         return hits;
     }
+
+    // ── M2 结构化 run 查找（2026-10-01 补抓包：推送/撤单/拒绝对帧的字段定位）──
+    // run = tag 后到下一 tag 字母表字节（E1..EF+FE；E0+下一字节为转义对属数据）的值段。
+
+    private static bool IsTagByte(byte b) => b is >= 0xE1 and <= 0xEF or 0xFE;
+
+    /// <summary>枚举 payload 内指定 tag 的全部 (值偏移, 值长)——E0 转义感知。</summary>
+    private static IEnumerable<(int Off, int Len)> TaggedRuns(byte[] p, byte tag)
+    {
+        for (var i = 4; i < p.Length; i++)
+        {
+            if (p[i] != tag) continue;
+            var j = i + 1;
+            while (j < p.Length)
+            {
+                if (p[j] == 0xE0 && j + 1 < p.Length) { j += 2; continue; }
+                if (IsTagByte(p[j])) break;
+                j++;
+            }
+            if (j > i + 1) yield return (i + 1, j - i - 1);
+            i = j - 1;
+        }
+    }
+
+    /// <summary>任意 tag 下满足形状谓词的全部 run（工具：OrderRef/枚举/价格等结构定位）。</summary>
+    private static List<(int Off, int Len)> ShapedRuns(byte[] p, Func<byte[], bool> match)
+    {
+        var outList = new List<(int, int)>();
+        for (var i = 4; i < p.Length; i++)
+        {
+            if (!IsTagByte(p[i]) || p[i] == 0xE0) continue;
+            var j = i + 1;
+            while (j < p.Length)
+            {
+                if (p[j] == 0xE0 && j + 1 < p.Length) { j += 2; continue; }
+                if (IsTagByte(p[j])) break;
+                j++;
+            }
+            if (j > i + 1 && match(p[(i + 1)..j]))
+                outList.Add((i + 1, j - i - 1));
+            i = j - 1;
+        }
+        return outList;
+    }
+
+    private static bool AllAsciiDigits(byte[] r) => r.Length > 0 && r.All(b => b is >= (byte)'0' and <= (byte)'9');
+    private static bool IsInstrumentRun(byte[] r)
+    {
+        var letters = 0;
+        while (letters < r.Length && char.IsAsciiLetter((char)r[letters])) letters++;
+        return letters is >= 1 and <= 2 && r.Length - letters is >= 3 and <= 4
+            && r.Skip(letters).All(b => b is >= (byte)'0' and <= (byte)'9');
+    }
+    private static bool IsTimeRun(byte[] r)
+        => r.Length == 8 && r[2] == (byte)':' && r[5] == (byte)':' && AllAsciiDigits(r.Where((_, k) => k is 0 or 1 or 3 or 4 or 6 or 7).ToArray());
+    private static bool IsDayRun(byte[] r) => r.Length == 8 && AllAsciiDigits(r) && r[0] == (byte)'2';
+
+    /// <summary>op 定位帧池中的帧（payload[4..] 前缀匹配）；可选内容过滤器。</summary>
+    private static List<byte[]> FramesWithOp(List<byte[]> payloads, string opHex, Func<byte[], bool>? filter = null)
+    {
+        var op = Hx(opHex);
+        return payloads.Where(p => p.Length > 4 + op.Length && p.AsSpan(4, op.Length).SequenceEqual(op)
+            && (filter is null || filter(p))).ToList();
+    }
+
+    /// <summary>一次 TCP 写 → payload 列表（多帧同写切分：⑩=2帧、⑳/㉒=2帧、推送批写=N帧）。
+    /// 声明长度超出剩余 ⇒ 响亮失败（抓包截断——RecordingProxy 上限须 ≥8192）。</summary>
+    private static List<byte[]> SplitWrite(byte[] raw)
+    {
+        var outList = new List<byte[]>();
+        var i = 0;
+        while (i + 4 <= raw.Length && raw[i] == 0x02 && raw[i + 1] == 0x00)
+        {
+            var ln = BinaryPrimitives.ReadUInt16BigEndian(raw.AsSpan(i + 2, 2));
+            if (i + 4 + ln > raw.Length)
+                throw Fail($"多帧写切分失败 @{i}：声明 {ln}B 超出剩余 {raw.Length - i - 4}B（抓包截断？——RecordingProxy 上限须 ≥8192）");
+            outList.Add(raw[(i + 4)..(i + 4 + ln)]);
+            i += 4 + ln;
+        }
+        if (i != raw.Length) throw Fail($"多帧写尾部残余 {raw.Length - i}B——帧头失步（截断或格式漂移）");
+        return outList;
+    }
+
+    /// <summary>定位包含指定帧（op+过滤器）的那次写的全部子帧（⑳/㉒ 两帧同写的配对提取）。</summary>
+    private static byte[][] WriteContaining(List<(byte[] Raw, string Dir)> frames, string opHex, Func<byte[], bool> filter, string what)
+    {
+        var op = Hx(opHex);
+        foreach (var (raw, _) in frames)
+        {
+            List<byte[]> ps;
+            try { ps = SplitWrite(raw); }
+            catch { continue; }   // 心跳/握手等非标准帧跳过
+            if (ps.Any(p => p.Length > 4 + op.Length && p.AsSpan(4, op.Length).SequenceEqual(op) && filter(p)))
+                return ps.ToArray();
+        }
+        throw Fail($"{what}: 未在任一写中找到该帧");
+    }
+
 
     // ── 转义解码 ──
 
@@ -450,6 +773,8 @@ internal static class FrontGen
         sb.AppendLine("/// <summary>CTP 前置应答帧模板（抓包 verbatim + 偏移替换）——由 ProtoCapture gen 生成。</summary>");
         sb.AppendLine("internal static class CtpFrontTemplates");
         sb.AppendLine("{");
+        sb.AppendLine("    // GBK 错误消息（EscapedGbk）需要 CodePages provider——.NET 默认只带 UTF/ASCII，macOS/Linux 上必须注册");
+        sb.AppendLine("    static CtpFrontTemplates() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);");
     }
 
     private static void EmitHelpers(StringBuilder sb)
@@ -483,6 +808,52 @@ internal static class FrontGen
         sb.AppendLine("    internal static byte[] EscapedMoney(double v)");
         sb.AppendLine("    {");
         sb.AppendLine("        var raw = Money(v);");
+        sb.AppendLine("        var n = 0;");
+        sb.AppendLine("        foreach (var b in raw)");
+        sb.AppendLine("            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) n++;");
+        sb.AppendLine("        var r = new byte[raw.Length + n];");
+        sb.AppendLine("        var i = 0;");
+        sb.AppendLine("        foreach (var b in raw)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) r[i++] = 0xE0;");
+        sb.AppendLine("            r[i++] = b;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return r;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>字节拼接（多段值组成一个 Edit 替换块）。</summary>");
+        sb.AppendLine("    internal static byte[] Cat(params byte[][] parts)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var r = new byte[parts.Sum(p => p.Length)];");
+        sb.AppendLine("        var i = 0;");
+        sb.AppendLine("        foreach (var p in parts) { p.CopyTo(r, i); i += p.Length; }");
+        sb.AppendLine("        return r;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>");
+        sb.AppendLine("    internal static byte[] TrimmedDouble(double v)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var b = Money(v);");
+        sb.AppendLine("        var n = b.Length;");
+        sb.AppendLine("        while (n > 1 && b[n - 1] == 0) n--;");
+        sb.AppendLine("        return b[..n];");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>大端 int 剥前导零（2 → 02、148 → 94、量 1 → 01——⑲/㉑ 实证；宽度随值）。</summary>");
+        sb.AppendLine("    internal static byte[] MinimalInt(long v)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (v == 0) return [0x00];");
+        sb.AppendLine("        var b = new byte[8];");
+        sb.AppendLine("        BinaryPrimitives.WriteInt64BigEndian(b, v);");
+        sb.AppendLine("        var n = 0;");
+        sb.AppendLine("        while (n < 7 && b[n] == 0) n++;");
+        sb.AppendLine("        return b[n..];");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>GBK 文本 + E0 转义（⑳ 实证：值内 {E0..EF,FE} 字节前插 E0，E0 自身亦转义——与 EscapedMoney 同一字母表）。</summary>");
+        sb.AppendLine("    internal static byte[] EscapedGbk(string text)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var raw = Encoding.GetEncoding(\"GBK\").GetBytes(text);");
         sb.AppendLine("        var n = 0;");
         sb.AppendLine("        foreach (var b in raw)");
         sb.AppendLine("            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) n++;");

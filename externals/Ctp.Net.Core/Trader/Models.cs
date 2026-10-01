@@ -54,6 +54,8 @@ public sealed class OrderRequest
     public required double LimitPrice { get; init; }
     public required int Volume { get; init; }
     public TimeCondition TimeCondition { get; init; } = TimeCondition.GFD;
+    /// <summary>交易所代码（SHFE/DCE/…）。留空 = 旧行为；SimNow 等前置对报单要求非空（M2 抓包实证）。</summary>
+    public string ExchangeId { get; init; } = "";
 }
 
 public sealed record OrderInsertResult(string OrderRef, int RequestId);

@@ -94,11 +94,15 @@ public sealed class RecordingProxy : IDisposable
         catch { /* 连接断开 */ }
     }
 
+    // 截断上限：M2 起放大到 8192——⑳ 报单应答一次写 335B、推送帧可能更大，256B 曾把 ⑳ 尾部 79B 吃掉
+    // （FrontGen 的 LineRe 对「 …」尾缀容忍，截断帧可定位但不可作模板——完整捕获是 M2 模板化的前提）。
+    private const int CaptureHexLimit = 8192;
+
     private void RecordFrame(int connSeq, char direction, byte[] buffer, int length, string dirLabel)
     {
         var timestamp = DateTimeOffset.UtcNow.ToString("HH:mm:ss.fff");
-        var hex = Convert.ToHexString(buffer, 0, Math.Min(length, 256));   // 前 256 字节 hex（防巨帧刷屏）
-        var line = $"{timestamp} #{connSeq} {dirLabel} [{length} bytes] {hex}{(length > 256 ? " …" : "")}";
+        var hex = Convert.ToHexString(buffer, 0, Math.Min(length, CaptureHexLimit));
+        var line = $"{timestamp} #{connSeq} {dirLabel} [{length} bytes] {hex}{(length > CaptureHexLimit ? " …" : "")}";
         lock (_fileLock)
         {
             File.AppendAllText(_captureFile, line + "\n");

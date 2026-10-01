@@ -16,6 +16,8 @@ namespace Acme.Ctp.Front;
 /// <summary>CTP 前置应答帧模板（抓包 verbatim + 偏移替换）——由 ProtoCapture gen 生成。</summary>
 internal static class CtpFrontTemplates
 {
+    // GBK 错误消息（EscapedGbk）需要 CodePages provider——.NET 默认只带 UTF/ASCII，macOS/Linux 上必须注册
+    static CtpFrontTemplates() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     internal static byte[] H(string hex) => Convert.FromHexString(hex);
 
     /// <summary>ASCII 字符串值 → 字节（协议字段值为 ASCII）。</summary>
@@ -45,6 +47,52 @@ internal static class CtpFrontTemplates
     internal static byte[] EscapedMoney(double v)
     {
         var raw = Money(v);
+        var n = 0;
+        foreach (var b in raw)
+            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) n++;
+        var r = new byte[raw.Length + n];
+        var i = 0;
+        foreach (var b in raw)
+        {
+            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) r[i++] = 0xE0;
+            r[i++] = b;
+        }
+        return r;
+    }
+
+    /// <summary>字节拼接（多段值组成一个 Edit 替换块）。</summary>
+    internal static byte[] Cat(params byte[][] parts)
+    {
+        var r = new byte[parts.Sum(p => p.Length)];
+        var i = 0;
+        foreach (var p in parts) { p.CopyTo(r, i); i += p.Length; }
+        return r;
+    }
+
+    /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>
+    internal static byte[] TrimmedDouble(double v)
+    {
+        var b = Money(v);
+        var n = b.Length;
+        while (n > 1 && b[n - 1] == 0) n--;
+        return b[..n];
+    }
+
+    /// <summary>大端 int 剥前导零（2 → 02、148 → 94、量 1 → 01——⑲/㉑ 实证；宽度随值）。</summary>
+    internal static byte[] MinimalInt(long v)
+    {
+        if (v == 0) return [0x00];
+        var b = new byte[8];
+        BinaryPrimitives.WriteInt64BigEndian(b, v);
+        var n = 0;
+        while (n < 7 && b[n] == 0) n++;
+        return b[n..];
+    }
+
+    /// <summary>GBK 文本 + E0 转义（⑳ 实证：值内 {E0..EF,FE} 字节前插 E0，E0 自身亦转义——与 EscapedMoney 同一字母表）。</summary>
+    internal static byte[] EscapedGbk(string text)
+    {
+        var raw = Encoding.GetEncoding("GBK").GetBytes(text);
         var n = 0;
         foreach (var b in raw)
             if (b is (>= 0xE0 and <= 0xEF) or 0xFE) n++;
@@ -115,13 +163,14 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>⑩ 登录结果主帧（交易日/FrontID/SessionID/MaxOrderRef——⑩ 到达即完成 OnRspUserLogin）。</summary>
-    internal static byte[] BuildSysInfoRsp(string brokerId, string userId, byte loginReqId, string tradingDay) =>
+    internal static byte[] BuildSysInfoRsp(string brokerId, string userId, byte loginReqId, string tradingDay, string maxOrderRef) =>
         Apply(SysInfoRspTemplate,
             new Edit(12, 1, [loginReqId]),
             new Edit(59, 4, F(brokerId, 4)),
             new Edit(64, 6, F(userId, 6)),
             new Edit(41, 8, F(tradingDay, 8)),
-            new Edit(185, 8, F(tradingDay, 8))
+            new Edit(185, 8, F(tradingDay, 8)),
+            new Edit(92, 1, A(maxOrderRef))
         );
 
     /// <summary>⑩ 伴随帧（42B payload + 4B 头 = 46B 整帧——与主帧同一次 TCP 写出）。</summary>
@@ -174,5 +223,214 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildQryPositionEmptyRsp(byte reqId) =>
         Apply(QryPositionEmptyRspTemplate,
             new Edit(12, 1, [reqId])
+        );
+
+    /// <summary>M1 ⑩ verbatim 会话身份（FrontID+SessionID，5B）——推送/回显帧 Edit 用（D6：与 ⑩ 同源）。</summary>
+    internal static readonly byte[] SessionFrontIdSessionId = H("012DAF7B02");
+
+    // ===== M2 帧 OnRtnOrder '3'（385B payload：未成交在队推送——F001） =====
+    internal static readonly byte[] RtnOrder3Template = H(
+        "0103344CE102E2F001E306E1010353E40401034F39393939E7323437313633E76D32373031EFEB303030303030303030303032E1323437313633EA323030E431E440A9C8E80133E931E30131E830EFEE202020202020202034363536E1444345E16D323730E139393939E131E3C9E139393939323437313431E16D32373031EFEB39393939636166E139393939E131E131E1393939E40133E3013230323630393239E401202020202020202039353037EA33E8013230323630393239E131303A35303A3437EFEFE739393939636166EFEC1341E301C8E0E69C40EBCEB4B3C9BDBBEFEFEFEFEFE510E710E86558E17FE3FDE66F70369F8C7FECFFFFFFE39CEFEFE53138302E3135382E3233322E313837EFE76D32373031EFEFEFEFEFE16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E13230323730313135E13230323730313230E13138302E3135382E3233322E313837EFEFE401"
+    );
+
+    /// <summary>OnRtnOrder '3'（未成交在队——受理/挂单状态推送）。</summary>
+    internal static byte[] BuildRtnOrder3(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+        Apply(RtnOrder3Template,
+            new Edit(10, 1, [instance]),
+            new Edit(39, 12, A(orderRef)),
+            new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
+            new Edit(65, 3, TrimmedDouble(limitPrice)),
+            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(25, 6, F(userId, 6)),
+            new Edit(52, 6, F(userId, 6)),
+            new Edit(20, 4, F(brokerId, 4)),
+            new Edit(102, 4, F(brokerId, 4)),
+            new Edit(111, 4, F(brokerId, 4)),
+            new Edit(129, 4, F(brokerId, 4)),
+            new Edit(137, 4, F(brokerId, 4)),
+            new Edit(200, 4, F(brokerId, 4)),
+            new Edit(32, 5, F(instrumentId, 5)),
+            new Edit(97, 4, F(instrumentId, 4)),
+            new Edit(122, 5, F(instrumentId, 5)),
+            new Edit(274, 5, F(instrumentId, 5)),
+            new Edit(285, 5, F(instrumentId, 5)),
+            new Edit(154, 8, A(tradingDay)),
+            new Edit(180, 8, A(tradingDay))
+        );
+
+    // ===== M2 帧 OnRtnOrder '0'（399B payload：全部成交推送——F001；VolumeTraded 保留捕获值 1，>1 手的全成回报成交量失真（边界）） =====
+    internal static readonly byte[] RtnOrder0Template = H(
+        "0103344CE102E2F001E309E1010353E40401034F39393939E7323437313633E76D32373031EFEB303030303030303030303033E1323437313633EA323030E431E440AA90E80133E931E30131E830EFEE202020202020202034363537E1444345E16D323730E139393939E131E3C9E139393939323437313431E16D32373031EFEB39393939636166E139393939E131E131E1393939E40130E43230323630393239E401202020202020202039353038E9303030E301E43230323630393239E131303A35303A3530EFEFE739393939636166EFEC1342E301C8E0E69C40EBC8ABB2BFB3C9BDBBB1A8B5A5D2D1CCE0E1BDBBEFEFEFEFE810E710E8655AE17FE3FDE66F70369F8C7FECFFFFFFE39CEFEFE53138302E3135382E3233322E313837EFE76D32373031EFEFEFEFEFE16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E13230323730313135E13230323730313230E13138302E3135382E3233322E313837EFEFE402"
+    );
+
+    /// <summary>OnRtnOrder '0'（全部成交推送）。</summary>
+    internal static byte[] BuildRtnOrder0(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+        Apply(RtnOrder0Template,
+            new Edit(10, 1, [instance]),
+            new Edit(39, 12, A(orderRef)),
+            new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
+            new Edit(65, 3, TrimmedDouble(limitPrice)),
+            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(25, 6, F(userId, 6)),
+            new Edit(52, 6, F(userId, 6)),
+            new Edit(20, 4, F(brokerId, 4)),
+            new Edit(102, 4, F(brokerId, 4)),
+            new Edit(111, 4, F(brokerId, 4)),
+            new Edit(129, 4, F(brokerId, 4)),
+            new Edit(137, 4, F(brokerId, 4)),
+            new Edit(202, 4, F(brokerId, 4)),
+            new Edit(32, 5, F(instrumentId, 5)),
+            new Edit(97, 4, F(instrumentId, 4)),
+            new Edit(122, 5, F(instrumentId, 5)),
+            new Edit(288, 5, F(instrumentId, 5)),
+            new Edit(299, 5, F(instrumentId, 5)),
+            new Edit(153, 8, A(tradingDay)),
+            new Edit(182, 8, A(tradingDay))
+        );
+
+    /// <summary>OnRtnOrder '5'（已撤销——'3' 模板合成：状态字节/状态消息替换）。</summary>
+    internal static byte[] BuildRtnOrder5(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+        Apply(RtnOrder3Template,
+            new Edit(10, 1, [instance]),
+            new Edit(39, 12, A(orderRef)),
+            new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
+            new Edit(65, 3, TrimmedDouble(limitPrice)),
+            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(25, 6, F(userId, 6)),
+            new Edit(52, 6, F(userId, 6)),
+            new Edit(20, 4, F(brokerId, 4)),
+            new Edit(102, 4, F(brokerId, 4)),
+            new Edit(111, 4, F(brokerId, 4)),
+            new Edit(129, 4, F(brokerId, 4)),
+            new Edit(137, 4, F(brokerId, 4)),
+            new Edit(200, 4, F(brokerId, 4)),
+            new Edit(32, 5, F(instrumentId, 5)),
+            new Edit(97, 4, F(instrumentId, 4)),
+            new Edit(122, 5, F(instrumentId, 5)),
+            new Edit(274, 5, F(instrumentId, 5)),
+            new Edit(285, 5, F(instrumentId, 5)),
+            new Edit(154, 8, A(tradingDay)),
+            new Edit(180, 8, A(tradingDay)),
+            new Edit(177, 1, [(byte)'5']),
+            new Edit(219, 6, EscapedGbk("已撤销"))
+        );
+
+    // ===== M2 帧 OnRtnTrade（283B payload：成交回报推送——F002） =====
+    internal static readonly byte[] RtnTradeTemplate = H(
+        "0103344CE102E2F002E30AE10101E0EFE4040901E0EB39393939E1444345E139E1323437313633E139393939E26D32373031EFEB303030303030303030303033E1323437313633EA444345E635333936EFE230202020202020202039353038E939393939E739393939323437313431E26D32373031EFEB303140AA3AE8013230323630393239E131303A35303A3530E130E139393939636166EE202020202020202034363537E139393939EFEF13433230323630393239E401E2655A30EFE26D32373031E1444345E16D32373031E16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E132E16D32373031EFEFEFEFEFE1"
+    );
+
+    /// <summary>OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。</summary>
+    internal static byte[] BuildRtnTrade(byte instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay) =>
+        Apply(RtnTradeTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(52, 12, A(orderRef)),
+            new Edit(76, 4, F(tradeId, 4)),
+            new Edit(121, 3, TrimmedDouble(price)),
+            new Edit(184, 1, MinimalInt(volume)),
+            new Edit(33, 6, F(userId, 6)),
+            new Edit(65, 6, F(userId, 6)),
+            new Edit(22, 4, F(brokerId, 4)),
+            new Edit(40, 4, F(brokerId, 4)),
+            new Edit(96, 4, F(brokerId, 4)),
+            new Edit(101, 4, F(brokerId, 4)),
+            new Edit(146, 4, F(brokerId, 4)),
+            new Edit(167, 4, F(brokerId, 4)),
+            new Edit(45, 5, F(instrumentId, 5)),
+            new Edit(112, 5, F(instrumentId, 5)),
+            new Edit(191, 5, F(instrumentId, 5)),
+            new Edit(201, 5, F(instrumentId, 5)),
+            new Edit(207, 5, F(instrumentId, 5)),
+            new Edit(272, 5, F(instrumentId, 5)),
+            new Edit(126, 8, A(tradingDay)),
+            new Edit(175, 8, A(tradingDay))
+        );
+
+    // ===== M2 帧 ⑳-4001（164B payload：OnRspOrderInsert 拒绝——C# 层不可见但真实，复刻） =====
+    internal static readonly byte[] OrderInsertRspErrTemplate = H(
+        "0103344CE101E24001E303E10201E0E5E307E355E3944354503ACEDED0A7B5C445786368616E67654944D7D6B6CEA3ACC7E0EBCCE0EEC8E0EBD5FDC8B7B5C445786368616E67654944EFEFE304E1018839393939E7323437313633E7616732353132EFEA303030303030303030303032E1323437313633EA323030E431E440BEDCE80133E931E30131E830EFEFEFEFEFEFEFEFE8616732353132EFEFEFEFEFEFEFEFE401"
+    );
+
+    /// <summary>⑳-4001 拒绝（payload；会话层与 F003 各自 BuildFrame 后拼接一次写）。</summary>
+    internal static byte[] BuildOrderInsertRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
+        Apply(OrderInsertRspErrTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(100, 12, A(orderRef)),
+            new Edit(120, 3, A($"{priceType}{direction}{offsetFlag}")),
+            new Edit(126, 3, TrimmedDouble(limitPrice)),
+            new Edit(130, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(85, 6, F(userId, 6)),
+            new Edit(113, 6, F(userId, 6)),
+            new Edit(80, 4, F(brokerId, 4)),
+            new Edit(92, 6, F(instrumentId, 6)),
+            new Edit(148, 6, F(instrumentId, 6)),
+            new Edit(17, 1, [reqId]),
+            new Edit(20, 53, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+        );
+
+    // ===== M2 帧 ⑳-F003（163B payload：OnErrRtnOrderInsert——拒单在 C# 层唯一可见信号 → RspError） =====
+    internal static readonly byte[] ErrRtnOrderInsertTemplate = H(
+        "0103344CE102E2F003E301E10201E0E5E404E1018839393939E7323437313633E7616732353132EFEA303030303030303030303032E1323437313633EA323030E431E440BEDCE80133E931E30131E830EFEFEFEFEFEFEFEFE8616732353132EFEFEFEFEFEFEFEFE401E355E3944354503ACEDED0A7B5C445786368616E67654944D7D6B6CEA3ACC7E0EBCCE0EEC8E0EBD5FDC8B7B5C445786368616E67654944EFEFE3"
+    );
+
+    /// <summary>⑳-F003 报单错误回报（拒单 → RspError 事件）。</summary>
+    internal static byte[] BuildErrRtnOrderInsert(byte instance, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
+        Apply(ErrRtnOrderInsertTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(41, 12, A(orderRef)),
+            new Edit(61, 3, A($"{priceType}{direction}{offsetFlag}")),
+            new Edit(67, 3, TrimmedDouble(limitPrice)),
+            new Edit(71, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(26, 6, F(userId, 6)),
+            new Edit(54, 6, F(userId, 6)),
+            new Edit(21, 4, F(brokerId, 4)),
+            new Edit(33, 6, F(instrumentId, 6)),
+            new Edit(89, 6, F(instrumentId, 6)),
+            new Edit(107, 53, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+        );
+
+    // ===== M2 帧 ㉒-4007（112B payload：OnRspOrderAction——OrderActionAsync 阻塞等它） =====
+    internal static readonly byte[] OrderActionRspTemplate = H(
+        "0103344CE101E24007E303E10201A5E30AE355E3194354503AB3B7B5A5D5D2B2BBB5BDCFE0E0D3A6B1A8B5A5EFEFEFEE0404014839393939E7323437313633EB303030303030303030303034E801C8E0E69C40444345EFEC30EC323437313633EFEFEFEFEFEFEFEFEFEFEFEFEFEFEF04"
+    );
+
+    /// <summary>㉒-4007 撤单应答·失败（RspInfo ← 核心错误码/消息）。</summary>
+    internal static byte[] BuildOrderActionRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
+        Apply(OrderActionRspTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(64, 12, A(orderRef)),
+            new Edit(57, 6, F(userId, 6)),
+            new Edit(90, 6, F(userId, 6)),
+            new Edit(52, 4, F(brokerId, 4)),
+            new Edit(16, 1, [reqId]),
+            new Edit(19, 25, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+        );
+
+    /// <summary>㉒-4007 撤单应答·成功（RspInfo → E4 +「正确」——成功撤单不发 F004）。</summary>
+    internal static byte[] BuildOrderActionRspOk(byte instance, byte reqId, string userId, string brokerId, string orderRef) =>
+        Apply(OrderActionRspTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(64, 12, A(orderRef)),
+            new Edit(57, 6, F(userId, 6)),
+            new Edit(90, 6, F(userId, 6)),
+            new Edit(52, 4, F(brokerId, 4)),
+            new Edit(16, 1, [reqId]),
+            new Edit(19, 25, Cat(H("E4"), A("D5FDC8B7")))
+        );
+
+    // ===== M2 帧 ㉒-F004（125B payload：OnErrRtnOrderAction 撤单错误回报） =====
+    internal static readonly byte[] ErrRtnOrderActionTemplate = H(
+        "0103344CE102E2F004E30DE1020270E40405021339393939E7323437313633EB303030303030303030303034E801C8E0E69C40444345EFEC30EFEFEFEFEFEFEFEFE5323437313633EFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEF04E355E3194354503AB3B7B5A5D5D2B2BBB5BDCFE0E0D3A6B1A8B5A5EFEFEFEE"
+    );
+
+    /// <summary>㉒-F004 撤单错误回报（payload；会话层与 4007 拼接一次写）。</summary>
+    internal static byte[] BuildErrRtnOrderAction(byte instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
+        Apply(ErrRtnOrderActionTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(32, 12, A(orderRef)),
+            new Edit(25, 6, F(userId, 6)),
+            new Edit(66, 6, F(userId, 6)),
+            new Edit(20, 4, F(brokerId, 4)),
+            new Edit(96, 25, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
         );
 }

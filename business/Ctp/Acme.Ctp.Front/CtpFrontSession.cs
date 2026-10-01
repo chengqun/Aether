@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
 using Acme.Ctp.Domain;
 using Acme.Ctp.Simulator;
 
@@ -47,7 +48,18 @@ internal sealed class CtpFrontSession : IDisposable
     // 登录后上下文
     private CtpLoginResult? _login;
     private byte _loginReqId;         // ⑦ 的 reqId——⑩ 回显它（SDK 以此归并登录结果）
-    private byte _settleInstance;     // 结算确认应答序号（抓包 ⑫=01 ⑭=02——会话内自增）
+    private byte _cmdInstance;        // 40 族应答序号（抓包 ⑫=01 ⑭=02 ⑳=03 ㉒=04——会话内自增，跨消息族共享）
+    private byte _rtnInstance;        // F0 族推送/错误回报序号（抓包实证独立计数——会话内自增）
+    private string? _accountId;       // 登录后的核心账户键（core 事件按它过滤路由）
+
+    // —— 出站管道（M2）：读循环不再内联写——应答入队，单写者循环统一写 TCP；主动推送（core 事件）经
+    //    RoutePush 入队。capture-during-dispatch（镜像 SimConnection）：本会话分发线程执行 op 期间
+    //    （core 在 InsertOrder 返回前同步抛订单/成交事件，回流到本会话）推送先入捕获缓冲，
+    //    应答帧入队后同锁排空——「应答先于推送」（消费方在应答后才注册 OrderRef，先到的回报会被丢）。——
+    private readonly Channel<byte[]> _out = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly object _writeGate = new();
+    private readonly List<byte[]> _captured = new();
+    private volatile bool _dispatching;
 
     public CtpFrontSession(TcpClient client, SimTradingCore core, Action<string> log)
     {
@@ -60,9 +72,11 @@ internal sealed class CtpFrontSession : IDisposable
     {
         var remote = _client.Client.RemoteEndPoint?.ToString() ?? "?";
         _log($"[CTP-Front] 会话启动: {remote}");
+        var writer = Task.CompletedTask;
         try
         {
             using var stream = _client.GetStream();
+            writer = WriterLoopAsync(stream, ct);
             var buffer = new byte[64 * 1024];
             while (_state != State.Closed && !ct.IsCancellationRequested)
             {
@@ -71,15 +85,7 @@ internal sealed class CtpFrontSession : IDisposable
 
                 var frames = _parser.Feed(buffer.AsSpan(0, n));
                 foreach (var frame in frames)
-                {
-                    var response = ProcessFrame(frame);
-                    if (response is { Length: > 0 })
-                    {
-                        // 出站帧也记日志——诊断「SDK 收到坏响应后挂死」时需要看见我们到底发了什么字节
-                        _log($"[CTP-Front] → [{response.Length}B] {Convert.ToHexString(response)}");
-                        await stream.WriteAsync(response, ct);
-                    }
-                }
+                    await DispatchFrameAsync(frame, ct);
             }
         }
         catch (Exception ex)
@@ -89,7 +95,108 @@ internal sealed class CtpFrontSession : IDisposable
         finally
         {
             _state = State.Closed;
+            _core.OrderChanged -= OnCoreOrderChanged;
+            _core.TradeFilled -= OnCoreTradeFilled;
+            _out.Writer.TryComplete();
+            try { await writer; } catch { }   // 排空剩余出站帧（含捕获的推送）
             _log($"[CTP-Front] 会话结束: {remote}");
+        }
+    }
+
+    /// <summary>单写者出站循环——唯一写 TCP 的地方（应答与推送统一走 <see cref="_out"/>）。</summary>
+    private async Task WriterLoopAsync(NetworkStream stream, CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var frame in _out.Reader.ReadAllAsync(ct))
+            {
+                // 出站帧也记日志——诊断「SDK 收到坏响应后挂死」时需要看见我们到底发了什么字节
+                _log($"[CTP-Front] → [{frame.Length}B] {Convert.ToHexString(frame)}");
+                await stream.WriteAsync(frame, ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _log($"[CTP-Front] 写循环异常: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// 分发一个入站帧（capture-during-disdispatch 包装）：处理期间核心同步抛的事件回流进
+    /// <see cref="_captured"/>；应答帧入队后同锁排空捕获——应答先于本单推送到达客户端。
+    /// 无应答帧且有捕获推送（成功报单路径）时先让路 10ms：客户端 CtpBrokerage 在
+    /// OrderInsertAsync 返回后才把 OrderRef 注册进 tracker，loopback 无 WAN RTT，
+    /// SDK 回调线程可能先于注册到达 ⇒ 回报被当手动单静默丢弃 + 看门狗误判（SimRpcServer 同款事故）。
+    /// 让路期间 <see cref="_dispatching"/> 保持 true——其它来源的推送仍入捕获，次序无损。
+    /// </summary>
+    private async Task DispatchFrameAsync(CtpFrame frame, CancellationToken ct)
+    {
+        byte[]? response = null;
+        lock (_writeGate) _dispatching = true;
+        try
+        {
+            response = ProcessFrame(frame);
+        }
+        finally
+        {
+            var hasCaptured = false;
+            lock (_writeGate) hasCaptured = _captured.Count > 0;
+            if (response is not { Length: > 0 } && hasCaptured)
+            {
+                try { await Task.Delay(TimeSpan.FromMilliseconds(10), ct); }
+                catch (OperationCanceledException) { }
+            }
+            lock (_writeGate)
+            {
+                if (response is { Length: > 0 })
+                    _out.Writer.TryWrite(response);
+                foreach (var captured in _captured)
+                    _out.Writer.TryWrite(captured);
+                _captured.Clear();
+                _dispatching = false;
+            }
+        }
+    }
+
+    private byte NextRtnInstance() => _rtnInstance = (byte)Math.Min(255, _rtnInstance + 1);
+
+    /// <summary>核心错误码 → wire 错误码（捕获槽 1 字节：>255 的核心码降级为 148 通用码，真码进 GBK 文本前缀）。</summary>
+    private static (int Id, string Msg) WireError(CtpBusinessException ex)
+        => ex.ErrorId > byte.MaxValue ? (148, $"[{ex.ErrorId}] {ex.ErrorMsg}") : (ex.ErrorId, ex.ErrorMsg);
+
+    // —— M2 推送：core 事件 → OnRtnOrder/OnRtnTrade wire 帧（本账户过滤 + capture-during-dispatch 排序）——
+
+    private void OnCoreOrderChanged(string accountId, CtpOrder order)
+    {
+        if (_accountId is null || !string.Equals(accountId, _accountId, StringComparison.OrdinalIgnoreCase)) return;
+        _log($"[CTP-Front] → 推送 OnRtnOrder: ref={order.OrderRef} status={(char)order.OrderStatusRaw}");
+        RoutePush(BuildFrame((char)order.OrderStatusRaw switch
+        {
+            '0' => CtpFrontTemplates.BuildRtnOrder0(NextRtnInstance(), _userId, _brokerId, order.InstrumentId, order.OrderRef,
+                (char)order.PriceType, (char)order.Direction, (char)order.OffsetFlag, order.LimitPrice, order.VolumeTotalOriginal, '3', _login?.TradingDay ?? ""),
+            // '5'（已撤销）推送暂缓：合成形状（'3' 模板改状态字节/消息）SDK 不触发回调——真前置的 '5' 帧
+            // 未捕获（补抓包当年撤单失败）。撤单经 4007 应答闭环 + 核心状态正确；补抓后启用（README 边界）。
+            _ => CtpFrontTemplates.BuildRtnOrder3(NextRtnInstance(), _userId, _brokerId, order.InstrumentId, order.OrderRef,
+                (char)order.PriceType, (char)order.Direction, (char)order.OffsetFlag, order.LimitPrice, order.VolumeTotalOriginal, '3', _login?.TradingDay ?? ""),
+            // '1' 部成借 '3' 形状（成交量字段失真——边界，README 记录）
+        }) ?? Array.Empty<byte>());
+    }
+
+    private void OnCoreTradeFilled(string accountId, CtpTrade trade)
+    {
+        if (_accountId is null || !string.Equals(accountId, _accountId, StringComparison.OrdinalIgnoreCase)) return;
+        _log($"[CTP-Front] → 推送 OnRtnTrade: ref={trade.OrderRef} {trade.Volume}@{trade.Price} id={trade.TradeId}");
+        RoutePush(BuildFrame(CtpFrontTemplates.BuildRtnTrade(NextRtnInstance(), _userId, _brokerId, trade.InstrumentId, trade.OrderRef,
+            trade.TradeId, trade.Price, trade.Volume, _login?.TradingDay ?? "")));
+    }
+
+    /// <summary>主动推送入站（core 事件 → wire 帧）。分发期间入捕获缓冲（应答先于推送），否则直写队列。</summary>
+    private void RoutePush(byte[] frame)
+    {
+        lock (_writeGate)
+        {
+            if (_dispatching)
+                _captured.Add(frame);
+            else
+                _out.Writer.TryWrite(frame);
         }
     }
 
@@ -204,6 +311,9 @@ internal sealed class CtpFrontSession : IDisposable
 
             // ⑧ 只是预响应——交易日/FrontID/SessionID/MaxOrderRef 由 ⑩（随 ⑨ 系统信息请求下发）承载
             _state = State.Authenticated;
+            _accountId = SimTradingCore.AccountIdOf(_userId);
+            _core.OrderChanged += OnCoreOrderChanged;     // M2：推送管道（会话自订阅自过滤——无需 server 级注册表）
+            _core.TradeFilled += OnCoreTradeFilled;
             return BuildFrame(CtpFrontTemplates.BuildLoginRsp(_brokerId, _userId));
         }
         catch (CtpBusinessException ex)
@@ -227,7 +337,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (body.Length >= 3 && body[0] == 0xE4 && body[1] == 0x30 && body[2] == 0x24)
         {
             _log($"[CTP-Front] 系统信息请求 → 回登录结果(⑩)");
-            var main = BuildFrame(CtpFrontTemplates.BuildSysInfoRsp(_brokerId, _userId, _loginReqId, day));
+            var main = BuildFrame(CtpFrontTemplates.BuildSysInfoRsp(_brokerId, _userId, _loginReqId, day, _login?.MaxOrderRef ?? "0"));
             var both = new byte[main.Length + CtpFrontTemplates.SysInfoCompanionFrame.Length];
             main.CopyTo(both, 0);
             CtpFrontTemplates.SysInfoCompanionFrame.CopyTo(both, main.Length);
@@ -240,10 +350,10 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E101E24013"))
         {
             var reqId = ExtractReqIdAfter(body, "E101E143E3");
-            _settleInstance = (byte)Math.Min(255, _settleInstance + 1);
-            _log($"[CTP-Front] 结算确认 #{_settleInstance} reqId={reqId}");
+            _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+            _log($"[CTP-Front] 结算确认 #{_cmdInstance} reqId={reqId}");
             return reqId is { } id
-                ? BuildFrame(CtpFrontTemplates.BuildSettleRsp(_settleInstance, id, _brokerId, _userId, day))
+                ? BuildFrame(CtpFrontTemplates.BuildSettleRsp(_cmdInstance, id, _brokerId, _userId, day))
                 : null;
         }
 
@@ -275,18 +385,71 @@ internal sealed class CtpFrontSession : IDisposable
                 : null;
         }
 
-        // ⑲ 报单: E1 01 E2 40 E4 05 —— 里程碑 2
-        if (MatchesSignature(body, "E101E240E405"))
+        // ⑲ 报单: E1 01 E2 40 E4 <计数器> —— 末字节随请求数递增（v2 抓包三单 = 05/06/07），匹配 5 字节前缀。
+        // 成功 = 无应答帧（真 CTP 语义，2026-10-01 补抓包实证）——OnRtnOrder 推送经捕获缓冲随应答槽排空；
+        // 风控拒单 = ⑳ 两子帧一次写（4001 + F003——F003 是 C# 层拒单唯一可见信号 → RspError）。
+        if (MatchesSignature(body, "E101E240E4"))
         {
-            _log($"[CTP-Front] 🚧 报单请求（里程碑 2 暂不应答）: body前缀={HexPrefix(body)}");
-            return null;
+            var o = CtpOrderWireCodec.ParseOrderInsert(body);
+            if (o is null)
+            {
+                _log($"[CTP-Front] 报单解析失败: body前缀={HexPrefix(body)}");
+                return null;
+            }
+            _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} reqId={o.ReqId}");
+            try
+            {
+                _core.InsertOrder(_accountId ?? "", new CtpOrderRequest
+                {
+                    BrokerId = _brokerId, InvestorId = _userId, InstrumentId = o.InstrumentId,
+                    Direction = (CtpDirection)o.Direction, OffsetFlag = (CtpOffsetFlag)o.OffsetFlag,
+                    PriceType = o.PriceType == '2' ? CtpOrderPriceType.Limit : CtpOrderPriceType.Market,   // '0'/'1' 双宽容（D7）
+                    LimitPrice = o.LimitPrice, Volume = o.Volume, OrderRef = o.OrderRef,
+                });
+                return null;   // 无应答帧——推送走捕获缓冲（DispatchFrameAsync 的 10ms 让路护客户端 tracker 注册）
+            }
+            catch (CtpBusinessException ex)
+            {
+                _log($"[CTP-Front] 报单拒绝: [{ex.ErrorId}] {ex.ErrorMsg}");
+                _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+                var echo = (_userId, _brokerId, o.InstrumentId, o.OrderRef, o.PriceType, o.Direction, o.OffsetFlag, o.LimitPrice, o.Volume, o.TimeCondition);
+                var (wireId, wireMsg) = WireError(ex);
+                var rsp = BuildFrame(CtpFrontTemplates.BuildOrderInsertRspErr(_cmdInstance, o.ReqId, wireId, wireMsg,
+                    echo.Item1, echo.Item2, echo.Item3, echo.Item4, echo.Item5, echo.Item6, echo.Item7, echo.Item8, echo.Item9, echo.Item10));
+                var rtn = BuildFrame(CtpFrontTemplates.BuildErrRtnOrderInsert(NextRtnInstance(), wireId, wireMsg,
+                    echo.Item1, echo.Item2, echo.Item3, echo.Item4, echo.Item5, echo.Item6, echo.Item7, echo.Item8, echo.Item9, echo.Item10));
+                var both = new byte[rsp.Length + rtn.Length];
+                rsp.CopyTo(both, 0); rtn.CopyTo(both, rsp.Length);
+                return both;
+            }
         }
 
-        // ㉑ 撤单: E1 01 E2 40 06 —— 里程碑 2
+        // ㉑ 撤单: E1 01 E2 40 06 —— core.CancelOrder（按 OrderRef 字符串匹配）。
+        // 成功 = 4007 单帧（成功 RspInfo）+ OnRtnOrder('5') 推送；失败 = 4007+F004 两帧一次写。
         if (MatchesSignature(body, "E101E240") && body.Length > 4 && body[4] == 0x06)
         {
-            _log($"[CTP-Front] 🚧 撤单请求（里程碑 2 暂不应答）: body前缀={HexPrefix(body)}");
-            return null;
+            var a = CtpOrderWireCodec.ParseOrderAction(body);
+            if (a is null)
+            {
+                _log($"[CTP-Front] 撤单解析失败: body前缀={HexPrefix(body)}");
+                return null;
+            }
+            _log($"[CTP-Front] 撤单: ref={a.OrderRef} reqId={a.ReqId}");
+            _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+            try
+            {
+                _core.CancelOrder(_accountId ?? "", new CtpOrderRef(_brokerId, _userId, 0, 0, a.OrderRef, ""));
+                return BuildFrame(CtpFrontTemplates.BuildOrderActionRspOk(_cmdInstance, a.ReqId, _userId, _brokerId, a.OrderRef));
+            }
+            catch (CtpBusinessException ex)
+            {
+                _log($"[CTP-Front] 撤单拒绝: [{ex.ErrorId}] {ex.ErrorMsg}");
+                var rsp = BuildFrame(CtpFrontTemplates.BuildOrderActionRspErr(_cmdInstance, a.ReqId, WireError(ex).Id, WireError(ex).Msg, _userId, _brokerId, a.OrderRef));
+                var rtn = BuildFrame(CtpFrontTemplates.BuildErrRtnOrderAction(NextRtnInstance(), WireError(ex).Id, WireError(ex).Msg, _userId, _brokerId, a.OrderRef));
+                var both = new byte[rsp.Length + rtn.Length];
+                rsp.CopyTo(both, 0); rtn.CopyTo(both, rsp.Length);
+                return both;
+            }
         }
 
         _log($"[CTP-Front] 未知业务帧: body前缀={HexPrefix(body)} len={body.Length}");
