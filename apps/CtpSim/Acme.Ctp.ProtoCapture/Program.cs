@@ -118,6 +118,11 @@ var tradeTask = Task.Run(async () =>
         var positions = await trader.QueryInvestorPositionAsync(brokerId, userId, ct: cts.Token);
         Console.WriteLine($"[Trader] 持仓 {positions.Count} 条");
 
+        // 查合约（M3 板子数据源的 wire op 抓包——SDK 自己构造请求帧，应答帧 = 模板素材）
+        Console.WriteLine("[Trader] QueryInstruments…");
+        var instruments = await trader.QueryInstrumentsAsync(cts.Token);
+        Console.WriteLine($"[Trader] 合约 {instruments.Count} 个（首 5: {string.Join(",", instruments.Take(5).Select(i => i.InstrumentId))}）");
+
         // 等首个 tick（成交场景的动态定价基准；无行情则回退固定价——成交场景可能落空）
         TickData? tick = null;
         try { tick = await firstTick.Task.WaitAsync(TimeSpan.FromSeconds(12), cts.Token); }
@@ -201,6 +206,11 @@ var mdTask = Task.Run(async () =>
         Console.WriteLine($"[MD] SubscribeMarketData({instrument} 及当前有效合约)…");
         await md.SubscribeMarketDataAsync(new[] { instrument, "i2701", "ta2701", "IF2612" }.Distinct().ToArray(), cts.Token);   // 勿混过期合约（v1 实证 2512 系全过期，疑似致 MD 断连）
         Console.WriteLine("[MD] 订阅已发");
+        // 长会话保持存活（v2 教训：订阅即 dispose ⇒ 从未观察过真实 tick 流的到达节奏与帧形状——
+        // 这是本地前置 tick 重投 bug 缺的地面真相）。存活至会话结束，逐帧记录。
+        Console.WriteLine("[MD] 保持存活收 tick 流…");
+        try { await Task.Delay(TimeSpan.FromSeconds(85), cts.Token); }
+        catch (OperationCanceledException) { }
     }
     catch (OperationCanceledException) { Console.WriteLine("[MD] 超时/取消"); }
     catch (Exception ex) { Console.WriteLine($"[MD] 异常（协议字节已被代理捕获）: {ex.Message}"); }

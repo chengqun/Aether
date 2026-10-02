@@ -126,6 +126,17 @@ public:
         copyStr(info.StatusMsg, pField->StatusMsg, sizeof(info.StatusMsg));
         owner_->cb.OnRspQryOrder(owner_->ctx, &info, pRspInfo, nRequestID, bIsLast);
     }
+    void OnRspQryInstrument(CThostFtdcInstrumentField* pField,
+                            CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) override {
+        if (!owner_->cb.OnRspQryInstrument || !pField) return;
+        CtpInstrumentInfo info{};
+        copyStr(info.InstrumentID, pField->InstrumentID, sizeof(info.InstrumentID));
+        copyStr(info.ExchangeID, pField->ExchangeID, sizeof(info.ExchangeID));
+        info.VolumeMultiple = pField->VolumeMultiple;
+        info.PriceTick = pField->PriceTick;
+        // CThostFtdcInstrumentField 无昨结算字段（属行情面）——置 0，前置侧不依赖该值
+        owner_->cb.OnRspQryInstrument(owner_->ctx, &info, pRspInfo, nRequestID, bIsLast);
+    }
     void OnRspOrderInsert(CThostFtdcInputOrderField* pField,
                           CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast) override {
         if (owner_->cb.OnRspOrderInsert)
@@ -365,6 +376,12 @@ CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
     if (investorId) std::strncpy(f.InvestorID, investorId, sizeof(f.InvestorID) - 1);
     if (instrumentId) std::strncpy(f.InstrumentID, instrumentId, sizeof(f.InstrumentID) - 1);
     return h->api->ReqQryOrder(&f, requestId);
+}
+
+CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, int requestId) {
+    if (!h || !h->api) return -1;
+    CThostFtdcQryInstrumentField f{};
+    return h->api->ReqQryInstrument(&f, requestId);
 }
 
 CTP_API int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,

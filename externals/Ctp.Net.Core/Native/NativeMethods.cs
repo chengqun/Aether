@@ -15,6 +15,7 @@ public struct CtpTraderCallbacks
     public IntPtr OnRspQryTradingAccount;
     public IntPtr OnRspQryInvestorPosition;
     public IntPtr OnRspQryOrder;
+    public IntPtr OnRspQryInstrument;
     public IntPtr OnRspOrderInsert;
     public IntPtr OnErrRtnOrderInsert;
     public IntPtr OnRspOrderAction;
@@ -61,6 +62,10 @@ public struct CtpTraderCallbacks
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void OnRspQryOrderDelegate(IntPtr ctx, IntPtr order, IntPtr info,
+        int requestId, [MarshalAs(UnmanagedType.I1)] bool isLast);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void OnRspQryInstrumentDelegate(IntPtr ctx, IntPtr instrument, IntPtr info,
         int requestId, [MarshalAs(UnmanagedType.I1)] bool isLast);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -133,6 +138,9 @@ internal static class NativeMethods
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern int CtpTrader_QryOrder(IntPtr handle,
         string brokerId, string investorId, string instrumentId, int requestId);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int CtpTrader_QryInstrument(IntPtr handle, int requestId);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern int CtpTrader_SettlementInfoConfirm(IntPtr handle,

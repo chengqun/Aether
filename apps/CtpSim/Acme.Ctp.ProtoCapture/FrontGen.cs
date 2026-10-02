@@ -247,7 +247,7 @@ internal static class FrontGen
         }
         var pRtn3 = RtnOrderByNeedle("EA33E8", "OnRtnOrder '3'（未成交在队）");
         var pRtn0 = RtnOrderByNeedle("E9303030", "OnRtnOrder '0'（全部成交）");
-        var pRtnT = FramesWithOp(allPayloads, "E102E2F002").SingleOrDefault()
+        var pRtnT = FramesWithOp(allPayloads, "E102E2F002").FirstOrDefault()
             ?? throw Fail("OnRtnTrade（F002）未捕获——补抓包需含成交场景");
         // ⑳ 拒绝对 = v1 抓包的「无效的ExchangeID」失败对（ErrorID 0x94；成功报单不发 ⑳——D3 实证）；
         // ㉒ 对 = 推送源会话的撤单失败对（回显携带 capFrontSession——排除 v1 的另一会话）。
@@ -456,45 +456,50 @@ internal static class FrontGen
         foreach (var off in AllHits(pMdLogin, Asc(day))) eMdLogin.Add((off, day.Length, "A(tradingDay)"));
         CheckDisjoint("MdLoginRsp", eMdLogin.ToArray());
 
-        // tick 帧：验证驱动选择——多抓包各有一帧（价格快照不同），needle 断言当帧验证器，通过者胜出。
-        // 截断点：首个与首节合约不同的 E1-合约 run（分节边界）——单合约模板。
-        // 价格槽（捕获值 needle——换抓包须同步）：40AA38 ×2 = [0]LastPrice（首价，A 块）/[1]AskPrice（时间后 E7 内）；
-        // 40AA36 = BidPrice（时间后 E5）。结构序（DepthMarketDataField）：…UpdateTime, UpdateMillisec, BidPrice1, BidVolume1, AskPrice1…
+        // tick 推送模板 = **E4F103 流式增量帧**（2026-10-02 长会话抓包定案：481 帧/次会话、SDK 正常逐帧
+        // 回调零洪水）。E4F101 是订阅后**一次性快照** op（真前置只发一次）——旧模板取自它，重复推送快照
+        // 帧触发 native 无限重投（~25 万次/秒，8 种帧形状实验均复现）。E4F103 单合约结构（105B m2701 例）：
+        //   E4F101→E4F103 op | E5 04 | E1 d2 | E4 "2439" 链路静态 | E1 [86]+合约 | EB "HH:mm:ss" |
+        //   E5 交易日 | E1 合约（净） | E1 "2433" | E1 [1c]+last(3B) | E6 量串 | E2 量串 | E4 "2434" |
+        //   E1 [18]+bid(3B) | E7 [量2B]+ask(3B) | E7 [量3B] | E1 08 E0转义额——价格三槽/时间/日/合约编辑，量串 verbatim。
         List<(int, int, string)>? eTick = null;
         var pTick = Array.Empty<byte>();
         List<byte[]> tickSource = mdPayloads;
         foreach (var filePayloads in mdByFile)
-        foreach (var cand in filePayloads.Where(p => p.Length > 9 && p.AsSpan(4, 4).SequenceEqual(Hx("E4F101E5")))
+        foreach (var cand in filePayloads.Where(p => p.Length is > 60 and < 130 && p.AsSpan(4, 3).SequenceEqual(Hx("E4F103")))
                      .OrderByDescending(p => p.Length))
         {
-            var insts1 = TaggedRuns(cand, 0xE1).Where(r => IsInstrumentRun(cand.AsSpan(r.Off, r.Len).ToArray())).ToList();
-            if (insts1.Count < 2) continue;
-            var fi = cand[insts1[0].Off..(insts1[0].Off + insts1[0].Len)];
-            var cut2 = insts1.FirstOrDefault(r => !cand.AsSpan(r.Off, r.Len).SequenceEqual(fi));
-            if (cut2.Off <= 0) continue;
-            // 截到本节完整闭合（E1 合约 + 尾部 EF 串）——下一节的引导段（E9 120214day，11B run + 1B tag）
-            // 残留会让 SDK 解析器等下一节未果而无限重发本节回调（E2E 实证 10M 次）。
-            var t = cand[..(cut2.Off - 1)];
-            var la = AllHits(t, Hx("40AA38"));
-            var bd = AllHits(t, Hx("40AA36"));
-            var tm = AllHits(t, Asc("10:50:36"));
-            if (la.Count != 2 || bd.Count != 1 || tm.Count != 1) continue;   // 快照价格不同的帧跳过——needle 即验证器
+            var t = cand;
+            // 结构定位：合约×2（E1 [86]前缀 6B + E1 净 5B）、时间（EB 8 字形）、日（8 数字 run）、
+            // last（E1 run [1c]+3B）、bid（E1 run [18]+3B）、ask（E7 run 5B 且 run[2]≥0x40——量 2B 后缀价格）
+            var e1s = TaggedRuns(t, 0xE1).ToList();
+            var instPref = e1s.Where(r => r.Len == 6 && t[r.Off] == 0x86 && IsInstrumentRun(t[(r.Off + 1)..(r.Off + r.Len)])).ToList();
+            var instClean = e1s.Where(r => r.Len is >= 4 and <= 8 && IsInstrumentRun(t[r.Off..(r.Off + r.Len)])).ToList();
+            var lastSlot = e1s.Where(r => r.Len == 4 && t[r.Off] == 0x1c).ToList();
+            var bidSlot = e1s.Where(r => r.Len == 4 && t[r.Off] == 0x18).ToList();
+            var e7s = TaggedRuns(t, 0xE7).ToList();
+            var askSlot = e7s.Where(r => r.Len == 5 && t[r.Off + 2] >= 0x40).ToList();
+            var times = ShapedRuns(t, IsTimeRun);
+            var days = ShapedRuns(t, IsDayRun);
+            if (instPref.Count != 1 || instClean.Count != 1 || lastSlot.Count != 1 || bidSlot.Count != 1
+                || askSlot.Count != 1 || times.Count != 1 || days.Count != 1) continue;
+            var dayVal = Encoding.ASCII.GetString(t[days[0].Off..(days[0].Off + 8)]);
             var e = new List<(int, int, string)>();
-            foreach (var off in AllHits(t, Asc(day))) e.Add((off, day.Length, "A(tradingDay)"));
-            var ti = TaggedRuns(t, 0xE1).Where(r => IsInstrumentRun(t.AsSpan(r.Off, r.Len).ToArray())).ToList();
-            if (ti.Count != 2) continue;
-            foreach (var r in ti) e.Add((r.Off, r.Len, $"F(instrumentId, {r.Len})"));
-            e.Add((tm[0], 8, "A(updateTime)"));
-            e.Add((la[0], 3, "PadTrimmedDouble(lastPrice, 3)"));
-            e.Add((la[1], 3, "PadTrimmedDouble(askPrice, 3)"));
-            e.Add((bd[0], 3, "PadTrimmedDouble(bidPrice, 3)"));
+            e.Add((days[0].Off, 8, "A(tradingDay)"));
+            e.Add((instPref[0].Off + 1, 5, "F(instrumentId, 5)"));   // 0x86 前缀后的合约体
+            e.Add((instClean[0].Off, instClean[0].Len, $"F(instrumentId, {instClean[0].Len})"));
+            e.Add((times[0].Off, 8, "A(updateTime)"));
+            e.Add((lastSlot[0].Off + 1, 3, "PadTrimmedDouble(lastPrice, 3)"));
+            e.Add((bidSlot[0].Off + 1, 3, "PadTrimmedDouble(bidPrice, 3)"));
+            e.Add((askSlot[0].Off + 2, 3, "PadTrimmedDouble(askPrice, 3)"));
             CheckDisjoint("MdTick", e.ToArray());
             eTick = e;
             pTick = t;
             tickSource = filePayloads;
+            Console.WriteLine($"[Gen] MdTick={t.Length}B E4F103（day={dayVal} inst={Encoding.ASCII.GetString(t[(instClean[0].Off)..(instClean[0].Off + instClean[0].Len)])}）");
             break;
         }
-        if (eTick is null) throw Fail("tick 推送帧（op E4F101）未捕获或价格 needle 未命中——补抓包需含订阅后的行情推送，且快照价与 needle 同步更新");
+        if (eTick is null) throw Fail("E4F103 流式 tick 帧未捕获或结构槽未命中——需长会话抓包（订阅后保持 MD 存活收 tick 流）");
 
         // 订阅应答：捕获帧 verbatim（E44402 + 回显合约块——SDK 无应答会断连，2026-10-01 E2E 实证）。
         // 边界：多合约订阅的回显是捕获的 4 合约块（首块 m2701/DCE 与测试匹配；幻影 ack 无害——wrapper 不校验）。
@@ -509,8 +514,8 @@ internal static class FrontGen
         EmitTemplate(sb, $"M3 帧 MdLoginRsp（{pMdLogin.Length}B payload：MD 登录应答——交易日编辑）", "MdLoginRspTemplate", pMdLogin);
         EmitBuilder(sb, "MD 登录应答（凭据不校验——行情订阅无账户语义）。",
             "BuildMdLoginRsp(string tradingDay)", "MdLoginRspTemplate", eMdLogin);
-        EmitTemplate(sb, $"M3 帧 MdTick（{pTick.Length}B payload：单合约 tick 推送——多合约帧截取首节；价格等宽填充）", "MdTickTemplate", pTick);
-        EmitBuilder(sb, "tick 推送（LastPrice/BidPrice/AskPrice 等宽填充；Volume/OI 等保留捕获 verbatim）。",
+        EmitTemplate(sb, $"M3 帧 MdTick（{pTick.Length}B payload：单合约 E4F103 流式 tick——价格三槽等宽填充，量串 verbatim）", "MdTickTemplate", pTick);
+        EmitBuilder(sb, "tick 推送（E4F103 流式 op——E4F101 快照 op 重复推送触发 native 重投，勿改回）；last/bid/ask 等宽填充，量串 verbatim。",
             "BuildMdTick(string instrumentId, string tradingDay, string updateTime, double lastPrice, double bidPrice, double askPrice)", "MdTickTemplate", eTick);
 
         sb.AppendLine("}");

@@ -54,8 +54,11 @@ public sealed class SimTradingCore : IDisposable
     private readonly SimOptions _options;
     private readonly SimClock _clock;
 
-    /// <summary>当前交易日（M3 行情腿登录应答用——无 core.Login 语境的会话取日）。</summary>
+    /// <summary>当前交易日（M3 行情腿登录应答/快照 tick 用——无 core.Login 语境的会话取日）。</summary>
     public string CurrentTradingDay => _clock.TradingDay;
+
+    /// <summary>当前时间 HH:mm:ss（M3 快照 tick 的 UpdateTime）。</summary>
+    public string CurrentTimeOfDay => _clock.TimeOfDay;
     private readonly IRiskEngine _risk;
     private readonly IMatchingEngine _matching;
     private readonly ISimStore _store;

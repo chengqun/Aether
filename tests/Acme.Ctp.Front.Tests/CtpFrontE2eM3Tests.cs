@@ -40,10 +40,19 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
             await Task.Delay(50);
         Assert.Contains(subAcks, a => a.Inst == Instrument && a.Err == 0);
 
-        // tick 推送 = 已知边界暂缓（native 无限重投——见 CtpFrontMdSession.OnTick 注释）；
-        // 服务端推送构造链路经日志可观测（FrontLoopback 日志含「tick 推送暂缓」行 = 模板构造成功）。
+        // ③ tick 推送（E4F103 流式 op——SDK 即裁判：值/合约/时间逐字段断言）。
+        // 注价竞态防护：订阅请求 fire-and-forget，等服务端登记完成再注价（否则 tick 在订阅登记前被丢）。
         await Task.Delay(500);
         _sim.Core.InjectQuote(Instrument, 2998, 3002, 3000);
-        await Task.Delay(500);
+
+        var tickDeadline = Environment.TickCount64 + 15000;
+        while (Environment.TickCount64 < tickDeadline && ticks.Count == 0)
+            await Task.Delay(50);
+        Assert.NotEmpty(ticks);
+        var tick = ticks.First();
+        Assert.Equal(Instrument, tick.InstrumentId);
+        Assert.Equal(3000, tick.LastPrice);
+        Assert.Equal(2998, tick.BidPrice);
+        Assert.Equal(3002, tick.AskPrice);
     }
 }

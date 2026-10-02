@@ -88,6 +88,15 @@ typedef struct CtpOrderInfo {
     char StatusMsg[81];
 } CtpOrderInfo;
 
+/* 合约静态元数据（查合约应答行——M3 板子数据源；字段集对齐 Domain CtpInstrument） */
+typedef struct CtpInstrumentInfo {
+    char InstrumentID[81];
+    char ExchangeID[9];
+    double VolumeMultiple;
+    double PriceTick;
+    double PreSettlement;
+} CtpInstrumentInfo;
+
 /* 成交（来自 CThostFtdcTradeField） */
 typedef struct CtpTradeInfo {
     char InstrumentID[81];
@@ -140,6 +149,9 @@ typedef struct CtpTraderCallbacks {
         const struct CThostFtdcRspInfoField* info, int requestId, bool isLast);
     void (*OnRspQryOrder)(void* ctx,
         const CtpOrderInfo* order,
+        const struct CThostFtdcRspInfoField* info, int requestId, bool isLast);
+    void (*OnRspQryInstrument)(void* ctx,
+        const CtpInstrumentInfo* instrument,
         const struct CThostFtdcRspInfoField* info, int requestId, bool isLast);
     void (*OnRspOrderInsert)(void* ctx,
         const struct CThostFtdcRspInfoField* info, int requestId, bool isLast);
@@ -196,6 +208,8 @@ CTP_API int CtpTrader_OrderAction(CtpTraderHandle h,
 CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
     const char* brokerId, const char* investorId,
     const char* instrumentId, int requestId);
+/* 查合约（全量——真实前置返回全市场清单；本地前置返回上市表） */
+CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, int requestId);
 /* 确认结算结果（每个交易日下单前必须先调） */
 CTP_API int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
     const char* brokerId, const char* investorId, int requestId);

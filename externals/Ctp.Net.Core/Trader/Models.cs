@@ -61,6 +61,14 @@ public sealed class OrderRequest
 public sealed record OrderInsertResult(string OrderRef, int RequestId);
 
 // —— 查询/回报模型 ——
+
+/// <summary>合约静态元数据（查合约应答行——对齐 Domain CtpInstrument 的字段面）。</summary>
+public sealed record InstrumentInfo(string InstrumentId, string ExchangeId,
+    double VolumeMultiple, double PriceTick, double PreSettlement)
+{
+    public static InstrumentInfo From(Native.CtpInstrumentInfo f) => new(
+        f.InstrumentID ?? "", f.ExchangeID ?? "", f.VolumeMultiple, f.PriceTick, f.PreSettlement);
+}
 public sealed record Account
 {
     public string AccountId { get; init; } = "";

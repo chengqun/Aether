@@ -38,6 +38,9 @@ public sealed class CtpTrader : IDisposable
     private readonly CtpTraderCallbacks.OnRspQryTradingAccountDelegate _dQryAccount;
     private readonly CtpTraderCallbacks.OnRspQryInvestorPositionDelegate _dQryPosition;
     private readonly CtpTraderCallbacks.OnRspQryOrderDelegate _dQryOrder;
+
+
+    private readonly CtpTraderCallbacks.OnRspQryInstrumentDelegate _dQryInstrument;
     private readonly CtpTraderCallbacks.OnRspOrderInsertDelegate _dRspOrderInsert;
     private readonly CtpTraderCallbacks.OnErrRtnOrderInsertDelegate _dErrRtnOrderInsert;
     private readonly CtpTraderCallbacks.OnRspOrderActionDelegate _dRspOrderAction;
@@ -68,6 +71,7 @@ public sealed class CtpTrader : IDisposable
         _dQryAccount = OnRspQryTradingAccountCb;
         _dQryPosition = OnRspQryInvestorPositionCb;
         _dQryOrder = OnRspQryOrderCb;
+        _dQryInstrument = OnRspQryInstrumentCb;
         _dRspOrderInsert = OnRspOrderInsertCb;
         _dErrRtnOrderInsert = OnErrRtnOrderInsertCb;
         _dRspOrderAction = OnRspOrderActionCb;
@@ -85,6 +89,7 @@ public sealed class CtpTrader : IDisposable
             OnRspQryTradingAccount = Marshal.GetFunctionPointerForDelegate(_dQryAccount),
             OnRspQryInvestorPosition = Marshal.GetFunctionPointerForDelegate(_dQryPosition),
             OnRspQryOrder = Marshal.GetFunctionPointerForDelegate(_dQryOrder),
+            OnRspQryInstrument = Marshal.GetFunctionPointerForDelegate(_dQryInstrument),
             OnRspOrderInsert = Marshal.GetFunctionPointerForDelegate(_dRspOrderInsert),
             OnErrRtnOrderInsert = Marshal.GetFunctionPointerForDelegate(_dErrRtnOrderInsert),
             OnRspOrderAction = Marshal.GetFunctionPointerForDelegate(_dRspOrderAction),
@@ -188,6 +193,18 @@ public sealed class CtpTrader : IDisposable
         if (rc != 0) throw new CtpException($"ReqQryInvestorPosition 发送失败 rc={rc}");
         var items = await tcs.Tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
         return items.Select(o => Position.From((CtpPositionInfo)o)).ToList();
+    }
+
+    /// <summary>查合约（全量——本地前置返回上市表；真实前置返回全市场清单，可能很大）。</summary>
+    public async Task<IReadOnlyList<InstrumentInfo>> QueryInstrumentsAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        var reqId = NextRequestId();
+        var tcs = RegisterQuery(reqId);
+        int rc = NativeMethods.CtpTrader_QryInstrument(_handle, reqId);
+        if (rc != 0) throw new CtpException($"ReqQryInstrument 发送失败 rc={rc}");
+        var items = await tcs.Tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+        return items.Select(o => InstrumentInfo.From((CtpInstrumentInfo)o)).ToList();
     }
 
     public Task<OrderInsertResult> OrderInsertAsync(OrderRequest req, CancellationToken ct = default)
@@ -335,6 +352,15 @@ public sealed class CtpTrader : IDisposable
         var o = order != IntPtr.Zero ? Marshal.PtrToStructure<CtpOrderInfo>(order) : default;
         Console.WriteLine($"[ctp-trader] 报单查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={o.InstrumentID}");
         self.OnQueryItem(requestId, o, i, isLast);
+    }
+
+    private void OnRspQryInstrumentCb(IntPtr ctx, IntPtr instrument, IntPtr info, int requestId, bool isLast)
+    {
+        var self = Self(ctx);
+        var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
+        var f = instrument != IntPtr.Zero ? Marshal.PtrToStructure<CtpInstrumentInfo>(instrument) : default;
+        Console.WriteLine($"[ctp-trader] 合约查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={f.InstrumentID}");
+        self.OnQueryItem(requestId, f, i, isLast);
     }
 
     private void OnRspOrderInsertCb(IntPtr ctx, IntPtr info, int requestId, bool isLast)

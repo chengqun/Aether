@@ -160,8 +160,22 @@ internal sealed class CtpFrontMdSession : IDisposable
             i = j - 1;
         }
         _log($"订阅: +[{string.Join(",", added)}] → 共 {_subscribed.Count} 个");
-        // 订阅应答（捕获 verbatim——SDK 无应答会断连，E2E 实证；wrapper 不阻塞等待但 native 层需要）
-        return BuildFrame(CtpFrontTemplates.MdSubscribeRspTemplate);
+        // 订阅应答 + 当前快照 tick **同一次 TCP 写**（真实前置行为——v2 抓包 664B = 195B rsp + 461B tick
+        // 拼一个写；M0 = rsp + 12B 迷你帧同写）。单独推送 E4F101 会触发 native 无限重投（E2E 7 种
+        // 帧形状实证）——「紧跟 rsp 同写」是唯一未测且与抓包完全一致的形状。
+        var parts = new List<byte[]> { BuildFrame(CtpFrontTemplates.MdSubscribeRspTemplate) };
+        foreach (var inst in added)
+        {
+            if (_core.Market.GetQuote(inst) is not { } q) continue;
+            parts.Add(BuildFrame(CtpFrontTemplates.BuildMdTick(inst, _core.CurrentTradingDay,
+                _core.CurrentTimeOfDay, q.LastPrice, q.BidPrice, q.AskPrice)));
+            _log($"→ 快照: {inst} last={q.LastPrice} bid={q.BidPrice} ask={q.AskPrice}");
+        }
+        var total = parts.Sum(b => b.Length);
+        var buf = new byte[total];
+        var off = 0;
+        foreach (var b in parts) { b.CopyTo(buf, off); off += b.Length; }
+        return buf;
     }
 
     private void OnTick(CtpTick tick)
@@ -169,11 +183,11 @@ internal sealed class CtpFrontMdSession : IDisposable
         if (_state != State.Ready || !_subscribed.Contains(tick.InstrumentId)) return;
         var day = string.IsNullOrEmpty(tick.TradingDay) ? _core.CurrentTradingDay : tick.TradingDay;
         _log($"→ 推送 tick: {tick.InstrumentId} last={tick.LastPrice} bid={tick.BidPrice} ask={tick.AskPrice}");
-        // 【已知边界·tick 推送暂缓】帧模板/字段编辑全部就绪（SDK 解析值验证正确：last/bid/ask/时间 ✓），
-        // 但该 SDK 构建收到 E4F101 推送后 native 层无限重投同一记录（~25 万次/秒，7 种帧形状实验
-        // 均复现：±E9 分隔/单元复制/迷你终止帧/单写拼接——根因不在帧形状；真实抓包的「无回调+断连」
-        // 实为抓包驱动订阅后即 dispose，非 SDK 行为参照）。开启推送须先在真前置长会话补抓验证。
-        _log($"⏸ tick 推送暂缓（边界）: {tick.InstrumentId} last={tick.LastPrice} bid={tick.BidPrice} ask={tick.AskPrice}");
+        // tick 推送（E4F103 流式 op——2026-10-02 长会话抓包定案：旧模板误用 E4F101 一次性快照 op，
+        // 重复推送快照帧触发 native 无限重投；E4F103 是真实 tick 流 op，481 帧/次会话 SDK 零洪水）
+        RoutePush(BuildFrame(CtpFrontTemplates.BuildMdTick(tick.InstrumentId, day,
+            string.IsNullOrEmpty(tick.UpdateTime) ? _core.CurrentTimeOfDay : tick.UpdateTime,
+            tick.LastPrice, tick.BidPrice, tick.AskPrice)));
     }
 
     // —— 工具（与交易腿同款规则）——

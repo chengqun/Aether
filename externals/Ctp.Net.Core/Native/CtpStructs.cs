@@ -166,6 +166,15 @@ public struct CtpPositionInfo
 }
 
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+public struct CtpInstrumentInfo
+{
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 81)] public string InstrumentID;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 9)] public string ExchangeID;
+    public double VolumeMultiple;
+    public double PriceTick;
+    public double PreSettlement;
+}
+
 public struct CtpOrderInfo
 {
     [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 81)] public string InstrumentID;
