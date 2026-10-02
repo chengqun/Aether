@@ -385,6 +385,27 @@ internal sealed class CtpFrontSession : IDisposable
                 : null;
         }
 
+        // 查合约: E1 04 E2 80 2E —— 板子数据源（2026-10-02 过滤查询抓包定案：真前置按应答大小选格式，
+        // 大清单走 LZ4 批量二进制（不逆向）；本地上市表小 ⇒ tag 模板逐合约一帧同写（首帧 verbatim
+        // isLast——isLast 编码未逆向，多合约时只有首行到达 SDK；默认上市表 = 单合约 zx001）。请求侧
+        // reqId 标签族 E1 01 01 5D E3（按查询类型各异），instance 回显请求值（请求 op 后 E3 <n>）。
+        if (MatchesSignature(body, "E104E2802E"))
+        {
+            var reqId = ExtractReqIdAfter(body, "E101015DE3");
+            var instance = ExtractInstanceAfterOp(body, "E104E2802E");
+            var listed = _core.QueryListedInstruments();
+            _log($"查合约 reqId={reqId} instance={instance} → 上市 {listed.Count} 个: {string.Join(",", listed.Select(i => i.InstrumentId))}");
+            if (reqId is not { } qryId || instance is not { } inst) return null;
+            if (listed.Count == 0) return null;
+            var frames = listed.Select(i =>
+                BuildFrame(CtpFrontTemplates.BuildQryInstrumentRsp(inst, qryId, i.InstrumentId, i.ExchangeId))).ToArray();
+            var total = frames.Sum(b => b.Length);
+            var buf = new byte[total];
+            var off = 0;
+            foreach (var b in frames) { b.CopyTo(buf, off); off += b.Length; }
+            return buf;
+        }
+
         // ⑲ 报单: E1 01 E2 40 E4 <计数器> —— 末字节随请求数递增（v2 抓包三单 = 05/06/07），匹配 5 字节前缀。
         // 成功 = 无应答帧（真 CTP 语义，2026-10-01 补抓包实证）——OnRtnOrder 推送经捕获缓冲随应答槽排空；
         // 风控拒单 = ⑳ 两子帧一次写（4001 + F003——F003 是 C# 层拒单唯一可见信号 → RspError）。
@@ -468,6 +489,16 @@ internal sealed class CtpFrontSession : IDisposable
     /// <summary>⑤/⑦ 共享 op 签名的 reqId：body[5]==E3 时 body[6] 即 reqId。</summary>
     private static byte? ReqIdAfterOp(ReadOnlySpan<byte> body)
         => body.Length > 6 && body[5] == 0xE3 ? body[6] : null;
+
+    /// <summary>提取 op 签名后的 instance（op + E3 &lt;n&gt;——应答回显请求值）。查合约请求 op=5B。</summary>
+    private static byte? ExtractInstanceAfterOp(ReadOnlySpan<byte> body, string opHex)
+    {
+        var op = Convert.FromHexString(opHex);
+        var hit = body.IndexOf(op);
+        if (hit < 0 || hit + op.Length >= body.Length || body[hit + op.Length] != 0xE3) return null;
+        var idx = hit + op.Length + 1;
+        return idx < body.Length ? body[idx] : null;
+    }
 
     /// <summary>定位 needle 后紧跟的 1B reqId（⑪⑬ E19CE3 / ⑮ E12EE3 / ⑰ E1A6E3）。</summary>
     private byte? ExtractReqIdAfter(ReadOnlySpan<byte> body, string needleHex)

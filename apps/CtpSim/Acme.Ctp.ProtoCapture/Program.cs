@@ -118,10 +118,14 @@ var tradeTask = Task.Run(async () =>
         var positions = await trader.QueryInvestorPositionAsync(brokerId, userId, ct: cts.Token);
         Console.WriteLine($"[Trader] 持仓 {positions.Count} 条");
 
-        // 查合约（M3 板子数据源的 wire op 抓包——SDK 自己构造请求帧，应答帧 = 模板素材）
-        Console.WriteLine("[Trader] QueryInstruments…");
-        var instruments = await trader.QueryInstrumentsAsync(cts.Token);
-        Console.WriteLine($"[Trader] 合约 {instruments.Count} 个（首 5: {string.Join(",", instruments.Take(5).Select(i => i.InstrumentId))}）");
+        // 查合约（M3 板子数据源的 wire op 抓包——SDK 自己构造请求帧，应答帧 = 模板素材）。
+        // 关键实验：单合约过滤查询——小应答是否走 tag 格式（决定本地前置能否用 tag 模板回查合约）。
+        Console.WriteLine("[Trader] QueryInstruments（过滤 sc2706 单合约）…");
+        var one = await trader.QueryInstrumentsAsync("sc2706", cts.Token);
+        Console.WriteLine($"[Trader] 过滤查合约 {one.Count} 个: {string.Join(",", one.Select(i => $"{i.InstrumentId}/{i.ExchangeId}/x{i.VolumeMultiple}/t{i.PriceTick}"))}");
+        Console.WriteLine("[Trader] QueryInstruments（全量）…");
+        var instruments = await trader.QueryInstrumentsAsync(null, cts.Token);
+        Console.WriteLine($"[Trader] 全量合约 {instruments.Count} 个（首 5: {string.Join(",", instruments.Take(5).Select(i => i.InstrumentId))}）");
 
         // 等首个 tick（成交场景的动态定价基准；无行情则回退固定价——成交场景可能落空）
         TickData? tick = null;

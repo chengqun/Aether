@@ -195,13 +195,14 @@ public sealed class CtpTrader : IDisposable
         return items.Select(o => Position.From((CtpPositionInfo)o)).ToList();
     }
 
-    /// <summary>查合约（全量——本地前置返回上市表；真实前置返回全市场清单，可能很大）。</summary>
-    public async Task<IReadOnlyList<InstrumentInfo>> QueryInstrumentsAsync(CancellationToken ct = default)
+    /// <summary>查合约（instrumentId 过滤——null/空 = 全量；真实前置全量返回全市场清单，可能很大）。</summary>
+    public async Task<IReadOnlyList<InstrumentInfo>> QueryInstrumentsAsync(string? instrumentId = null,
+        CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         var reqId = NextRequestId();
         var tcs = RegisterQuery(reqId);
-        int rc = NativeMethods.CtpTrader_QryInstrument(_handle, reqId);
+        int rc = NativeMethods.CtpTrader_QryInstrument(_handle, instrumentId ?? "", reqId);
         if (rc != 0) throw new CtpException($"ReqQryInstrument 发送失败 rc={rc}");
         var items = await tcs.Tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
         return items.Select(o => InstrumentInfo.From((CtpInstrumentInfo)o)).ToList();

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Ctp.Net.Core.MarketData;
 using Ctp.Net.Core.Trader;
+using Ctp.Net.Core.Trader;
 
 namespace Acme.Ctp.Front.Tests;
 
@@ -44,6 +45,22 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
         // 注价竞态防护：订阅请求 fire-and-forget，等服务端登记完成再注价（否则 tick 在订阅登记前被丢）。
         await Task.Delay(500);
         _sim.Core.InjectQuote(Instrument, 2998, 3002, 3000);
+
+        // ④ 查合约（板子数据源——交易腿 op，前置 tag 应答，SDK 解析返回上市表）
+        var traderFlow = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", "qry", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(traderFlow);
+        using var trader = new CtpTrader(traderFlow);
+        await trader.LoginAsync(new CtpConnectRequest
+        {
+            FrontAddress = _sim.FrontAddress,
+            BrokerId = FrontLoopback.Broker,
+            UserId = User,
+            Password = "m3-pass",
+            AppId = "simnow_client_test",
+            AuthCode = "0000000000000000",
+        });
+        var instruments = await trader.QueryInstrumentsAsync();
+        Assert.Contains(instruments, i => i.InstrumentId == "zx001" && i.ExchangeId == "SIM");
 
         var tickDeadline = Environment.TickCount64 + 15000;
         while (Environment.TickCount64 < tickDeadline && ticks.Count == 0)

@@ -466,6 +466,7 @@ internal static class FrontGen
         var pTick = Array.Empty<byte>();
         List<byte[]> tickSource = mdPayloads;
         foreach (var filePayloads in mdByFile)
+        {
         foreach (var cand in filePayloads.Where(p => p.Length is > 60 and < 130 && p.AsSpan(4, 3).SequenceEqual(Hx("E4F103")))
                      .OrderByDescending(p => p.Length))
         {
@@ -483,6 +484,8 @@ internal static class FrontGen
             var days = ShapedRuns(t, IsDayRun);
             if (instPref.Count != 1 || instClean.Count != 1 || lastSlot.Count != 1 || bidSlot.Count != 1
                 || askSlot.Count != 1 || times.Count != 1 || days.Count != 1) continue;
+            // 钉死 m2701 帧（E2E 验证过的形状——跨帧的 ask 槽结构有变体，换帧曾致 ask 解析漂移）
+            if (Encoding.ASCII.GetString(t[instClean[0].Off..(instClean[0].Off + instClean[0].Len)]) != "m2701") continue;
             var dayVal = Encoding.ASCII.GetString(t[days[0].Off..(days[0].Off + 8)]);
             var e = new List<(int, int, string)>();
             e.Add((days[0].Off, 8, "A(tradingDay)"));
@@ -491,13 +494,26 @@ internal static class FrontGen
             e.Add((times[0].Off, 8, "A(updateTime)"));
             e.Add((lastSlot[0].Off + 1, 3, "PadTrimmedDouble(lastPrice, 3)"));
             e.Add((bidSlot[0].Off + 1, 3, "PadTrimmedDouble(bidPrice, 3)"));
-            e.Add((askSlot[0].Off + 2, 3, "PadTrimmedDouble(askPrice, 3)"));
+            // ask 槽 wire 偏移 = 跳过前 2 个逻辑字节（bidvol）后的 wire 位置——bidvol 字节若落在
+            // tag 字母表（E0..EF/FE）会被 E0 转义、wire 额外 +1（107B 帧实证：bidvol [02,E9] → wire [02,E0,E9]，
+            // 朴素 +2 编辑撞进转义对 → SDK 读出捕获值 3372 而非注入价）。转义感知跳字节。
+            var askOff = askSlot[0].Off;
+            var askSkip = 0;
+            while (askSkip < 2)
+            {
+                if (t[askOff] == 0xE0) askOff += 2;   // 转义对 = 1 逻辑字节
+                else askOff += 1;
+                askSkip++;
+            }
+            e.Add((askOff, 3, "PadTrimmedDouble(askPrice, 3)"));
             CheckDisjoint("MdTick", e.ToArray());
             eTick = e;
             pTick = t;
             tickSource = filePayloads;
             Console.WriteLine($"[Gen] MdTick={t.Length}B E4F103（day={dayVal} inst={Encoding.ASCII.GetString(t[(instClean[0].Off)..(instClean[0].Off + instClean[0].Len)])}）");
             break;
+        }
+        if (eTick is not null) break;   // 内层 break 只退本文件循环——不退外层会被后续文件的匹配覆盖（曾致 109B→107B 静默换帧）
         }
         if (eTick is null) throw Fail("E4F103 流式 tick 帧未捕获或结构槽未命中——需长会话抓包（订阅后保持 MD 存活收 tick 流）");
 
@@ -508,8 +524,29 @@ internal static class FrontGen
         var pMdSubRsp = tickSource.Where(p => p.Length > 9 && p.AsSpan(4, 3).SequenceEqual(Hx("E44402"))
                 && p.AsSpan().IndexOf(tickInstNeedle) >= 0).OrderByDescending(p => p.Length).FirstOrDefault()
             ?? throw Fail("MdSubscribeRsp（op E44402）未捕获——补抓包需含订阅会话");
-        Console.WriteLine($"[Gen] M3 帧长: MdLoginRsp={pMdLogin.Length} MdTick={pTick.Length} MdSubscribeRsp={pMdSubRsp.Length}（多合约帧截取首节）");
+        // ═══ 查合约 tag 应答模板（2026-10-02 过滤查询抓包定案）═══
+        // 真前置按应答大小选格式：大清单（1.15MB/15990 行）走 LZ4 批量二进制（通道路由 0104FA0F，SDK 二进制
+        // strings 证实 Lz4Protocol.cpp——不逆向）；过滤单合约（421B）走 tag 协议（路由 0103344C，op E104E2802F）。
+        // 本地前置只回上市表（小）⇒ tag 模板即可。请求侧 op E104E2802E、reqId 标签族 E1 01 01 5D E3；
+        // 响应 instance/reqId 回显请求值。多行 = 每合约一帧同写（首帧 verbatim isLast——isLast 编码未逆向，
+        // 多合约时只有首行到达 SDK，v1 边界：默认上市表 = 单合约 zx001）。
+        var pQryInst = allPayloads.Where(p => p.Length is > 100 and < 1000
+                && p.AsSpan(4, 5).SequenceEqual(Hx("E104E2802F")))
+            .OrderBy(p => p.Length).FirstOrDefault()
+            ?? throw Fail("查合约 tag 应答帧（op E104E2802F，<1000B）未捕获——需过滤单合约查询抓包（大清单走 LZ4 批量格式不适用本地小上市表）");
+        var eQryInst = new List<(int, int, string)>();
+        eQryInst.Add(LocFull(pQryInst, Cat(Hx("E104E2802F"), [0xE3]), 1, "[instance]", "QryInstrumentRsp instance"));
+        eQryInst.Add(LocFull(pQryInst, Hx("E101025EE3"), 1, "[reqId]", "QryInstrumentRsp reqId"));
+        var instIdHits = AllHits(pQryInst, Asc("sc2706"));
+        if (instIdHits.Count < 1) throw Fail($"QryInstrumentRsp: 合约号槽命中 {instIdHits.Count} 处");
+        foreach (var off in instIdHits) eQryInst.Add((off, 6, "F(instrumentId, 6)"));
+        foreach (var off in AllHits(pQryInst, Asc("INE"))) eQryInst.Add((off, 3, "F(exchangeId, 3)"));
+        CheckDisjoint("QryInstrumentRsp", eQryInst.ToArray());
+        Console.WriteLine($"[Gen] M3 帧长: MdLoginRsp={pMdLogin.Length} MdTick={pTick.Length} MdSubscribeRsp={pMdSubRsp.Length} QryInstrumentRsp={pQryInst.Length}B（合约槽×{instIdHits.Count}）");
         EmitTemplate(sb, $"M3 帧 MdSubscribeRsp（{pMdSubRsp.Length}B payload：订阅应答——捕获 verbatim，回显块边界见注释）", "MdSubscribeRspTemplate", pMdSubRsp);
+        EmitTemplate(sb, $"M3 帧 QryInstrumentRsp（{pQryInst.Length}B payload：查合约 tag 应答——单行模板（InstrumentId/ExchangeId 等宽编辑；VolumeMultiple/PriceTick 等保留捕获 verbatim——板子只读 id/交易所）", "QryInstrumentRspTemplate", pQryInst);
+        EmitBuilder(sb, "查合约应答（板子数据源——instance/reqId 回显请求值；多合约=每合约一帧同写，首帧 verbatim isLast）。",
+            "BuildQryInstrumentRsp(byte instance, byte reqId, string instrumentId, string exchangeId)", "QryInstrumentRspTemplate", eQryInst);
 
         EmitTemplate(sb, $"M3 帧 MdLoginRsp（{pMdLogin.Length}B payload：MD 登录应答——交易日编辑）", "MdLoginRspTemplate", pMdLogin);
         EmitBuilder(sb, "MD 登录应答（凭据不校验——行情订阅无账户语义）。",

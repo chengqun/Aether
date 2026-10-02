@@ -378,9 +378,10 @@ CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
     return h->api->ReqQryOrder(&f, requestId);
 }
 
-CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, int requestId) {
+CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, const char* instrumentId, int requestId) {
     if (!h || !h->api) return -1;
     CThostFtdcQryInstrumentField f{};
+    if (instrumentId) std::strncpy(f.InstrumentID, instrumentId, sizeof(f.InstrumentID) - 1);
     return h->api->ReqQryInstrument(&f, requestId);
 }
 

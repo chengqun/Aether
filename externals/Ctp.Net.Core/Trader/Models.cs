@@ -67,7 +67,7 @@ public sealed record InstrumentInfo(string InstrumentId, string ExchangeId,
     double VolumeMultiple, double PriceTick, double PreSettlement)
 {
     public static InstrumentInfo From(Native.CtpInstrumentInfo f) => new(
-        f.InstrumentID ?? "", f.ExchangeID ?? "", f.VolumeMultiple, f.PriceTick, f.PreSettlement);
+        (f.InstrumentID ?? "").Trim(), (f.ExchangeID ?? "").Trim(), f.VolumeMultiple, f.PriceTick, f.PreSettlement);
 }
 public sealed record Account
 {

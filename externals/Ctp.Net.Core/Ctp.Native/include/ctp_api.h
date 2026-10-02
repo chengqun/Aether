@@ -209,7 +209,7 @@ CTP_API int CtpTrader_QryOrder(CtpTraderHandle h,
     const char* brokerId, const char* investorId,
     const char* instrumentId, int requestId);
 /* 查合约（全量——真实前置返回全市场清单；本地前置返回上市表） */
-CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, int requestId);
+CTP_API int CtpTrader_QryInstrument(CtpTraderHandle h, const char* instrumentId, int requestId);
 /* 确认结算结果（每个交易日下单前必须先调） */
 CTP_API int CtpTrader_SettlementInfoConfirm(CtpTraderHandle h,
     const char* brokerId, const char* investorId, int requestId);

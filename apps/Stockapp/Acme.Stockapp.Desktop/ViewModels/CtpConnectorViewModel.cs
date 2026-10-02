@@ -253,8 +253,9 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
 
     /// <summary>
     /// 交易前置是否指向本地仿真柜台（镜像 <c>SimAddress.IsSimFront</c> 的纯文本判定——VM 不引 Acme.Ctp.Sim，
-    /// 先例 = <see cref="FrontTag"/>）：sim（不分大小写）或 127.0.0.1:17800（容忍 tcp:// 前缀）。
-    /// 行情随柜台：sim 登录 ⇒ 行情为 host 推送的仿真合成行情，行情前置可留空。
+    /// 先例 = <see cref="FrontTag"/>）：sim（不分大小写）/ 127.0.0.1:17800（旧 JSON-RPC 形态）/ 127.0.0.1:17801
+    /// （CTP 前置交易腿——2026-10-01 起本地柜台统一形态；容忍 tcp:// 前缀与 localhost）。
+    /// 行情随柜台：本地柜台登录 ⇒ 行情走前置行情腿 17802（前置地址形态须填行情前置）。
     /// </summary>
     public bool IsSimFront
     {
@@ -264,7 +265,9 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
             if (string.IsNullOrWhiteSpace(a)) return false;
             if (string.Equals(a, "sim", StringComparison.OrdinalIgnoreCase)) return true;
             var bare = a.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) ? a["tcp://".Length..] : a;
-            return string.Equals(bare, "127.0.0.1:17800", StringComparison.OrdinalIgnoreCase);
+            bare = bare.Replace("localhost", "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(bare, "127.0.0.1:17800", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(bare, "127.0.0.1:17801", StringComparison.OrdinalIgnoreCase);
         }
     }
 
