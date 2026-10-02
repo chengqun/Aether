@@ -23,7 +23,9 @@ internal static class CtpOrderWireCodec
     internal static ParsedOrderInsert? ParseOrderInsert(ReadOnlySpan<byte> body)
     {
         var reqId = ByteAfter(body, "E101017BE3");
-        var orderRef = RunAfter(body, 0xE8, r => r.Length == 12 && r.ToArray().All(IsDigit));
+        // orderRef 的 tag 随会话字段形状漂（6 字符用户 ⇒ E8；7 字符用户 ⇒ E7——2026-10-03 E2E 实证，
+        // 形状谓词 12 位数字足够闸住无误中）。先 E8 后 E7。
+        var orderRef = RunAfter(body, 0xE8, OrderRefShape) ?? RunAfter(body, 0xE7, OrderRefShape);
         var enums = RunAfter(body, 0xEA, r => r.Length == 3 && r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'4'));
         var price = RunAfter(body, 0xE4, r => r.Length is >= 2 and <= 8 && r.ToArray().Any(b => b >= 0x80));
         // 量的 tag 随值宽变：1 字节量 ⇒ E8（2B run），2 字节量（≥256 手）⇒ E7（3B run）——2026-10-02 E2E
@@ -57,6 +59,10 @@ internal static class CtpOrderWireCodec
         => r.Length is >= 2 and <= 5
            && r[^1] is (byte)'1' or (byte)'2' or (byte)'3'
            && r[..^1].ToArray().Any(b => b < 0x20);
+
+    /// <summary>orderRef run 形状：恒 12 位零填充数字（D12）。</summary>
+    private static bool OrderRefShape(ReadOnlySpan<byte> r)
+        => r.Length == 12 && r.ToArray().All(IsDigit);
 
     /// <summary>needle（hex）后紧跟的 1 字节。</summary>
     private static byte? ByteAfter(ReadOnlySpan<byte> body, string needleHex)

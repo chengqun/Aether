@@ -14,8 +14,15 @@
              含 ASCII "API_20171207_V1"（API 版本标识）
 
 客户端心跳:  精确 6B [00 02 00 00 05 00]
-             等待服务端响应期间 ~15s 一次；无对应服务端应答帧
-             （抓包未见 S→C 心跳——短会话里程碑无需服务端心跳发射）
+             等待服务端响应期间 ~15s 一次；服务端回射同款 6B（2026-10-03 实证：
+             S→C 心跳确实存在——20261002-184410 抓包 18:45:02.842 有一条 6B
+             [00 02 00 00 05 00]，旧「未见 S→C 心跳」是短窗口漏看；本地前置
+             已实现逐拍回射保活）
+
+80 族应答实例: ⑯/⑱/查合约应答 op 后的 `E3 <n>` = 请求侧 80 族查询计数的回显
+             （1,2,3…逐次 +1）。客户端按它丢弃重复帧——应答实例不推进 ⇒ 第二次
+             同型查询起被读而不派发（30s 超时、无断线事件）。2026-10-03 根因修复
+             （DirectTest idle 复现 + 真前置录制对照定案）。
 
 复合帧:      一个 TCP 段可含多个帧——需流式分帧器
              消息路由 = payload 前 4B（如 0103334C = [1B 类型][1B 保留][2B 功能码/TID]）
@@ -167,7 +174,7 @@ dotnet run --project apps/CtpSim/Acme.Ctp.ProtoCapture -- gen [trade.txt路径] 
 | 登录 ⑦ | `Login(broker, user, pwdHex)` | 首登开户（密文 hex 当密码）；`Login` 无交易时段守卫 |
 | 结算确认 ⑪⑬ | （无需——直接回应答） | instance 自增跟踪 |
 | 查资金 ⑮ | `QueryAccount(AccountIdOf(user))` | 6 个余额字段 ← `CtpAccount.Balance` |
-| 查持仓 ⑰ | `QueryPositions(...)` | 里程碑 1 恒空表；非空时记警告 |
+| 查持仓 ⑰ | `QueryPositions(...)` | 非空逐仓一行 ⑱（2026-10-03 实抓模板：方向三元组+总仓量槽）；空仓走 13B 空表 |
 | 报单 ⑲ | `InsertOrder()` | 里程碑 2 |
 | 撤单 ㉑ | `CancelOrder()` | 里程碑 2 |
 
@@ -186,7 +193,7 @@ dotnet run --project apps/CtpSim/Acme.Ctp.ProtoCapture -- gen [trade.txt路径] 
 - [ ] 未来：`sim` 关键字 / RemoteCtpSession JSON-RPC 路径退休（用户定调——CTP 前置全面取代）
 
 已知边界（M1）：FrontID/SessionID/MaxOrderRef verbatim 回放抓包值；
-服务端心跳发射未做（短会话够用，长会话待 M2 观察 SDK 超时行为）；
+服务端心跳：逐拍回射客户端心跳（2026-10-03 长会话验证——本地前置已实现，idle 150s 查询全通）；
 **等宽归一化（2026-09-30 桌面端实测修复）**——verbatim 模板对字段宽度敏感：变长替换缩/撑
 payload 会致 SDK 记录遍历失步**无限挂死**（8 字符用户 / 空AppId+4字符用户双实测——桌面端
 连接器 AppId 留空即踩中，⑥ 的 18B AppId 槽缩帧后 SDK 连 ⑦ 都不发）。修复 = 生成器发射

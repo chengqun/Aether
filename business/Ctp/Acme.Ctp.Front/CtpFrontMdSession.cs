@@ -51,6 +51,14 @@ internal sealed class CtpFrontMdSession : IDisposable
                 if (n == 0) break;
                 foreach (var frame in _parser.Feed(buffer.AsSpan(0, n)))
                 {
+                    // 心跳回射（协议级 keepalive，不走业务分发——任意会话状态都须应答；与交易腿同款，
+                    // 2026-10-02 长会话实测：不回射 ⇒ 客户端应答管线停摆）。tick 是纯推送无应答排序
+                    // 需求，心跳回射与业务帧同一出站通道保序即可。
+                    if (frame.IsHeartbeat)
+                    {
+                        _out.Writer.TryWrite(CtpFrame.Heartbeat);
+                        continue;
+                    }
                     var response = ProcessFrame(frame);
                     if (response is { Length: > 0 })
                         _out.Writer.TryWrite(response);

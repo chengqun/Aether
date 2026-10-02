@@ -205,9 +205,15 @@ internal static class CtpFrontTemplates
         "0103344CE104E28007E301E101018EE305E10C018A39393939E13234373136E1323437313633E130E130E139EFE2412E83E0EF6147AE14412E83E0EF6147AE14EFEFEFEFEFEFEE412E83E0EF6147AE14412E83E0EF6147AE14412E83E0EF6147AE14E83230323630393239E401EFEFEFE3434E59EFEFEB412E83E0EF6147AE14EFEFEFEFEFEE"
     );
 
-    /// <summary>⑯ 资金应答（6 个 E0 转义余额字段全部 ← Balance——整槽替换，线上宽度随值内 tag 字节数可变）。</summary>
-    internal static byte[] BuildQryAccountRsp(byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
+    /// <summary>
+    /// ⑯ 资金应答（6 个 E0 转义余额字段全部 ← Balance——整槽替换，线上宽度随值内 tag 字节数可变）。
+    /// <paramref name="instance"/> = 请求侧 80 族实例计数回显（E3 后 1B）——**客户端按它丢弃重复帧**：
+    /// 旧版恒回 captured 的 01 ⇒ 同一会话第二次 ⑮ 起应答被客户端静默丢弃（读而不派发——Recv-Q=0、
+    /// 无断线事件、30s 超时），bot 长会话必死（2026-10-03 DirectTest idle 复现 + 真前置录制对照定案）。
+    /// </summary>
+    internal static byte[] BuildQryAccountRsp(byte instance, byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
         Apply(QryAccountRspTemplate,
+            new Edit(10, 1, [instance]),
             new Edit(16, 1, [reqId]),
             new Edit(21, 4, F(brokerId, 4)),
             new Edit(26, 5, A(accountId.Length >= 5 ? accountId[..5] : accountId.PadLeft(5, '0'))),
@@ -226,10 +232,49 @@ internal static class CtpFrontTemplates
         "0103344CE104E28005E302E706"
     );
 
-    /// <summary>⑱ 持仓应答（空表——M1 恒空；非空持仓需 M2 结构）。</summary>
-    internal static byte[] BuildQryPositionEmptyRsp(byte reqId) =>
+    /// <summary>⑱ 持仓应答·空表（instance = 请求侧 80 族计数回显——见 <see cref="BuildQryAccountRsp"/>）。</summary>
+    internal static byte[] BuildQryPositionEmptyRsp(byte instance, byte reqId) =>
         Apply(QryPositionEmptyRspTemplate,
+            new Edit(10, 1, [instance]),
             new Edit(12, 1, [reqId])
+        );
+
+    // ===== 帧 ⑱ 持仓应答·非空单行（261B payload——2026-10-03 SimNow 实抓：账户 1 手 m2701 多·今仓。
+    // 字段经 tag-walker 解码定位；金额/名称/静态元数据字段保留捕获 verbatim（客户端仅映射
+    // 合约/交易所/方向/今昨总仓四组决策字段）；量槽 E7(1B) = 总仓（探针 E2E 定位）=====
+    internal static readonly byte[] QryPositionRspTemplate = H(
+        "0103344CE104E28005E302E10101BEE306E10D01BA6D32373031EFEB39393939E2B3CCC8BAE1323437313633E139393939E23231"
+        + "31E701E302E440F040EFE101E440E0E07FC0EC40E0E07FC0EC40B27A999999999A40C2333333333334E83FD999999999999AE83F"
+        + "C999999999999AE8C034E640AA26E540AA62E53230323630393330E40140E0E07FC0E440B27A999999999AEFEFE1013FC1E0EB85"
+        + "1EB851E0ECEFE9444345E16D323730E9890C100C497FEFEC6D32373031E1444345E16D32373031E16D32373031E16DE131E13230"
+        + "3237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E132"
+        + "E9"
+    );
+
+    /// <summary>
+    /// ⑱ 持仓应答·非空单行（每仓一行——方向三元组 <paramref name="directionChar"/><c>1</c><paramref name="positionDateChar"/>、
+    /// 量槽 = 总仓 1B minimal int）。金额字段（保证金/盈亏/成本）保留捕获 verbatim——客户端模型映射但
+    /// 券商 offset 决策不消费。多行边界：isLast 编码未逆向（与查合约同边界）——首行即完成客户端收集，
+    /// 多仓只有首行到达（多行场景按仓排序把关键行放首）。
+    /// </summary>
+    internal static byte[] BuildQryPositionRsp(byte instance, byte reqId, string brokerId, string investorId,
+        string instrumentId, string exchangeId, string tradingDay, char directionChar, char positionDateChar, int totalPosition) =>
+        Apply(QryPositionRspTemplate,
+            new Edit(10, 1, [instance]),
+            new Edit(16, 1, [reqId]),
+            new Edit(21, 5, F(instrumentId, 5)),
+            new Edit(28, 4, F(brokerId, 4)),
+            new Edit(38, 6, F(investorId, 6)),
+            new Edit(45, 4, F(brokerId, 4)),
+            new Edit(50, 3, A($"{directionChar}{'1'}{positionDateChar}")),
+            new Edit(54, 1, MinimalInt(totalPosition)),
+            new Edit(123, 8, A(tradingDay)),
+            new Edit(163, 3, F(exchangeId, 3)),
+            new Edit(167, 4, F(instrumentId, 4)),
+            new Edit(180, 5, F(instrumentId, 5)),
+            new Edit(186, 3, F(exchangeId, 3)),
+            new Edit(190, 5, F(instrumentId, 5)),
+            new Edit(196, 5, F(instrumentId, 5))
         );
 
     /// <summary>M1 ⑩ verbatim 会话身份（FrontID+SessionID，5B）——推送/回显帧 Edit 用（D6：与 ⑩ 同源）。</summary>

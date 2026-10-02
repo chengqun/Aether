@@ -9,12 +9,26 @@ namespace Acme.Ctp.ProtoCapture;
 
 internal static class DirectTest
 {
-    public static async Task RunAsync(string front, string user, string pwd, int idleSec = 0)
+    public static async Task RunAsync(string front, string user, string pwd, int idleSec = 0, bool proxy = false)
     {
-        Console.WriteLine($"[Test] 直连 {front} user={user} idle={idleSec}s");
+        Console.WriteLine($"[Test] 直连 {front} user={user} idle={idleSec}s proxy={proxy}");
 
         var flowDir = Path.Combine(Path.GetTempPath(), "ctp-direct-test");
         Directory.CreateDirectory(flowDir);
+
+        // 代理录制模式：官方 SDK → RecordingProxy(17001) → front——线级对比「真实前置 vs 本地前置」
+        // 在 idle+周期查询下的两侧字节流（2026-10-03 心跳/停摆排查）。
+        RecordingProxy? tradeProxy = null;
+        var connectFront = front;
+        if (proxy)
+        {
+            var captureDir = Path.Combine(Path.GetTempPath(), "ctp-proto-capture", $"direct-{DateTime.Now:yyyyMMdd-HHmmss}");
+            Directory.CreateDirectory(captureDir);
+            tradeProxy = new RecordingProxy(17001, front, "Trade", Path.Combine(captureDir, "trade.txt"));
+            tradeProxy.Start();
+            connectFront = "tcp://127.0.0.1:17001";
+            Console.WriteLine($"[Test] 录制目录: {captureDir}");
+        }
 
         using var trader = new CtpTrader(flowDir);
         trader.FrontConnected += (_, _) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✓ 前置已连接");
@@ -28,7 +42,7 @@ internal static class DirectTest
             Console.WriteLine("[Test] LoginAsync…");
             var result = await trader.LoginAsync(new CtpConnectRequest
             {
-                FrontAddress = front,
+                FrontAddress = connectFront,
                 BrokerId = "9999",
                 UserId = user,
                 Password = pwd,
@@ -74,5 +88,10 @@ internal static class DirectTest
         }
 
         Console.WriteLine("[Test] 完成");
+        if (tradeProxy is not null)
+        {
+            await Task.Delay(500);   // 排空代理缓冲
+            tradeProxy.Dispose();
+        }
     }
 }

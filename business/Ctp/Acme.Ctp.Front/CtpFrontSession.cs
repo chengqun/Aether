@@ -85,7 +85,17 @@ internal sealed class CtpFrontSession : IDisposable
 
                 var frames = _parser.Feed(buffer.AsSpan(0, n));
                 foreach (var frame in frames)
+                {
+                    // 心跳回射（协议级 keepalive，不走业务分发/捕获缓冲——任意会话状态都须应答）。
+                    // 2026-10-02 DirectTest idle 复现：不回射 ⇒ 客户端应答管线 ~30-60s 停摆
+                    // （host 照常收答、客户端全超时无断线事件）——bot 长连接必死。
+                    if (frame.IsHeartbeat)
+                    {
+                        _out.Writer.TryWrite(CtpFrame.Heartbeat);
+                        continue;
+                    }
                     await DispatchFrameAsync(frame, ct);
+                }
             }
         }
         catch (Exception ex)
@@ -372,32 +382,40 @@ internal sealed class CtpFrontSession : IDisposable
                 : null;
         }
 
-        // ⑮ 资金查询请求: E1 04 E2 80 06；reqId 在 E1 2E E3 之后（=05）
+        // ⑮ 资金查询请求: E1 04 E2 80 06；reqId 在 E1 2E E3 之后（=05）。
+        // instance = 请求侧 80 族计数回显（E3 后 1B）——客户端按它丢弃重复帧（见 BuildQryAccountRsp 注释）。
         if (MatchesSignature(body, "E104E28006"))
         {
             var reqId = ExtractReqIdAfter(body, "E12EE3");
+            var instance = ExtractInstanceAfterOp(body, "E104E28006");
             var accountId = SimTradingCore.AccountIdOf(_userId);
             var account = _core.QueryAccount(accountId);
-            _log($"[CTP-Front] 资金查询 reqId={reqId} balance={account.Balance}");
-            return reqId is { } id
-                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(id, _brokerId, account.AccountId, _userId, day, account.Balance))
+            _log($"[CTP-Front] 资金查询 reqId={reqId} instance={instance} balance={account.Balance}");
+            return reqId is { } id && instance is { } inst
+                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(inst, id, _brokerId, account.AccountId, _userId, day, account.Balance))
                 : null;
         }
 
-        // ⑰ 持仓查询请求: E1 04 E2 80 04；reqId 在 E1 A6 E3 之后（=06）
+        // ⑰ 持仓查询请求: E1 04 E2 80 04；reqId 在 E1 A6 E3 之后（=06）。
+        // 非空持仓：逐仓一行 ⑱（方向三元组/总仓量槽编辑——2026-10-03 SimNow 实抓模板）；
+        // 空仓走原 13B 空表。多行边界：isLast 编码未逆向——首行即完成客户端收集。
         if (MatchesSignature(body, "E104E28004"))
         {
             var reqId = ExtractReqIdAfter(body, "E1A6E3");
+            var instance = ExtractInstanceAfterOp(body, "E104E28004");
             var positions = _core.QueryPositions(SimTradingCore.AccountIdOf(_userId));
-            if (positions.Count > 0)
-            {
-                // 里程碑 1 只有「空持仓」响应模板——非空持仓帧形状待补抓包
-                _log($"[CTP-Front] ⚠️ 持仓 {positions.Count} 条非空——里程碑 1 回空表");
-            }
-            _log($"[CTP-Front] 持仓查询 reqId={reqId} → 空表");
-            return reqId is { } id
-                ? BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(id))
-                : null;
+            _log($"[CTP-Front] 持仓查询 reqId={reqId} instance={instance} → {positions.Count} 条");
+            if (reqId is not { } id || instance is not { } inst) return null;
+            if (positions.Count == 0)
+                return BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(inst, id));
+            var frames = positions.Select(p => BuildFrame(CtpFrontTemplates.BuildQryPositionRsp(
+                inst, id, _brokerId, _userId, p.InstrumentId, p.ExchangeId, day,
+                (char)p.PosiDirection, (char)p.PositionDate, p.TotalPosition))).ToArray();
+            var total = frames.Sum(b => b.Length);
+            var buf = new byte[total];
+            var off = 0;
+            foreach (var b in frames) { b.CopyTo(buf, off); off += b.Length; }
+            return buf;
         }
 
         // 查合约: E1 04 E2 80 2E —— 板子数据源（2026-10-02 过滤查询抓包定案：真前置按应答大小选格式，

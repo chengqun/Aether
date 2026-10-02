@@ -228,6 +228,53 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         Assert.True((char)coreAsk.OrderStatusRaw == '5' && coreAsk.VolumeTotal == 0, "核心侧撤单未收敛");
     }
 
+    [Fact]
+    public async Task 同会话重复查询_实例回显_第二次应答不被丢弃()
+    {
+        // 2026-10-03 根因回归：80 族查询应答（⑯/⑱/查合约）的实例字节若恒回 captured 值（01），
+        // 客户端把第二次起的应答当重复帧静默丢弃（读而不派发——Recv-Q=0、无断线事件、30s 超时）——
+        // bot 长会话必死：期货页登录时已查过资金，Lean 引擎 GetCashBalance 再查即触发超时。
+        // 修复 = 回显请求侧 80 族实例计数（真前置录制实证：⑮=1→⑯=1、⑰=2→⑱=2、idle⑮=3→⑯=3…）。
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        using var trader = Login(dir);
+
+        var first = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, User, CancellationToken.None);
+        Assert.Equal(FrontLoopback.InitialBalance, first.Balance);
+        // 第二次同型查询——修复前这里 30s 超时（实例重复被丢）
+        var second = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, User, CancellationToken.None);
+        Assert.Equal(FrontLoopback.InitialBalance, second.Balance);
+        // 第三次跨型查询（⑰ 空表——实例计数继续推进）
+        var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, User, ct: CancellationToken.None);
+        Assert.NotNull(positions);
+    }
+
+    [Fact]
+    public async Task 持仓查询非空_逐仓一行_客户端解析方向与总仓()
+    {
+        // ⑱ 非空单行模板（2026-10-03 SimNow 实抓：1 手 m2701 多·今仓）——SDK 即裁判：
+        // 模板偏移错 ⇒ 解析字段错 ⇒ 断言失败。walk 模式先吃 1 手成交落持仓。
+        using var sim = FrontLoopback.Start();
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        using var trader = LoginAccount(sim, "posusr");
+
+        var fill = await trader.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = "posusr", BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3001, Volume = 1, ExchangeId = "DCE",
+        });
+        Assert.True(await UntilAsync(() => sim.Core.QueryPositions(SimTradingCore.AccountIdOf("posusr"))
+            .Any(p => p.TotalPosition == 1)), "核心侧持仓未落账");
+
+        var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, "posusr", ct: CancellationToken.None);
+        var row = positions.FirstOrDefault(p => p.InstrumentId == Instrument && p.TotalPosition == 1);
+        Assert.NotNull(row);
+        Assert.Equal(PosiDirection.Long, row!.PosiDirection);
+        Assert.Equal(PositionDate.Today, row.PositionDate);
+    }
+
     private static CtpTrader LoginAccount(FrontLoopback sim, string user)
     {
         var dir = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", $"dual-{user}", Guid.NewGuid().ToString("N"));
