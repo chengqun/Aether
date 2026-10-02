@@ -42,7 +42,8 @@ if (directArgs.Length > 0 && directArgs[0].StartsWith("tcp:", StringComparison.O
     await DirectTest.RunAsync(
         directArgs[0],
         directArgs.Length > 1 ? directArgs[1] : "testuser",
-        directArgs.Length > 2 ? directArgs[2] : "testpass");
+        directArgs.Length > 2 ? directArgs[2] : "testpass",
+        directArgs.Length > 3 && int.TryParse(directArgs[3], out var idle) ? idle : 0);
     return;
 }
 

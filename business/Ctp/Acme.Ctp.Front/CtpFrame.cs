@@ -19,6 +19,9 @@ public sealed record CtpFrame
     /// <summary>true = 初始握手帧（非 0x0200 开头）。</summary>
     public bool IsHandshake { get; init; }
 
+    /// <summary>true = 心跳帧（6B [00 02 00 00 05 00]）——会话层须回射同款心跳。</summary>
+    public bool IsHeartbeat { get; init; }
+
     /// <summary>true = 无法解析的垃圾数据（超长兜底丢弃）——非协议帧，会话层只记日志。</summary>
     public bool IsGarbage { get; init; }
 
@@ -28,8 +31,13 @@ public sealed record CtpFrame
     /// <summary>消息体（payload 去掉前 4B 路由后的字段数据）。</summary>
     public ReadOnlySpan<byte> Body => Payload.Length > 4 ? Payload.AsSpan(4) : ReadOnlySpan<byte>.Empty;
 
+    /// <summary>心跳帧字节（客户端→服务端，服务端回射同款——2026-10-02 实测：不回射 ⇒ 长会话
+    /// ~30-60s 后客户端应答管线停摆（idle 查询全超时、无断线事件）——bot 长连接必死）。</summary>
+    public static readonly byte[] Heartbeat = [0x00, 0x02, 0x00, 0x00, 0x05, 0x00];
+
     public override string ToString()
         => IsGarbage ? $"Garbage[{Raw.Length}B]"
+         : IsHeartbeat ? "Heartbeat[6B]"
          : IsHandshake ? $"Handshake[{Raw.Length}B]"
          : $"Frame[{Raw.Length}B] route={Convert.ToHexString(Route)}";
 }
@@ -51,8 +59,10 @@ public sealed class CtpFrameParser
         // 解析循环：每轮先剥头部心跳再解帧——心跳可能出现在任意两帧之间（见下）
         while (true)
         {
-            // 客户端心跳: 精确 6B [00 02 00 00 05 00]——静默消费、不应答
+            // 客户端心跳: 精确 6B [00 02 00 00 05 00]——剥出为 IsHeartbeat 帧交会话层回射
             // （抓包 20260929-053552 实证: 客户端等待服务端响应期间 ~15s 一次。
+            //   2026-10-02 长会话实测（DirectTest idle 复现）：不回射 ⇒ 客户端应答管线 ~30-60s 停摆——
+            //   host 侧查询照常收到+应答，客户端全部超时且无断线事件 ⇒ bot 长连接必死。
             //   不剥的话它会落进「未知帧头逐字节跳过」分支: 跳过 00 后
             //   残余 [02 00 00 05 00] 幻影解析成 9B 假标准帧 → 吃掉下一真实帧的前几字节 → 流静默错位。
             //   必须在解析循环内剥而非只入口剥一次：[帧A][心跳][帧B] 同批到达时，
@@ -63,6 +73,7 @@ public sealed class CtpFrameParser
                    && _buffer[3] == 0x00 && _buffer[4] == 0x05 && _buffer[5] == 0x00)
             {
                 _buffer.RemoveRange(0, 6);
+                frames.Add(new CtpFrame { Raw = CtpFrame.Heartbeat, Payload = CtpFrame.Heartbeat, IsHeartbeat = true });
             }
 
             if (!TryParseOne(out var frame) || frame is null) break;
