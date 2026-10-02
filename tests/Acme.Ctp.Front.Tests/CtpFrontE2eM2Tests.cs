@@ -87,8 +87,14 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         await Task.Delay(500);
         Assert.Equal(before, orders.Count);   // 静默：无成交
 
-        // ③ 撤挂单 → OrderActionAsync 正常返回（不超时 = ㉒ 成功应答闭环；'5' 推送形状未捕获——已知边界）
+        // ③ 撤挂单 → OrderActionAsync 正常返回（不超时 = ㉒ 成功应答闭环）+ OnRtnOrder '5' 终态推送到达
+        //（2026-10-02：'3' 模板 + 状态槽(177)/消息槽(219) 等宽编辑——早期「合成形状 SDK 不触发回调」结论被推翻）。
+        // '5' 是 CtpBrokerage tracker 收敛撤单的唯一信号（撤单成功无 ⑳）——缺它 = 做市商移心重挂死循环冻结市场。
         await trader.OrderActionAsync(FrontLoopback.Broker, User, 1, 1, rest.OrderRef, "DCE");
+        Assert.True(await UntilAsync(() => orders.Any(o => o.OrderRef == rest.OrderRef && (char)o.OrderStatusRaw == '5')),
+            "撤单 '5' 终态推送未到达（SDK 未回调合成帧？）");
+        var coreRest = _sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User)).Single(o => o.OrderRef == rest.OrderRef);
+        Assert.True((char)coreRest.OrderStatusRaw == '5' && coreRest.VolumeTotal == 0, "核心侧撤单未收敛");
         var acct = _sim.Core.QueryAccount(SimTradingCore.AccountIdOf(User));
         Assert.True(acct.Available > FrontLoopback.InitialBalance - 5000, $"撤单后冻结未释放: Available={acct.Available}");   // 成交保证金~3000+手续费+浮亏 ≈3000，远小于 5000
 
@@ -107,18 +113,137 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         var errors = new ConcurrentBag<(int Id, string Msg)>();
         trader.RspError += (_, e) => errors.Add((e.ErrorId, e.ErrorMsg));
 
-        // 资金不足触发风控 90005（walk 模式未知合约会被合成——不拒；巨量 100000 的 ⑲ 编码形状解析不了）
+        // 资金不足触发风控 90005（5000 手保证金 ≫ 初始 100 万；2 字节量走 E7 tag——2026-10-02 修复
+        // ⑲ 量字段 tag 随宽度变后，大单不再被静默丢帧）
         var rej = await trader.OrderInsertAsync(new OrderRequest
         {
             InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
             Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
-            PriceType = OrderPriceType.Limit, LimitPrice = 3100, Volume = 400, ExchangeId = "DCE",
+            PriceType = OrderPriceType.Limit, LimitPrice = 3100, Volume = 5000, ExchangeId = "DCE",
         });
-        // 已知边界（2026-10-01）：⑳/F003 的 RspInfo 变长编辑（错误码 3B 进 1B 槽 + 变长 GBK 消息）
-        // SDK 不触发 RspError——等宽纪律的又一实证。服务端断言：核心拒单（无报单、资金未冻结）；
-        // SDK 侧 RspError 待等宽 RspInfo 方案（补抓多长度错误样本或槽位重算）后启用。
+        // 核心侧拒单是权威断言（⑳/F003 的 RspInfo 已等宽编码——2026-10-02：变长编辑会致 SDK 静默丢帧）；
+        // SDK 侧 RspError 触发与否是客户端可见性问题（CtpBrokerage 有 watchdog 兜底），不强断言。
         var acct = _sim.Core.QueryAccount(SimTradingCore.AccountIdOf(User));
+        var deadline = Environment.TickCount64 + 5000;
+        while (Environment.TickCount64 < deadline
+               && (acct.FrozenMargin != 0 || acct.Available != FrontLoopback.InitialBalance))
+        {
+            await Task.Delay(50);   // ⑲ fire-and-forget：等核心侧拒单落账再断言（旧版靠解析失败静默丢单才「恰好」通过）
+            acct = _sim.Core.QueryAccount(SimTradingCore.AccountIdOf(User));
+        }
         Assert.True(acct.FrozenMargin == 0 && acct.Available == FrontLoopback.InitialBalance, "核心未拒单（资金被冻结）");
+    }
+
+    [Fact]
+    public async Task IOC单未成交残量作废_不挂簿_终态推送到达()
+    {
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        using var trader = Login(dir);
+
+        var orders = new ConcurrentBag<Order>();
+        trader.OrderReceived += (_, o) => orders.Add(o);
+
+        // IOC 买 2@2900（不交叉 ask 3001）⇒ 零成交 ⇒ 残量作废（'4' 未成交不在队列），不挂簿。
+        // CtpOrderRequestMapper 把市价单映射成「对手价限价 + IOC」——⑲ 的 TimeCondition 透传是
+        // 该语义跨前置存活的前提（2026-10-02 修复前：漏传 ⇒ 核心按 GFD 入簿 ⇒ 残量滞留 ⇒ 自成交跳过冻死市场）。
+        var ioc = await trader.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 2900, Volume = 2, ExchangeId = "DCE",
+            TimeCondition = TimeCondition.IOC,
+        });
+        Assert.True(await UntilAsync(() => orders.Any(o => o.OrderRef == ioc.OrderRef && (char)o.OrderStatusRaw == '4')),
+            "IOC 残量作废 '4' 终态推送未到达（TimeCondition 未透传 ⇒ GFD 入簿？）");
+
+        // 核心侧：该单不在队（VolumeTotal=0，资金零冻结——作废即释放）
+        var coreOrder = _sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User)).Single(o => o.OrderRef == ioc.OrderRef);
+        Assert.True((char)coreOrder.OrderStatusRaw == '4' && coreOrder.VolumeTotal == 0, $"核心侧 IOC 残量未作废: {coreOrder}");
+        var acct = _sim.Core.QueryAccount(SimTradingCore.AccountIdOf(User));
+        Assert.True(acct.FrozenMargin == 0 && acct.Available == FrontLoopback.InitialBalance,
+            $"IOC 作废后冻结未释放: FrozenMargin={acct.FrozenMargin} Available={acct.Available}");
+    }
+
+    [Fact]
+    public async Task 交易所模式_双客户端互为对手_IOC吃单_撤单终态推送()
+    {
+        // 用户场景 E2E（做市商 + 噪声交易者经前置端口跑起来——2026-10-02 双 bot 冻结根因的回归钉）：
+        // maker 挂双边 GFD 报价（做市商行为），taker IOC 对手价吃单（CtpOrderRequestMapper 的市价映射行为）
+        // ⇒ 跨账户按 maker 价成交、被动方空闲收 F002/F001；maker 移心撤残腿 ⇒ '5' 终态推送到达
+        //（撤单闭环——CtpBrokerage tracker 收敛的唯一信号）。交易所模式：无庄家、价格发现归簿。
+        using var sim = FrontLoopback.StartExchange();
+        var makerDir = NewFlowDir(); var takerDir = NewFlowDir();
+        Directory.CreateDirectory(makerDir); Directory.CreateDirectory(takerDir);
+        using var maker = LoginAccount(sim, "maker1");
+        using var taker = LoginAccount(sim, "taker1");
+
+        var makerOrders = new ConcurrentBag<Order>(); var makerTrades = new ConcurrentBag<Trade>();
+        maker.OrderReceived += (_, o) => makerOrders.Add(o);
+        maker.TradeReceived += (_, t) => makerTrades.Add(t);
+        var takerOrders = new ConcurrentBag<Order>(); var takerTrades = new ConcurrentBag<Trade>();
+        taker.OrderReceived += (_, o) => takerOrders.Add(o);
+        taker.TradeReceived += (_, t) => takerTrades.Add(t);
+
+        // ① maker 挂双边报价（GFD 限价入簿）
+        var ask = await maker.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = "maker1", BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Sell, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3002, Volume = 5, ExchangeId = "DCE",
+        });
+        var bid = await maker.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = "maker1", BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 2998, Volume = 5, ExchangeId = "DCE",
+        });
+        Assert.True(await UntilAsync(() => makerOrders.Any(o => o.OrderRef == ask.OrderRef && (char)o.OrderStatusRaw == '3')
+                                         && makerOrders.Any(o => o.OrderRef == bid.OrderRef && (char)o.OrderStatusRaw == '3')),
+            "双边报价挂单受理推送未到达");
+
+        // ② taker IOC 吃对手价（买 3@ask=3002）⇒ 跨账户按 maker 价成交 3 手
+        var eat = await taker.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = "taker1", BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3002, Volume = 3, ExchangeId = "DCE",
+            TimeCondition = TimeCondition.IOC,
+        });
+        Assert.True(await UntilAsync(() => takerTrades.Any(t => t.OrderRef == eat.OrderRef)), "taker 成交回报未到达（IOC 未吃到簿？）");
+        Assert.Equal(3002, takerTrades.Single(t => t.OrderRef == eat.OrderRef).Price);
+        // 吃单方全成（3/3，IOC 无残量——若有残量按 '4' 作废不挂簿）
+        Assert.Contains(takerOrders, o => o.OrderRef == eat.OrderRef && (char)o.OrderStatusRaw == '0');
+
+        // ③ 被动方（maker）空闲收到自己的成交 + 部成状态（做市商被动成交路径）
+        Assert.True(await UntilAsync(() => makerTrades.Any(t => t.OrderRef == ask.OrderRef)), "maker 被动成交回报未到达");
+        Assert.Contains(makerOrders, o => o.OrderRef == ask.OrderRef && (char)o.OrderStatusRaw == '1');
+
+        // ④ maker 移心撤残腿（卖腿剩 2 手）⇒ 4007 + '5' 终态推送（tracker 收敛信号）
+        await maker.OrderActionAsync(FrontLoopback.Broker, "maker1", 1, 1, ask.OrderRef, "DCE");
+        Assert.True(await UntilAsync(() => makerOrders.Any(o => o.OrderRef == ask.OrderRef && (char)o.OrderStatusRaw == '5')),
+            "撤单 '5' 终态推送未到达");
+        // 核心侧：撤单后簿上只剩买腿（卖腿量归零）
+        var coreAsk = sim.Core.QueryOrders(SimTradingCore.AccountIdOf("maker1")).Single(o => o.OrderRef == ask.OrderRef);
+        Assert.True((char)coreAsk.OrderStatusRaw == '5' && coreAsk.VolumeTotal == 0, "核心侧撤单未收敛");
+    }
+
+    private static CtpTrader LoginAccount(FrontLoopback sim, string user)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", $"dual-{user}", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var trader = new CtpTrader(dir);
+        var login = trader.LoginAsync(new CtpConnectRequest
+        {
+            FrontAddress = sim.FrontAddress,
+            BrokerId = FrontLoopback.Broker,
+            UserId = user,
+            Password = "dual-pass",
+            AppId = "simnow_client_test",
+            AuthCode = "0000000000000000",
+        }).GetAwaiter().GetResult();
+        Assert.Equal("20260923", login.TradingDay);
+        return trader;
     }
 
     [Fact]

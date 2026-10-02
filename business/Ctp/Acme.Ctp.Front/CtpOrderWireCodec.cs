@@ -26,8 +26,9 @@ internal static class CtpOrderWireCodec
         var orderRef = RunAfter(body, 0xE8, r => r.Length == 12 && r.ToArray().All(IsDigit));
         var enums = RunAfter(body, 0xEA, r => r.Length == 3 && r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'4'));
         var price = RunAfter(body, 0xE4, r => r.Length is >= 2 and <= 8 && r.ToArray().Any(b => b >= 0x80));
-        var vol = RunAfter(body, 0xE8, r => r.Length is >= 2 and <= 5
-            && r[^1] is (byte)'1' or (byte)'2' or (byte)'3' && r[..^1].ToArray().Any(b => b < 0x20));
+        // 量的 tag 随值宽变：1 字节量 ⇒ E8（2B run），2 字节量（≥256 手）⇒ E7（3B run）——2026-10-02 E2E
+        // 实证（volume=400 旧版解析失败静默丢单）。先 E8 后 E7，形状谓词闸住（orderRef 12 位/交易所码不误中）。
+        var vol = RunAfter(body, 0xE8, VolShape) ?? RunAfter(body, 0xE7, VolShape);
         // 合约形状 ^[A-Za-z]{1,2}\d{3,4}$（官方命名——1-2 字母；本地品种已改名 zx 对齐，排除用户名/交易所码）
         // 取**最后一个**匹配（合约近帧尾、用户近帧头——避免 3 字母+3 数字的用户名误中）
         var inst = RunLast(body, 0, r =>
@@ -50,6 +51,12 @@ internal static class CtpOrderWireCodec
         if (reqId is null || orderRef is null) return null;
         return new ParsedOrderAction(reqId.Value, Encoding.ASCII.GetString(orderRef));
     }
+
+    /// <summary>量字段 run 形状：len 2-5、尾字节 = TimeCondition（'1' IOC / '2' FOK / '3' GFD）、前缀含低字节。</summary>
+    private static bool VolShape(ReadOnlySpan<byte> r)
+        => r.Length is >= 2 and <= 5
+           && r[^1] is (byte)'1' or (byte)'2' or (byte)'3'
+           && r[..^1].ToArray().Any(b => b < 0x20);
 
     /// <summary>needle（hex）后紧跟的 1 字节。</summary>
     private static byte? ByteAfter(ReadOnlySpan<byte> body, string needleHex)

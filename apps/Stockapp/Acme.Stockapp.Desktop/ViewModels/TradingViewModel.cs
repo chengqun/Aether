@@ -396,8 +396,8 @@ public partial class TradingViewModel : ObservableObject
     {
         // 守卫（与启动条件一致，提前拦截避免确认后才失败）
         if (!Connector.IsConnected) { AppendLiveLog("[实盘] CTP 未登录——请先在「期货」页登录后再启动实盘引擎"); return; }
-        if (!Connector.IsSimFront && (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)))
-        { AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码；sim 登录无需）"); return; }
+        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password))
+        { AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码）"); return; }
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (instruments.Length == 0) { AppendLiveLog("[实盘] 请填写至少一个合约（如 ag2610）"); return; }
 
@@ -431,9 +431,9 @@ public partial class TradingViewModel : ObservableObject
             AppendLiveLog("[实盘] CTP 未登录——请先在「期货」页登录后再启动实盘引擎");
             return;
         }
-        if (!Connector.IsSimFront && (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password)))
+        if (string.IsNullOrEmpty(Connector.MdFrontAddress) || string.IsNullOrEmpty(Connector.Password))
         {
-            AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码；sim 登录无需）");
+            AppendLiveLog("[实盘] 行情前置参数缺失（Connector 未配置 md 地址/密码）");
             return;
         }
         var instruments = LiveInstruments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

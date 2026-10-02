@@ -295,8 +295,11 @@ internal static class CtpFrontTemplates
             new Edit(182, 8, A(tradingDay))
         );
 
-    /// <summary>OnRtnOrder '5'（已撤销——'3' 模板合成：状态字节/状态消息替换）。</summary>
-    internal static byte[] BuildRtnOrder5(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+    /// <summary>
+    /// OnRtnOrder 终态（'5' 已撤销 / '2' 部成后作废 / '4' 未成交作废——'3' 模板 + 状态槽(177)/消息槽(219) 等宽编辑）。
+    /// 客户端（CtpBrokerage tracker）按状态字节收敛订单生命周期——掩成 '3' 会让已撤/已废单成僵尸。
+    /// </summary>
+    internal static byte[] BuildRtnOrderTerminated(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay, char status, string statusMsg) =>
         Apply(RtnOrder3Template,
             new Edit(10, 1, [instance]),
             new Edit(39, 12, A(orderRef)),
@@ -318,9 +321,21 @@ internal static class CtpFrontTemplates
             new Edit(285, 5, F(instrumentId, 5)),
             new Edit(154, 8, A(tradingDay)),
             new Edit(180, 8, A(tradingDay)),
-            new Edit(177, 1, [(byte)'5']),
-            new Edit(219, 6, EscapedGbk("已撤销"))
+            new Edit(177, 1, [(byte)status]),
+            new Edit(219, 6, EscapedGbk(TruncateGbk(statusMsg, 6)))
         );
+
+    /// <summary>按 GBK 字节宽截断（消息槽 6B——汉字 2B/个；调用方传 ≤3 汉字时为直通）。</summary>
+    private static string TruncateGbk(string text, int maxBytes)
+    {
+        var used = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            used += Encoding.GetEncoding("GBK").GetByteCount([text[i]]);
+            if (used > maxBytes) return text[..i];
+        }
+        return text;
+    }
 
     // ===== M2 帧 OnRtnTrade（283B payload：成交回报推送——F002） =====
     internal static readonly byte[] RtnTradeTemplate = H(
@@ -372,7 +387,7 @@ internal static class CtpFrontTemplates
             new Edit(92, 6, F(instrumentId, 6)),
             new Edit(148, 6, F(instrumentId, 6)),
             new Edit(17, 1, [reqId]),
-            new Edit(20, 53, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+            new Edit(20, 53, RspInfo(53, errorId, errorMsg))
         );
 
     // ===== M2 帧 ⑳-F003（163B payload：OnErrRtnOrderInsert——拒单在 C# 层唯一可见信号 → RspError） =====
@@ -393,7 +408,7 @@ internal static class CtpFrontTemplates
             new Edit(21, 4, F(brokerId, 4)),
             new Edit(33, 6, F(instrumentId, 6)),
             new Edit(89, 6, F(instrumentId, 6)),
-            new Edit(107, 53, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+            new Edit(107, 53, RspInfo(53, errorId, errorMsg))
         );
 
     // ===== M2 帧 ㉒-4007（112B payload：OnRspOrderAction——OrderActionAsync 阻塞等它） =====
@@ -401,7 +416,7 @@ internal static class CtpFrontTemplates
         "0103344CE101E24007E303E10201A5E30AE355E3194354503AB3B7B5A5D5D2B2BBB5BDCFE0E0D3A6B1A8B5A5EFEFEFEE0404014839393939E7323437313633EB303030303030303030303034E801C8E0E69C40444345EFEC30EC323437313633EFEFEFEFEFEFEFEFEFEFEFEFEFEFEF04"
     );
 
-    /// <summary>㉒-4007 撤单应答·失败（RspInfo ← 核心错误码/消息）。</summary>
+    /// <summary>㉒-4007 撤单应答·失败（RspInfo ← 核心错误码/消息，等宽 25B——变宽即失步）。</summary>
     internal static byte[] BuildOrderActionRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
             new Edit(10, 1, [instance]),
@@ -410,10 +425,10 @@ internal static class CtpFrontTemplates
             new Edit(90, 6, F(userId, 6)),
             new Edit(52, 4, F(brokerId, 4)),
             new Edit(16, 1, [reqId]),
-            new Edit(19, 25, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+            new Edit(19, 25, RspInfo(25, errorId, errorMsg))
         );
 
-    /// <summary>㉒-4007 撤单应答·成功（RspInfo → E4 +「正确」——成功撤单不发 F004）。</summary>
+    /// <summary>㉒-4007 撤单应答·成功（RspInfo errorId=0 +「撤单成功」，等宽 25B——成功撤单不发 F004）。</summary>
     internal static byte[] BuildOrderActionRspOk(byte instance, byte reqId, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
             new Edit(10, 1, [instance]),
@@ -422,8 +437,26 @@ internal static class CtpFrontTemplates
             new Edit(90, 6, F(userId, 6)),
             new Edit(52, 4, F(brokerId, 4)),
             new Edit(16, 1, [reqId]),
-            new Edit(19, 25, Cat(H("E4"), A("D5FDC8B7")))
+            new Edit(19, 25, RspInfo(25, 0, "撤单成功"))
         );
+
+    /// <summary>
+    /// RspInfo 槽等宽编码：E3 + MinimalInt(errorId) + EscapedGbk(msg)，空格右补到槽宽、超长按 GBK 截断。
+    /// <b>等宽纪律（2026-10-02 E2E 实证）</b>：旧 OK 路径把 25B 槽缩成 8B（E4+"D5FDC8B7" ASCII）——4007
+    /// 应答本身 SDK 能解析（OnRspOrderAction 触发、ErrorID=0），但<b>其后的所有推送帧静默失效</b>（撤单 '5'
+    /// 回报从不触发 OnRtnOrder——曾被误判为「合成 '5' 形状 SDK 不触发回调」；压掉 4007 即恢复推送）。
+    /// 变宽即失步的又一实证，与 ⑳/F003 RspInfo 变长编辑不触发 RspError 同根因。
+    /// </summary>
+    private static byte[] RspInfo(int width, int errorId, string msg)
+    {
+        var id = MinimalInt(errorId);
+        var budget = width - 1 - id.Length;   // E3 + id 之后的消息字节预算
+        var raw = Encoding.GetEncoding("GBK").GetBytes(msg);
+        if (raw.Length > budget) msg = TruncateGbk(msg, budget);
+        var body = Cat(H("E3"), id, EscapedGbk(msg));
+        return body.Length >= width ? body[..width]
+            : Cat(body, new byte[width - body.Length].Select(_ => (byte)' ').ToArray());
+    }
 
     // ===== M2 帧 ㉒-F004（125B payload：OnErrRtnOrderAction 撤单错误回报） =====
     internal static readonly byte[] ErrRtnOrderActionTemplate = H(
@@ -438,7 +471,7 @@ internal static class CtpFrontTemplates
             new Edit(25, 6, F(userId, 6)),
             new Edit(66, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
-            new Edit(96, 25, Cat(H("E3"), MinimalInt(errorId), EscapedGbk(errorMsg)))
+            new Edit(96, 25, RspInfo(25, errorId, errorMsg))
         );
 
     // ===== M3 帧 MdSubscribeRsp（183B payload：订阅应答——捕获 verbatim，回显块边界见注释） =====

@@ -42,18 +42,37 @@ public sealed class FrontLoopback : IDisposable
         _mdServer = mdServer;
     }
 
-    public static FrontLoopback Start()
+    public static FrontLoopback Start() => Start(SimMarketMode.Walk);
+
+    /// <summary>
+    /// 交易所模式回环（双 bot E2E 用）：无庄家兜底、价格发现归订单簿、上市表 = m2701（官方命名 5 字符
+    /// 对齐推送模板槽宽）。tick 由订阅快照/簿事件驱动——本类 TickIntervalMs=0 与交易所模式正交（事件驱动）。
+    /// </summary>
+    public static FrontLoopback StartExchange()
+    {
+        var loop = StartCore(SimMarketMode.Exchange);
+        return loop;
+    }
+
+    private static FrontLoopback Start(SimMarketMode mode)
+    {
+        var loop = StartCore(mode);
+        if (mode == SimMarketMode.Walk)
+            loop.Core.InjectQuote("m2701", 2999, 3001, 3000);   // m2701 = 5 字符（推送模板捕获槽宽，等宽纪律）
+        return loop;
+    }
+
+    private static FrontLoopback StartCore(SimMarketMode mode)
     {
         var options = new SimOptions
         {
             TickIntervalMs = 0,     // 不自动喂行情——本测试只走交易腿
             DatabasePath = null,    // 纯内存——绝不碰 ~/.aether/ctp-sim.db（用户真实账本）
-            MarketMode = SimMarketMode.Walk,
+            MarketMode = mode,
+            ListedInstruments = mode == SimMarketMode.Exchange ? new[] { "m2701" } : null,
         };
         var core = new SimTradingCore(options, new SimClock(() => TradingNow));
         core.InitializeAsync().GetAwaiter().GetResult(); // xunit 无同步上下文，安全
-        // M2：Walk 模式庄家报价（激进限价在 InsertOrder 内同步全成、成交价=Ask——OrderLifecycleTests 先例）
-        core.InjectQuote("m2701", 2999, 3001, 3000);   // m2701 = 5 字符（推送模板捕获槽宽，等宽纪律）
 
         // 双写日志：Console（xunit 测试结束时随结果输出）+ 实时文件（xunit 扣留 Console 到测试结束——
         // 测试挂死时文件是唯一的诊断面；服务端逐帧日志是「模板偏移错/签名漏配」定位依据）。

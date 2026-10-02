@@ -172,13 +172,28 @@ internal sealed class CtpFrontSession : IDisposable
         {
             '0' => CtpFrontTemplates.BuildRtnOrder0(NextRtnInstance(), _userId, _brokerId, order.InstrumentId, order.OrderRef,
                 (char)order.PriceType, (char)order.Direction, (char)order.OffsetFlag, order.LimitPrice, order.VolumeTotalOriginal, '3', _login?.TradingDay ?? ""),
-            // '5'（已撤销）推送暂缓：合成形状（'3' 模板改状态字节/消息）SDK 不触发回调——真前置的 '5' 帧
-            // 未捕获（补抓包当年撤单失败）。撤单经 4007 应答闭环 + 核心状态正确；补抓后启用（README 边界）。
+            // 非 '0'/'3' 状态必须带真状态字节——客户端（CtpBrokerage tracker / 期货页）靠它收敛订单生命周期。
+            // 掩成 '3' 的后果：'5'/'2'/'4' 终态成「永远在队」僵尸（2026-10-02 双 bot 冻结根因：做市商撤单
+            // 后票根永不清 ⇒ 不再重挂）；'1' 部成不可见（做市商无法区分在队/部成）。
+            // '3' 模板 + 状态槽(177)/消息槽(219) 等宽编辑，SDK 正常回调（交易所模式双客户端 E2E 钉住）。
+            // 边界：部成/终态推送的 VolumeTraded 字段保留捕获 verbatim（成交量回显失真——README 记录）。
+            '1' or '2' or '4' or '5' => CtpFrontTemplates.BuildRtnOrderTerminated(NextRtnInstance(), _userId, _brokerId, order.InstrumentId, order.OrderRef,
+                (char)order.PriceType, (char)order.Direction, (char)order.OffsetFlag, order.LimitPrice, order.VolumeTotalOriginal, '3', _login?.TradingDay ?? "",
+                (char)order.OrderStatusRaw, ShortStatusMsg(order)),
             _ => CtpFrontTemplates.BuildRtnOrder3(NextRtnInstance(), _userId, _brokerId, order.InstrumentId, order.OrderRef,
                 (char)order.PriceType, (char)order.Direction, (char)order.OffsetFlag, order.LimitPrice, order.VolumeTotalOriginal, '3', _login?.TradingDay ?? ""),
-            // '1' 部成借 '3' 形状（成交量字段失真——边界，README 记录）
         }) ?? Array.Empty<byte>());
     }
+
+    /// <summary>非 '0'/'3' 状态推送的状态消息（消息槽 6B = 3 个 GBK 汉字，超长截断——等宽纪律）。</summary>
+    private static string ShortStatusMsg(CtpOrder order) => (char)order.OrderStatusRaw switch
+    {
+        '1' => "部成交",
+        '2' => "已作废",
+        '4' => "已作废",
+        '5' => "已撤销",
+        _ => order.StatusMsg is { Length: > 0 } ? order.StatusMsg : "终态",
+    };
 
     private void OnCoreTradeFilled(string accountId, CtpTrade trade)
     {
@@ -414,10 +429,10 @@ internal sealed class CtpFrontSession : IDisposable
             var o = CtpOrderWireCodec.ParseOrderInsert(body);
             if (o is null)
             {
-                _log($"[CTP-Front] 报单解析失败: body前缀={HexPrefix(body)}");
+                _log($"[CTP-Front] 报单解析失败: body={Convert.ToHexString(body)}");
                 return null;
             }
-            _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} reqId={o.ReqId}");
+            _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} TC={(char)o.TimeCondition} reqId={o.ReqId}");
             try
             {
                 _core.InsertOrder(_accountId ?? "", new CtpOrderRequest
@@ -426,6 +441,10 @@ internal sealed class CtpFrontSession : IDisposable
                     Direction = (CtpDirection)o.Direction, OffsetFlag = (CtpOffsetFlag)o.OffsetFlag,
                     PriceType = o.PriceType == '2' ? CtpOrderPriceType.Limit : CtpOrderPriceType.Market,   // '0'/'1' 双宽容（D7）
                     LimitPrice = o.LimitPrice, Volume = o.Volume, OrderRef = o.OrderRef,
+                    // TimeCondition 必须透传（2026-10-02 双 bot 冻结根因之二）：CtpOrderRequestMapper 把
+                    // 市价单映射成「对手价限价 + IOC」（吃不挂、残量作废）；漏传 ⇒ 核心按默认 GFD 入簿
+                    // ⇒ 噪声账户残量单滞留簿上、后续同价单自成交跳过 ⇒ 市场冻死（mapper 注释里实测过的失败模式）。
+                    TimeCondition = (CtpTimeCondition)o.TimeCondition,
                 });
                 return null;   // 无应答帧——推送走捕获缓冲（DispatchFrameAsync 的 10ms 让路护客户端 tracker 注册）
             }
