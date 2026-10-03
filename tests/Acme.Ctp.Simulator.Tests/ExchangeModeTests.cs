@@ -6,25 +6,16 @@ using Acme.Ctp.Simulator.Storage;
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 交易所模式（<see cref="SimMarketMode.Exchange"/>——价格发现归簿）：行情 = 订单簿顶 + 成交流、
+/// 交易所模式（价格发现归簿——2026-10-03 起恒为唯一模式）：行情 = 订单簿顶 + 成交流、
 /// 成交驱动最新价、市价单空簿拒单、市价残量作废（2026-09-28 起做市/噪声 = 外部客户端策略，服务端无内嵌机器人）。
-/// 与 walk 模式（随机游走 + 庄家兜底）互斥——全部既有用例存活即 walk 行为未变。
 /// ag2610 种子元数据：昨结算 6990 / tick 1 / 乘数 15 / 保证金率 12%（做市报价断言的确定性来源）。
 /// </summary>
 public class ExchangeModeTests
 {
-    private static SimOptions ExchangeOptions() => new()
-    {
-        TickIntervalMs = 0,
-        DatabasePath = null,
-        MarketMode = SimMarketMode.Exchange,
-        ListedInstruments = new[] { SimHarness.Instrument },   // 交易所模式：上市表 = 可交易集合（ag2610 上架）
-    };
-
-    /// <summary>交易所模式核心（已激活 ag2610——做市报价由外部客户端策略供给，2026-09-28 起服务端无内嵌机器人）。</summary>
+    /// <summary>交易所核心（已激活 ag2610、上市表 = [ag2610]——做市报价由外部客户端策略供给，服务端无内嵌机器人）。</summary>
     private static async Task<SimTradingCore> NewExchangeCoreAsync()
     {
-        var core = await SimHarness.NewCoreAsync(ExchangeOptions(), injectQuote: false);
+        var core = await SimHarness.NewCoreAsync(SimHarness.Options(), seedMaker: false);
         core.ActivateMarket(SimHarness.Instrument);
         return core;
     }
@@ -46,8 +37,8 @@ public class ExchangeModeTests
     [Fact]
     public async Task 未上市合约下单被拒_即便品种可派生()
     {
-        // 交易所模式：上市表 = 唯一可交易集合——rb2701 虽可从 rb 品种派生元数据，但未上架 ⇒ 拒 90002。
-        // （旧「下单即合成合约」的沙盒语义只保留在 walk 显式退路。）
+        // 上市表 = 唯一可交易集合——rb2701 虽可从 rb 品种派生元数据，但未上架 ⇒ 拒 90002。
+        // （上架是显式决定——「下单即合成合约」的沙盒语义已随 walk 模式删除。）
         var core = await NewExchangeCoreAsync();   // 上市表 = [ag2610]
 
         var ex = Assert.Throws<CtpBusinessException>(
@@ -63,7 +54,7 @@ public class ExchangeModeTests
         var db = Path.Combine(Path.GetTempPath(), $"sim-tick-{Guid.NewGuid():N}.db");
         try
         {
-            var options = ExchangeOptions() with { DatabasePath = db };
+            var options = SimHarness.Options() with { DatabasePath = db };
             var core = new SimTradingCore(options);
             await core.InitializeAsync();
             core.ActivateMarket(SimHarness.Instrument);
@@ -242,12 +233,7 @@ public class ExchangeModeTests
         // 曾因「先激活后登记订阅」被路由吞掉 ⇒ 订阅者板恒空（挂单明明在簿里）。
         // 修法 = 先登记订阅再激活——快照落进本 op 的 capture-during-dispatch 缓冲，应答帧后送达。
         // 做市商以外部客户端身份接入（2026-09-28 起 bots 即 Lean 策略）——此处经 core 直下等价模拟其挂单。
-        using var sim = LoopbackSim.Start(o => o with
-        {
-            MarketMode = SimMarketMode.Exchange,
-            PasswordIterations = 1000,
-            ListedInstruments = new[] { SimHarness.Instrument },
-        });
+        using var sim = LoopbackSim.Start(o => o with { PasswordIterations = 1000 }, seedMaker: false);
         // 参与者双边挂单（任意普通账户——直接经 core 下单，服务端视角与外部客户端经 wire 下单等价）
         sim.Core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Buy, 5, 6988));
         sim.Core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Sell, 5, 6992));

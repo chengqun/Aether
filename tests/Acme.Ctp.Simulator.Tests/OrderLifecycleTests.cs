@@ -7,23 +7,25 @@ namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
 /// 报单生命周期：状态级联（<c>'3'</c> 未成交排队 → <c>'1'</c> 部分成交 → <c>'0'</c> 全部成交）、
-/// 有效期类型的尾部（GFD 留挂 / IOC 转 <c>'2'</c> / FOK 转 <c>'4'</c>）、撤单转 <c>'5'</c>，
+/// 有效期类型的尾部（GFD 留挂 / IOC·FOK·市价残量作废转 <c>'2'</c>/<c>'4'</c>）、撤单转 <c>'5'</c>，
 /// 以及**外发顺序**与「每笔状态变化恰好一次」。
+/// 流动性来自 maker 账户双边挂单（<see cref="SimHarness.SeedMaker"/>——价格发现归簿）。
 /// </summary>
 /// <remarks>
 /// 核心（<see cref="SimTradingCore"/>）在调用线程上同步外发事件——异步性是 <c>SimCtpSession</c> 的泵加的，
 /// 故本文件的断言可以直接跟在 <c>InsertOrder</c> 之后，无需轮询等待。
+/// 回报收集按账户过滤（maker 的回报不得混入被测账户的时间线）。
 /// </remarks>
 public class OrderLifecycleTests
 {
     private static async Task<(SimTradingCore Core, Collector<CtpOrder> Orders, Collector<CtpTrade> Trades)> SubscribedAsync(
-        SimOptions? options = null)
+        SimOptions? options = null, bool seedMaker = true)
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(options);
+        var core = await SimHarness.NewLoggedInCoreAsync(options, seedMaker);
         var orders = new Collector<CtpOrder>();
         var trades = new Collector<CtpTrade>();
-        core.OrderChanged += (_, o) => orders.Add(o);
-        core.TradeFilled += (_, t) => trades.Add(t);
+        core.OrderChanged += (a, o) => { if (a == SimHarness.Account) orders.Add(o); };
+        core.TradeFilled += (a, t) => { if (a == SimHarness.Account) trades.Add(t); };
         return (core, orders, trades);
     }
 
@@ -47,7 +49,7 @@ public class OrderLifecycleTests
 
         var trade = Assert.Single(trades.Snapshot);
         Assert.Equal(inserted.OrderRef, trade.OrderRef);
-        Assert.Equal(SimHarness.Ask, trade.Price, 6); // 买成交在卖一
+        Assert.Equal(SimHarness.Ask, trade.Price, 6); // 买成交在对手侧（maker 卖一）
         Assert.Equal(1, trade.Volume);
         Assert.Equal("1", trade.TradeId);
     }
@@ -58,8 +60,8 @@ public class OrderLifecycleTests
         // 用一条共用时间线记录两类事件的相对次序（客户端按 OrderRef 配对，成交先到会配不上）
         var timeline = new System.Collections.Generic.List<string>();
         var core = await SimHarness.NewLoggedInCoreAsync();
-        core.OrderChanged += (_, o) => { lock (timeline) timeline.Add($"order:{Status(o)}"); };
-        core.TradeFilled += (_, t) => { lock (timeline) timeline.Add($"trade:{t.TradeId}"); };
+        core.OrderChanged += (a, o) => { if (a == SimHarness.Account) lock (timeline) timeline.Add($"order:{Status(o)}"); };
+        core.TradeFilled += (a, t) => { if (a == SimHarness.Account) lock (timeline) timeline.Add($"trade:{t.TradeId}"); };
 
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 2));
 
@@ -86,32 +88,23 @@ public class OrderLifecycleTests
     }
 
     [Fact]
-    public async Task 部分成交后GFD留挂并随行情推进补足()
+    public async Task GFD限价残量静息入簿并等对手方补足()
     {
-        var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
+        // 部分成交的另一半路径：GFD 限价残量**入簿**（不冻结释放），对手方后续插反向单即补足
+        var (core, orders, trades) = await SubscribedAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, SimHarness.Ask));
 
-        var inserted = core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));
+        var inserted = core.InsertOrder(SimHarness.Account,
+            SimHarness.Limit(CtpDirection.Buy, 3, SimHarness.Ask));   // 穿价吃 1，残 2 静息入簿
+        Assert.Equal("31", Statuses(orders));
 
-        Assert.Equal("31", Statuses(orders)); // 未成交 → 部分成交且仍在队列
-        var part = orders.Snapshot[1];
-        Assert.Equal(1, part.VolumeTraded);
-        Assert.Equal(2, part.VolumeTotal); // 剩余 2 手仍挂
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 2, SimHarness.Ask));   // 对手方补量 ⇒ 吃掉残 2
+        Assert.Equal("310", Statuses(orders));
+
+        Assert.Equal(2, trades.Count);
+        Assert.Equal(new[] { "1", "2" }, trades.Snapshot.Select(t => t.TradeId).ToArray());
 
         var account = core.QueryAccount(SimHarness.Account);
-        Assert.Equal(12601.8, account.CurrMargin, 2);   // 只消耗已成交那 1 手
-        Assert.Equal(25203.6, account.FrozenMargin, 2); // 未成交的 2 手继续冻结
-        Assert.Equal(10.5, account.FrozenCash, 2);      // 5.25075 → 10.5015
-
-        core.AdvanceMarket();
-        Assert.Equal("311", Statuses(orders));
-        core.AdvanceMarket();
-        Assert.Equal("3110", Statuses(orders)); // 全部成交
-
-        Assert.Equal(3, trades.Count);
-        Assert.Equal(new[] { "1", "2", "3" }, trades.Snapshot.Select(t => t.TradeId).ToArray());
-
-        account = core.QueryAccount(SimHarness.Account);
         Assert.Equal(0, account.FrozenMargin, 2); // 终态不留冻结
         Assert.Equal(0, account.FrozenCash, 2);
         Assert.Equal(3, core.QueryPositions(SimHarness.Account).Sum(p => p.TotalPosition));
@@ -124,8 +117,9 @@ public class OrderLifecycleTests
     [Fact]
     public async Task IOC未成交部分转部分成交不排队并退款()
     {
-        var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
+        // maker 卖侧只挂 1 手 ⇒ IOC 买 3 只吃到 1 手，残量作废（不挂簿）
+        var (core, orders, trades) = await SubscribedAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, SimHarness.Ask));
 
         core.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 3, timeCondition: CtpTimeCondition.IOC));
@@ -147,8 +141,9 @@ public class OrderLifecycleTests
     [Fact]
     public async Task FOK成交量不足则整单不成交并全额退款()
     {
-        var (core, orders, trades) = await SubscribedAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
+        // 簿上只有 1 手 ⇒ FOK 买 3 整单作废（干跑先于落账——免回滚）
+        var (core, orders, trades) = await SubscribedAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, SimHarness.Ask));
 
         core.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 3, timeCondition: CtpTimeCondition.FOK));
@@ -170,7 +165,7 @@ public class OrderLifecycleTests
     {
         var (core, orders, trades) = await SubscribedAsync();
 
-        // ask = 7001 > 买限价 6900 ⇒ 不可成交
+        // maker 卖一 7001 > 买限价 6900 ⇒ 不可成交
         core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 1, 6900));
 
         Assert.Equal("3", Statuses(orders));
@@ -189,7 +184,7 @@ public class OrderLifecycleTests
     {
         var (core, orders, trades) = await SubscribedAsync();
 
-        // 买限价 7005 ≥ ask 7001 ⇒ 成交，且成交价取卖一（委托价只表示可接受上限）
+        // 买限价 7005 ≥ maker 卖一 7001 ⇒ 成交，且成交价取挂单价（委托价只表示可接受上限）
         core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 1, 7005));
 
         Assert.Equal("30", Statuses(orders));
@@ -263,10 +258,9 @@ public class OrderLifecycleTests
     }
 
     [Fact]
-    public async Task 重启后未成交挂单作废且不残留冻结()
+    public async Task 已撤报单不再被后续市场事件触碰()
     {
-        // 「重启」= 用同一份存储重新建核心；这里用 NullSimStore 无法跨实例复用，
-        // 故只验证同实例内的等价语义：终态挂单不再被后续行情推进。
+        // 「已撤的单不再产生任何回报」：撤后打两笔对手方市场单（其它账户成交），被测账户零回报
         var (core, orders, _) = await SubscribedAsync();
         core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 1, 6900));
         Assert.Equal("3", Statuses(orders));
@@ -274,7 +268,8 @@ public class OrderLifecycleTests
         core.CancelOrder(SimHarness.Account, SimHarness.RefOf(orders.Snapshot[0]));
         Assert.Equal("35", Statuses(orders));
 
-        for (var i = 0; i < 5; i++) core.AdvanceMarket();
+        core.InsertOrder("noise", SimHarness.Market(CtpDirection.Buy, 1));
+        core.InsertOrder("noise", SimHarness.Market(CtpDirection.Buy, 1));
         Assert.Equal("35", Statuses(orders)); // 已撤单不再产生任何回报
     }
 }

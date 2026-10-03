@@ -4,9 +4,8 @@ using Acme.Ctp.Simulator;
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 混合订单簿的跨账户撮合（「几个不同客户端真实进行交易」——客户互为对手）。
-/// 价格-时间优先、按挂单方（maker）价成交、自成交跳过、庄家兜底；空簿路径与旧行为逐字节一致
-/// （由全部既有用例存活论证——见 OrderLifecycleTests 等）。
+/// 订单簿的跨账户撮合（「几个不同客户端真实进行交易」——客户互为对手）。
+/// 价格-时间优先、按挂单方（maker）价成交、自成交跳过；流动性全部来自挂单（价格发现归簿）。
 /// </summary>
 public class CrossAccountMatchingTests
 {
@@ -17,12 +16,12 @@ public class CrossAccountMatchingTests
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
-        // alice 挂限价买 7000（低于卖一 7001 ⇒ 不交叉报价，静息入簿）
+        // alice 挂限价买 7000（低于 maker 卖一 7001 ⇒ 不交叉，静息入簿）
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 1, 7000));
         var resting = Assert.Single(core.QueryOrders("alice", null));
         Assert.Equal(SimOrderStatus.NoTradeQueueing, resting.OrderStatusRaw);   // '3' 静息
 
-        // bob 市价卖 1 ⇒ 吃掉 alice 的挂单（maker 价 7000，优于报价买一 6999）
+        // bob 市价卖 1 ⇒ 吃掉 alice 的挂单（maker 价 7000，优于 maker 双边挂单的买一 6999）
         core.InsertOrder("bob", SimHarness.Market(CtpDirection.Sell, 1));
 
         // 双方各自拿到自己账户的成交（TradeId 从各自序列铸——同一起点 "1"）
@@ -52,7 +51,7 @@ public class CrossAccountMatchingTests
     [Fact]
     public async Task 价格优先与时间优先()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync();
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);   // 纯多账户簿——maker 种子会干扰时间优先序
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
@@ -86,7 +85,7 @@ public class CrossAccountMatchingTests
     [Fact]
     public async Task 部分成交跨档与残量入簿()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync();
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);
 
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 2, 7000));
         core.InsertOrder("carol", SimHarness.Limit(CtpDirection.Buy, 2, 6999));
@@ -118,12 +117,13 @@ public class CrossAccountMatchingTests
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
-        // alice 挂买 7000；同账户市价卖——吃簿跳过自己，走庄家（报价买一 6999）
+        // alice 挂买 7000；同账户市价卖——吃簿跳过自己，吃 maker 的买侧挂单 6999
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 1, 7000));
         core.InsertOrder("alice", SimHarness.Market(CtpDirection.Sell, 1));
 
-        var aliceTrade = Assert.Single(trades.Snapshot).Trade;
-        Assert.Equal(6999, aliceTrade.Price, 6);   // 庄家价，非自己挂单价 7000
+        var aliceTrades = trades.Snapshot.Where(t => t.AccountId == "alice").Select(t => t.Trade).ToList();
+        var aliceTrade = Assert.Single(aliceTrades);
+        Assert.Equal(6999, aliceTrade.Price, 6);   // maker 挂单价，非自己挂单价 7000
 
         // 挂买单原封未动（'3' 静息）；持仓 = 空 1（卖单成交）
         var orders = core.QueryOrders("alice", null).ToList();
@@ -136,8 +136,8 @@ public class CrossAccountMatchingTests
     [Fact]
     public async Task FOK跨簿干跑足量则成交()
     {
-        // MaxFillVolume=2 ⇒ 庄家单次最多 2 手；alice 簿上挂 1 手 ⇒ 合量 3 恰好覆盖 FOK 卖 3
-        var core = await SimHarness.NewLoggedInCoreAsync(SimHarness.Options() with { MaxFillVolume = 2 });
+        // alice 簿上挂 1 手 + maker 买侧 100 手 ⇒ 合量覆盖 FOK 卖 3（先吃簿，余量吃 maker——价低档先）
+        var core = await SimHarness.NewLoggedInCoreAsync();
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
@@ -146,9 +146,9 @@ public class CrossAccountMatchingTests
             SimHarness.Market(CtpDirection.Sell, 3, timeCondition: CtpTimeCondition.FOK));
 
         var bobTrades = trades.Snapshot.Where(t => t.AccountId == "bob").Select(t => t.Trade).ToList();
-        Assert.Equal(2, bobTrades.Count);                       // 簿 1 手 + 庄家 2 手
+        Assert.Equal(2, bobTrades.Count);                       // 簿 1 手 + maker 2 手
         Assert.Equal(7000, bobTrades[0].Price, 6);              // 先吃簿（maker 价）
-        Assert.Equal(6999, bobTrades[1].Price, 6);              // 余量庄家（报价买一）
+        Assert.Equal(6999, bobTrades[1].Price, 6);              // 余量吃 maker 双边挂单的买一
         Assert.Equal(SimOrderStatus.AllTraded, Assert.Single(core.QueryOrders("bob", null)).OrderStatusRaw);
         AssertConserved(core, "bob");
     }
@@ -156,12 +156,13 @@ public class CrossAccountMatchingTests
     [Fact]
     public async Task FOK跨簿干跑不足则整单作废()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(SimHarness.Options() with { MaxFillVolume = 2 });
+        // 纯多账户簿（maker 种子的 100 手会补足 FOK——这里只用 alice 的 1 手）
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);
         var trades = new Collector<(string AccountId, CtpTrade Trade)>();
         core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
 
         core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 1, 7000));
-        // 簿 1 + 庄家 2 = 3 < 4 ⇒ FOK 整单作废（零成交、全额退冻结；alice 挂单原封不动）
+        // 簿 1 < 4 ⇒ FOK 整单作废（零成交、全额退冻结；alice 挂单原封不动）
         core.InsertOrder("bob",
             SimHarness.Market(CtpDirection.Sell, 4, timeCondition: CtpTimeCondition.FOK));
 
@@ -171,35 +172,6 @@ public class CrossAccountMatchingTests
         Assert.Empty(core.QueryPositions("bob", null));
         Assert.Equal(SimOrderStatus.NoTradeQueueing, Assert.Single(core.QueryOrders("alice", null)).OrderStatusRaw);
         AssertConserved(core, "bob");
-    }
-
-    [Fact]
-    public async Task 簿价劣于报价不被吃_优于报价才成交()
-    {
-        // 价格连贯（有效最优价 = 簿与庄家报价合并）：合成做市商报价是市场底价——
-        // 簄档位只有优于或等于报价对手价才被吃；劣价挂单等行情穿越它（庄家路径），不被劣价成交
-        var core = await SimHarness.NewLoggedInCoreAsync();
-        var trades = new Collector<(string AccountId, CtpTrade Trade)>();
-        core.TradeFilled += (accountId, trade) => trades.Add((accountId, trade));
-
-        core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Sell, 1, 7020));   // 劣于报价卖一 7001 ⇒ 静息
-        core.InsertOrder("bob", SimHarness.Limit(CtpDirection.Buy, 1, 7000));      // 优于报价买一 6999 ⇒ 静息
-        Assert.Empty(trades.Snapshot);
-
-        // carol 市价买：有效最优卖 = min(簿 7020, 报价 7001) = 7001 ⇒ 走庄家；alice 劣价挂单不动
-        core.InsertOrder("carol", SimHarness.Market(CtpDirection.Buy, 1));
-        var carolTrade = Assert.Single(trades.Snapshot.Where(t => t.AccountId == "carol")).Trade;
-        Assert.Equal(7001, carolTrade.Price, 6);
-        Assert.Equal(SimOrderStatus.NoTradeQueueing, Assert.Single(core.QueryOrders("alice", null)).OrderStatusRaw);
-
-        // dave 市价卖：有效最优买 = max(簿 7000, 报价 6999) = 7000 ⇒ 吃 bob 的挂单（maker 价）
-        core.InsertOrder("dave", SimHarness.Market(CtpDirection.Sell, 1));
-        var daveTrade = Assert.Single(trades.Snapshot.Where(t => t.AccountId == "dave").Select(t => t.Trade).ToList().Where(t => t.Price == 7000));
-        Assert.Equal(7000, daveTrade.Price, 6);
-        Assert.Equal(SimOrderStatus.AllTraded, Assert.Single(core.QueryOrders("bob", null)).OrderStatusRaw);
-        Assert.Equal(CtpPosiDirection.Long, Assert.Single(core.QueryPositions("bob", null)).PosiDirection);
-        Assert.Equal(CtpPosiDirection.Short, Assert.Single(core.QueryPositions("dave", null)).PosiDirection);
-        AssertConserved(core, "dave");
     }
 
     /// <summary>资金守恒断言（镜像 AccountingInvariantTests 的恒等式，容差 0.05；DTO 无 StaticBalance——用 Balance 展开式）。</summary>

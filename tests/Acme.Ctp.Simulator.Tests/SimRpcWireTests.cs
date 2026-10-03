@@ -58,7 +58,7 @@ public class SimRpcWireTests
         var ex = await Assert.ThrowsAsync<CtpBusinessException>(() => client.CancelOrderAsync(bogus));
         Assert.Equal(SimErrorCodes.OrderNotFound, ex.ErrorId);
 
-        // 订阅（host 恒推送——本例 TickIntervalMs=0 无 tick，只验往返不抛）
+        // 订阅（host 恒推送——本例无后续市场事件，只验往返不抛）
         await client.SubscribeAsync([SimHarness.Instrument]);
     }
 
@@ -165,13 +165,13 @@ public class SimRpcWireTests
     }
 
     [Fact]
-    public async Task 合成tick按订阅路由到对应连接()
+    public async Task tick按订阅路由到对应连接()
     {
-        // 行情随柜台（恒推送）的 wire 级 pin：无需任何开关，订阅即激活游走 + 按订阅集路由
+        // 行情随柜台（恒推送）的 wire 级 pin：无需任何开关，订阅即激活 + 按订阅集路由
+        // （rb2610 须上架才能激活——激活即推零值快照；ag2610 的快照来自 maker 双边挂单）
         using var sim = LoopbackSim.Start(o => o with
         {
-            TickIntervalMs = 25,
-            Seed = 4242,
+            ListedInstruments = new[] { SimHarness.Instrument, "rb2610" },
         });
         using var a = await LoginClientAsync(sim, "alice");
         using var b = await LoginClientAsync(sim, "bob");
@@ -195,7 +195,8 @@ public class SimRpcWireTests
     [Fact]
     public async Task queryInstruments默认上市表往返()
     {
-        using var sim = LoopbackSim.Start();
+        // 默认上市表 = zx001（须显式把 ListedInstruments 归 null——SimHarness 默认上架 ag2610 供交易用例）
+        using var sim = LoopbackSim.Start(o => o with { ListedInstruments = null }, seedMaker: false);
         using var client = await LoginClientAsync(sim);
 
         var list = await client.QueryInstrumentsAsync();
@@ -209,7 +210,7 @@ public class SimRpcWireTests
     [Fact]
     public async Task queryInstruments自定义上市表()
     {
-        using var sim = LoopbackSim.Start(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } });
+        using var sim = LoopbackSim.Start(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } }, seedMaker: false);
         using var client = await LoginClientAsync(sim);
 
         var list = await client.QueryInstrumentsAsync();

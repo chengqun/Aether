@@ -39,10 +39,10 @@ namespace Acme.Ctp.Simulator.Tests;
 /// </remarks>
 public class SessionAdapterTests
 {
-    /// <summary>不自动跑行情、不落盘的回环仿真（与 <see cref="SimHarness.Options"/> 同口径；configure 塑造服务端 options）。</summary>
-    /// <remarks><see cref="SimOptions"/> 是 <c>init</c>-only record ⇒ 覆写走 <c>with</c> 表达式。</remarks>
-    private static LoopbackSim NewLoopback(Func<SimOptions, SimOptions>? configure = null)
-        => LoopbackSim.Start(configure);
+    /// <summary>不落盘 + ag2610 上架的回环仿真（与 <see cref="SimHarness.Options"/> 同口径；configure 塑造服务端 options）。</summary>
+    /// <remarks><see cref="SimOptions"/> 是 <c>init</c>-only record ⇒ 覆写走 <c>with</c> 表达式；seedMaker 默认注入双边流动性（部分用例自管簿须关）。</remarks>
+    private static LoopbackSim NewLoopback(Func<SimOptions, SimOptions>? configure = null, bool seedMaker = true)
+        => LoopbackSim.Start(configure, seedMaker);
 
     /// <summary>
     /// 把「本地同步抛出」的调用收成 <see cref="Action"/>。
@@ -147,7 +147,7 @@ public class SessionAdapterTests
         await session.LoginAsync(LoginRequest());
         await session.SubscribeMarketDataAsync(MdConnect(), [SimHarness.Instrument]);
 
-        await session.OrderInsertAsync(Market(CtpDirection.Buy, 1));   // 行情未跑也立即全成交（下单自带一次撮合）
+        await session.OrderInsertAsync(Market(CtpDirection.Buy, 1));   // 吃 maker 挂单——立即全成交
         var opened = Assert.Single(await session.QueryPositionAsync());
 
         session.Logout();
@@ -283,19 +283,15 @@ public class SessionAdapterTests
         Assert.Equal(accepted.OrderSysId, trade.OrderSysId);
         Assert.Equal(1, trade.Volume);
         Assert.Equal(CtpDirection.Buy, trade.Direction);
-        Assert.Equal("6991", trade.Price.ToString("0.####"));           // 买进吃卖一 = 游走起点 6990 + 1 tick
+        Assert.Equal("7001", trade.Price.ToString("0.####"));           // 买进吃 maker 卖侧挂单 7001
     }
 
     [Fact]
     public async Task 部分成交时每笔成交前都有一个状态回报()
     {
-        // 部分成交需要**行情在跑**：下单时只撮一次（一次成交 1 手后仍有残量），
-        // 残量靠后续 tick 逐笔推进 ⇒ 必须起定时器（TickIntervalMs > 0）
-        using var sim = NewLoopback(o => o with
-        {
-            MaxFillVolume = 1,
-            TickIntervalMs = 25,
-        });
+        // 部分成交由「对手方分批供给」驱动：GFD 限价买 3 在空簿静息入簿，
+        // 对手方（lp 账户）每次插 1 张等价反向单 ⇒ 吃掉 1 手 ⇒ 逐笔推进到全成
+        using var sim = NewLoopback(seedMaker: false);
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
@@ -305,7 +301,11 @@ public class SessionAdapterTests
         session.OrderReceived += (_, o) => { orders.Add(o); interleaved.Add("order"); };
         session.TradeReceived += (_, t) => { trades.Add(t); interleaved.Add("trade"); };
 
-        await session.OrderInsertAsync(Market(CtpDirection.Buy, 3));
+        await session.OrderInsertAsync(Limit(CtpDirection.Buy, 3, 7001));   // 空簿 ⇒ 静息入簿
+
+        sim.Core.InsertOrder("lp", SimHarness.Limit(CtpDirection.Sell, 1, 7001));
+        sim.Core.InsertOrder("lp", SimHarness.Limit(CtpDirection.Sell, 1, 7001));
+        sim.Core.InsertOrder("lp", SimHarness.Limit(CtpDirection.Sell, 1, 7001));
 
         Assert.True(await Wait.UntilAsync(() => trades.Count >= 3), "3 手逐手成交");
         Assert.Equal(4, await Wait.QuiesceAsync(() => orders.Count));   // 已报入 + 3 次推进
@@ -332,7 +332,7 @@ public class SessionAdapterTests
         session.OrderReceived += (_, o) => orders.Add(o);
         session.TradeReceived += (_, t) => trades.Add(t);
 
-        // 买限价 6900 < 卖一 6991 ⇒ 挂得住（随机游走起点 = ag2610 昨结算 6990，买一/卖一 = ∓1 tick）
+        // 买限价 6900 < maker 卖一 7001 ⇒ 挂得住（静息入簿，等对手方来吃）
         await session.OrderInsertAsync(Limit(CtpDirection.Buy, 1, 6900));
 
         Assert.True(await Wait.UntilAsync(() => orders.Count >= 1));
@@ -380,7 +380,7 @@ public class SessionAdapterTests
 
         var account = await session.QueryAccountAsync();
         Assert.Equal(SimHarness.Account, account.AccountId);
-        Assert.Equal(12583.8, account.CurrMargin, 2);                   // 卖一 6991 × 乘数 15 × 保证金率 12%
+        Assert.Equal(12601.8, account.CurrMargin, 2);                   // maker 卖一 7001 × 乘数 15 × 保证金率 12%
 
         var positions = await session.QueryPositionAsync();
         var position = Assert.Single(positions);
@@ -414,12 +414,11 @@ public class SessionAdapterTests
     }
 
     [Fact]
-    public async Task 订阅即激活游走并缓存tick()
+    public async Task 订阅即激活行情并缓存tick()
     {
         using var sim = NewLoopback(o => o with
         {
-            TickIntervalMs = 25,                                        // host 生命周期内定时器常跑
-            Seed = 4242,
+            ListedInstruments = new[] { SimHarness.Instrument, "rb2610" },   // 第二合约须上架才能激活
         });
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
@@ -429,12 +428,12 @@ public class SessionAdapterTests
 
         await session.SubscribeMarketDataAsync(MdConnect(), ["ag2610", "rb2610"]);
 
-        // 订阅即激活 ⇒ 定时器推进的随机游走会走到这两个合约（不激活则 Advance 不碰它们，行情恒空）
+        // 订阅即激活 ⇒ 激活即推快照（maker 双边挂单在簿 ⇒ ag2610 盘口有价；rb2610 空簿 ⇒ 零值快照也推）
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("ag2610") is not null), "订阅后必须收到该合约行情");
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("rb2610") is not null), "同批订阅的第二个合约也要有行情");
 
-        // 定时器在跑、行情每 tick 都在推进 ⇒ 要拿「稳定的一帧」必须先把本连接的订阅停掉再静置。
-        // Logout 清服务端订阅路由（fire-and-forget 帧）且**不清**本地行情缓存（正是这条语义——登出后 GetLatestTick 仍可读）。
+        // 行情事件驱动（无定时器续流）——登出清服务端订阅路由且**不清**本地行情缓存
+        // （正是这条语义——登出后 GetLatestTick 仍可读）。
         session.Logout();
         await Wait.QuiesceAsync(() => ticks.Count);
 
@@ -447,7 +446,7 @@ public class SessionAdapterTests
             DateTimeStyles.None, out _), $"交易日字段格式不对：「{tick.TradingDay}」");
 
         Assert.Equal(6990, tick.PreSettlement, 6);                      // ag2610 昨结算
-        Assert.True(tick.AskPrice > tick.BidPrice, $"盘口必须买低卖高：{tick.BidPrice}/{tick.AskPrice}");
+        Assert.True(tick.AskPrice > tick.BidPrice, $"盘口必须买低卖高：{tick.BidPrice}/{tick.AskPrice}");   // maker 6999/7001
 
         // 行情缓存与事件同步：GetLatestTick 拿到的就是最后一帧 TickReceived（订阅路由已停 ⇒ 此刻比较无竞态）
         var last = ticks.Snapshot.LastOrDefault(t => t.InstrumentId == "ag2610");
@@ -462,31 +461,35 @@ public class SessionAdapterTests
     {
         using var sim = NewLoopback(o => o with
         {
-            TickIntervalMs = 25,
-            Seed = 4242,
+            ListedInstruments = new[] { SimHarness.Instrument, "cu2610" },   // 增量订阅的第二合约须上架
         });
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
         await session.SubscribeMarketDataAsync(MdConnect(), ["ag2610"]);
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("ag2610") is not null));
 
+        // 一笔成交推动行情（last=7001、volume=1——会话统计是真实成交的累计，不归零）
+        sim.Core.InsertOrder("taker", SimHarness.Market(CtpDirection.Buy, 1));
+        Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("ag2610")!.Volume > 0
+            && Math.Abs(session.GetLatestTick("ag2610")!.LastPrice - 7001) < 1e-9));
         var before = session.GetLatestTick("ag2610")!;
+
         await session.SubscribeMarketDataAsync(MdConnect(), ["ag2610", "cu2610"]);   // 增量订阅
 
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("cu2610") is not null));
         Assert.Equal(2, session.GetAllLatestTicks().Count);
 
-        // 已订阅过的合约**不被重建**：游走若被重置，累计成交量会从小数字重新起算（每 tick 只累加 1~49）。
-        // 刻意用「累计量继续增长」而非「价格不变」——后者在 25ms 喂价下必然竞态。
-        Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("ag2610")!.Volume > before.Volume),
-            "重复订阅不得重置已有行情（累计成交量应继续增长而非归零）");
+        // 已订阅过的合约**不被重置**：重复激活不重置会话统计（最新价/累计量延续，不归零回昨结算）。
+        var after = session.GetLatestTick("ag2610")!;
+        Assert.True(after.Volume >= before.Volume && Math.Abs(after.LastPrice - before.LastPrice) < 1e-9,
+            "重复订阅不得重置已有行情（会话统计应延续而非归零）");
     }
 
     [Fact]
     public async Task 默认配置订阅后即收到tick推送()
     {
-        // 行情随柜台的新默认 pin：无任何开关/塑造（除定时器间隔），订阅 ⇒ host 恒推送
-        using var sim = NewLoopback(o => o with { TickIntervalMs = 25 });
+        // 行情随柜台的默认 pin：无任何开关/塑造，订阅 ⇒ host 恒推送（激活即推快照——maker 挂单在簿）
+        using var sim = NewLoopback();
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
@@ -496,7 +499,7 @@ public class SessionAdapterTests
         await session.SubscribeMarketDataAsync(MdConnect(), [SimHarness.Instrument]);
 
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick(SimHarness.Instrument) is not null),
-            "默认（无开关）订阅后必须收到合成行情");
+            "默认（无开关）订阅后必须收到行情（激活快照）");
         Assert.All(ticks.Snapshot, t => Assert.Equal(SimHarness.Instrument, t.InstrumentId));
     }
 
@@ -504,8 +507,8 @@ public class SessionAdapterTests
     public async Task 订阅非种子合约经品种派生激活行情()
     {
         // 期货页行情板订阅全部主力合约（~250 个），绝大多数不在种子 9 合约表内——
-        // 订阅须经下单同款解析链（品种派生/合成）补元数据，否则盘面只有零星几格有价
-        using var sim = NewLoopback(o => o with { TickIntervalMs = 25 });
+        // 上市表的自定义 id 须经下单同款解析链（品种派生/合成）补元数据，否则板面只有零星几格有价
+        using var sim = NewLoopback(o => o with { ListedInstruments = new[] { "rb2605", "zz9999" } }, seedMaker: false);
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
@@ -514,13 +517,14 @@ public class SessionAdapterTests
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("rb2605") is not null),
             "同品种非种子合约（rb2605）必须经品种派生激活出行情");
         Assert.True(await Wait.UntilAsync(() => session.GetLatestTick("zz9999") is not null),
-            "未知品种合约（zz9999）必须经合成兜底激活出行情（AcceptUnknownInstruments 默认开）");
+            "未知品种合约（zz9999）必须经合成兜底激活出行情（上市表解析链含合成）");
     }
 
     [Fact]
     public async Task QueryInstrumentsAsync返回host上市表()
     {
-        using var sim = NewLoopback();
+        // 默认上市表 = zx001（须显式把 ListedInstruments 归 null——SimHarness 默认上架 ag2610 供交易用例）
+        using var sim = NewLoopback(o => o with { ListedInstruments = null }, seedMaker: false);
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
@@ -537,7 +541,7 @@ public class SessionAdapterTests
     [Fact]
     public async Task QueryInstrumentsAsync返回自定义上市表()
     {
-        using var sim = NewLoopback(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } });
+        using var sim = NewLoopback(o => o with { ListedInstruments = new[] { "ag2610", "xx2601" } }, seedMaker: false);
         var session = sim.Session;
         await session.LoginAsync(LoginRequest());
 
@@ -552,8 +556,8 @@ public class SessionAdapterTests
     public async Task 双客户端不同账户互为对手撮合()
     {
         // 用户场景 E2E：两个客户端（不同账户）连同一 host——A 挂单、B 吃单，被动方空闲中收到自己的成交推送
-        using var sim = NewLoopback();
-        sim.Core.InjectQuote(SimHarness.Instrument, SimHarness.Bid, SimHarness.Ask, SimHarness.Last);   // 确定盘口 6999/7001
+        // （纯两客户端簿——alice 的挂单就是 bob 的对手价，无须 maker 种子）
+        using var sim = NewLoopback(seedMaker: false);
         var alice = sim.Session;
         await alice.LoginAsync(LoginRequest(userId: "alice"));
         using var bob = new RemoteCtpSession("127.0.0.1", sim.Server.LocalEndpoint!.Port);
@@ -564,7 +568,7 @@ public class SessionAdapterTests
         alice.OrderReceived += (_, o) => aliceOrders.Add(o);
         alice.TradeReceived += (_, t) => aliceTrades.Add(t);
 
-        // alice 挂限价买 7000（低于卖一 7001 ⇒ 静息入簿）
+        // alice 挂限价买 7000（空簿 ⇒ 静息入簿）
         await alice.OrderInsertAsync(SimHarness.Limit(CtpDirection.Buy, 1, 7000));
         var resting = Assert.Single(await alice.QueryOrderAsync());
         Assert.Equal((byte)'3', resting.OrderStatusRaw);

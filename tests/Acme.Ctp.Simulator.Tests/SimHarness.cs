@@ -5,11 +5,10 @@ using Acme.Ctp.Sim.Server;
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 单测夹具：确定性时钟 + 纯内存存储 + 手工注入的盘口。
+/// 单测夹具：确定性时钟 + 纯内存存储 + maker 账户双边挂单供给流动性。
 /// <para>
-/// 三条确定性来源：①<see cref="SimOptions.TickIntervalMs"/> = 0（行情只在测试显式调用
-/// <c>AdvanceMarket</c> 时变化）；②<see cref="SimOptions.DatabasePath"/> = null（不落盘）；
-/// ③固定时钟指向交易时段内的一个周三。
+/// 三条确定性来源：①<see cref="SimOptions.DatabasePath"/> = null（不落盘）；②固定时钟指向交易时段内的一个周三；
+/// ③价格全部来自显式挂单（价格发现归簿——测试放进簿里的单子决定一切成交价）。
 /// </para>
 /// </summary>
 internal static class SimHarness
@@ -24,7 +23,7 @@ internal static class SimHarness
     /// <summary>ag2610 的交易所（品种种子表里 ag 属上期所）——撤单定位键的回显项。</summary>
     public const string Exchange = "SHFE";
 
-    /// <summary>注入的盘口（tick = 1 ⇒ 原样往返，见 <c>InjectQuote</c> 的 Mid 语义）。</summary>
+    /// <summary>maker 双边挂单价（买 <see cref="Bid"/> / 卖 <see cref="Ask"/>）——市价单按对手侧成交的确定性来源。</summary>
     public const double Bid = 6999;
     public const double Ask = 7001;
     public const double Last = 7000;
@@ -39,26 +38,39 @@ internal static class SimHarness
     /// <summary>测试登录密码（密码必填——2026-09-28 起 `Login` 无密码一律拒 90017）。</summary>
     public const string TestPassword = "test-pw";
 
-    /// <summary>默认参数：不自动跑行情、不落盘、**显式 walk**（MarketMode 默认已是 Exchange——2026-09-28 翻转；本 harness 大量用例测 walk 撮合语义）。</summary>
-    public static SimOptions Options() => new() { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk };
+    /// <summary>maker 账户（「庄家」的替身：双边挂限价单供给流动性——价格发现归簿下流动性唯一来源是挂单）。</summary>
+    public const string MakerAccount = "maker";
+
+    /// <summary>maker 双边挂单的每侧手数（30×2 手 × 单手保证金 ≈ 75.6 万 < 初始 100 万——双边同时冻结须留足余量）。</summary>
+    public const int MakerVolume = 30;
+
+    /// <summary>默认参数：不落盘 + ag2610 上架（上市闸门恒生效——测试合约必须在上市表内）。</summary>
+    public static SimOptions Options() => new() { DatabasePath = null, ListedInstruments = new[] { Instrument } };
 
     public static async Task<SimTradingCore> NewCoreAsync(
         SimOptions? options = null,
-        bool injectQuote = true,
+        bool seedMaker = true,
         DateTime? now = null)
     {
         var core = new SimTradingCore(options ?? Options(), new SimClock(() => now ?? TradingNow));
         await core.InitializeAsync();
-        if (injectQuote) core.InjectQuote(Instrument, Bid, Ask, Last);
+        if (seedMaker) SeedMaker(core);
         return core;
+    }
+
+    /// <summary>maker 账户双边挂单（买 <see cref="Bid"/> × volumePerSide / 卖 <see cref="Ask"/> × volumePerSide）——「盘口注入」的簿版替身。</summary>
+    public static void SeedMaker(SimTradingCore core, int volumePerSide = MakerVolume)
+    {
+        core.InsertOrder(MakerAccount, Limit(CtpDirection.Buy, volumePerSide, Bid));
+        core.InsertOrder(MakerAccount, Limit(CtpDirection.Sell, volumePerSide, Ask));
     }
 
     public static CtpLoginResult Login(SimTradingCore core) => core.Login(Broker, Account, TestPassword);
 
-    /// <summary>已登录 + 已注入盘口的核心（绝大多数用例的起点）。</summary>
-    public static async Task<SimTradingCore> NewLoggedInCoreAsync(SimOptions? options = null, DateTime? now = null)
+    /// <summary>已登录核心（绝大多数用例的起点；seedMaker 决定是否注入双边流动性）。</summary>
+    public static async Task<SimTradingCore> NewLoggedInCoreAsync(SimOptions? options = null, bool seedMaker = true, DateTime? now = null)
     {
-        var core = await NewCoreAsync(options, now: now);
+        var core = await NewCoreAsync(options, seedMaker, now);
         Login(core);
         return core;
     }
@@ -156,7 +168,7 @@ internal static class Wait
 /// <summary>
 /// 回环仿真：测试进程内起「host 侧」listener + <see cref="RemoteCtpSession"/>——把 Phase 1 的进程内适配测试
 /// 升级为**跨线**契约测试（同一套断言经 TCP/JSON 走一圈，传输层顺带被覆盖），无需外部进程。
-/// 生命周期镜像真实 host：InitializeAsync + StartMarketFeed 在构造时一次（feed = host 生命周期），
+/// 生命周期镜像真实 host：InitializeAsync + maker 流动性种子在构造时一次，
 /// Dispose = 关会话 + 停 listener + core.Dispose（同步 flush——重启续用测试的落盘点）。
 /// </summary>
 internal sealed class LoopbackSim : IDisposable
@@ -172,13 +184,16 @@ internal sealed class LoopbackSim : IDisposable
         Session = session;
     }
 
-    /// <summary>启动回环柜台（端口 0 = 内核临时端口；configure 塑造**服务端** options）。</summary>
-    public static LoopbackSim Start(Func<SimOptions, SimOptions>? configure = null)
+    /// <summary>
+    /// 启动回环柜台（端口 0 = 内核临时端口；configure 塑造**服务端** options；seedMaker 注入 maker 双边挂单
+    /// ——options 的上市表不含 ag2610 时须传 false，否则种子挂单会被上市闸门拒掉）。
+    /// </summary>
+    public static LoopbackSim Start(Func<SimOptions, SimOptions>? configure = null, bool seedMaker = true)
     {
         var options = configure is null ? SimHarness.Options() : configure(SimHarness.Options());
         var core = new SimTradingCore(options);
         core.InitializeAsync().GetAwaiter().GetResult();   // xunit 无同步上下文 ⇒ sync-over-async 安全
-        core.StartMarketFeed();
+        if (seedMaker) SimHarness.SeedMaker(core);
         var server = new SimRpcServer(core, "127.0.0.1", 0);
         server.Start();
         var session = new RemoteCtpSession("127.0.0.1", server.LocalEndpoint!.Port);
@@ -189,6 +204,6 @@ internal sealed class LoopbackSim : IDisposable
     {
         try { Session.Dispose(); } catch { }
         try { Server.Dispose(); } catch { }   // StopAsync + 关连接（不 dispose core——下行）
-        try { Core.Dispose(); } catch { }     // 停 feed + 同步 flush
+        try { Core.Dispose(); } catch { }     // 同步 flush
     }
 }

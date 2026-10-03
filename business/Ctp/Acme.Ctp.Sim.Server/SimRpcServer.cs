@@ -18,11 +18,11 @@ namespace Acme.Ctp.Sim.Server;
 /// OrderRef 注册进 <c>CtpOrderTracker</c>，先到的成交回报会被静默丢弃（10s 看门狗误判 Invalid）。
 /// 真 CTP 的语义是「rc 返回先于 SPI 回调」，线上由 <see cref="SimConnection"/> 的
 /// capture-during-dispatch 复刻：本连接的 op 执行期间产生的推送先入捕获缓冲，应答帧写入后再排空。
-/// 其它来源（行情定时器、别的连接的 op）对本连接的推送无此契约，直写出站通道。
+/// 其它来源（别的连接的 op）对本连接的推送无此契约，直写出站通道。
 /// </para>
 /// <para>
 /// <b>不做的事</b>：不 dispose core（host 拥有核心生命周期）；不调 <c>core.Logout()</c>
-/// （行情 feed 生命周期 = host 生命周期，单客户端登出不得停全局 feed）；不做账户租约/踢人
+/// （行情事件驱动恒推送，单客户端登出不得停全局行情）；不做账户租约/踢人
 /// （同账户双客户端会撞 OrderRef 序号——已知限制，文档化）。
 /// </para>
 /// </summary>

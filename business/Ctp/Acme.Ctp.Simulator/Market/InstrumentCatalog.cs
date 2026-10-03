@@ -13,7 +13,7 @@ namespace Acme.Ctp.Simulator;
 /// </summary>
 public static class InstrumentCatalog
 {
-    /// <summary>未知合约的默认乘数（<see cref="SimOptions.AcceptUnknownInstruments"/> 为 true 时使用）。</summary>
+    /// <summary>未知合约的默认乘数（上市表自定义 id 经合成兜底时使用）。</summary>
     public const double DefaultUnknownVolumeMultiple = 10;
 
     /// <summary>未知合约的默认保证金率。</summary>
@@ -35,7 +35,8 @@ public static class InstrumentCatalog
     /// 故未知月份（如用户的真实持仓 <c>ag2602</c>）能按品种自动派生。
     /// <para>
     /// <c>zx</c> 品种 = 本交易所自有品种（「我就是交易所」）：zxNNN 系列（zx001/zx002…）按此派生——
-    /// 上市表默认 <c>zx001</c>（2 字母+3 数字——对齐官方合约命名，sim001@3字母致前置解析器拒识，2026-10-01 实证）。价格由驱动层供给：交易所模式（默认，价格发现归簿）/ 历史 tick 回放 / 随机游走（显式退路）——同一条注价管线；真实行情转发明确不做（本柜台是自己的交易所）。
+    /// 上市表默认 <c>zx001</c>（2 字母+3 数字——对齐官方合约命名，sim001@3字母致前置解析器拒识，2026-10-01 实证）。
+    /// 价格发现归订单簿（挂单/成交驱动）；真实行情转发明确不做（本柜台是自己的交易所）。
     /// </para>
     /// </summary>
     private static readonly Dictionary<string, SimInstrument> Varieties = new(StringComparer.OrdinalIgnoreCase)

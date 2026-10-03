@@ -135,25 +135,25 @@ MD 登录（op E430E603，凭据不校验）→ MD 登录应答
 |---|---|
 | `SimTradingCore` | 门面：Login/QueryAccount/QueryPositions/InsertOrder/CancelOrder/QueryListedInstruments |
 | `SimOrderManager` | 报单生命周期（状态机、冻结额、今昨拆分） |
-| `OrderBook` + `SimpleMatchingEngine` | 混合订单簿：客户端互为对手（价格-时间优先、maker 价成交、自成交跳过） |
+| `OrderBook` | 限价订单簿（唯一撮合机制）：客户端互为对手（价格-时间优先、maker 价成交、自成交跳过） |
 | `SimPositionManager` | 持仓管理（今昨仓、方向、盈亏盯市） |
 | `SimRiskEngine` | 风控（资金不足/手数/价格/时段校验） |
 | `SimMarketDataEngine` | 行情引擎：tick 事件驱动（挂单/撤单/成交即推） |
 | `SimInstrument` / `InstrumentCatalog` | 合约元数据（乘数/保证金率/tick/上市表） |
 | `SimStore` / `NullSimStore` | 持久化（SQLite 或纯内存） |
 
-### 交易所模式（默认）
+### 交易所（唯一模式：订单簿价格发现）
 
 - **价格发现归订单簿**——bid/ask = 簿顶真实挂单，last = 最新成交价
 - **零参与者代码**——做市商/噪声交易者是普通客户端（Lean 策略笔记），服务端无特殊账户
-- 庄家兜底关闭——空簿市价单拒单 90016
-- 挂单/撤单/成交即推 tick（非定时器）
+- 空簿市价单拒 90016（无对手价——真实交易所语义）
+- 挂单/撤单/成交即推 tick（事件驱动，非定时器）
 
 ### 上市合约表
 
 - 默认 `zx001`（SIM 交易所自有品种，乘数 10 / 保证金 10% / tick 1 / 基准 3800）
 - `AETHER_CTP_SIM_BOARD` 自定义（逗号分隔）
-- 上市表 = 唯一可交易/可订阅集合（交易所模式）
+- 上市表 = 唯一可交易/可订阅集合
 
 ## 6. 线协议参考（逆向成果）
 
@@ -254,14 +254,12 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop   # 实例 2（SIM-NOIS
 | `AETHER_CTP_MD_FRONT_PORT` | 17802 | CTP 行情腿前置端口 |
 | `AETHER_CTP_SIM_ADDR` | 127.0.0.1:17800 | JSON-RPC 端点 |
 | `AETHER_CTP_SIM_DB` | ~/.aether/ctp-sim.db | 账本库路径 |
-| `AETHER_CTP_SIM_MODE` | exchange | 价格源模式（exchange / walk / replay CSV） |
 | `AETHER_CTP_SIM_BOARD` | zx001 | 上市合约表 |
-| `AETHER_CTP_SIM_TICK_MS` | 500 | walk 模式行情频率（0=不自动喂） |
-| `AETHER_CTP_SIM_SEED` | 20260925 | walk 模式随机种子 |
 | `AETHER_CTP_SIM_BALANCE` | 1000000 | 新账户初始资金 |
-| `AETHER_CTP_SIM_REPLAY` | — | 历史 tick 回放 CSV |
-| `AETHER_CTP_SIM_REPLAY_SPEED` | 1 | 回放速度倍率 |
-| `AETHER_CTP_SIM_REPLAY_LOOP` | true | 回放循环 |
+| `AETHER_CTP_SIM_LOGIN_MAX_FAILURES` | 5 | 防爆破阈值 |
+| `AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC` | 60 | 防爆破锁定秒数 |
+
+已废除（设了被忽略）：`AETHER_CTP_SIM_MODE` / `AETHER_CTP_SIM_TICK_MS` / `AETHER_CTP_SIM_SEED` / `AETHER_CTP_SIM_REPLAY` / `AETHER_CTP_SIM_REPLAY_SPEED` / `AETHER_CTP_SIM_REPLAY_LOOP`（walk/回放模式已删除）。
 
 ### 工具
 

@@ -14,9 +14,8 @@ public sealed record SimHostOptions(string Host, int Port, SimOptions Core)
 
     /// <summary>
     /// 从环境变量构造：<c>AETHER_CTP_SIM_ADDR</c>（监听端点）、<c>AETHER_CTP_SIM_DB</c>（库路径），
-    /// 其余（tick 间隔/种子/初始资金/模式）经 <see cref="SimOptions.FromEnvironment"/>。
-    /// <para><b>回放优先归一</b>：REPLAY 设定 ⇒ 强制 <c>MarketMode = Walk</c>——回放经 <c>InjectQuote</c> 注价，
-    /// 而它在交易所模式下是 no-op（价格源互斥），不归一回 walk 回放会**静默失效**（无价格无行情）。</para>
+    /// 其余（初始资金/上市表/防爆破）经 <see cref="SimOptions.FromEnvironment"/>。
+    /// （价格源恒为订单簿价格发现——walk/回放已删除，无模式开关。）
     /// </summary>
     public static SimHostOptions FromEnvironment()
     {
@@ -24,8 +23,6 @@ public sealed record SimHostOptions(string Host, int Port, SimOptions Core)
         var db = Environment.GetEnvironmentVariable(DbEnvVar);
         if (string.IsNullOrWhiteSpace(db)) db = DefaultDatabasePath();
         var core = SimOptions.FromEnvironment(db);
-        if (!string.IsNullOrWhiteSpace(core.ReplayPath) && core.MarketMode == SimMarketMode.Exchange)
-            core = core with { MarketMode = SimMarketMode.Walk };
         return new SimHostOptions(host, port, core);
     }
 

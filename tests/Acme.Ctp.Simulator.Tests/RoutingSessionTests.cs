@@ -139,20 +139,16 @@ public class RoutingSessionTests
     [Fact]
     public void 仿真选项从环境变量读取覆盖值()
     {
-        // host 侧语义（AETHER_CTP_SIM_TICK_MS/SEED/BALANCE 全部由 host 进程读取）
-        var names = new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE" };
+        // host 侧语义（AETHER_CTP_SIM_BALANCE/BOARD 全部由 host 进程读取）
+        var names = new[] { "AETHER_CTP_SIM_BALANCE" };
         var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
         try
         {
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_TICK_MS", "0");
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_SEED", "4242");
             Environment.SetEnvironmentVariable("AETHER_CTP_SIM_BALANCE", "500000");
 
             var options = SimOptions.FromEnvironment("/tmp/ctp-sim.db");
 
             Assert.Equal("/tmp/ctp-sim.db", options.DatabasePath);
-            Assert.Equal(0, options.TickIntervalMs);        // 0 ⇒ host 不起自动行情喂送
-            Assert.Equal(4242, options.Seed);
             Assert.Equal(500_000, options.InitialBalance, 6);
         }
         finally
@@ -165,72 +161,14 @@ public class RoutingSessionTests
     [Fact]
     public void 环境变量缺省时取内置默认值()
     {
-        foreach (var name in new[] { "AETHER_CTP_SIM_TICK_MS", "AETHER_CTP_SIM_SEED", "AETHER_CTP_SIM_BALANCE", "AETHER_CTP_SIM_BOARD", "AETHER_CTP_SIM_MODE", "AETHER_CTP_SIM_REPLAY" })
+        foreach (var name in new[] { "AETHER_CTP_SIM_BALANCE", "AETHER_CTP_SIM_BOARD" })
             Environment.SetEnvironmentVariable(name, null);
 
         var options = SimOptions.FromEnvironment(null);
 
         Assert.Null(options.DatabasePath);
-        Assert.Equal(500, options.TickIntervalMs);
-        Assert.Equal(20260925, options.Seed);
         Assert.Equal(1_000_000, options.InitialBalance, 6);
         Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落默认 zx001
-        Assert.Equal(SimMarketMode.Exchange, options.MarketMode);   // 默认 = 交易所模式（2026-09-28 用户定调）
-
-        var host = SimHostOptions.FromEnvironment();
-        Assert.Equal(SimMarketMode.Exchange, host.Core.MarketMode);
-    }
-
-    [Fact]
-    public void 价格源模式环境变量解析()
-    {
-        var names = new[] { "AETHER_CTP_SIM_MODE", "AETHER_CTP_SIM_REPLAY" };
-        var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
-        try
-        {
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_REPLAY", null);
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", "walk");
-            Assert.Equal(SimMarketMode.Walk, SimOptions.FromEnvironment(null).MarketMode);
-
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", "Exchange");   // 大小写不敏感
-            Assert.Equal(SimMarketMode.Exchange, SimOptions.FromEnvironment(null).MarketMode);
-
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", "  ");        // 空白 ⇒ 默认交易所
-            Assert.Equal(SimMarketMode.Exchange, SimOptions.FromEnvironment(null).MarketMode);
-
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", "wolk");      // 坏值 ⇒ 拒（打错字宁可知晓）
-            Assert.Throws<ArgumentException>(() => SimOptions.FromEnvironment(null));
-        }
-        finally
-        {
-            for (var i = 0; i < names.Length; i++)
-                Environment.SetEnvironmentVariable(names[i], saved[i]);
-        }
-    }
-
-    [Fact]
-    public void 回放设定强制归一walk模式()
-    {
-        var names = new[] { "AETHER_CTP_SIM_MODE", "AETHER_CTP_SIM_REPLAY" };
-        var saved = names.Select(Environment.GetEnvironmentVariable).ToArray();
-        try
-        {
-            // REPLAY 设定（MODE 未设 ⇒ 默认 exchange）⇒ SimHostOptions 归一回 walk——回放骑 walk 撮合机制
-            //（InjectQuote 在交易所模式 no-op，不归一回放会静默失效）
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", null);
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_REPLAY", "/tmp/ticks.csv");
-            Assert.Equal(SimMarketMode.Walk, SimHostOptions.FromEnvironment().Core.MarketMode);
-            Assert.Equal(SimMarketMode.Exchange, SimOptions.FromEnvironment(null).MarketMode);   // 归一只发生在 host 层
-
-            // 显式 walk + REPLAY ⇒ 本来就是 walk
-            Environment.SetEnvironmentVariable("AETHER_CTP_SIM_MODE", "walk");
-            Assert.Equal(SimMarketMode.Walk, SimHostOptions.FromEnvironment().Core.MarketMode);
-        }
-        finally
-        {
-            for (var i = 0; i < names.Length; i++)
-                Environment.SetEnvironmentVariable(names[i], saved[i]);
-        }
     }
 
     [Fact]

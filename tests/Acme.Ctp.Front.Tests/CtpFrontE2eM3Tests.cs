@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using Ctp.Net.Core.MarketData;
 using Ctp.Net.Core.Trader;
-using Ctp.Net.Core.Trader;
 
 namespace Acme.Ctp.Front.Tests;
 
@@ -20,6 +19,9 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
     [Fact]
     public async Task 行情腿_Md登录_订阅_Tick推送全链路()
     {
+        // maker 双边挂单（价格发现归簿——tick 事件驱动：订阅快照 + 成交推送，无注价入口）
+        _sim.SeedMaker();
+
         var flowDir = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", "md", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(flowDir);
         using var md = new CtpMarketData(flowDir);
@@ -41,10 +43,19 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
             await Task.Delay(50);
         Assert.Contains(subAcks, a => a.Inst == Instrument && a.Err == 0);
 
-        // ③ tick 推送（E4F103 流式 op——SDK 即裁判：值/合约/时间逐字段断言）。
-        // 注价竞态防护：订阅请求 fire-and-forget，等服务端登记完成再注价（否则 tick 在订阅登记前被丢）。
-        await Task.Delay(500);
-        _sim.Core.InjectQuote(Instrument, 2998, 3002, 3000);
+        // ③ 成交驱动一帧 tick（E4F103 流式 op——SDK 即裁判：值/合约/时间逐字段断言）：
+        // taker 市价买 1 吃 maker 卖侧 ⇒ last=3001，簿顶 bid=2999 / ask=3001（卖侧剩 19）
+        _sim.Core.InsertOrder("m3taker", new Acme.Ctp.Domain.CtpOrderRequest
+        {
+            BrokerId = FrontLoopback.Broker,
+            InvestorId = "m3taker",
+            InstrumentId = Instrument,
+            Direction = Acme.Ctp.Domain.CtpDirection.Buy,
+            OffsetFlag = Acme.Ctp.Domain.CtpOffsetFlag.Open,
+            PriceType = Acme.Ctp.Domain.CtpOrderPriceType.Market,
+            LimitPrice = 0,
+            Volume = 1,
+        });
 
         // ④ 查合约（板子数据源——交易腿 op，前置 tag 应答，SDK 解析返回上市表）
         var traderFlow = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", "qry", Guid.NewGuid().ToString("N"));
@@ -63,13 +74,13 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
         Assert.Contains(instruments, i => i.InstrumentId == "zx001" && i.ExchangeId == "SIM");
 
         var tickDeadline = Environment.TickCount64 + 15000;
-        while (Environment.TickCount64 < tickDeadline && ticks.Count == 0)
+        while (Environment.TickCount64 < tickDeadline && !ticks.Any(t => Math.Abs(t.LastPrice - 3001) < 1e-9))
             await Task.Delay(50);
-        Assert.NotEmpty(ticks);
-        var tick = ticks.First();
+        Assert.Contains(ticks, t => Math.Abs(t.LastPrice - 3001) < 1e-9);
+        var tick = ticks.First(t => Math.Abs(t.LastPrice - 3001) < 1e-9);
         Assert.Equal(Instrument, tick.InstrumentId);
-        Assert.Equal(3000, tick.LastPrice);
-        Assert.Equal(2998, tick.BidPrice);
-        Assert.Equal(3002, tick.AskPrice);
+        Assert.Equal(3001, tick.LastPrice);
+        Assert.Equal(2999, tick.BidPrice);
+        Assert.Equal(3001, tick.AskPrice);
     }
 }

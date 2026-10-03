@@ -15,16 +15,14 @@ public class AccountAuthTests
 {
     private static SimOptions AuthOptions(int maxFailures = 5, int lockoutSec = 60) => new()
     {
-        TickIntervalMs = 0,
         DatabasePath = null,
-        MarketMode = SimMarketMode.Walk,   // 认证与模式无关——显式 pin 与其余 walk 用例一致
         PasswordIterations = 1000,   // 测试提速（仅迭代数——哈希格式/验证不受影响）
         LoginMaxFailures = maxFailures,
         LoginLockoutSeconds = lockoutSec,
     };
 
     private static async Task<SimTradingCore> NewAuthCoreAsync(SimOptions? options = null)
-        => await SimHarness.NewCoreAsync(options ?? AuthOptions(), injectQuote: false);
+        => await SimHarness.NewCoreAsync(options ?? AuthOptions(), seedMaker: false);   // 认证用例不下单——无须流动性
 
     [Fact]
     public async Task 首次登录带密码即开户设密()

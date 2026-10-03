@@ -8,8 +8,7 @@ namespace Acme.Ctp.Simulator.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// 仿真柜台默认不挑时段（<see cref="SimOptions.RejectOrdersOutsideTradingTime"/> = false，
-/// <see cref="SimOptions.GateByTradingTime"/> = false）——离线回放要的就是随时可跑。
+/// 仿真柜台默认不挑时段（<see cref="SimOptions.RejectOrdersOutsideTradingTime"/> = false）——本地沙盒要的就是随时可跑。
 /// 但时段表**仍必须正确**：它是「重连还是等开盘」的判据，也是开启闸门后唯一的准入依据。
 /// </para>
 /// <para>

@@ -50,27 +50,30 @@ public class RiskRejectionTests
     }
 
     [Fact]
-    public async Task 未知合约被拒()
+    public async Task 未上市合约被拒()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, AcceptUnknownInstruments = false, MarketMode = SimMarketMode.Walk });
+        // 上市闸门恒生效：上市表 = 唯一可交易集合——zz9999 不在上市表 ⇒ 拒 90002（品种可派生也不行，上架是显式决定）
+        var core = await SimHarness.NewLoggedInCoreAsync();
 
         RejectedWith(core, SimHarness.Market(CtpDirection.Buy, 1, instrument: "zz9999"),
             SimErrorCodes.UnknownInstrument);
 
-        // 空合约代码同样归入「未知合约」
+        // 空合约代码同样归入「未上市」
         RejectedWith(core, SimHarness.Market(CtpDirection.Buy, 1, instrument: ""),
             SimErrorCodes.UnknownInstrument);
     }
 
     [Fact]
-    public async Task 未知合约在兜底开启时被合成而非拒绝()
+    public async Task 未知品种上架后经合成可交易()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(); // AcceptUnknownInstruments 默认 true
+        // 「我就是交易所」的上架自由：BOARD 写什么 id 都能上——zz9999 经合成兜底落表（默认乘数/保证金率）
+        var core = await SimHarness.NewLoggedInCoreAsync(
+            SimHarness.Options() with { ListedInstruments = new[] { SimHarness.Instrument, "zz9999" } });
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 5, 100, instrument: "zz9999"));   // zz 做市供给对手价
 
         var inserted = core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1, instrument: "zz9999"));
 
-        // 合成合约可正常撮合（用默认乘数/保证金率）——这是「随便填个代码也能跑通流程」的能力来源
+        // 合成合约可正常撮合（用默认乘数/保证金率）——这是「随便填个代码上架也能跑通流程」的能力来源
         Assert.Equal("000000000001", inserted.OrderRef);
         var synthetic = Assert.Single(core.QueryInstruments(), i => i.InstrumentId == "zz9999");
         Assert.Equal(InstrumentCatalog.DefaultUnknownVolumeMultiple, synthetic.VolumeMultiple);
@@ -211,17 +214,18 @@ public class RiskRejectionTests
     [Fact]
     public async Task 时段闸门只在显式开启时生效()
     {
-        // 默认（RejectOrdersOutsideTradingTime = false）：任意时刻都能下单——离线回放要的就是这个
+        // 默认（RejectOrdersOutsideTradingTime = false）：任意时刻都能下单——离线沙盒要的就是这个
         var lenient = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk },
             now: new DateTime(2026, 9, 26, 3, 0, 0)); // 周六凌晨
         Assert.NotNull(lenient.InsertOrder(SimHarness.Account,
             SimHarness.Market(CtpDirection.Buy, 1)));
 
-        // 开启闸门：同一时刻被拒
+        // 开启闸门：同一时刻被拒（seedMaker 关——闸门开着 maker 种子单也会被拒；用限价单——
+        // 市价单会先撞空簿的 NoCounterparty 90016，到不了时段闸门）
         var strict = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, RejectOrdersOutsideTradingTime = true, MarketMode = SimMarketMode.Walk },
+            SimHarness.Options() with { RejectOrdersOutsideTradingTime = true },
+            seedMaker: false,
             now: new DateTime(2026, 9, 26, 3, 0, 0));
-        RejectedWith(strict, SimHarness.Market(CtpDirection.Buy, 1), SimErrorCodes.NotTradingTime);
+        RejectedWith(strict, SimHarness.Limit(CtpDirection.Buy, 1, 6900), SimErrorCodes.NotTradingTime);
     }
 }

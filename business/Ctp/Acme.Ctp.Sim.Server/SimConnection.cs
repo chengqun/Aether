@@ -16,7 +16,7 @@ namespace Acme.Ctp.Sim.Server;
 /// 分发前置 <c>_dispatching=true</c>；路由线程（核心事件线程）见 dispatching 则把帧入 <c>_captured</c>；
 /// 应答帧先 TryWrite，随后在同一锁内排空捕获、复位标志。锁内只有非阻塞 TryWrite，无死锁面。
 /// 注意：核心在 op 调用内同步抛事件 ⇒ 该路由就发生在**本连接自己的分发线程**上（自持锁无竞争）；
-/// 其它来源（feed 定时器/别的连接）在各自线程路由。
+/// 其它来源（别的连接的 op）在各自线程路由。
 /// </para>
 /// <para>
 /// <b>查询无登录守卫</b>（对齐 Phase 1「未登录查询返回空账本」：绑定空 → AccountIdOf(null)="sim"）；
@@ -216,12 +216,12 @@ internal sealed class SimConnection
                     foreach (var s in sub.Symbols)
                     {
                         if (string.IsNullOrWhiteSpace(s)) continue;
-                        // 先登记订阅、再激活——交易所模式下 ActivateMarket 会同步外发盘口快照 tick，
+                        // 先登记订阅、再激活——ActivateMarket 会同步外发盘口快照 tick，
                         // 若登记在后，快照路由时本连接的订阅集还没有该合约 ⇒ 订阅者永远收不到这唯一一帧
-                        // （walk 模式靠定时器续命无感；交易所模式空闲市场无后续事件——板恒空，2026-09-28 实测踩中）。
+                        // （事件驱动下空闲市场无后续事件——板恒空，2026-09-28 实测踩中）。
                         // 先登记则快照恰好落在本 op 的 capture-during-dispatch 缓冲里，应答帧后送达（F1 顺序契约）。
                         lock (_stateLock) Subscriptions.Add(s);
-                        _core.ActivateMarket(s);   // 订阅即激活行情（walk：否则不推进；exchange：快照 + 做市进场）
+                        _core.ActivateMarket(s);   // 订阅即激活行情（激活即推快照）
                     }
                     break;
                 }

@@ -6,7 +6,8 @@ namespace Acme.Ctp.Front.Tests;
 
 /// <summary>
 /// M2 E2E：报单/撤单/成交推送全链路（SDK 即裁判）——官方 SDK 解析我们构造的 OnRtnOrder/OnRtnTrade/
-/// ⑳/㉒ 帧，任何字段错位 ⇒ 回调不触发 ⇒ 超时失败。FrontLoopback 已注入 ag2610 庄家价（bid 6999/ask 7001）。
+/// ⑳/㉒ 帧，任何字段错位 ⇒ 回调不触发 ⇒ 超时失败。需要成交的用例先 <see cref="FrontLoopback.SeedMaker"/>
+/// 挂 m2701 双边（bid 2999/ask 3001——价格发现归簿，流动性来自挂单）。
 /// </summary>
 public sealed class CtpFrontE2eM2Tests : IDisposable
 {
@@ -52,13 +53,14 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         var dir = NewFlowDir();
         Directory.CreateDirectory(dir);
         using var trader = Login(dir);
+        _sim.SeedMaker();   // maker 双边挂单（bid 2999/ask 3001）——成交的对手方
 
         var orders = new ConcurrentBag<Order>();
         var trades = new ConcurrentBag<Trade>();
         trader.OrderReceived += (_, o) => orders.Add(o);
         trader.TradeReceived += (_, t) => trades.Add(t);
 
-        // ① 激进限价买 1@7100（≥Ask 7001）→ 受理 '3' + 全成 '0' + OnRtnTrade（价=Ask）
+        // ① 激进限价买 1@3100（≥maker Ask 3001）→ 受理 '3' + 全成 '0' + OnRtnTrade（价=挂单价 3001）
         var fill = await trader.OrderInsertAsync(new OrderRequest
         {
             InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
@@ -75,7 +77,7 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         Assert.Equal(3001, trade.Price);
         Assert.Equal(1, trade.Volume);
 
-        // ② 远端限价买 6900（<Bid）→ 仅受理 '3'，静默
+        // ② 远端限价买 2900（<maker Bid 2999）→ 仅受理 '3'，静默
         var rest = await trader.OrderInsertAsync(new OrderRequest
         {
             InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
@@ -171,8 +173,8 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         // 用户场景 E2E（做市商 + 噪声交易者经前置端口跑起来——2026-10-02 双 bot 冻结根因的回归钉）：
         // maker 挂双边 GFD 报价（做市商行为），taker IOC 对手价吃单（CtpOrderRequestMapper 的市价映射行为）
         // ⇒ 跨账户按 maker 价成交、被动方空闲收 F002/F001；maker 移心撤残腿 ⇒ '5' 终态推送到达
-        //（撤单闭环——CtpBrokerage tracker 收敛的唯一信号）。交易所模式：无庄家、价格发现归簿。
-        using var sim = FrontLoopback.StartExchange();
+        //（撤单闭环——CtpBrokerage tracker 收敛的唯一信号）。无庄家、价格发现归簿。
+        using var sim = FrontLoopback.Start();
         var makerDir = NewFlowDir(); var takerDir = NewFlowDir();
         Directory.CreateDirectory(makerDir); Directory.CreateDirectory(takerDir);
         using var maker = LoginAccount(sim, "maker1");
@@ -262,8 +264,9 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
     public async Task 持仓查询非空_逐仓一行_客户端解析方向与总仓()
     {
         // ⑱ 非空单行模板（2026-10-03 SimNow 实抓：1 手 m2701 多·今仓）——SDK 即裁判：
-        // 模板偏移错 ⇒ 解析字段错 ⇒ 断言失败。walk 模式先吃 1 手成交落持仓。
+        // 模板偏移错 ⇒ 解析字段错 ⇒ 断言失败。maker 卖单供给对手价，先吃 1 手成交落持仓。
         using var sim = FrontLoopback.Start();
+        sim.SeedMaker();
         var dir = NewFlowDir();
         Directory.CreateDirectory(dir);
         using var trader = LoginAccount(sim, "posusr");

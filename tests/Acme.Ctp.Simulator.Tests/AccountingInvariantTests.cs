@@ -57,7 +57,7 @@ public class AccountingInvariantTests
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
         var account = core.QueryAccount(SimHarness.Account);
 
-        // 买 1 手 @ 卖一 7001 ⇒ 占用 7001×15×0.12 = 12601.8，手续费 5.25075
+        // 买 1 手 @ maker 卖一 7001 ⇒ 占用 7001×15×0.12 = 12601.8，手续费 5.25075
         Assert.Equal(12601.8, account.CurrMargin, 2);
         Assert.Equal(5.25, account.Commission, 2);
         Assert.Equal(0, account.CloseProfit, 2);
@@ -65,8 +65,8 @@ public class AccountingInvariantTests
         Assert.Equal(0, account.FrozenCash, 2);
         AssertConserved(account);
 
-        // 持仓浮亏 -15（成本 7001、最新 7000）—— 浮盈不进本金恒等式，只进 Balance
-        Assert.Equal(-15, account.PositionProfit, 2);
+        // 最新价 = 成交价 7001（价格发现归簿——last 由成交流维护）⇒ 持仓浮盈 0；浮盈不进本金恒等式，只进 Balance
+        Assert.Equal(0, account.PositionProfit, 2);
         Assert.Equal(999994.74925, account.Balance - account.PositionProfit, 2);
     }
 
@@ -97,12 +97,13 @@ public class AccountingInvariantTests
     [Fact]
     public async Task 平仓按占总量比例释放保证金而非按手先进先出()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync();
-
-        // 两次不同价开仓：7001 与 7101
-        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
-        core.InjectQuote(SimHarness.Instrument, 7099, 7101, 7100);
-        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
+        // 两次不同价开仓：maker 分两档供给对手价（7001 先吃完，再吃 7101）——价格发现归簿下的「换价」
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, 7001));
+        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));   // @7001
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, 7101));
+        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));   // @7101
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Buy, 10, 6999));   // 平仓的对手价
 
         var twoLots = core.QueryAccount(SimHarness.Account);
         Assert.Equal(12601.8 + 12781.8, twoLots.CurrMargin, 2); // 7001 与 7101 各自的单手保证金
@@ -129,10 +130,12 @@ public class AccountingInvariantTests
     [Fact]
     public async Task 部分成交的冻结摊销与释放总额等于初始冻结()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
+        // maker 卖侧只挂 1 手 ⇒ GFD 限价买 3 只吃到 1 手（残 2 静息入簿继续冻结）；
+        // 对手方补 2 手 ⇒ 残量补足——「已成交转占用 + 未成交继续冻结」之和守恒
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, 7001));
 
-        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));
+        core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 3, 7001));
         var part = core.QueryAccount(SimHarness.Account);
 
         // 已成交那手转占用，未成交两手继续冻结——三者之和必须仍是 3 手的初始冻结额
@@ -142,8 +145,7 @@ public class AccountingInvariantTests
             $"成交摊销破坏守恒：占用 {part.CurrMargin} + 冻结 {part.FrozenMargin} 应等于 3 手总额 {3 * 12601.8}");
         AssertConserved(part, "（部分成交后）");
 
-        core.AdvanceMarket();
-        core.AdvanceMarket();
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 2, 7001));   // 对手方补量 ⇒ 吃掉残 2
 
         var filled = core.QueryAccount(SimHarness.Account);
         Assert.Equal(3 * 12601.8, filled.CurrMargin, 2);
@@ -202,16 +204,18 @@ public class AccountingInvariantTests
     [Fact]
     public async Task 混合操作后恒等式仍成立()
     {
-        var core = await SimHarness.NewLoggedInCoreAsync(
-            new SimOptions { TickIntervalMs = 0, DatabasePath = null, MaxFillVolume = 1, MarketMode = SimMarketMode.Walk });
+        // 一串真实策略会做出的操作：挂单 → 部分成交 → 补成交 → 平掉 → 撤单 → 反手开仓
+        // （对手方流动性由 maker 账户分档分批供给——价格发现归簿）
+        var core = await SimHarness.NewLoggedInCoreAsync(seedMaker: false);
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 1, 7001));
 
-        // 一串真实策略会做出的操作：挂单 → 部分成交 → 平掉 → 撤单 → 反手开仓
-        core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 3));
+        core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 3, 7001));
         AssertConserved(core.QueryAccount(SimHarness.Account), "（部分成交）");
 
-        core.AdvanceMarket();
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Sell, 2, 7001));
         AssertConserved(core.QueryAccount(SimHarness.Account), "（补成交）");
 
+        core.InsertOrder(SimHarness.MakerAccount, SimHarness.Limit(CtpDirection.Buy, 10, 6999));
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Sell, 2, CtpOffsetFlag.Close));
         AssertConserved(core.QueryAccount(SimHarness.Account), "（部分平仓）");
 

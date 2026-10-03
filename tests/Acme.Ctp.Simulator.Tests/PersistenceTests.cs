@@ -18,14 +18,15 @@ public class PersistenceTests
     private static string TempDbPath()
         => Path.Combine(Path.GetTempPath(), $"aether-ctp-sim-{Guid.NewGuid():N}", "ctp-sim.db");
 
-    /// <summary>不自动喂行情（价格只由注入决定 ⇒ 撮合价可预期）+ 落盘到指定文件。</summary>
-    private static SimOptions OptionsFor(string dbPath) => new() { DatabasePath = dbPath, TickIntervalMs = 0, MarketMode = SimMarketMode.Walk };
+    /// <summary>落盘到指定文件 + ag2610 上架 + maker 双边挂单（撮合价可预期）。</summary>
+    private static SimOptions OptionsFor(string dbPath)
+        => new() { DatabasePath = dbPath, ListedInstruments = new[] { SimHarness.Instrument } };
 
     private static async Task<SimTradingCore> OpenCoreAsync(string dbPath)
     {
         var core = new SimTradingCore(OptionsFor(dbPath), new SimClock(() => SimHarness.TradingNow));
         await core.InitializeAsync();
-        core.InjectQuote(SimHarness.Instrument, SimHarness.Bid, SimHarness.Ask, SimHarness.Last);
+        SimHarness.SeedMaker(core);   // 重启后挂单不复活 ⇒ 每次开核都补双边流动性
         SimHarness.Login(core);
         return core;
     }
@@ -41,8 +42,8 @@ public class PersistenceTests
         Directory.CreateDirectory(dir);
         try
         {
-            // 用不自动喂行情的选项，价格只由注入决定 ⇒ 撮合价可预期
-            var configure = (Func<SimOptions, SimOptions>)(o => o with { DatabasePath = dbPath, TickIntervalMs = 0 });
+            // maker 双边挂单供给流动性（撮合价可预期——LoopbackSim 默认种子）
+            var configure = (Func<SimOptions, SimOptions>)(o => o with { DatabasePath = dbPath });
 
             using (var first = LoopbackSim.Start(configure))
             {
@@ -172,7 +173,7 @@ public class PersistenceTests
             using (var first = await OpenCoreAsync(dbPath))
             {
                 var trades = new Collector<CtpTrade>();
-                first.TradeFilled += (_, t) => trades.Add(t);
+                first.TradeFilled += (a, t) => { if (a == SimHarness.Account) trades.Add(t); };
 
                 first.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
                 firstTradeId = Assert.Single(trades.Snapshot).TradeId;
@@ -183,7 +184,7 @@ public class PersistenceTests
             using (var second = await OpenCoreAsync(dbPath))
             {
                 var trades = new Collector<CtpTrade>();
-                second.TradeFilled += (_, t) => trades.Add(t);
+                second.TradeFilled += (a, t) => { if (a == SimHarness.Account) trades.Add(t); };
 
                 second.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
                 var secondTradeId = Assert.Single(trades.Snapshot).TradeId;
@@ -251,10 +252,10 @@ public class PersistenceTests
         {
             // DatabasePath 为 null ⇒ 核心内部取 NullSimStore：跑完一整套交易也不该有任何文件产生
             var core = new SimTradingCore(
-                new SimOptions { TickIntervalMs = 0, DatabasePath = null, MarketMode = SimMarketMode.Walk },
+                SimHarness.Options(),
                 new SimClock(() => SimHarness.TradingNow));
             await core.InitializeAsync();
-            core.InjectQuote(SimHarness.Instrument, SimHarness.Bid, SimHarness.Ask, SimHarness.Last);
+            SimHarness.SeedMaker(core);
             SimHarness.Login(core);
 
             core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 1));
