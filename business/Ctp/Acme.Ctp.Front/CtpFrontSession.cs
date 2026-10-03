@@ -431,7 +431,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E280E4"))
         {
             var reqId = ExtractReqIdAfter(body, "E101E1CDE3");
-            _log($"[CTP-Front] 查报单 reqId={reqId} → 空表（多行走 LZ4 二进制——已知边界）");
+            _log($"[CTP-Front] 查报单 reqId={reqId} → 17B tag 空表（SDK 30s 超时后管线恢复——真前置同款行为）");
             return reqId is { } id
                 ? BuildFrame(CtpFrontTemplates.BuildQryOrderEmptyRsp(NextQrySeq(), id))
                 : null;
