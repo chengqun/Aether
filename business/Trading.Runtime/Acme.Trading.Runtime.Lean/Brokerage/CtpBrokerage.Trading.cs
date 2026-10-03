@@ -228,8 +228,13 @@ public partial class CtpBrokerage
     }
 
     /// <summary>
-    /// 终态聚合：全部子单终态后按「任一腿 Filled / 全部 Cancel 类」发终态事件（SHFE 拆腿两腿全完才算完）。
-    /// 在 tracker 的终态旗标原子仲裁下只发一次（末笔 Trade 与 '0' 回报的竞态安全）。
+    /// 终态聚合（2026-10-03 修正）：全部子单终态后按「成交腿 vs 撤/拒腿」分组发终态事件（SHFE 拆腿两腿全完才算完）。
+    /// 在 tracker 的终态旗标原子仲裁下只发一次（末笔 Trade 与 '0' 回报的竞态安全）。<para/>
+    /// 旧版缺陷：见「任一腿成交」即走 Filled/补齐分支，把**撤/拒腿的残量**当成交缺口回补幻影成交
+    /// （双 bot 实测：SellClose1 成 + SellOpen4 撤 ⇒ 净持仓凭空 -4 ⇒ Lean Portfolio 与核心账本漂移）。
+    /// 现按腿终态分组：①成交腿存在且无撤/拒腿 ⇒ Filled（Trade 缺口按限价补齐——'0' 回报量 verbatim
+    /// 失真的兜底）；②有成交腿 + 有撤/拒腿 ⇒ 部分成交后撤——fill 保留（Trade 已计），终态 Canceled；
+    /// ③零成交+被拒（'4'）⇒ Invalid；④其余（零成全撤）⇒ Canceled。
     /// </summary>
     private void HandleAggregateTerminal(CtpOrderTracker.Tracked tracked, string context)
     {
@@ -237,18 +242,26 @@ public partial class CtpBrokerage
         if (tracked.FilledEmitted || tracked.CanceledEmitted) return;
 
         var order = tracked.Order;
-        var anyFilled = tracked.Children.Any(c => c.LastStatus == OrderStatus.Filled);
-        if (anyFilled)
+        var claimedFilled = tracked.Children.Where(c => c.LastStatus == OrderStatus.Filled).Sum(c => c.Request.Volume);
+        var hasCancelledOrRejected = tracked.Children.Any(c => c.LastStatus is OrderStatus.Canceled or OrderStatus.Invalid);
+        if (claimedFilled > 0)
         {
-            if (tracked.Filled >= tracked.ExpectedVolume)
+            if (hasCancelledOrRejected)
+            {
+                // 部分腿成交、其余撤/拒：成交保留、残量不作缺口——终态 Canceled
+                if (_tracker.TryMarkCanceled(tracked))
+                    OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, OrderFee.Zero, context) { Status = OrderStatus.Canceled });
+            }
+            else if (tracked.Filled >= claimedFilled)
             {
                 if (_tracker.TryMarkFilled(tracked))
                     OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, OrderFee.Zero) { Status = OrderStatus.Filled });
             }
             else
             {
-                // 回报宣称全成但 Trade 回报乱序未到齐：补齐缺口（价格用该腿限价近似）+ 警示
-                var missing = tracked.ExpectedVolume - (int)tracked.Filled;
+                // 回报宣称全成但 Trade 回报乱序未到齐：补齐缺口（价格用该腿限价近似）+ 警示——
+                // 缺口只按「成交腿申报量」算（撤/拒腿不贡献）
+                var missing = claimedFilled - (int)tracked.Filled;
                 var leg = tracked.Children.First(c => c.LastStatus == OrderStatus.Filled);
                 var signedMissing = order.Direction == OrderDirection.Sell ? -missing : missing;
                 CtpLeanGateway.Log($"[Brokerage] 报单全成但成交回报缺 {missing} 手，按限价 {leg.Request.LimitPrice} 补齐");
@@ -271,7 +284,7 @@ public partial class CtpBrokerage
         }
         else
         {
-            // 部分成交后撤/拒——已处理的 fill 保留在 Portfolio，剩余部分终态 Canceled
+            // 零成全撤（或撤前部成的 fill 已由 Trade 计账）——终态 Canceled
             if (_tracker.TryMarkCanceled(tracked))
                 OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, OrderFee.Zero, context) { Status = OrderStatus.Canceled });
         }

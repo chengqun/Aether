@@ -241,6 +241,36 @@ public class CtpBrokerageTradingTests : IDisposable
     }
 
     [Fact]
+    public void Partial_fill_leg_plus_cancelled_leg_emits_canceled_no_phantom_backfill()
+    {
+        // 2026-10-03 双 bot 实测回归：SellClose 1（成交）+ SellOpen 4（撤单 0 成）的两腿单——
+        // 旧版聚合见「任一腿成交 + Filled < 预期」即把撤腿残量当缺口回补幻影成交
+        // （净持仓凭空 -4、Lean Portfolio 与核心账本漂移）。正确语义 = 部分成交后撤：
+        // fill 保留（Trade 已计 1）、终态 Canceled、无补齐。
+        CtpLeanGateway.TradingOptions = new CtpLiveTradingOptions { EnableRealOrders = true, MaxOrderVolume = 10 };
+        // 多 1 → 卖 5 = 反转：CloseYesterday(1) + Open(4)（保险丝 10 不裁）
+        _session.Positions = new List<CtpPosition>
+        {
+            new() { InstrumentId = "ag2610", ExchangeId = "SHFE", PosiDirection = CtpPosiDirection.Long,
+                    TotalPosition = 1, TodayPosition = 0, YdPosition = 1 },
+        };
+        _brokerage.PlaceOrder(NewOrder(-5m));
+        Assert.Equal(2, _session.InsertCalls.Count);
+        _events.Clear();
+
+        // 平仓腿成交 1（Trade + '0'）；开仓腿撤单（'5'，0 成）
+        _session.RaiseTrade(TradeReport(_session.OrderRefs[0], "t1", 1, price: 7002));
+        _session.RaiseOrder(OrderReport(_session.OrderRefs[0], (byte)'0', volumeTraded: 1));
+        _session.RaiseOrder(OrderReport(_session.OrderRefs[1], (byte)'5'));
+
+        // 终态 = Canceled（部分成交后撤），无 Filled、无按限价补齐的幻影腿
+        Assert.Equal(OrderStatus.PartiallyFilled, _events[0].Status);
+        Assert.Equal(OrderStatus.Canceled, _events[^1].Status);
+        Assert.Empty(_events.Where(e => e.Status == OrderStatus.Filled));
+        Assert.Equal(1, _events.Sum(e => Math.Abs(e.FillQuantity)));   // 真实成交恰 1 手（撤腿不计）
+    }
+
+    [Fact]
     public void Cancel_unknown_order_returns_false()
     {
         CtpLeanGateway.TradingOptions = new CtpLiveTradingOptions { EnableRealOrders = true, MaxOrderVolume = 10 };
