@@ -168,6 +168,13 @@ internal sealed class CtpFrontSession : IDisposable
 
     private byte NextRtnInstance() => _rtnInstance = (byte)Math.Min(255, _rtnInstance + 1);
 
+    /// <summary>应答侧 80 族记录流水（⑯/⑱/查合约/查报单应答的 `E3` 后 1B）——**逐条递增，非请求回显**。
+    /// 2026-10-03 SimNow 过滤查报单实证：请求 op `E104E280E4` 的计数在 op 字节里（03/04…），
+    /// 而应答 `E3` = 09 = 会话内全部 80 族应答记录的流水（⑯=01、⑱=02、二进制报单 6 行内部消耗
+    /// 03-08、空应答=09）。客户端按它丢弃过期帧——回显请求计数会被判过期静默丢弃。多行应答逐行消耗。 </summary>
+    private byte _qrySeq;
+    private byte NextQrySeq() => _qrySeq = (byte)((_qrySeq + 1) % 256);
+
     /// <summary>核心错误码 → wire 错误码（捕获槽 1 字节：>255 的核心码降级为 148 通用码，真码进 GBK 文本前缀）。</summary>
     private static (int Id, string Msg) WireError(CtpBusinessException ex)
         => ex.ErrorId > byte.MaxValue ? (148, $"[{ex.ErrorId}] {ex.ErrorMsg}") : (ex.ErrorId, ex.ErrorMsg);
@@ -383,16 +390,15 @@ internal sealed class CtpFrontSession : IDisposable
         }
 
         // ⑮ 资金查询请求: E1 04 E2 80 06；reqId 在 E1 2E E3 之后（=05）。
-        // instance = 请求侧 80 族计数回显（E3 后 1B）——客户端按它丢弃重复帧（见 BuildQryAccountRsp 注释）。
+        // 应答 E3 = 80 族记录流水（NextQrySeq——见字段注释；旧版回显请求计数在查报单缺席时会错位）。
         if (MatchesSignature(body, "E104E28006"))
         {
             var reqId = ExtractReqIdAfter(body, "E12EE3");
-            var instance = ExtractInstanceAfterOp(body, "E104E28006");
             var accountId = SimTradingCore.AccountIdOf(_userId);
             var account = _core.QueryAccount(accountId);
-            _log($"[CTP-Front] 资金查询 reqId={reqId} instance={instance} balance={account.Balance}");
-            return reqId is { } id && instance is { } inst
-                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(inst, id, _brokerId, account.AccountId, _userId, day, account.Balance))
+            _log($"[CTP-Front] 资金查询 reqId={reqId} balance={account.Balance}");
+            return reqId is { } id
+                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(NextQrySeq(), id, _brokerId, account.AccountId, _userId, day, account.Balance))
                 : null;
         }
 
@@ -402,20 +408,41 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E28004"))
         {
             var reqId = ExtractReqIdAfter(body, "E1A6E3");
-            var instance = ExtractInstanceAfterOp(body, "E104E28004");
             var positions = _core.QueryPositions(SimTradingCore.AccountIdOf(_userId));
-            _log($"[CTP-Front] 持仓查询 reqId={reqId} instance={instance} → {positions.Count} 条");
-            if (reqId is not { } id || instance is not { } inst) return null;
+            _log($"[CTP-Front] 持仓查询 reqId={reqId} → {positions.Count} 条");
+            if (reqId is not { } id) return null;
             if (positions.Count == 0)
-                return BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(inst, id));
+                return BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(NextQrySeq(), id));
             var frames = positions.Select(p => BuildFrame(CtpFrontTemplates.BuildQryPositionRsp(
-                inst, id, _brokerId, _userId, p.InstrumentId, p.ExchangeId, day,
+                NextQrySeq(), id, _brokerId, _userId, p.InstrumentId, p.ExchangeId, day,
                 (char)p.PosiDirection, (char)p.PositionDate, p.TotalPosition))).ToArray();
             var total = frames.Sum(b => b.Length);
             var buf = new byte[total];
             var off = 0;
             foreach (var b in frames) { b.CopyTo(buf, off); off += b.Length; }
             return buf;
+        }
+
+        // 查报单请求: E1 04 E2 80 E4 <计数器>（⑤⑦ 族同款——计数在 op 字节不在 E3）；reqId 在 E1 01 E1 CD E3 后。
+        // **必须应答**（恒空表——2026-10-03 双 bot 实测：未应答的查报单把客户端查询管线堵死 30s，
+        // Lean 引擎 GetCashBalance 排队超时 → cash=0 → 引擎侧 buying power 拒掉全部订单）。
+        // 真前置多行报单走 LZ4 二进制（不逆向）；空表（17B tag 帧）为 SimNow 过滤查询实抓模板，
+        // E3 = 应答侧 80 族记录流水（NextQrySeq——二进制 6 行内部消耗 6 个号、空应答接续）。
+        if (MatchesSignature(body, "E104E280E4"))
+        {
+            var reqId = ExtractReqIdAfter(body, "E101E1CDE3");
+            _log($"[CTP-Front] 查报单 reqId={reqId} → 空表（多行走 LZ4 二进制——已知边界）");
+            return reqId is { } id
+                ? BuildFrame(CtpFrontTemplates.BuildQryOrderEmptyRsp(NextQrySeq(), id))
+                : null;
+        }
+
+        // 终端信息上报: E4 30 E6 05 01 31（SDK 每次登录自动发、真前置不应答——2026-10-03 录制实证）。
+        // 识别降噪：不再落「未知业务帧」（fire-and-forget，无应答帧）。
+        if (body.Length >= 5 && body[0] == 0xE4 && body[1] == 0x30 && body[2] == 0xE6 && body[3] == 0x05 && body[4] == 0x01)
+        {
+            _log("[CTP-Front] 终端信息上报（真前置不应答，忽略）");
+            return null;
         }
 
         // 查合约: E1 04 E2 80 2E —— 板子数据源（2026-10-02 过滤查询抓包定案：真前置按应答大小选格式，
@@ -425,13 +452,12 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E2802E"))
         {
             var reqId = ExtractReqIdAfter(body, "E101015DE3");
-            var instance = ExtractInstanceAfterOp(body, "E104E2802E");
             var listed = _core.QueryListedInstruments();
-            _log($"查合约 reqId={reqId} instance={instance} → 上市 {listed.Count} 个: {string.Join(",", listed.Select(i => i.InstrumentId))}");
-            if (reqId is not { } qryId || instance is not { } inst) return null;
+            _log($"查合约 reqId={reqId} → 上市 {listed.Count} 个: {string.Join(",", listed.Select(i => i.InstrumentId))}");
+            if (reqId is not { } qryId) return null;
             if (listed.Count == 0) return null;
             var frames = listed.Select(i =>
-                BuildFrame(CtpFrontTemplates.BuildQryInstrumentRsp(inst, qryId, i.InstrumentId, i.ExchangeId))).ToArray();
+                BuildFrame(CtpFrontTemplates.BuildQryInstrumentRsp(NextQrySeq(), qryId, i.InstrumentId, i.ExchangeId))).ToArray();
             var total = frames.Sum(b => b.Length);
             var buf = new byte[total];
             var off = 0;
@@ -526,16 +552,6 @@ internal sealed class CtpFrontSession : IDisposable
     /// <summary>⑤/⑦ 共享 op 签名的 reqId：body[5]==E3 时 body[6] 即 reqId。</summary>
     private static byte? ReqIdAfterOp(ReadOnlySpan<byte> body)
         => body.Length > 6 && body[5] == 0xE3 ? body[6] : null;
-
-    /// <summary>提取 op 签名后的 instance（op + E3 &lt;n&gt;——应答回显请求值）。查合约请求 op=5B。</summary>
-    private static byte? ExtractInstanceAfterOp(ReadOnlySpan<byte> body, string opHex)
-    {
-        var op = Convert.FromHexString(opHex);
-        var hit = body.IndexOf(op);
-        if (hit < 0 || hit + op.Length >= body.Length || body[hit + op.Length] != 0xE3) return null;
-        var idx = hit + op.Length + 1;
-        return idx < body.Length ? body[idx] : null;
-    }
 
     /// <summary>定位 needle 后紧跟的 1B reqId（⑪⑬ E19CE3 / ⑮ E12EE3 / ⑰ E1A6E3）。</summary>
     private byte? ExtractReqIdAfter(ReadOnlySpan<byte> body, string needleHex)

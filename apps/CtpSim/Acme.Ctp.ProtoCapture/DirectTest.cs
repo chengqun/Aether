@@ -63,6 +63,15 @@ internal static class DirectTest
             var positions = await trader.QueryInvestorPositionAsync("9999", user, ct: CancellationToken.None);
             Console.WriteLine($"[Test] ✓ 持仓 {positions.Count} 条");
 
+            // 过滤查询放最前（无匹配报单的合约）——验证「首查即空」是否也走 17B tag 格式
+            // （此前抓包里 tag 应答都在二进制应答之后——顺序是变量）
+            Console.WriteLine("[Test] QueryOrder（过滤 au2610——预期空，首查）…");
+            var filtered = await trader.QueryOrderAsync("9999", user, "au2610", CancellationToken.None);
+            Console.WriteLine($"[Test] ✓ 过滤报单 {filtered.Count} 条");
+            Console.WriteLine("[Test] QueryOrder…");
+            var orders = await trader.QueryOrderAsync("9999", user, ct: CancellationToken.None);
+            Console.WriteLine($"[Test] ✓ 报单 {orders.Count} 条（首条: {(orders.Count > 0 ? orders[0].ToString() : "无")}）");
+
             // 空转观测：每 30s 一次轻查询（应答活着 = 心跳/连接健康；超时 = 被掐的指征）
             var deadline = Environment.TickCount64 + idleSec * 1000L;
             var n = 0;

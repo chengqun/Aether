@@ -247,6 +247,15 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
         // 第三次跨型查询（⑰ 空表——实例计数继续推进）
         var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, User, ct: CancellationToken.None);
         Assert.NotNull(positions);
+        // 查报单（80 族 op 带计数器）：SDK 现仍无法解析本地前置的 tag 空应答（真前置多行走 LZ4 二进制、
+        // 空走 17B tag——同构 verbatim 也被拒，原因未定位）。先钉住「查报单超时是否堵死后续查询」——
+        // 这决定它是 30s 烦扰还是管线杀手（noise 实例资金查询超时的归因）。
+        IReadOnlyList<Order>? orders = null;
+        try { orders = await trader.QueryOrderAsync(FrontLoopback.Broker, User, ct: CancellationToken.None); }
+        catch (TimeoutException) { /* 已知边界：tag 空应答 SDK 不派发 */ }
+        // 之后的查询仍健康？（若这里也超时 ⇒ 未决查询堵死管线 ⇒ 必须在服务端彻底解决查报单）
+        var third = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, User, CancellationToken.None);
+        Assert.Equal(FrontLoopback.InitialBalance, third.Balance);
     }
 
     [Fact]

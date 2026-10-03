@@ -207,9 +207,9 @@ internal static class CtpFrontTemplates
 
     /// <summary>
     /// ⑯ 资金应答（6 个 E0 转义余额字段全部 ← Balance——整槽替换，线上宽度随值内 tag 字节数可变）。
-    /// <paramref name="instance"/> = 请求侧 80 族实例计数回显（E3 后 1B）——**客户端按它丢弃重复帧**：
-    /// 旧版恒回 captured 的 01 ⇒ 同一会话第二次 ⑮ 起应答被客户端静默丢弃（读而不派发——Recv-Q=0、
-    /// 无断线事件、30s 超时），bot 长会话必死（2026-10-03 DirectTest idle 复现 + 真前置录制对照定案）。
+    /// <paramref name="instance"/> = **应答侧 80 族记录流水**（E3 后 1B，逐条递增——2026-10-03 SimNow
+    /// 过滤查报单定案：非请求回显）——客户端按它丢弃过期帧：旧版恒回 captured 的 01 ⇒ 同一会话第二次
+    /// ⑮ 起应答被客户端静默丢弃（读而不派发——Recv-Q=0、无断线事件、30s 超时），bot 长会话必死。
     /// </summary>
     internal static byte[] BuildQryAccountRsp(byte instance, byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
         Apply(QryAccountRspTemplate,
@@ -275,6 +275,21 @@ internal static class CtpFrontTemplates
             new Edit(186, 3, F(exchangeId, 3)),
             new Edit(190, 5, F(instrumentId, 5)),
             new Edit(196, 5, F(instrumentId, 5))
+        );
+
+    /// <summary>
+    /// 查报单空应答（17B——2026-10-03 SimNow 实抓：过滤无匹配报单的合约时真前置回此 tag 帧而非
+    /// LZ4 二进制。大清单（6 行实测 811B）走二进制——「不逆向」，本地前置恒回空表：客户端
+    /// QueryOrderAsync 管线不再被未应答查询堵死（期货页委托 tab 显示空是已知边界）。
+    /// 结构 = op `E104E28001` + E3 应答流水 + E7 reqId 回显（与 ⑱ 空表同构）。
+    /// </summary>
+    internal static readonly byte[] QryOrderEmptyRspTemplate = H("0103344CE104E28001E309E708");
+
+    /// <summary>查报单空应答（E3 值槽 = offset 10、E7 reqId 值槽 = offset 12）。op 用 +1 惯例（E4→E5）。</summary>
+    internal static byte[] BuildQryOrderEmptyRsp(byte e3Value, byte reqId) =>
+        Apply(QryOrderEmptyRspTemplate,
+            new Edit(10, 1, [e3Value]),
+            new Edit(12, 1, [reqId])
         );
 
     /// <summary>M1 ⑩ verbatim 会话身份（FrontID+SessionID，5B）——推送/回显帧 Edit 用（D6：与 ⑩ 同源）。</summary>
