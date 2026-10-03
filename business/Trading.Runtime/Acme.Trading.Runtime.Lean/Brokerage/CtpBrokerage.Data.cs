@@ -41,7 +41,18 @@ public partial class CtpBrokerage
         _barBuilders[sym] = new BarBuilder(dataConfig.Increment);
 
         _subscriptionManager!.Subscribe(dataConfig);
-        CtpLeanGateway.Log($"[Data] 订阅 {sym.Value} 增量={dataConfig.Increment}");
+
+        // 快照种子：CtpSessionService 增量订阅对已订合约是 no-op（不再发订阅帧 ⇒ 前置不再推订阅快照）——
+        // 期货页行情板先于引擎订阅时，快照 tick 在本类挂 TickReceived 监听之前就到达并被消费。静态市场
+        // （做市商挂单等噪声来吃——无新 TickProduced 事件）下策略 Price 恒 0「等待首帧行情」死锁
+        // （2026-10-03 双 bot 实测：MM 靠 68s 后断线重建才自举，noise 无重建永等）。从会话最新 tick
+        // 缓存回放一帧自举首个 bar；fresh 连接路径不受影响（快照在挂监听后经事件正常到达）。
+        // Lean 大写 ticker（ZX001）→ CTP 原始 instrumentId（zx001）——会话 tick 缓存按 CTP 大小写键控。
+        var seed = _session.GetLatestTick(ResolveCtpInstrument(sym.Value));
+        if (seed is not null)
+            OnTickReceived(this, seed);
+
+        CtpLeanGateway.Log($"[Data] 订阅 {sym.Value} 增量={dataConfig.Increment}{(seed is null ? "" : "（快照种子 last=" + seed.LastPrice + "）")}");
         return enumerator;
     }
 

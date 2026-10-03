@@ -28,6 +28,7 @@ public class CtpBrokerageDataTests : IDisposable
         {
             MdFrontAddress = "tcp://127.0.0.1:40002", BrokerId = "9999", UserId = "user01", Password = "pw",
         };
+        _session.Ticks.Clear();   // fake 预置了映射器用的行情——数据面测试自控 tick（快照种子只在该测里注入）
         _brokerage = new CtpBrokerage(null, _session);
         _brokerage.Connect();   // WireSessionEvents（fake IsConnected=true）
     }
@@ -65,6 +66,22 @@ public class CtpBrokerageDataTests : IDisposable
 
         enumerator.MoveNext();
         var bar = Assert.IsType<CtpBar>(enumerator.Current);   // Current=null ⇒ IsType 失败（自举死锁会挂这里）
+        Assert.Equal(7000m, bar.Close);
+    }
+
+    [Fact]
+    public void 增量订阅no_op时_会话缓存快照种子自举首棒()
+    {
+        // 2026-10-03 双 bot 实测回归：期货页行情板先于引擎订阅 ⇒ CtpSessionService 增量订阅对同合约
+        // 是 no-op（不再发订阅帧 ⇒ 前置不再推订阅快照），且原快照 tick 在 brokerage 挂监听前已被
+        // 消费——静态市场（做市商挂单等噪声来吃）无新 TickProduced 事件 ⇒ 策略 Price 恒 0
+        // 「等待首帧行情」死锁。修复 = Subscribe 从会话最新 tick 缓存回放一帧（快照种子）。
+        _session.Ticks["ag2610"] = Tick(7000, "10:00:00");   // 行情板时代到达、缓存在会话里的快照
+
+        var enumerator = _brokerage.Subscribe(Config(Resolution.Second), (_, _) => { });
+
+        enumerator.MoveNext();
+        var bar = Assert.IsType<CtpBar>(enumerator.Current);   // 种子回放成首棒——无任何 wire 事件驱动
         Assert.Equal(7000m, bar.Close);
     }
 
