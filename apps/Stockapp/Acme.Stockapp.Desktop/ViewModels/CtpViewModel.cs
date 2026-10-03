@@ -170,7 +170,12 @@ public partial class CtpViewModel : ObservableObject
                 foreach (var i in listed)
                 {
                     // sim id 已是 CTP 规整形态（不经 ToCtpInstrumentCode）；无中文名——名称列显交易所
-                    var q = new MainFutureQuote(i.InstrumentId, i.ExchangeId);
+                    var q = new MainFutureQuote(i.InstrumentId, i.ExchangeId)
+                    {
+                        // 昨结算来自合约目录（查合约 wire op 已带）——MdTick wire 帧没有 PreSettlement 槽位，
+                        // tick.PreSettlement 恒 0 ⇒ ChangePercent 恒 0（涨幅不动——2026-10-03 修复）
+                        PreSettlement = i.PreSettlement,
+                    };
                     QuoteBoard.Add(q);
                     _quoteBySymbol[i.InstrumentId] = q;
                 }
@@ -340,14 +345,19 @@ public partial class CtpViewModel : ObservableObject
     private async Task QueryOrderAsync()
     {
         if (!_trading.IsConnected) { StatusMessage = "请先登录"; return; }
+        // 委托 tab 由 OnRtnOrder（F001 推送）实时维护——查询是历史回填（本地前置 SDK 不派发
+        // 17B tag 空应答 → 30s 超时，与真前置首查行为一致）。**不清 Orders**——推送攒的活单
+        // 是权威数据源，查询失败不能把列表清空（旧版 Orders.Clear() 把 bot 期间的推送记录全毁）。
         try
         {
-            StatusMessage = "查询报单…"; Orders.Clear();
+            StatusMessage = "查询报单…（推送驱动，查询仅历史回填）";
             var list = await _trading.QueryOrderAsync();
-            foreach (var o in list) Orders.Add(o);
-            StatusMessage = $"报单 {list.Count} 条";
+            foreach (var o in list)
+                if (!Orders.Any(x => x.OrderRef == o.OrderRef && x.FrontId == o.FrontId && x.SessionId == o.SessionId))
+                    Orders.Add(o);
+            StatusMessage = $"报单 {list.Count} 条（查询）｜列表 {Orders.Count} 条（含推送）";
         }
-        catch (Exception ex) { StatusMessage = $"查询失败: {ex.Message}"; }
+        catch (Exception ex) { StatusMessage = $"查询超时（已知边界——列表由推送维护: {Orders.Count} 条）"; }
     }
 
     [RelayCommand]
@@ -441,7 +451,11 @@ public partial class CtpViewModel : ObservableObject
                 q.OpenInterest = tick.OpenInterest;
                 q.Volume = tick.Volume;
                 q.OpenPrice = tick.OpenPrice;
-                q.PreSettlement = tick.PreSettlement;
+                // MdTick wire 帧没有 PreSettlement 槽位（SDK 解析恒 0）+ 查合约的 CThostFtdcInstrumentField
+                // 也无此字段（C++ wrapper 恒 0）——首帧 tick 的 last 即基价（sim 撮合起点 = BasePrice = PreSettlement，
+                // 2026-10-03 涨幅不动修复）。后续 tick 带 PreSettlement > 0 时优先用真值。
+                if (tick.PreSettlement > 0) q.PreSettlement = tick.PreSettlement;
+                else if (q.PreSettlement == 0 && tick.LastPrice > 0) q.PreSettlement = tick.LastPrice;
                 q.UpdateTime = $"{tick.UpdateTime}.{tick.UpdateMillisec:D3}";
             }
         }
