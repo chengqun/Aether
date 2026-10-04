@@ -37,12 +37,59 @@ foreach ($d in @($DeployDir, $DataDir, $StagingDir)) {
 }
 Info "目录就绪：$DeployDir（部署）/ $DataDir（账本+日志）/ $StagingDir（部署中转）"
 
-# 2) OpenSSH Server（-SkipOpenSsh 跳过；幂等）——GitHub Actions 的 SSH 通道
+# 2) OpenSSH Server（-SkipOpenSsh 跳过；幂等）——GitHub Actions 的 SSH 通道。
+#    已知坑：Add-WindowsCapability 报 0x800f0954 = WSUS/更新策略拦 Feature-on-Demand（FoD 载荷不在 WSUS）——
+#    临时把 wuauserv 切直连 Windows Update 重试、装完还原（2026-10-05 服务器实测踩中）。
 if (-not $SkipOpenSsh) {
     $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Where-Object { $_.State -ne 'Installed' }
     if ($cap) {
         Info '安装 OpenSSH Server（Windows 内置能力，可能需要几分钟）…'
-        Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+        try {
+            Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+        }
+        catch {
+            $auKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
+            $wuWasUs = $null
+            if (Test-Path $auKey) {
+                $wuWasUs = (Get-ItemProperty -Path $auKey -Name UseWUServer -ErrorAction SilentlyContinue).UseWUServer
+            }
+            if ($wuWasUs -eq 1) {
+                Info 'Add-WindowsCapability 失败（WSUS 拦 FoD，0x800f0954）——临时切直连 Windows Update 重试…'
+                try {
+                    Set-ItemProperty -Path $auKey -Name UseWUServer -Value 0
+                    Restart-Service wuauserv
+                    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+                    Info 'OpenSSH Server 安装成功'
+                }
+                catch {
+                    Fail "切直连后重试仍失败：$($_.Exception.Message)——改走 Win32-OpenSSH 手动安装（见下）后重跑本脚本加 -SkipOpenSsh"
+                }
+                finally {
+                    # 无论成败都还原 WSUS 配置
+                    try {
+                        Set-ItemProperty -Path $auKey -Name UseWUServer -Value 1
+                        Restart-Service wuauserv
+                        Info 'WSUS 更新配置已还原（UseWUServer=1）'
+                    }
+                    catch {
+                        Info "WSUS 配置还原失败——请手动检查 $auKey 的 UseWUServer 应为 1：$($_.Exception.Message)"
+                    }
+                }
+            }
+            else {
+                $manual = @(
+                    'Add-WindowsCapability 失败且未检测到 WSUS 开关——多半是服务器访问不了 Windows Update。两条路线任选：',
+                    'A) 排通 Windows Update 后重跑本脚本；',
+                    'B) 手动装 Win32-OpenSSH（GitHub 发行包，不依赖 Windows Update；服务器直接下不动就本地下载后 RDP 拷上去）：',
+                    "   Invoke-WebRequest 'https://github.com/PowerShell/Win32-OpenSSH/releases/latest/download/OpenSSH-Win64.zip' -OutFile `"$env:TEMP\OpenSSH-Win64.zip`"",
+                    "   Expand-Archive `"$env:TEMP\OpenSSH-Win64.zip`" -DestinationPath 'C:\Program Files' -Force",
+                    "   powershell -ExecutionPolicy Bypass -File 'C:\Program Files\OpenSSH-Win64\install-sshd.ps1'",
+                    '   Set-Service sshd -StartupType Automatic; Start-Service sshd',
+                    '   然后重跑本脚本加 -SkipOpenSsh（后续步骤照常，sshd 服务名/配置路径与内置版一致）。'
+                ) -join [Environment]::NewLine
+                Fail $manual
+            }
+        }
     }
     Set-Service -Name sshd -StartupType Automatic
     if ((Get-Service -Name sshd).Status -ne 'Running') { Start-Service -Name sshd }
