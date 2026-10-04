@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 交易所契约内核（2026-10-04 从 Acme.Ctp.Domain 拆出）：三方共享的纯 DTO/枚举/异常/交易日历——
+       本上下文（Simulator/Sim/Sim.Server）+ CtpFront + 客户端（business/Ctp 的 Domain 经共享内核引用，AppAuth 模式）。
+       **namespace 刻意沿用 `Acme.Ctp.Domain`**：契约身份不变 ⇒ 全仓零 using 改动；所有权归交易所（真实世界 = 交易所拥有模型）。
+       项目名以 .Domain 结尾 = Tier=Domain（层化规则「Domain purity / 外域 Domain 共享内核引用」的合法性基石）。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

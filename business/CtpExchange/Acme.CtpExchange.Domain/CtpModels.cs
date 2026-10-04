@@ -1,19 +1,9 @@
 namespace Acme.Ctp.Domain;
 
 // —— CTP 领域 DTO（纯数据载体，无行为；字段镜像 Ctp.Net.Core 模型，由 Infrastructure 侧映射）——
-// 这些类型放在 Domain.Abstractions，使 ICtpSession 契约不依赖外部 SDK，Application/UI 层只面向领域 DTO。
-
-/// <summary>CTP 登录连接参数（交易前置 + 行情前置 + 凭据）。</summary>
-public sealed class CtpLoginRequest
-{
-    public required string FrontAddress { get; init; }   // 交易前置 tcp://ip:port
-    public required string MdFrontAddress { get; init; } // 行情前置 tcp://ip:port
-    public required string BrokerId { get; init; }
-    public required string UserId { get; init; }
-    public required string Password { get; init; }
-    public required string AppId { get; init; }
-    public required string AuthCode { get; init; }
-}
+// 交易所契约内核（Acme.CtpExchange.Domain）：三方共享（交易所/前置/客户端），使接缝契约不依赖外部 SDK。
+// **namespace 刻意沿用 `Acme.Ctp.Domain`**（2026-10-04 拆分时零 using 改动）——客户端专属类型
+// （CtpLoginRequest/CtpMarketDataConnect/CtpConnectionStatus）在 business/Ctp/Acme.Ctp.Domain/CtpClientContracts.cs。
 
 /// <summary>登录结果：含订单回报匹配键 FrontID/SessionID/MaxOrderRef。</summary>
 public sealed record CtpLoginResult(
@@ -147,12 +137,3 @@ public sealed record CtpOrderInsertResult(string OrderRef, int RequestId);
 /// <summary>撤单定位键（FrontId/SessionId/OrderRef 唯一定位一笔报单）。</summary>
 public sealed record CtpOrderRef(
     string BrokerId, string InvestorId, int FrontId, int SessionId, string OrderRef, string ExchangeId);
-
-/// <summary>行情前置连接参数。CTP 行情前置是独立连接，不依赖交易登录即可订阅行情。</summary>
-public sealed class CtpMarketDataConnect
-{
-    public required string MdFrontAddress { get; init; }   // 行情前置 tcp://ip:port
-    public required string BrokerId { get; init; }
-    public required string UserId { get; init; }
-    public required string Password { get; init; }
-}

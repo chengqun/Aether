@@ -1,38 +1,20 @@
 using System;
 using System.IO;
-using System.Threading.Tasks;
-using Acme.Ctp.Domain;
-using Acme.Ctp.Infrastructure;
-using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.Ctp.Sim;
 using Acme.Ctp.Sim.Server;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 「用前置地址选柜台」的组合与选项测试（取代 Phase 1 的环境变量切换）：
-/// 2026-10-01 收口后 <see cref="ICtpSession"/> 直连 <see cref="Acme.Ctp.Infrastructure.CtpSessionService"/>
-/// （官方 SDK 链路——本地前置 tcp://127.0.0.1:17801/17802 与真实 SimNow 同形）；旧 <c>sim</c> 关键字
-/// JSON-RPC 路由（RoutingCtpSession）已于 2026-10-04 删除。
-/// <para>含端点解析矩阵与 host 侧选项（<see cref="SimHostOptions"/>）测试。</para>
+/// 端点解析与 host 侧选项测试：<see cref="SimAddress"/> 解析矩阵（默认端口 / host:port / 垃圾值）、
+/// <see cref="SimHostOptions"/> 与 <see cref="SimOptions"/> 的环境变量读取（AETHER_CTP_SIM_* 全家）、上市表 env 解析。
+/// <para>
+/// （2026-10-04：原「ICtpSession 直连官方 SDK 链路」DI 组合测试测的是**客户端**组合根，
+/// 已迁至 <c>tests/Acme.Ctp.Infrastructure.Tests/CtpSessionRegistrationTests</c>——那不是柜台的事。）
+/// </para>
 /// </summary>
 public class RoutingSessionTests
 {
-    /// <summary>临时目录下的 ctp.db 路径——**绝不**让测试碰 <c>~/.aether/ctp.db</c>（真实用户的配置库）。</summary>
-    private static string TempDbPath()
-        => Path.Combine(Path.GetTempPath(), $"aether-ctp-sim-test-{Guid.NewGuid():N}", "ctp.db");
-
-    private static CtpLoginRequest LoginRequest(string frontAddress, string userId = SimHarness.Account) => new()
-    {
-        FrontAddress = frontAddress,
-        MdFrontAddress = "tcp://127.0.0.1:40002",
-        BrokerId = SimHarness.Broker,
-        UserId = userId,
-        Password = "任意",
-        AppId = "aether",
-        AuthCode = "auth",
-    };
 
     // —— 地址判据 ——
 
@@ -50,22 +32,6 @@ public class RoutingSessionTests
     public void 前置地址判据区分仿真与真实(string? front, bool expected)
     {
         Assert.Equal(expected, SimAddress.IsSimFront(front));
-    }
-
-    // —— DI 组合 ——
-
-    [Fact]
-    public void ICtpSession直连官方SDK链路_路由会话已退役出DI()
-    {
-        using var provider = new ServiceCollection().AddCtpInfrastructure(TempDbPath()).BuildServiceProvider();
-
-        // 2026-10-01 用户定调：桌面端砍掉 sim 关键字直连——ICtpSession 直连 CtpSessionService
-        //（本地前置 tcp://127.0.0.1:17801/17802 或真实 SimNow 同链路；RoutingCtpSession 不再进 DI）
-        var session = provider.GetRequiredService<ICtpSession>();
-        var real = Assert.IsType<CtpSessionService>(session);
-        Assert.Same(real, provider.GetRequiredService<CtpSessionService>());   // 同一单例
-        Assert.False(session.IsConnected);
-        Assert.Null(real.LoginResult);
     }
 
     // —— 端点解析（两端共用） ——

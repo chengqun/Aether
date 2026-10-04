@@ -72,6 +72,7 @@
     <Project Path="business/Ctp/Acme.Ctp.Infrastructure/Acme.Ctp.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/business/CtpExchange/">
+    <Project Path="business/CtpExchange/Acme.CtpExchange.Domain/Acme.CtpExchange.Domain.csproj" />
     <Project Path="business/CtpExchange/Acme.Ctp.Simulator/Acme.Ctp.Simulator.csproj" />
     <Project Path="business/CtpExchange/Acme.Ctp.Sim/Acme.Ctp.Sim.csproj" />
     <Project Path="business/CtpExchange/Acme.Ctp.Sim.Server/Acme.Ctp.Sim.Server.csproj" />

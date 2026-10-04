@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Ctp\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
+    <!-- 交易所契约内核（同上下文）——三方共享 DTO；不再引客户端的 Acme.Ctp.Domain（2026-10-04 方向修正） -->
+    <ProjectReference Include="..\Acme.CtpExchange.Domain\Acme.CtpExchange.Domain.csproj" />
     <!-- SqliteStoreBase（连接串/busy_timeout/WAL/幂等 schema）—— Microsoft.Data.Sqlite 经此传递获得，不直引。 -->
     <ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
   </ItemGroup>

@@ -29,17 +29,5 @@ public enum CtpHedgeFlag : byte { Speculation = (byte)'1', Arbitrage = (byte)'2'
 /// <summary>持仓日期（今/昨）。</summary>
 public enum CtpPositionDate : byte { Today = (byte)'1', History = (byte)'2' }
 
-/// <summary>
-/// CTP 连接状态（比单纯 bool 更细，承载重连/闭市语义）。
-/// </summary>
-public enum CtpConnectionStatus
-{
-    /// <summary>未登录 / 已登出。</summary>
-    Disconnected,
-    /// <summary>已连接且已登录（可交易/查询）。</summary>
-    Connected,
-    /// <summary>盘中断线，重连 + 重新登录中。</summary>
-    Reconnecting,
-    /// <summary>闭市（交易时段外），等待下个开盘自动重连。</summary>
-    Closed,
-}
+// CtpConnectionStatus（客户端会话连接状态）在 business/Ctp/Acme.Ctp.Domain/CtpClientContracts.cs——
+// 客户端专属类型（2026-10-04 契约分家：内核只留三方共享的交易域模型）。

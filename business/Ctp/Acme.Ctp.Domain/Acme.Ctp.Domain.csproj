@@ -1,5 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- 客户端契约（ICtpSession 端口 + 客户端专属类型）——2026-10-04 契约分家后只剩会话形状的类型；
+       三方共享的交易域 DTO 在交易所契约内核 Acme.CtpExchange.Domain（共享内核引用，AppAuth 模式；
+       kernel namespace 沿用 Acme.Ctp.Domain ⇒ 全仓零 using 改动）。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\CtpExchange\Acme.CtpExchange.Domain\Acme.CtpExchange.Domain.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
