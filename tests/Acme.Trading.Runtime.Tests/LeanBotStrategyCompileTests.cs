@@ -17,6 +17,7 @@ public class LeanBotStrategyCompileTests
     private const string MarketMakerSource = """
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Acme.Trading.Domain;
 using Acme.Trading.Runtime.Lean;
 using QuantConnect;
@@ -31,16 +32,21 @@ public class MarketMakerAlgo : LeanAlgorithmBase
     private Symbol _symbol;
     private decimal _last;
     private decimal _priceTick;
-    private decimal _spread;
+    private int _spreadTicks;
+    private int _levelStepTicks;
+    private int _levels;
     private decimal _quoteVolume;
     private decimal _positionCap;
-    private OrderTicket? _bidTicket, _askTicket;
+    private readonly List<OrderTicket> _bidLegs = new();
+    private readonly List<OrderTicket> _askLegs = new();
 
     public static IReadOnlyList<StrategyParameterDef> ParameterDefinitions => new[]
     {
-        new StrategyParameterDef("SpreadTicks", "报价点差（tick 数）", "2"),
+        new StrategyParameterDef("SpreadTicks", "内侧点差（最内档距最新价 tick 数）", "2"),
+        new StrategyParameterDef("Levels", "每侧档位数", "5"),
+        new StrategyParameterDef("LevelStepTicks", "相邻档位间距（tick 数）", "1"),
         new StrategyParameterDef("PriceTick", "最小变动价位", "1"),
-        new StrategyParameterDef("QuoteVolume", "单侧挂单手数", "5"),
+        new StrategyParameterDef("QuoteVolume", "单档挂单手数", "5"),
         new StrategyParameterDef("PositionCap", "单边持仓上限（手）", "200"),
     };
 
@@ -50,10 +56,12 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         _symbol = AddCtpData(GetParameter("symbol") ?? "sim001", Resolution.Second);
 
         _priceTick = GetDecimalParam("PriceTick", 1m);
-        _spread = GetDecimalParam("SpreadTicks", 2m) * _priceTick;
+        _spreadTicks = GetIntParam("SpreadTicks", 2);
+        _levelStepTicks = GetIntParam("LevelStepTicks", 1);
+        _levels = GetIntParam("Levels", 5);
         _quoteVolume = GetDecimalParam("QuoteVolume", 5m);
         _positionCap = GetDecimalParam("PositionCap", 200m);
-        BotLog($"[MM] 初始化 {_symbol.Value}: 点差±{_spread} 单侧{_quoteVolume}手 仓限±{_positionCap}");
+        BotLog($"[MM] 初始化 {_symbol.Value}: 上下各{_levels}档 点差{_spreadTicks}tick 档距{_levelStepTicks}tick 单档{_quoteVolume}手 仓限±{_positionCap}");
     }
 
     public override void OnData(Slice slice)
@@ -68,8 +76,8 @@ public class MarketMakerAlgo : LeanAlgorithmBase
     {
         if (e.Status.IsClosed())
         {
-            if (_bidTicket?.OrderId == e.OrderId) _bidTicket = null;
-            if (_askTicket?.OrderId == e.OrderId) _askTicket = null;
+            _bidLegs.RemoveAll(t => t.OrderId == e.OrderId);
+            _askLegs.RemoveAll(t => t.OrderId == e.OrderId);
         }
         if (e.Status is OrderStatus.Filled or OrderStatus.PartiallyFilled)
             BotLog($"[MM] 成交 {e.Symbol.Value} {e.FillQuantity}@{e.FillPrice}（净持仓 {Portfolio[_symbol].Quantity}）");
@@ -84,31 +92,53 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         if (pos > _positionCap) MarketOrder(_symbol, _positionCap - pos, tag: "超限减仓");
         else if (pos < -_positionCap) MarketOrder(_symbol, -_positionCap - pos, tag: "超限减仓");
 
-        var desiredBid = RoundToTick(_last - _spread);
-        var desiredAsk = RoundToTick(_last + _spread);
-        var bidCapped = pos >= _positionCap;
-        var askCapped = pos <= -_positionCap;
+        var desiredBids = DesiredLevels(bid: true);
+        var desiredAsks = DesiredLevels(bid: false);
 
-        if (_bidTicket != null && (bidCapped || _bidTicket.Get(OrderField.LimitPrice) != desiredBid))
-        {
-            BotLog($"[MM] 撤买腿 @{_bidTicket.Get(OrderField.LimitPrice)}（移心/触限）");
-            _bidTicket.Cancel();
-        }
-        if (_askTicket != null && (askCapped || _askTicket.Get(OrderField.LimitPrice) != desiredAsk))
-        {
-            BotLog($"[MM] 撤卖腿 @{_askTicket.Get(OrderField.LimitPrice)}（移心/触限）");
-            _askTicket.Cancel();
-        }
+        RollStaleLegs(_bidLegs, desiredBids, pos >= _positionCap, "买");
+        RollStaleLegs(_askLegs, desiredAsks, pos <= -_positionCap, "卖");
 
-        if (_bidTicket == null && !bidCapped)
+        FillMissingLegs(_bidLegs, desiredBids, _positionCap - pos, isBid: true);
+        FillMissingLegs(_askLegs, desiredAsks, _positionCap + pos, isBid: false);
+    }
+
+    private List<decimal> DesiredLevels(bool bid)
+    {
+        var levels = new List<decimal>(_levels);
+        for (var i = 0; i < _levels; i++)
         {
-            _bidTicket = LimitOrder(_symbol, _quoteVolume, desiredBid, tag: "MM买");
-            BotLog($"[MM] 挂买 {desiredBid} × {_quoteVolume}手（last={_last}）");
+            var offset = (_spreadTicks + i * _levelStepTicks) * _priceTick;
+            levels.Add(RoundToTick(bid ? _last - offset : _last + offset));
         }
-        if (_askTicket == null && !askCapped)
+        return levels;
+    }
+
+    private void RollStaleLegs(List<OrderTicket> legs, List<decimal> desired, bool capped, string side)
+    {
+        foreach (var leg in legs)
         {
-            _askTicket = LimitOrder(_symbol, -_quoteVolume, desiredAsk, tag: "MM卖");
-            BotLog($"[MM] 挂卖 {desiredAsk} × {_quoteVolume}手（last={_last}）");
+            if (leg.Status == OrderStatus.CancelPending) continue;
+            var price = leg.Get(OrderField.LimitPrice);
+            if (capped || !desired.Contains(price))
+            {
+                BotLog($"[MM] 撤{side}腿 @{price}（移出带宽/触限）");
+                leg.Cancel();
+            }
+        }
+    }
+
+    private void FillMissingLegs(List<OrderTicket> legs, List<decimal> desired, decimal budget, bool isBid)
+    {
+        if (budget <= 0) return;
+        var resting = legs.Sum(t => Math.Abs(t.QuantityRemaining));
+        foreach (var price in desired)
+        {
+            if (legs.Exists(t => t.Get(OrderField.LimitPrice) == price)) continue;
+            var volume = Math.Min(_quoteVolume, budget - resting);
+            if (volume < 1m) break;
+            legs.Add(LimitOrder(_symbol, isBid ? volume : -volume, price, tag: isBid ? "MM买" : "MM卖"));
+            resting += volume;
+            BotLog($"[MM] 挂{(isBid ? "买" : "卖")} {price} × {volume}手（last={_last}）");
         }
     }
 
@@ -117,6 +147,9 @@ public class MarketMakerAlgo : LeanAlgorithmBase
 
     private decimal GetDecimalParam(string key, decimal fallback)
         => GetParameter(key) is { Length: > 0 } s && decimal.TryParse(s, out var v) && v > 0 ? v : fallback;
+
+    private int GetIntParam(string key, int fallback)
+        => GetParameter(key) is { Length: > 0 } s && int.TryParse(s, out var v) && v > 0 ? v : fallback;
 }
 """;
 
