@@ -1,4 +1,6 @@
-# ── Aether CTP 仿真柜台·远程部署脚本（在服务器上执行）──────────────────────────────────
+﻿# ── Aether CTP 仿真柜台·远程部署脚本（在服务器上执行）──────────────────────────────────
+# ⚠ 编码：UTF-8 带 BOM（必须——Windows PowerShell 5.1 对无 BOM 的 UTF-8 按系统 ANSI/GBK 误读，
+#    中文字节错位会吞掉字符串引号致解析错误；BOM 是 5.1 识别 UTF-8 的唯一信号）。改本文件勿去 BOM。
 # 由 .github/workflows/deploy-ctpsim.yml 经 SSH 调起：
 #   powershell -NoProfile -ExecutionPolicy Bypass -File C:/Aether/ctpsim-tmp/ctpsim-remote-deploy.ps1
 # 前提（一次性）：已以管理员运行 scripts/ctpsim-setup-server.ps1（服务 AetherCtpSim + 服务级 env 注册表 + 防火墙）。

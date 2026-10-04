@@ -1,4 +1,6 @@
-# ── Aether CTP 仿真柜台·服务器一次性准备脚本（管理员、Windows 服务器上手动跑）──────────
+﻿# ── Aether CTP 仿真柜台·服务器一次性准备脚本（管理员、Windows 服务器上手动跑）──────────
+# ⚠ 编码：UTF-8 带 BOM（必须——Windows PowerShell 5.1 对无 BOM 的 UTF-8 按系统 ANSI/GBK 误读，
+#    中文字节错位会吞掉字符串引号致解析错误；BOM 是 5.1 识别 UTF-8 的唯一信号）。改本文件勿去 BOM。
 # 之后的每次部署由 GitHub Actions（.github/workflows/deploy-ctpsim.yml，纯 SSH 通道）自动完成——
 # 本脚本不复制二进制，只做环境准备。幂等：重复运行安全。兼容 Windows PowerShell 5.1。
 # 五件事：目录 / OpenSSH Server / Windows 服务 AetherCtpSim + 服务级 env（注册表）/ 崩溃自恢复 / 防火墙。
