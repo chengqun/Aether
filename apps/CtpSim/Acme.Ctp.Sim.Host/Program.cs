@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
 //   AETHER_CTP_SIM_LOGIN_MAX_FAILURES / AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC  防爆破（登录锁定）
 //   AETHER_CTP_FRONT_PORT / AETHER_CTP_MD_FRONT_PORT  CTP 协议前置双腿端口（默认 17801/17802）
+//   AETHER_CTP_SIM_LOG     日志文件路径（默认空=仅控制台；Windows 服务形态部署时由 setup 脚本设置）
 //
 // 价格源恒为订单簿价格发现（2026-10-03 起 walk/回放已删除）：行情 = 簿顶 + 成交流，tick 事件驱动；
 // 流动性由外部客户端策略（labs leanalgorithms 做市/噪声 bot）供给——不起 bot = 空闲市场无对手价（真实交易所本义）。
@@ -24,14 +25,16 @@ using Microsoft.Extensions.Hosting;
 // ──────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService();   // 服务器部署形态：SCM 启动 → ServiceLifetime（服务停止 = 优雅关停 flush 账本）；
+                                        // 交互运行（dotnet run）仍是 console lifetime，本地行为零变
 
 var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
 var server = new SimRpcServer(core, opts.Host, opts.Port);
 var ctpFrontPort = int.TryParse(Environment.GetEnvironmentVariable("AETHER_CTP_FRONT_PORT"), out var fp) ? fp : 17801;
-var ctpFront = new CtpFrontServer(core, opts.Host, ctpFrontPort, msg => Console.WriteLine($"[CTP-Front] {msg}"));
+var ctpFront = new CtpFrontServer(core, opts.Host, ctpFrontPort, msg => Log.Line($"[CTP-Front] {msg}"));
 var ctpMdPort = int.TryParse(Environment.GetEnvironmentVariable("AETHER_CTP_MD_FRONT_PORT"), out var mfp) ? mfp : 17802;
-var ctpMdFront = new CtpFrontMdServer(core, opts.Host, ctpMdPort, msg => Console.WriteLine($"[CTP-Front-MD] {msg}"));
+var ctpMdFront = new CtpFrontMdServer(core, opts.Host, ctpMdPort, msg => Log.Line($"[CTP-Front-MD] {msg}"));
 
 builder.Services.AddHostedService(_ => new SimCounterHostedService(core, server, opts, ctpFront, ctpMdFront));
 await builder.Build().RunAsync();
@@ -52,13 +55,13 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         var ctpPort = ctpFront.LocalEndpoint?.Port ?? 17801;
         var listed = core.QueryListedInstruments();
         var accounts = core.QueryAccounts();
-        Console.WriteLine($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}（JSON RPC）+ :{ctpPort}（CTP 前置）");
-        Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
+        Log.Line($"[CTP-SIM] 本地仿真柜台已就绪：{opts.Host}:{port}（JSON RPC）+ :{ctpPort}（CTP 前置）");
+        Log.Line($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
         if (accounts.Count > 0)
-            Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
-        Console.WriteLine($"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}");
-        Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
-        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：交易腿 tcp://<本机IP>:" + ctpPort + "，行情腿 tcp://<本机IP>:" + (ctpMdFront.LocalEndpoint?.Port ?? 17802));
+            Log.Line($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
+        Log.Line($"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}");
+        Log.Line($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
+        Log.Line("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。Aether 客户端：前置地址填 sim。CTP 客户端：交易腿 tcp://<本机IP>:" + ctpPort + "，行情腿 tcp://<本机IP>:" + (ctpMdFront.LocalEndpoint?.Port ?? 17802));
     }
 
     public async Task StopAsync(CancellationToken ct)
@@ -67,6 +70,28 @@ internal sealed class SimCounterHostedService(SimTradingCore core, SimRpcServer 
         await ctpFront.StopAsync();
         await ctpMdFront.StopAsync();
         core.Dispose();   // 同步 flush（重启续用靠这里落盘）
-        Console.WriteLine("[CTP-SIM] 已退出，账本已落盘。");
+        Log.Line("[CTP-SIM] 已退出，账本已落盘。");
+    }
+}
+
+/// <summary>
+/// 最小可观测性：恒写控制台；<c>AETHER_CTP_SIM_LOG</c> 设了路径时（Windows 服务形态——headless 无控制台可见）
+/// 追加到文件。日志失败不致命（try/catch 吞）——遥测自身故障绝不打断柜台。
+/// </summary>
+internal static class Log
+{
+    private static readonly string? LogPath = Environment.GetEnvironmentVariable("AETHER_CTP_SIM_LOG");
+
+    public static void Line(string msg)
+    {
+        Console.WriteLine(msg);
+        if (LogPath is null) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(LogPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}");
+        }
+        catch { /* 磁盘/权限故障不打断柜台 */ }
     }
 }

@@ -106,7 +106,9 @@ public static class SimAddress
     /// 由登录窗口填的前置地址决定，不经环境变量/重启）：
     /// <list type="bullet">
     /// <item><c>sim</c>（大小写不敏感、容忍空白）——保留字，永不与真实前置冲突；</item>
-    /// <item><c>127.0.0.1:17800</c> / <c>tcp://127.0.0.1:17800</c>——与默认仿真端点等价的直写。</item>
+    /// <item><c>127.0.0.1:17800</c> / <c>tcp://127.0.0.1:17800</c>——与默认仿真端点等价的直写；</item>
+    /// <item>任意 host 的 <c>:17801</c>（CTP 前置交易腿默认端口）——远程服务器部署形态：仿真前置在远端
+    /// 也是同一端口（<c>AETHER_CTP_FRONT_PORT</c> 默认 17801）；<c>:17802</c> 行情腿不算交易前置。</item>
     /// </list>
     /// 其余一律视为真实前置（含空——空地址本来就过不了登录校验）。
     /// </summary>
@@ -116,7 +118,8 @@ public static class SimAddress
         if (string.IsNullOrWhiteSpace(a)) return false;
         if (a.Equals("sim", StringComparison.OrdinalIgnoreCase)) return true;
         var bare = a.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) ? a[6..] : a;
-        return bare.Equals($"{SimEndpointDefaults.Host}:{SimEndpointDefaults.Port}", StringComparison.OrdinalIgnoreCase);
+        return bare.Equals($"{SimEndpointDefaults.Host}:{SimEndpointDefaults.Port}", StringComparison.OrdinalIgnoreCase)
+            || bare.EndsWith(":17801", StringComparison.OrdinalIgnoreCase);
     }
 }
 

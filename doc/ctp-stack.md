@@ -246,6 +246,15 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop   # 实例 2（SIM-NOIS
 
 各自期货页登录（不同账户）→ 实盘 tab → 引擎选 `LeanAlgorithm` → 合约填 `zx001` → 勾「真实下单」 → 一个选 `market-maker`、另一个选 `noise-taker`。
 
+### 服务器部署（Windows 服务 + GitHub Actions）
+
+柜台是裸 TCP（非 HTTP）——**不走 IIS**，部署形态 = Windows 服务器上的常驻 Windows 服务 `AetherCtpSim`。
+
+- **一次性准备**（服务器上管理员跑）：`scripts/ctpsim-setup-server.ps1` —— OpenSSH Server + Windows 服务（binPath `C:\Aether\CtpSim\Acme.Ctp.Sim.Host.exe`，self-contained 无需装 .NET）+ 服务级 env（注册表 `Environment`：`AETHER_CTP_SIM_ADDR=0.0.0.0:17800` 三监听全绑 + DB/LOG/BOARD 指向 `C:\Aether\ctpsim-data`）+ 崩溃自恢复 + **防火墙只放 17801/17802**（17800 JSON-RPC 故意不放行——默认入站拒绝即拦）。
+- **每次部署** = `.github/workflows/deploy-ctpsim.yml`（push main 触及 CTP 相关路径自动触发，或手动按钮）：ubuntu runner 交叉 publish self-contained win-x64 → tar → scp → 远端 `scripts/ctpsim-remote-deploy.ps1`（停服务 → `robocopy /MIR` 换文件 → 起服务 → TCP 探针）。账本与日志在 `C:\Aether\ctpsim-data`（部署目录之外，/MIR 永不波及）。
+- **客户端**：前置地址填 `tcp://<服务器IP>:17801` + 行情前置 `tcp://<服务器IP>:17802`（`IsSimFront` 按端口 `:17801` 识别远程仿真前置，与本地同体验）。
+- **注意**：服务器时区须中国时区 UTC+8（`SimClock` 用 `DateTime.Now`）；部署/重启后未成交挂单作废、在线客户端须重新登录（客户端无自动重连）；SSH 用户须在 Administrators 组（控服务）。GitHub Secrets：`CTPSIM_SSH_HOST` / `CTPSIM_SSH_USER` / `CTPSIM_SSH_KEY` / 可选 `CTPSIM_SSH_PORT`。
+
 ### 环境变量
 
 | 变量 | 默认 | 说明 |
@@ -255,6 +264,7 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop   # 实例 2（SIM-NOIS
 | `AETHER_CTP_SIM_ADDR` | 127.0.0.1:17800 | JSON-RPC 端点 |
 | `AETHER_CTP_SIM_DB` | ~/.aether/ctp-sim.db | 账本库路径 |
 | `AETHER_CTP_SIM_BOARD` | zx001 | 上市合约表 |
+| `AETHER_CTP_SIM_LOG` | 空（仅控制台） | 日志文件路径（Windows 服务形态由 setup 脚本设置） |
 | `AETHER_CTP_SIM_BALANCE` | 1000000 | 新账户初始资金 |
 | `AETHER_CTP_SIM_LOGIN_MAX_FAILURES` | 5 | 防爆破阈值 |
 | `AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC` | 60 | 防爆破锁定秒数 |

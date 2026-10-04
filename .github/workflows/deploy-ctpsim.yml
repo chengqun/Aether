@@ -1,0 +1,91 @@
+name: Deploy CTP Sim Counter
+
+# CTP 仿真柜台（apps/CtpSim/Acme.Ctp.Sim.Host——交易所+前置，一个进程三监听 17800/17801/17802）
+# 部署为 Windows 服务器上的常驻 Windows 服务 AetherCtpSim。裸 TCP 非 HTTP——不走 IIS/ANCM，
+# 镜像 deploy-iis.yml 的触发手法（push main + paths + 手动按钮），但通道 = 纯 SSH：
+# ubuntu runner 交叉 publish self-contained win-x64（host 依赖闭包零 externals/，无需 submodules）
+# → tar → scp → 远端 powershell 脚本控服务（停 → robocopy /MIR 换文件 → 起 → TCP 探针）。
+# 服务器一次性准备 = scripts/ctpsim-setup-server.ps1（OpenSSH Server + 服务 + env 注册表 + 防火墙 17801/17802）。
+# Secrets：CTPSIM_SSH_HOST / CTPSIM_SSH_USER（Administrators 组——控服务）/ CTPSIM_SSH_KEY（私钥）/ 可选 CTPSIM_SSH_PORT。
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/CtpSim/Acme.Ctp.Sim.Host/**'
+      - 'business/CtpExchange/**'        # Sim / Sim.Server / Simulator / CtpExchange.Domain（host 依赖闭包）
+      - 'business/CtpFront/**'
+      - 'business/Ctp/Acme.Ctp.Domain/**'
+      - 'src/Acme.Persistence/**'
+      - 'Directory.Packages.props'
+      - 'scripts/ctpsim-*.ps1'
+      - '.github/workflows/deploy-ctpsim.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ctpsim-deploy      # SSH 部署有状态（停服务/换文件），两个 run 不许交错
+  cancel-in-progress: false
+
+env:
+  # 服务器上的部署中转目录——与 scripts/ctpsim-remote-deploy.ps1 的 $StagingDir 默认值是同值常量，改一处须同步另一处
+  CTPSIM_STAGING: 'C:/Aether/ctpsim-tmp'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4   # 无需 submodules：host 依赖闭包全在仓内（不触 externals/）
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Publish (self-contained win-x64)
+      run: dotnet publish apps/CtpSim/Acme.Ctp.Sim.Host -c Release --self-contained true --runtime win-x64 -o ./publish
+
+    - name: Bundle (VERSION stamp + tar)
+      run: |
+        git rev-parse --short HEAD > publish/VERSION
+        tar -czf ctpsim.tar.gz -C publish .
+
+    - name: Setup SSH key
+      env:
+        SSH_KEY: ${{ secrets.CTPSIM_SSH_KEY }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/ctpsim_key
+        chmod 600 ~/.ssh/ctpsim_key
+
+    - name: Upload (tar + deploy script -> staging)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        scp -i ~/.ssh/ctpsim_key -o StrictHostKeyChecking=accept-new -P "${SSH_PORT:-22}" \
+          ctpsim.tar.gz scripts/ctpsim-remote-deploy.ps1 "${SSH_USER}@${SSH_HOST}:${CTPSIM_STAGING}/"
+
+    - name: Deploy (stop -> swap files -> start)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        ssh -i ~/.ssh/ctpsim_key -o StrictHostKeyChecking=accept-new -p "${SSH_PORT:-22}" \
+          "${SSH_USER}@${SSH_HOST}" \
+          "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTPSIM_STAGING}/ctpsim-remote-deploy.ps1"
+        # Windows OpenSSH 默认 shell 是 cmd.exe——显式起 powershell 跑脚本；这是唯一远程命令，零嵌套引号
+
+    - name: Health check (best-effort TCP 17801)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+      run: |
+        for i in 1 2 3; do
+          if timeout 5 bash -c "echo > /dev/tcp/${SSH_HOST}/17801"; then
+            echo "TCP 17801 OK"
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "::warning::TCP 17801 探测失败（远程脚本已断言服务 Running；可能 NAT/上游防火墙挡了 GitHub runner 的直达）"

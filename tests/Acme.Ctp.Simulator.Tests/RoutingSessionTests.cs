@@ -24,6 +24,12 @@ public class RoutingSessionTests
     [InlineData("  sim ", true)]              // 容忍空白
     [InlineData("127.0.0.1:17800", true)]     // 默认仿真端点直写
     [InlineData("tcp://127.0.0.1:17800", true)]
+    [InlineData("tcp://192.168.1.10:17801", true)]     // 远程仿真前置：任意 host 的交易腿端口（服务器部署形态）
+    [InlineData("server.example.com:17801", true)]
+    [InlineData("192.168.1.10:17801", true)]           // 无 tcp:// 前缀同判
+    [InlineData("tcp://192.168.1.10:17802", false)]    // 行情腿端口不算交易前置
+    [InlineData("tcp://192.168.1.10:17800", false)]    // JSON-RPC 端口的远程形态不判 sim（只认本地直写）
+    [InlineData("tcp://server:10130", false)]          // 真实前置端口
     [InlineData("tcp://127.0.0.1:10041", false)]  // 其它端口的本地地址不是仿真
     [InlineData("tcp://180.168.146.187:10131", false)]
     [InlineData("simnow", false)]
