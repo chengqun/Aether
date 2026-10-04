@@ -90,6 +90,11 @@ internal static class Log
         {
             var dir = Path.GetDirectoryName(LogPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // 新文件先种 UTF-8 BOM（显式字节——不赌 AppendAllText 的前导行为）：Windows PowerShell 5.1 的
+            // Get-Content 对无 BOM 的 UTF-8 按默认 ANSI/GBK 读会乱码（2026-10-05 服务器实测）；带 BOM 即自动识别。
+            // 既有无 BOM 旧日志删一次即可。注意 System.Text 不在 ImplicitUsings 默认集——别用 Encoding.UTF8 裸名。
+            if (!File.Exists(LogPath) || new FileInfo(LogPath).Length == 0)
+                File.WriteAllBytes(LogPath, new byte[] { 0xEF, 0xBB, 0xBF });
             File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}");
         }
         catch { /* 磁盘/权限故障不打断柜台 */ }
