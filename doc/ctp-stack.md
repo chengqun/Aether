@@ -18,13 +18,13 @@
 │    （唯一注册——前置地址选柜台）                            │
 ├─────────────────────────────────────────────────────────┤
 │                 前置服务器（线协议翻译）                    │
-│  business/Ctp/Acme.Ctp.Front                            │
+│  business/CtpFront/Acme.Ctp.Front                            │
 │    CtpFrontServer   : 17801（交易腿）                    │
 │    CtpFrontMdServer : 17802（行情腿）                    │
 │    把 CTP 线协议帧 ↔ SimTradingCore 方法调用 互译          │
 ├─────────────────────────────────────────────────────────┤
 │                  交易所（撮合/账本/行情）                  │
-│  business/Ctp/Acme.Ctp.Simulator                        │
+│  business/CtpExchange/Acme.Ctp.Simulator                        │
 │    SimTradingCore（撮合/风控/持仓/行情引擎）               │
 │  business/Ctp/Acme.Ctp.{Sim, Sim.Server}                │
 │    JSON-RPC 旧路径（与前置并存于同一 host）                │

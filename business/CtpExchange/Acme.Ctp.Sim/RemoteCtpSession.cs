@@ -6,28 +6,26 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Acme.Ctp.Domain;
-using Acme.Ctp.Sim;
 
-namespace Acme.Ctp.Infrastructure.Sim;
+namespace Acme.Ctp.Sim;
 
 /// <summary>
-/// 本地仿真柜台的**远程**会话适配器：把独立 host 进程（<c>Acme.Ctp.Sim.Host</c>，经
-/// <see cref="SimRpcClient"/> 连 127.0.0.1）接到 <see cref="ICtpSession"/> 接缝上，
-/// 使 Application / 6 个 CTP AI 工具 / 桌面「期货」页 / Lean 的 <c>CtpBrokerage</c> **全部零改动**。
+/// 本地仿真柜台的**远程**会话适配器（JSON-RPC 参考客户端）：把独立 host 进程（<c>Acme.Ctp.Sim.Host</c>，经
+/// <see cref="SimRpcClient"/> 连 127.0.0.1）接到 <see cref="ICtpSession"/> 接缝上。
+/// E2E 测试（<c>LoopbackSim</c> / SessionAdapterTests / SimRpcWireTests）用它跨线驱动柜台；
+/// 桌面客户端不走它——2026-10-01 收口后 <c>ICtpSession</c> 直连 <c>CtpSessionService</c>（官方 SDK，
+/// 本地前置 tcp://127.0.0.1:17801），JSON-RPC 是仓内备用路径。
 /// <para>
-/// 结构镜像 Phase 1 的 <c>SimCtpSession</c>（进程内版）：泵 Channel + 后台回调线程、
-/// tick 本地缓存、状态去重、未登录同步抛。差别只在撮合/账本/行情引擎全部住在 host 进程——
-/// 客户端进程不再携带仿真核心（Infrastructure 对 Simulator 的引用已删除）。
+/// 结构：泵 Channel + 后台回调线程、tick 本地缓存、状态去重、未登录同步抛。
 /// </para>
 /// <para>
 /// <b>行情随柜台</b>：sim 登录的行情**恒由 host RPC 推送**（<c>TickPushed</c> → 泵线程外发），
 /// 本类**无本地 MD 腿**——sim 登录看到的行情价 = 撮合引擎用的价（host 侧同一 <c>SimMarketDataEngine</c>），
-/// 沙盒自洽。想要真实行情 ⇒ 登录窗口填真实前置（<c>CtpSessionService</c> 自带 MD 腿 + 断线重连）。
-/// <c>CtpMarketDataConnect</c> 参数被本实现忽略（真实后端仍需要——<see cref="RoutingCtpSession"/> 透传同一签名）。
+/// 沙盒自洽。<c>CtpMarketDataConnect</c> 参数被本实现忽略（真实后端仍需要同一签名）。
 /// </para>
 /// <para>
-/// <b>与 Phase 1 的契约差异（消费方影响已核实）</b>：服务端风控拒单从「Task 返回前同步抛」
-/// 变为「await 时抛」（VM/AI 工具 await+catch、Lean GetResult 全兼容）；「未登录」守卫保留
+/// <b>契约差异（消费方影响已核实）</b>：服务端风控拒单从「Task 返回前同步抛」
+/// 变为「await 时抛」（VM/工具 await+catch、GetResult 全兼容）；「未登录」守卫保留
 /// **客户端本地同步抛**；host 未启动 ⇒ <c>CtpBusinessException(90012, 含启动命令)</c>；
 /// host 死亡 ⇒ <see cref="ICtpSession.ConnectionStateChanged"/> 发 Disconnected、后续操作快速失败 90013。
 /// 无自动重连——重新登录即重连。
@@ -35,7 +33,7 @@ namespace Acme.Ctp.Infrastructure.Sim;
 /// </summary>
 public sealed class RemoteCtpSession : ICtpSession, IDisposable
 {
-    /// <summary>与 Simulator.SimErrorCodes.NotLoggedIn 同码值（分层：客户端不引 Simulator，码值保持一致）。</summary>
+    /// <summary>与 Simulator.SimErrorCodes.NotLoggedIn 同码值（分层：本类所在 Sim 不引 Simulator，码值保持一致）。</summary>
     private const int NotLoggedIn = 90001;
 
     /// <summary>等待盘面回调的队列上限（超出丢最旧帧——与 Phase 1 相同的背压策略）。</summary>
@@ -142,7 +140,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     // —— ICtpSession：查询 ——
 
     /// <summary>
-    /// 查询无登录守卫（Phase 1 接缝契约④）：未登录 ⇒ 本地直答**空账本形态**（不起 RPC——
+    /// 查询无登录守卫（接缝契约）：未登录 ⇒ 本地直答**空账本形态**（不起 RPC——
     /// 远端未连接会抛 90013，而契约要求空壳不抛异常）。登录后走 RPC（服务端按绑定账户取数）。
     /// </summary>
     public Task<CtpAccount> QueryAccountAsync(CancellationToken ct = default)
@@ -186,7 +184,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
         return await _client.QueryInstrumentsAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>与 Simulator.SimTradingCore.AccountIdOf 同一归一规则（空 → "sim"；分层：客户端不引 Simulator，规则复制+注释交叉引用）。</summary>
+    /// <summary>与 Simulator.SimTradingCore.AccountIdOf 同一归一规则（空 → "sim"；分层：本类不引 Simulator，规则复制+注释交叉引用）。</summary>
     private static string AccountKey(string? userId)
         => string.IsNullOrWhiteSpace(userId) ? "sim" : userId;
 
@@ -194,8 +192,8 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
 
     /// <summary>
     /// 下单：**fire-and-forget**——返回 <c>OrderRef</c>/<c>RequestId</c>，订单状态经
-    /// <see cref="OrderReceived"/> 异步外发（服务端保证应答先于本单推送——Lean 的
-    /// <c>CtpOrderTracker</c> 在应答后才注册 OrderRef）。「未登录」本地同步抛；
+    /// <see cref="OrderReceived"/> 异步外发（服务端保证应答先于本单推送——消费方在
+    /// 应答后才注册 OrderRef）。「未登录」本地同步抛；
     /// 服务端风控拒单在 await 时抛 <see cref="CtpBusinessException"/>（ErrorId 原样）。
     /// </summary>
     public Task<CtpOrderInsertResult> OrderInsertAsync(CtpOrderRequest request, CancellationToken ct = default)
@@ -217,8 +215,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
     /// 订阅行情。行情随柜台：本会话（sim 登录）的行情恒由 host RPC 推送（同一
     /// <c>SimMarketDataEngine</c>——看到的价 = 撮合用的价）。先连 + Hello：host 未启动 ⇒
     /// <c>CtpBusinessException(90012, 含启动命令)</c>（行情独立于交易登录，可能先于 LoginAsync 调用）。
-    /// <paramref name="connect"/> 被本实现忽略（真实后端 <c>CtpSessionService</c> 仍需要——
-    /// <see cref="RoutingCtpSession"/> 透传同一签名）。
+    /// <paramref name="connect"/> 被本实现忽略（真实后端 <c>CtpSessionService</c> 仍需要同一签名）。
     /// </summary>
     public async Task SubscribeMarketDataAsync(CtpMarketDataConnect connect, IReadOnlyList<string> symbols, CancellationToken ct = default)
     {
@@ -263,7 +260,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
                         if (cb.Tick is not null)
                         {
                             // 全部 tick 经 RPC 推送，缓存必须写在泵里——GetLatestTick/GetAllLatestTicks
-                            // 的唯一数据源，「期货」页/AI 查询工具都从这里拿报价。
+                            // 的唯一数据源，消费方都从这里拿报价。
                             _latestTicks[cb.Tick.InstrumentId] = cb.Tick;
                             TickReceived?.Invoke(this, cb.Tick);
                         }
@@ -271,7 +268,7 @@ public sealed class RemoteCtpSession : ICtpSession, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        // 订阅方（UI/Lean）抛异常不得终止泵——否则后续回报全部静默丢失
+                        // 订阅方抛异常不得终止泵——否则后续回报全部静默丢失
                         System.Diagnostics.Trace.WriteLine($"[CTP-SIM] 回调订阅方异常（已忽略）：{ex.Message}");
                     }
                 }

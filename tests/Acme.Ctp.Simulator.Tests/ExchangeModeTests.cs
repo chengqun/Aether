@@ -1,5 +1,5 @@
 using Acme.Ctp.Domain;
-using Acme.Ctp.Infrastructure.Sim;
+using Acme.Ctp.Sim;
 using Acme.Ctp.Simulator;
 using Acme.Ctp.Simulator.Storage;
 

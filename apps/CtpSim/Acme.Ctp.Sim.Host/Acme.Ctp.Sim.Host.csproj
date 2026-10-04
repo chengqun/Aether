@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
-    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Front\Acme.Ctp.Front.csproj" />
+    <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
+    <ProjectReference Include="..\..\..\business\CtpFront\Acme.Ctp.Front\Acme.Ctp.Front.csproj" />
   </ItemGroup>
 
   <ItemGroup>

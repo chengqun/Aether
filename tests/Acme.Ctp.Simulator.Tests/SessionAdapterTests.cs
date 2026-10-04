@@ -4,13 +4,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Acme.Ctp.Domain;
-using Acme.Ctp.Infrastructure.Sim;
+using Acme.Ctp.Sim;
 using Acme.Ctp.Simulator;
 
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// <see cref="Acme.Ctp.Infrastructure.Sim.RemoteCtpSession"/>（<see cref="ICtpSession"/> 接缝上的仿真适配器）
+/// <see cref="Acme.Ctp.Sim.RemoteCtpSession"/>（<see cref="ICtpSession"/> 接缝上的仿真适配器）
 /// 的契约测试——经 <see cref="LoopbackSim"/>（测试进程内起 host 侧 listener + RPC）**跨线**驱动。
 /// </summary>
 /// <remarks>

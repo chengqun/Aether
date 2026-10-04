@@ -70,10 +70,14 @@
     <Project Path="business/Ctp/Acme.Ctp.Application/Acme.Ctp.Application.csproj" />
     <Project Path="business/Ctp/Acme.Ctp.Domain/Acme.Ctp.Domain.csproj" />
     <Project Path="business/Ctp/Acme.Ctp.Infrastructure/Acme.Ctp.Infrastructure.csproj" />
-    <Project Path="business/Ctp/Acme.Ctp.Simulator/Acme.Ctp.Simulator.csproj" />
-    <Project Path="business/Ctp/Acme.Ctp.Sim/Acme.Ctp.Sim.csproj" />
-    <Project Path="business/Ctp/Acme.Ctp.Sim.Server/Acme.Ctp.Sim.Server.csproj" />
-    <Project Path="business/Ctp/Acme.Ctp.Front/Acme.Ctp.Front.csproj" />
+  </Folder>
+  <Folder Name="/business/CtpExchange/">
+    <Project Path="business/CtpExchange/Acme.Ctp.Simulator/Acme.Ctp.Simulator.csproj" />
+    <Project Path="business/CtpExchange/Acme.Ctp.Sim/Acme.Ctp.Sim.csproj" />
+    <Project Path="business/CtpExchange/Acme.Ctp.Sim.Server/Acme.Ctp.Sim.Server.csproj" />
+  </Folder>
+  <Folder Name="/business/CtpFront/">
+    <Project Path="business/CtpFront/Acme.Ctp.Front/Acme.Ctp.Front.csproj" />
   </Folder>
   <Folder Name="/business/Llm/">
     <Project Path="business/Llm/Acme.Llm.Application/Acme.Llm.Application.csproj" />

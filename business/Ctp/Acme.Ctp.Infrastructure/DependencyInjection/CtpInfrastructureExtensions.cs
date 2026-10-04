@@ -1,7 +1,6 @@
 using System.IO;
 using Acme.Ctp.Domain;
 using Acme.Ctp.Infrastructure;
-using Acme.Ctp.Infrastructure.Sim;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Acme.Ctp.Infrastructure.DependencyInjection;
@@ -13,8 +12,8 @@ namespace Acme.Ctp.Infrastructure.DependencyInjection;
 /// <b>一律官方 SDK 链路</b>（2026-10-01 起）：<see cref="ICtpSession"/> 直连 <see cref="CtpSessionService"/>——
 /// 本地仿真柜台填前置 <c>tcp://127.0.0.1:17801</c>（交易）/ <c>tcp://127.0.0.1:17802</c>（行情，host 进程
 /// <c>dotnet run --project apps/CtpSim/Acme.Ctp.Sim.Host</c>）；真实前置（SimNow 等）同一链路。
-/// 旧 <c>sim</c> 关键字 JSON-RPC 直连已退役（RoutingCtpSession/RemoteCtpSession 不再进 DI，客户端侧
-/// <c>AETHER_CTP_SIM_ADDR</c> 环境变量随之失效——该变量只余 host 侧用途）。
+/// 旧 <c>sim</c> 关键字 JSON-RPC 直连已退役（2026-10-04 死代码清理：<c>RoutingCtpSession</c> 删除；
+/// <c>RemoteCtpSession</c> 迁至 <c>Acme.Ctp.Sim</c> 归属仿真侧——客户端上下文自此零引用服务端项目）。
 /// </para>
 /// </summary>
 public static class CtpInfrastructureExtensions
@@ -30,7 +29,7 @@ public static class CtpInfrastructureExtensions
 
         // 2026-10-01 用户定调：桌面端砍掉 sim 关键字直连（JSON-RPC），一律走前置端口——
         // ICtpSession 直连官方 SDK 链路（本地前置 tcp://127.0.0.1:17801/17802 或真实 SimNow 同链路）。
-        // RoutingCtpSession/RemoteCtpSession 退役出 DI（类保留——host 侧 E2E 测试仍直接构造使用）。
+        // 2026-10-04：RoutingCtpSession（死代码）删除；RemoteCtpSession 迁至 Acme.Ctp.Sim（E2E 用）。
         services.AddSingleton<CtpSessionService>();
         services.AddSingleton<ICtpSession>(sp => sp.GetRequiredService<CtpSessionService>());
 

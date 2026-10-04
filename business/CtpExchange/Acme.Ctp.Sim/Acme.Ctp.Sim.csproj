@@ -1,10 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Ctp\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
-  </ItemGroup>
+
 </Project>

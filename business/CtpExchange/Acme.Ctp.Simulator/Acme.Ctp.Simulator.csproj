@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
+    <ProjectReference Include="..\..\Ctp\Acme.Ctp.Domain\Acme.Ctp.Domain.csproj" />
     <!-- SqliteStoreBase（连接串/busy_timeout/WAL/幂等 schema）—— Microsoft.Data.Sqlite 经此传递获得，不直引。 -->
     <ProjectReference Include="..\..\..\src\Acme.Persistence\Acme.Persistence.csproj" />
   </ItemGroup>

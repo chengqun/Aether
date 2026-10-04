@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Acme.Ctp.Domain;
 using Acme.Ctp.Infrastructure;
 using Acme.Ctp.Infrastructure.DependencyInjection;
-using Acme.Ctp.Infrastructure.Sim;
 using Acme.Ctp.Sim;
 using Acme.Ctp.Sim.Server;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,9 +11,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 「用前置地址选柜台」的路由测试（取代 Phase 1 的环境变量切换）：
-/// <see cref="RoutingCtpSession"/> 是唯一 <see cref="ICtpSession"/> 注册，前置地址填 <c>sim</c> ⇒
-/// 仿真后端（连独立 host），填真实前置 ⇒ 官方链路。无环境变量、无重启、无 UI/VM 改动。
+/// 「用前置地址选柜台」的组合与选项测试（取代 Phase 1 的环境变量切换）：
+/// 2026-10-01 收口后 <see cref="ICtpSession"/> 直连 <see cref="Acme.Ctp.Infrastructure.CtpSessionService"/>
+/// （官方 SDK 链路——本地前置 tcp://127.0.0.1:17801/17802 与真实 SimNow 同形）；旧 <c>sim</c> 关键字
+/// JSON-RPC 路由（RoutingCtpSession）已于 2026-10-04 删除。
 /// <para>含端点解析矩阵与 host 侧选项（<see cref="SimHostOptions"/>）测试。</para>
 /// </summary>
 public class RoutingSessionTests

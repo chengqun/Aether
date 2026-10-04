@@ -2,7 +2,7 @@
 
 > **定位**：本地期货交易所撮合引擎——「我就是交易所」。价格发现完全归订单簿，流动性由参与者（客户端）供给。
 > 协议无关（不引任何网络/SDK 依赖）、部署无关（进程内嵌或独立进程均可）。
-> 代码：`business/Ctp/Acme.Ctp.Simulator/`。
+> 代码：`business/CtpExchange/Acme.Ctp.Simulator/`。
 > 前置服务器（线协议翻译）见 [ctp-stack.md](ctp-stack.md) §4。
 
 ---

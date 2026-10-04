@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
+    <ProjectReference Include="..\..\business\CtpExchange\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
     <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
-    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
+    <ProjectReference Include="..\..\business\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
+    <ProjectReference Include="..\..\business\CtpExchange\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
   </ItemGroup>
 
 </Project>

@@ -6,8 +6,8 @@ using Microsoft.Extensions.Hosting;
 
 // ── CTP 本地仿真柜台（独立服务端进程）────────────────────────────────────────
 // 单独起一个柜台进程：dotnet run --project apps/CtpSim/Acme.Ctp.Sim.Host
-// 客户端（Aether 桌面 app）无需任何环境变量：期货页登录窗口前置地址填 sim ⇒ ICtpSession
-// 经 RoutingCtpSession 路由到薄 RPC 客户端连 127.0.0.1:17800；填真实前置 ⇒ 官方链路。
+// 客户端（Aether 桌面 app）一律官方 SDK 链路：期货页登录窗口前置地址填 tcp://127.0.0.1:17801/17802
+// 直连本前置（与连 SimNow 同形）；JSON-RPC :17800 是仓内备用路径（E2E 参考客户端 RemoteCtpSession 用）。
 //
 // 配置（全部在本进程读——客户端侧零必设项，柜台由前置地址选）：
 //   AETHER_CTP_SIM_ADDR    监听端点（默认 127.0.0.1:17800，格式 [host:]port）

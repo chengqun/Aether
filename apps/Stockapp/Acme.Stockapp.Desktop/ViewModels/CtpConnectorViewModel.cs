@@ -167,8 +167,7 @@ public sealed partial class CtpConnectorViewModel : ConnectorCardViewModel
 
     /// <summary>
     /// 点连接标签 = 载入该 profile 到表单 + 直接登录。已连接时先登出：
-    /// 同柜台换账号 <c>CtpSessionService.LoginAsync</c> 会抛「已有活跃连接，请先登出」
-    /// （<c>RoutingCtpSession</c> 只自动处理跨柜台切换），故统一先 Logout 再 Login。
+    /// 同柜台换账号 <c>CtpSessionService.LoginAsync</c> 会抛「已有活跃连接，请先登出」，故统一先 Logout 再 Login。
     /// </summary>
     [RelayCommand]
     private async Task ApplyProfileAsync(CtpProfileItem? item)

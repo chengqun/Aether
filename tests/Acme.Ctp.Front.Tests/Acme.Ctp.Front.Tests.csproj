@@ -19,8 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Front\Acme.Ctp.Front.csproj" />
-    <ProjectReference Include="..\..\business\Ctp\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
+    <ProjectReference Include="..\..\business\CtpFront\Acme.Ctp.Front\Acme.Ctp.Front.csproj" />
+    <ProjectReference Include="..\..\business\CtpExchange\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
     <ProjectReference Include="..\..\externals\Ctp.Net.Core\Ctp.Net.Core.csproj" />
   </ItemGroup>
 
