@@ -85,14 +85,69 @@
 
 前置与交易所**分进程**：每个客户端会话一条 `SimRpcClient` 连 17800（登录绑定账户 ⇒ 推送按连接路由 ⇒ 券商柜台镜像）；前置可独立重启（账本不丢——交易所不动）；启动序无硬依赖（前置探活重试）。**前置只是协议翻译，交易所是唯一权威状态**——行情腿快照/时钟经 `quotes` wire op（非推送）保「订阅应答+快照单次写」形状。
 
+### 进程分离设计（2026-10-05——如何解耦）
+
+#### 连接模型：每客户端会话一条交易所连接
+
+```
+客户端(官方SDK)          前置进程                    交易所进程
+   │                        │                            │
+   │── CTP 线协议 ────────▶│ CtpFrontSession            │
+   │  tcp://ip:17801        │   └── SimRpcClient ══════▶ │ SimRpcServer
+   │                        │        (登录绑定账户)        │   └── SimTradingCore
+   │                        │                            │     （撮合/账本/行情引擎）
+   │ ◀── F001/F002 推送 ────│ ◀══ OrderPushed/TradePushed│
+```
+
+为什么**每会话一条连接**而不是前置共享一条：RPC 推送 payload（`CtpOrder`/`CtpTrade`）**没有 accountId 字段**，服务端只能按「哪条连接登录了这个账户」路由——共享连接无法解复用。而每会话一条恰好是**真实券商柜台的同构**（柜台为每个客户会话独立服务），登录即绑定（`SimConnection` 的 `AccountId`），推送按 `MatchesAccount` 路由到该账户的全部连接。行情腿同理（tick 按连接的 `Subscriptions` 集合路由），但无账户语义——不登录，只 Hello + `quotes`/`subscribe`。
+
+#### 解耦接缝：wire op 面是唯一契约
+
+前置对交易所的全部依赖收敛为 **11 个 wire op + 3 个推送事件**（`SimWire`）——前置项目（`Acme.Ctp.Front`）**只引 `Acme.Ctp.Sim`**（RPC 客户端契约层），**不引 `Acme.Ctp.Simulator` 核心**（原引擎桥层化例外退役）。换交易所实现 = 实现 wire op 面；换前置 = 新写 `XxxServer + XxxSession` 调同一批 op。
+
+| 前置用 | op | 交易腿/行情腿 |
+|---|---|---|
+| 登录（密文域） | `login` | 交易腿 ⑦——密文 hex 塞 `LoginArg.Password`（核心当不透明字符串哈希） |
+| 查资金/持仓/合约 | `queryAccount` / `queryPositions` / `queryInstruments` | ⑮⑰/查合约——无账户参数（绑定账户） |
+| 报单/撤单 | `insertOrder` / `cancelOrder` | ⑲/㉑——OrderRef 直通、TC 透传 |
+| 行情快照+时钟 | `quotes`（**分离时新增**） | 行情腿订阅快照 + TradingDay/TimeOfDay——替代进程内直调 `Market.GetQuote`/核心时钟 |
+| 订阅 | `subscribe` | 行情腿——服务端登记订阅集 + 激活行情 |
+| 推送 | `order` / `trade` / `tick` 事件 | 服务端按账户/订阅集路由到对应连接 |
+
+#### 密码域：零改动跨进程
+
+核心 `Login(broker, user, password)` 把密码当**不透明字符串**（PBKDF2 哈希任意串）。前置拿到的是 CTP 固定挑战密文 hex——直接塞进 `LoginArg.Password` 走 wire，交易所哈希的就是这个 hex ⇒ 与进程内直调**逐字节一致**。密码域隔离（前置密文域 vs JSON-RPC 明文域）由字符串值承载，不需要 op 级区分。
+
+#### 顺序保证：双层 capture，跨进程保「应答先于推送」
+
+真 CTP 语义「rc 返回先于 SPI 回调」跨进程后由两层 capture 复刻：
+
+1. **RPC 侧（交易所→前置）**：`SimConnection` 的 capture-during-dispatch——`InsertOrder` 在 op 内同步抛事件，路由回本连接的推送先入捕获缓冲，**应答帧先写 wire**，同锁排空（F1 顺序契约）。
+2. **前置侧（前置→客户端）**：`CtpFrontSession.DispatchFrameAsync` 的 `_dispatching` 捕获窗**跨 await 有效**——RPC 应答（threadpool continuation）与推送事件（RPC 接收线程）谁先跑都无所谓：推送在窗内必入捕获缓冲，应答帧入队后同锁排空。成功报单无应答帧（真 CTP 语义）时先让路 10ms 护客户端 tracker 注册。
+
+两层叠加 ⇒ 客户端看到的顺序与单进程版逐帧一致（E2E 12/12 全绿钉住）。
+
+#### 生命周期与故障语义
+
+| 场景 | 行为 |
+|---|---|
+| 前置先起、交易所没起 | 前置监听照常起（客户端能连）；每会话登录时 RPC 连接失败 ⇒ 诚实关连接（客户端见断线）；后台每 5s 探活直到连上 |
+| **前置崩溃/重启** | **交易所不动、账本不丢**；在线客户端断线，重新登录即恢复——bot 断线重连测试的真实故障注入 |
+| 交易所崩溃/重启 | 交易所崩溃自恢复（`sc failure restart/5000`）；重启后挂单作废、客户端须重登（与单进程版同语义） |
+| 会话结束（客户端断开） | 前置会话 `RpcClient.Logout()`（服务端清绑定/订阅 + flush）→ Dispose |
+
+#### 部署形态（服务器两服务）
+
+`AetherCtpExchange`（交易所——`127.0.0.1:17800` 只绑回环，比旧单进程 `0.0.0.0` 更收敛）+ `AetherCtpFront`（前置——`0.0.0.0:17801/17802` 对客户端，`AETHER_CTP_EXCHANGE_ADDR` 指交易所）。同机部署即默认值；交易所远端部署改此 env 即可（届时 17800 需对外 + TLS——已知公网化批次）。CI（`deploy-ctpsim.yml`）两项目 publish → `exchange/`+`front/` 布局单 tar → 远端脚本「停前置→停交易所→换文件→起交易所→起前置」。
+
 ### 核心类（5 文件）
 
 | 类 | 职责 |
 |---|---|
 | `CtpFrameParser` | 流式分帧器：标准帧/握手帧/复合帧/半帧/心跳剥离（剥出为 `IsHeartbeat` 帧交会话层回射）/未知帧头逐字节重对齐 |
-| `CtpFrontSession` | 交易腿状态机（握手→挑战→认证→登录→业务）；按 op 签名先长后短分派；`SimTradingCore` 对接 |
-| `CtpFrontMdSession` | 行情腿：握手/挑战/MD 登录/订阅/tick 推送（`TickProduced` → 流式帧） |
-| `CtpFrontServer` / `CtpFrontMdServer` | TCP 监听，每连接一会话 |
+| `CtpFrontSession` | 交易腿状态机（握手→挑战→认证→登录→业务）；按 op 签名先长后短分派；**自持一条 `SimRpcClient` 连交易所**（登录绑定账户，业务 op/推送经它走） |
+| `CtpFrontMdSession` | 行情腿：握手/挑战/MD 登录/订阅/tick 推送（自持 `SimRpcClient`——`quotes` op 取快照/时钟、`subscribe` op 订阅、`TickPushed` 事件 → 流式帧） |
+| `CtpFrontServer` / `CtpFrontMdServer` | TCP 监听，每连接一会话 + 每会话一条新建 `SimRpcClient` |
 | `CtpOrderWireCodec` | ⑲ 报单请求解析（tag 宽度自适应）+ 数值解码 |
 | `CtpFrontTemplates` | 捕获帧模板 + 等宽编辑（生成器产物，勿手改） |
 

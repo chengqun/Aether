@@ -3,7 +3,7 @@
 > **定位**：本地期货交易所撮合引擎——「我就是交易所」。价格发现完全归订单簿，流动性由参与者（客户端）供给。
 > 协议无关（不引任何网络/SDK 依赖）、部署无关（进程内嵌或独立进程均可）。
 > 代码：`business/CtpExchange/Acme.Ctp.Simulator/`。
-> 前置服务器（线协议翻译）见 [ctp-stack.md](ctp-stack.md) §4。
+> **2026-10-05 起独立进程部署**（`Acme.Ctp.Sim.Host`：core + `SimRpcServer` JSON-RPC 17800）——前置服务器是**独立进程**（`Acme.Ctp.Front.Host`），经 `SimRpcClient` 消费本交易所的 wire op 面（每客户端会话一条连接，推送按连接路由）；设计详见 §14 与 [ctp-stack.md](ctp-stack.md) §4「进程分离设计」。
 
 ---
 
