@@ -48,8 +48,11 @@ public sealed class CtpTrader : IDisposable
     private readonly CtpTraderCallbacks.OnRtnTradeDelegate _dRtnTrade;
     private readonly CtpTraderCallbacks.OnRspSettlementInfoConfirmDelegate _dRspSettlementInfoConfirm;
 
-    // 查询类请求的逐项收集器（按 requestId 索引，isLast 时完成）
+    // 查询类请求的逐项收集器（按 requestId 索引，isLast 起静默期收尾——见 OnQueryItem 注释）
     private readonly Dictionary<int, QueryCollector> _queryPending = new();
+
+    /// <summary>多行收集的静默期（ms）：最后一次 isLast=true 后无新行才完成查询（本地前置 tag 帧恒 isLast=true）。</summary>
+    private const int QueryQuietMs = 150;
     private int _nextOrderRef;   // 登录后由 MaxOrderRef 初始化
 
     public event EventHandler? FrontConnected;
@@ -423,14 +426,37 @@ public sealed class CtpTrader : IDisposable
         if (c is null) return;
         if (info.ErrorID != 0)
         {
-            lock (_pendingLock) _queryPending.Remove(reqId);
+            lock (_pendingLock) { _queryPending.Remove(reqId); c.CompletionTimer?.Dispose(); c.CompletionTimer = null; }
             c.Tcs.TrySetException(new CtpBusinessException(info.ErrorID, DecodeMsg(info.ErrorMsg)));
             return;
         }
-        c.Items.Add(item);
+        // 多行收集（2026-10-05 探针定案）：本地前置的多行 tag 应答**每帧都是完整响应**（isLast 恒 true——
+        // tag 协议无 isLast=false 编码；真前置的多行走二进制列式路由，未逆向）。首个 isLast=true 立即完成会把
+        // 同一写里后续帧的行丢掉（探针基线实证：SDK 两帧回调都发，旧版只收第一行）——改为<b>静默期收尾</b>：
+        // 最后一次 isLast=true 后 150ms 无新行才完成，期间到达的行全部入列。真实前置的 false..true 序列
+        // 同样兼容（false 只入列不起表，true 起表/续表），代价仅为每查询 +150ms。
+        lock (_pendingLock) c.Items.Add(item);
         if (isLast)
         {
-            lock (_pendingLock) _queryPending.Remove(reqId);
+            lock (_pendingLock)
+            {
+                if (c.CompletionTimer is null)
+                    c.CompletionTimer = new Timer(_ => CompleteQuery(reqId, c), null, QueryQuietMs, Timeout.Infinite);
+                else
+                    c.CompletionTimer.Change(QueryQuietMs, Timeout.Infinite);   // 新行到达——重置静默期
+            }
+        }
+    }
+
+    /// <summary>静默期到点收尾（timer 线程）：该 reqId 仍是本收集器才完成（防御 reqId 复用/竞态）。</summary>
+    private void CompleteQuery(int reqId, QueryCollector c)
+    {
+        lock (_pendingLock)
+        {
+            if (!_queryPending.TryGetValue(reqId, out var cur) || !ReferenceEquals(cur, c)) return;
+            _queryPending.Remove(reqId);
+            c.CompletionTimer?.Dispose();
+            c.CompletionTimer = null;
             c.Tcs.TrySetResult(c.Items);
         }
     }
@@ -440,6 +466,9 @@ public sealed class CtpTrader : IDisposable
         public readonly List<object> Items = new();
         public readonly TaskCompletionSource<IReadOnlyList<object>> Tcs =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>静默期收尾计时器（首个 isLast=true 创建，后续行 Change 续表）——见 OnQueryItem 注释。</summary>
+        public Timer? CompletionTimer;
     }
 
     public void Dispose()

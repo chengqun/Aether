@@ -446,9 +446,10 @@ internal sealed class CtpFrontSession : IDisposable
         }
 
         // 查合约: E1 04 E2 80 2E —— 板子数据源（2026-10-02 过滤查询抓包定案：真前置按应答大小选格式，
-        // 大清单走 LZ4 批量二进制（不逆向）；本地上市表小 ⇒ tag 模板逐合约一帧同写（首帧 verbatim
-        // isLast——isLast 编码未逆向，多合约时只有首行到达 SDK；默认上市表 = 单合约 zx001）。请求侧
-        // reqId 标签族 E1 01 01 5D E3（按查询类型各异），instance 回显请求值（请求 op 后 E3 <n>）。
+        // 大清单走 LZ4 批量二进制（不逆向）；本地上市表小 ⇒ tag 模板逐合约一帧同写）。多行收集在 wrapper 侧
+        // 静默期收尾（2026-10-05 探针定案：tag 帧恒 isLast=true、无 false 编码——多行走 wrapper 收集而非帧内
+        // 标志；见 CtpTrader.OnQueryItem 注释）。请求侧 reqId 标签族 E1 01 01 5D E3（按查询类型各异），
+        // instance 回显请求值（请求 op 后 E3 <n>）。
         if (MatchesSignature(body, "E104E2802E"))
         {
             var reqId = ExtractReqIdAfter(body, "E101015DE3");

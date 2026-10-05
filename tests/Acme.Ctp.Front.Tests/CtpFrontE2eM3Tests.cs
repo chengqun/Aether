@@ -72,6 +72,10 @@ public sealed class CtpFrontE2eM3Tests : IDisposable
         });
         var instruments = await trader.QueryInstrumentsAsync();
         Assert.Contains(instruments, i => i.InstrumentId == "zx001" && i.ExchangeId == "SIM");
+        // 多行钉子（2026-10-05 wrapper 静默期收尾修复）：双品种上市表**全部行**到达——tag 帧恒 isLast=true，
+        // 多行收集靠 CtpTrader.OnQueryItem 静默期收尾（旧版首个 isLast 即完成、只有首行）。
+        Assert.Contains(instruments, i => i.InstrumentId == "m2701" && i.ExchangeId == "DCE");
+        Assert.Equal(2, instruments.Count);
 
         var tickDeadline = Environment.TickCount64 + 15000;
         while (Environment.TickCount64 < tickDeadline && !ticks.Any(t => Math.Abs(t.LastPrice - 3001) < 1e-9))

@@ -254,8 +254,8 @@ internal static class CtpFrontTemplates
     /// <summary>
     /// ⑱ 持仓应答·非空单行（每仓一行——方向三元组 <paramref name="directionChar"/><c>1</c><paramref name="positionDateChar"/>、
     /// 量槽 = 总仓 1B minimal int）。金额字段（保证金/盈亏/成本）保留捕获 verbatim——客户端模型映射但
-    /// 券商 offset 决策不消费。多行边界：isLast 编码未逆向（与查合约同边界）——首行即完成客户端收集，
-    /// 多仓只有首行到达（多行场景按仓排序把关键行放首）。
+    /// 券商 offset 决策不消费。多行收集在 wrapper 静默期收尾（2026-10-05——与查合约同路径：tag 帧恒
+    /// isLast=true，多仓行全部到达 CtpTrader.OnQueryItem 静默窗）。
     /// </summary>
     internal static byte[] BuildQryPositionRsp(byte instance, byte reqId, string brokerId, string investorId,
         string instrumentId, string exchangeId, string tradingDay, char directionChar, char positionDateChar, int totalPosition) =>
@@ -579,7 +579,8 @@ internal static class CtpFrontTemplates
         "0103344CE104E2802FE303E101025EE307E103025AEFEFE1494E45E173633237E1736332373036E1736332373036E17363E131E132EFEFEFEFE331E207E0EBE306E31EE301E201F4E301E203E0E83FB999999999999A3230323430353036E13230323430363033E13230323730353331E13230323730363031E13230323730363037E131E30132313FC5C28F5C28F5C33FC5C28F5C28F5C331EFEFE17FE0EFFFFFFFFFFFFFE13FF0E630736332373036E1494E45E1736332373036E1736332373036E17363E131E132303237E136E13330E131E1353030E131E131303030E1302E31E13230323430353036E13230323430363033E13230323730E1736332373036E17363E131E132303237E136E13330E131E1353030E131E131303030E1302E31E13230323430353036E13230323430363033E13230323730353331E13230323730363031E13230323730E17363E131E132303237E136E13330E131E1353030E131E131303030E1302E31E13230323430353036E13230323430363033E13230323730353331E13230323730363031E13230323730363037E131E131E17363EFEFEFEFEFE4"
     );
 
-    /// <summary>查合约应答（板子数据源——instance/reqId 回显请求值；多合约=每合约一帧同写，首帧 verbatim isLast）。</summary>
+    /// <summary>查合约应答（板子数据源——instance/reqId 回显请求值；多合约=每合约一帧同写）。多行收集在 wrapper
+    /// 静默期收尾（2026-10-05 定案：tag 帧恒 isLast=true 无 false 编码——见 CtpTrader.OnQueryItem）。</summary>
     internal static byte[] BuildQryInstrumentRsp(byte instance, byte reqId, string instrumentId, string exchangeId) =>
         Apply(QryInstrumentRspTemplate,
             new Edit(10, 1, [instance]),

@@ -74,7 +74,7 @@ public sealed class FrontLoopback : IDisposable
         var options = new SimOptions
         {
             DatabasePath = null,    // 纯内存——绝不碰 ~/.aether/ctp-sim.db（用户真实账本）
-            // 上市表：zx001 首行 = 查合约应答首帧（isLast verbatim——多行上市表只有首行到达 SDK）；m2701 = 交易腿测试合约
+            // 上市表双品种：查合约多行钉子（wrapper 静默期收尾，2026-10-05——两行都应到达 SDK）；m2701 = 交易腿测试合约
             ListedInstruments = new[] { "zx001", Instrument },
         };
         var core = new SimTradingCore(options, new SimClock(() => TradingNow));
