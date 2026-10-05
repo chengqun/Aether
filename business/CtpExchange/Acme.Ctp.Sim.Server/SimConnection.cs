@@ -193,6 +193,25 @@ internal sealed class SimConnection
                     }).ToList();
                     break;
 
+                case SimOps.Quotes:
+                    // 行情快照/时钟（2026-10-05 进程分离：前置行情腿经 wire 取订阅快照与 TradingDay/TimeOfDay——
+                    // 替代进程内直调；无快照的合约（未激活行情）跳过，与前置旧语义一致）
+                {
+                    var arg = Arg<QuoteArg>(req);
+                    var quotes = new List<MarketQuote>();
+                    if (arg?.Symbols is not null)
+                    {
+                        foreach (var s in arg.Symbols)
+                        {
+                            if (string.IsNullOrWhiteSpace(s)) continue;
+                            if (_core.Market.GetQuote(s) is not { } q) continue;   // SimQuote 是 struct——模式匹配解 Nullable
+                            quotes.Add(new MarketQuote(q.InstrumentId, q.BidPrice, q.AskPrice, q.LastPrice));
+                        }
+                    }
+                    result = new QuoteSnapshot(_core.CurrentTradingDay, _core.CurrentTimeOfDay, quotes);
+                    break;
+                }
+
                 case SimOps.InsertOrder:
                 {
                     var insert = Arg<CtpOrderRequest>(req);

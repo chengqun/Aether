@@ -26,12 +26,13 @@ public class LayeringRulesTests
         ("Acme.Trading.AI", "Acme.Trading.Runtime.Domain"),
     };
 
-    /// <summary>跨上下文「引擎桥」白名单（CLAUDE.md DDD layering rules 节）：前置（CtpFront）→ 交易所核心
-    /// （CtpExchange 的 Simulator，Tier=Other）。前置是交易所之上的线协议翻译层，进程内直调核心门面
-    /// （CtpFrontSession ↔ SimTradingCore）——2026-10-04 客户端/交易所/前置三上下文三分后的合法引用形态。</summary>
+    /// <summary>跨上下文「协议适配桥」白名单（CLAUDE.md DDD layering rules 节）：前置（CtpFront）→ 交易所
+    /// RPC 客户端契约项目（CtpExchange 的 Sim——SimRpcClient/SimWire，Tier=Other 但只引 Ctp.Domain 的纯 wire 层）。
+    /// 2026-10-05 进程分离后的合法引用形态：前置经 SimRpcClient 连交易所（不再直调 Simulator 核心——旧
+    /// 前置→Simulator 引擎桥例外已随进程分离退役；本条 = 同缝换轻目标）。</summary>
     private static readonly (string Project, string Target)[] CrossContextEngineBridgeWhitelist =
     {
-        ("Acme.Ctp.Front", "Acme.Ctp.Simulator"),
+        ("Acme.Ctp.Front", "Acme.Ctp.Sim"),
     };
 
     /// <summary>允许引用 externals/ 的项目：Ctp.Net.Core（native 包装）唯一消费方 + Lean 引擎唯一桥接层（CLAUDE.md「Trading + Lean」节）

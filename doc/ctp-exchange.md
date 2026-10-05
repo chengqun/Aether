@@ -372,31 +372,25 @@ public sealed class SimClock
 
 ## 14. 部署形态
 
-### 当前（单进程，三端口共享 core）
+### 当前（✅ 已分离，2026-10-05 实施落地——真实世界对齐：一个交易所 + N 券商前置）
 
 ```
-Acme.Ctp.Sim.Host
-├── :17800 SimRpcServer      （JSON-RPC）
-├── :17801 CtpFrontServer    （CTP 交易腿）
-├── :17802 CtpFrontMdServer  （CTP 行情腿）
-└── SimTradingCore           （交易所——共享实例）
+进程 A：Acme.Ctp.Sim.Host（交易所）
+└── :17800 SimRpcServer（SimTradingCore，默认绑 127.0.0.1——前置进程的连接口）
+
+进程 B：Acme.Ctp.Front.Host（前置）
+├── :17801 CtpFrontServer    → 每客户端会话一条 SimRpcClient 连 :17800
+├── :17802 CtpFrontMdServer  → 每客户端会话一条 SimRpcClient 连 :17800（quotes op 取快照/时钟）
+└── 启动序无硬依赖：监听即起 + 后台探活 5s 重试；交易所不在时客户端会话登录诚实失败
 ```
 
-### 分离部署（交易所独立进程）
-
-交易所已有独立端口（:17800 JSON-RPC = 裸接口）。前置服务器改为远程连接：
-
-```
-进程 A（交易所）
-└── :17800 SimRpcServer（SimTradingCore）
-
-进程 B（前置服务器）
-├── :17801 CtpFrontServer  →  经 SimRpcClient 连 :17800
-└── :17802 CtpFrontMdServer →  经 SimRpcClient 连 :17800
-```
-
-改动量小：`CtpFrontSession` 中的 `SimTradingCore` 直接引用改为 `SimRpcClient` 网络调用（方法签名一一对应）。当前同进程跑是**便利选择**（省网络跳），非架构约束。
+实施要点（超出原「方法签名一一对应」预期的四处，均已落地）：
+1. **每客户端会话一条 RPC 连接**（推送 payload 无 accountId——按连接路由是唯一解复用方式；登录绑定账户即券商柜台镜像）；
+2. **`quotes` wire op 新增**（前置行情腿的订阅快照 + TradingDay/TimeOfDay——原为进程内直调 `Market.GetQuote`/核心时钟）；
+3. **密码域零改动**：核心把密码当不透明字符串——前置把密文 hex 塞 `LoginArg.Password` 即逐字节复刻（域隔离由字符串值承载）；
+4. **顺序保证跨进程**：RPC 侧 SimConnection 的 capture-during-dispatch（应答先写 wire）+ 前置捕获窗跨 await——E2E 全绿钉住。
+层化红利：前置不再引 Simulator 核心（引擎桥例外退役，换为 Front→Sim RPC 客户端白名单）；服务器部署从 1 服务变 2 服务（setup/deploy 脚本与 workflow 已同步——前置可独立重启，账本不丢）。
 
 ### 前置服务器替换（换协议）
 
-新写一个 `XxxServer + XxxSession`，同样调 `SimTradingCore`（或 `SimRpcClient`），交易所零改动。协议适配层与交易所通过**方法签名 + 三个事件**解耦。
+新写一个 `XxxServer + XxxSession`，同样经 `SimRpcClient` 连交易所，交易所零改动。协议适配层与交易所通过 **wire op 面 + 三个推送事件**解耦。

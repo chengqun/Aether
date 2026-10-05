@@ -51,6 +51,7 @@
   </Folder>
   <Folder Name="/apps/CtpSim/">
     <Project Path="apps/CtpSim/Acme.Ctp.Sim.Host/Acme.Ctp.Sim.Host.csproj" />
+    <Project Path="apps/CtpSim/Acme.Ctp.Front.Host/Acme.Ctp.Front.Host.csproj" />
     <Project Path="apps/CtpSim/Acme.Ctp.ProtoCapture/Acme.Ctp.ProtoCapture.csproj" />
   </Folder>
   <Folder Name="/server/">

@@ -51,6 +51,9 @@ public static class SimOps
     public const string QueryOrders = "queryOrders";
     /// <summary>查询 host 上市合约表（返回 <see cref="CtpInstrument"/> 列表——行情板的「我就是交易所」数据源）。</summary>
     public const string QueryInstruments = "queryInstruments";
+    /// <summary>行情快照/时钟（2026-10-05 进程分离：前置行情腿的订阅快照 + TradingDay/TimeOfDay 来源——
+    /// 替代进程内直调 Market.GetQuote/CurrentTradingDay/CurrentTimeOfDay）。无登录守卫（同 queryInstruments）。</summary>
+    public const string Quotes = "quotes";
     public const string InsertOrder = "insertOrder";
     public const string CancelOrder = "cancelOrder";
     public const string Subscribe = "subscribe";
@@ -138,6 +141,15 @@ public sealed record InstrumentArg(string? InstrumentId);
 
 /// <summary>行情订阅参数。</summary>
 public sealed record SubscribeArg(IReadOnlyList<string> Symbols);
+
+/// <summary>行情快照查询参数（null/空 = 只要时钟）。</summary>
+public sealed record QuoteArg(IReadOnlyList<string>? Symbols);
+
+/// <summary>单合约当前盘口快照（簿顶 bid/ask + 最新成交价——镜像 Simulator 的 SimQuote，但住 wire 层不泄漏核心类型）。</summary>
+public sealed record MarketQuote(string InstrumentId, double BidPrice, double AskPrice, double LastPrice);
+
+/// <summary>行情快照应答：交易日/时间 + 逐合约盘口（快照来自 op 应答而非推送——前置「订阅应答+快照单次写」的形状来源）。</summary>
+public sealed record QuoteSnapshot(string TradingDay, string TimeOfDay, List<MarketQuote>? Quotes);
 
 /// <summary>请求帧（客户端→服务端）。Arg 为按运行时类型序列化的 JSON 元素。</summary>
 public sealed record SimRequest(long Id, string Op, JsonElement? Arg);

@@ -1,17 +1,19 @@
 using System.Net;
 using System.Net.Sockets;
-using Acme.Ctp.Simulator;
+using Acme.Ctp.Sim;
 
 namespace Acme.Ctp.Front;
 
 /// <summary>
 /// CTP 行情腿前置服务端（M3）：独立端口监听（host 默认 17802，env <c>AETHER_CTP_MD_FRONT_PORT</c>），
-/// 每连接一个 <see cref="CtpFrontMdSession"/>。与 <see cref="CtpFrontServer"/>（交易腿）共享同一
-/// <see cref="SimTradingCore"/>——行情随柜台：tick 来自同一撮合核心的 <c>TickProduced</c>。
+/// 每连接一个 <see cref="CtpFrontMdSession"/> + 一条到交易所的 RPC 连接（进程分离 2026-10-05——
+/// tick 经 <see cref="SimRpcClient.TickPushed"/> 按订阅集路由；快照/时钟经 `quotes` op）。
+/// 行情随柜台：tick 来自同一撮合核心（交易所进程）。
 /// </summary>
 public sealed class CtpFrontMdServer : IDisposable
 {
-    private readonly SimTradingCore _core;
+    private readonly string _exchangeHost;
+    private readonly int _exchangePort;
     private readonly string _host;
     private readonly int _port;
     private readonly Action<string> _log;
@@ -19,9 +21,10 @@ public sealed class CtpFrontMdServer : IDisposable
     private Task? _acceptLoop;
     private readonly CancellationTokenSource _cts = new();
 
-    public CtpFrontMdServer(SimTradingCore core, string host, int port, Action<string>? log = null)
+    public CtpFrontMdServer(string exchangeHost, int exchangePort, string host, int port, Action<string>? log = null)
     {
-        _core = core;
+        _exchangeHost = exchangeHost;
+        _exchangePort = exchangePort;
         _host = host;
         _port = port;
         _log = log ?? (msg => Console.WriteLine($"[CTP-Front-MD] {msg}"));
@@ -56,7 +59,7 @@ public sealed class CtpFrontMdServer : IDisposable
             TcpClient client;
             try { client = await _listener!.AcceptTcpClientAsync(ct); }
             catch { break; }
-            var session = new CtpFrontMdSession(client, _core, _log);
+            var session = new CtpFrontMdSession(client, new SimRpcClient(_exchangeHost, _exchangePort), _log);
             _ = Task.Run(() => session.RunAsync(ct), ct);
         }
     }

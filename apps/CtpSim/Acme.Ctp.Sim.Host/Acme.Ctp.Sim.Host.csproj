@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- 交易所进程（2026-10-05 分离）：只含 core + RPC 服务端——前置是独立进程（Acme.Ctp.Front.Host） -->
     <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
-    <ProjectReference Include="..\..\..\business\CtpFront\Acme.Ctp.Front\Acme.Ctp.Front.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -75,15 +75,15 @@
 
 ### 形态
 
-一个 host 进程（`apps/CtpSim/Acme.Ctp.Sim.Host`）同时启动三个监听：
+**两独立进程（2026-10-05 分离，真实世界对齐——一个交易所 + N 券商前置）**：
 
-| 端口 | 服务 | 用途 |
-|---|---|---|
-| 17800 | `SimRpcServer` | JSON-RPC（旧路径，与前置并存） |
-| 17801 | `CtpFrontServer` | CTP 线协议交易腿（`env AETHER_CTP_FRONT_PORT`） |
-| 17802 | `CtpFrontMdServer` | CTP 线协议行情腿（`env AETHER_CTP_MD_FRONT_PORT`） |
+| 进程 | 端口 | 服务 | 用途 |
+|---|---|---|---|
+| `Acme.Ctp.Sim.Host`（交易所） | 17800 | `SimRpcServer` | JSON-RPC（默认绑 127.0.0.1——前置进程/E2E 的连接口） |
+| `Acme.Ctp.Front.Host`（前置） | 17801 | `CtpFrontServer` | CTP 线协议交易腿（对客户端；`env AETHER_CTP_FRONT_ADDR`） |
+| `Acme.Ctp.Front.Host`（前置） | 17802 | `CtpFrontMdServer` | CTP 线协议行情腿（`env AETHER_CTP_MD_FRONT_PORT`） |
 
-前置服务器与交易所共享同一 `SimTradingCore` 实例（host 进程持有）——**前置只是协议翻译，交易所是唯一权威状态**。
+前置与交易所**分进程**：每个客户端会话一条 `SimRpcClient` 连 17800（登录绑定账户 ⇒ 推送按连接路由 ⇒ 券商柜台镜像）；前置可独立重启（账本不丢——交易所不动）；启动序无硬依赖（前置探活重试）。**前置只是协议翻译，交易所是唯一权威状态**——行情腿快照/时钟经 `quotes` wire op（非推送）保「订阅应答+快照单次写」形状。
 
 ### 核心类（5 文件）
 

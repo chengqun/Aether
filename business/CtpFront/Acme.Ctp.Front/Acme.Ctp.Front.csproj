@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\CtpExchange\Acme.Ctp.Simulator\Acme.Ctp.Simulator.csproj" />
+    <!-- 进程分离（2026-10-05）：前置经 SimRpcClient 连交易所——不再引 Simulator 核心（CrossContextEngineBridge
+         层化例外随之删除；前置成为干净的协议适配层，真实世界券商前置形态）。 -->
+    <ProjectReference Include="..\..\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
   </ItemGroup>
 </Project>

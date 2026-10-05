@@ -1,21 +1,21 @@
-﻿# ── Aether CTP 仿真柜台·远程部署脚本（在服务器上执行）──────────────────────────────────
-# ⚠ 编码：UTF-8 带 BOM（必须——Windows PowerShell 5.1 对无 BOM 的 UTF-8 按系统 ANSI/GBK 误读，
-#    中文字节错位会吞掉字符串引号致解析错误；BOM 是 5.1 识别 UTF-8 的唯一信号）。改本文件勿去 BOM。
+﻿# ── Aether CTP 仿真栈·远程部署脚本（在服务器上执行）──────────────────────────────────
 # 由 .github/workflows/deploy-ctpsim.yml 经 SSH 调起：
 #   powershell -NoProfile -ExecutionPolicy Bypass -File C:/Aether/ctpsim-tmp/ctpsim-remote-deploy.ps1
-# 前提（一次性）：已以管理员运行 scripts/ctpsim-setup-server.ps1（服务 AetherCtpSim + 服务级 env 注册表 + 防火墙）。
-# 流程：preflight → 干净解包 → 停服务（等 Stopped）→ robocopy /MIR 换文件 → 起服务（等 Running）→ 汇报。
-# 兼容 Windows PowerShell 5.1（OpenSSH 默认 shell 是 cmd → powershell.exe；不用 ?? / 三元 / &&）。
-# 注意：$StagingDir/$DeployDir/$ServiceName 默认值与 workflow 的 env.CTPSIM_STAGING、setup 脚本的目录约定是
-# 同值常量——改一处须同步另一处。
+# 两服务形态（2026-10-05 进程分离）：AetherCtpExchange（交易所）+ AetherCtpFront（前置）。
+# 前提（一次性）：已以管理员运行 scripts/ctpsim-setup-server.ps1（两服务 + env 注册表 + 防火墙）。
+# 流程：preflight → 干净解包 → 停前置再停交易所 → robocopy /MIR 两目录 → 起交易所（等 Running）
+#       → 起前置（等 Running）→ 汇报。兼容 Windows PowerShell 5.1（无 ?? / 三元 / &&）。
+# 注意：参数默认值与 workflow 的 env.CTPSIM_STAGING / setup 脚本的目录约定是同值常量——改一处须同步另一处。
 
 [CmdletBinding()]
 param(
-    [string]$ServiceName = 'AetherCtpSim',
-    [string]$StagingDir  = 'C:\Aether\ctpsim-tmp',
-    [string]$DeployDir   = 'C:\Aether\CtpSim',
-    [string]$TarName     = 'ctpsim.tar.gz',
-    [string]$DataDir     = 'C:\Aether\ctpsim-data'
+    [string]$ExchangeService = 'AetherCtpExchange',
+    [string]$ExchangeDir = 'C:\Aether\CtpExchange',
+    [string]$FrontService = 'AetherCtpFront',
+    [string]$FrontDir = 'C:\Aether\CtpFront',
+    [string]$StagingDir = 'C:\Aether\ctpsim-tmp',
+    [string]$TarName = 'ctpsim.tar.gz',
+    [string]$DataDir = 'C:\Aether\ctpsim-data'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,15 +24,17 @@ function Fail([string]$msg) {
     [Console]::Error.WriteLine("[CTPSIM-DEPLOY] $msg")
     exit 1
 }
+function Info([string]$msg) { Write-Host "[CTPSIM-DEPLOY] $msg" }
 
-# 1) Preflight：服务不存在 = setup 没跑过——服务的全部配置（env 注册表）都在服务注册项上，
-#    缺失时部署只会让 exe 以错误默认值跑（LocalSystem 的 ~/.aether），立即失败好过静默错配。
-$svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if (-not $svc) {
-    Fail "服务 $ServiceName 不存在——请先在服务器上以管理员运行 scripts/ctpsim-setup-server.ps1（一次性）。"
+# 1) Preflight：两服务都已注册（setup 没跑过 = 配置缺失——立即失败好过静默错配）
+foreach ($svc in @($ExchangeService, $FrontService)) {
+    if (-not (Get-Service -Name $svc -ErrorAction SilentlyContinue)) {
+        Fail "服务 $svc 不存在——请先在服务器上以管理员运行 scripts/ctpsim-setup-server.ps1（一次性）。"
+    }
 }
 
-# 2) 干净解包（tar 不清旧文件——不删 staging\out 的话，已删除的旧 DLL 会被 /MIR 带进部署目录）
+# 2) 干净解包（tar 不清旧文件——不删 staging\out 的话，已删除的旧 DLL 会被 /MIR 带进部署目录）。
+#    tar 布局：exchange/（交易所二进制）+ front/（前置二进制）——workflow 的两项目 publish 产物。
 $tar = Join-Path $StagingDir $TarName
 $out = Join-Path $StagingDir 'out'
 if (-not (Test-Path $tar)) {
@@ -44,40 +46,54 @@ New-Item -ItemType Directory -Path $out -Force | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Fail "解包 $tar 失败（exit $LASTEXITCODE）"
 }
-
-# 3) 停服务 + 等 Stopped（超时即失败——此时二进制未动，服务还在跑旧版本，安全）
-if ($svc.Status -ne 'Stopped') {
-    try {
-        Stop-Service -Name $ServiceName
-        $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
-    }
-    catch {
-        Fail "停服务失败/超时：$($_.Exception.Message)——二进制未动，服务仍在跑旧版本"
+foreach ($part in @('exchange', 'front')) {
+    if (-not (Test-Path (Join-Path $out $part))) {
+        Fail "解包产物缺 $part\ 子目录（workflow 的 Bundle 布局已变？）"
     }
 }
 
-# 4) 换文件：robocopy /MIR（退出码 0-7 都是成功，>=8 才失败）。
-#    账本 ctp-sim.db 与日志在 DataDir（部署目录之外），/MIR 永不波及。
-robocopy $out $DeployDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
-if ($LASTEXITCODE -ge 8) {
-    Fail "robocopy 失败（code $LASTEXITCODE）——服务已停、二进制可能不完整，重跑一次部署即可恢复"
+# 3) 停服务（先前置后交易所——前置依赖交易所；账本 flush 在交易所停止时同步落盘）
+try { Stop-Service -Name $FrontService -ErrorAction SilentlyContinue } catch { }
+try { Stop-Service -Name $ExchangeService -ErrorAction SilentlyContinue } catch { }
+foreach ($svc in @($FrontService, $ExchangeService)) {
+    $deadline = [DateTime]::Now.AddSeconds(30)
+    while ((Get-Service -Name $svc).Status -ne 'Stopped' -and [DateTime]::Now -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+    }
+    if ((Get-Service -Name $svc).Status -ne 'Stopped') {
+        Fail "停服务 $svc 超时（30s）——二进制未动，服务仍在跑旧版本，安全（手工排查后重跑）"
+    }
 }
 
-# 5) 起服务 + 等 Running；失败时打日志尾部自证故障（AETHER_CTP_SIM_LOG 指向 $DataDir\ctpsim.log）
-try {
-    Start-Service -Name $ServiceName
-    $svc.WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
+# 4) 换文件：robocopy /MIR（退出码 0-7 都是成功，>=8 才失败）。账本与日志在 DataDir（两部署目录之外）。
+robocopy (Join-Path $out 'exchange') $ExchangeDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
+if ($LASTEXITCODE -ge 8) { Fail "robocopy 交易所失败（code $LASTEXITCODE）" }
+robocopy (Join-Path $out 'front') $FrontDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
+if ($LASTEXITCODE -ge 8) { Fail "robocopy 前置失败（code $LASTEXITCODE）——交易所已更新，重跑一次部署即可恢复" }
+
+# 5) 起交易所（等 Running——前置探活会自动连上）；再起前置（等 Running）
+Start-Service -Name $ExchangeService
+$deadline = [DateTime]::Now.AddSeconds(60)
+while ((Get-Service -Name $ExchangeService).Status -ne 'Running' -and [DateTime]::Now -lt $deadline) {
+    Start-Sleep -Milliseconds 500
 }
-catch {
-    Write-Host '── 部署后启动失败，ctpsim.log 尾部：'
-    Get-Content (Join-Path $DataDir 'ctpsim.log') -Tail 30 -ErrorAction SilentlyContinue
-    Fail "服务 $ServiceName 未能进入 Running（见上方日志尾部；Windows 事件查看器亦可能有 .NET Runtime 错误）"
+if ((Get-Service -Name $ExchangeService).Status -ne 'Running') {
+    Get-Content (Join-Path $DataDir 'ctpsim-exchange.log') -Tail 30 -ErrorAction SilentlyContinue
+    Fail "交易所未能进入 Running（见上方 ctpsim-exchange.log 尾部）"
+}
+Start-Service -Name $FrontService
+$deadline = [DateTime]::Now.AddSeconds(60)
+while ((Get-Service -Name $FrontService).Status -ne 'Running' -and [DateTime]::Now -lt $deadline) {
+    Start-Sleep -Milliseconds 500
+}
+if ((Get-Service -Name $FrontService).Status -ne 'Running') {
+    Get-Content (Join-Path $DataDir 'ctpsim-front.log') -Tail 30 -ErrorAction SilentlyContinue
+    Fail "前置未能进入 Running（见上方 ctpsim-front.log 尾部）"
 }
 
 # 6) 汇报（显式 exit 0——robocopy 的非零退出码不能漏成本脚本退出码毒死 workflow step）
-$svc.Refresh()
-$version = Get-Content (Join-Path $DeployDir 'VERSION') -ErrorAction SilentlyContinue
-Write-Host "[CTPSIM-DEPLOY] ==> $ServiceName 已部署并运行（版本 $version）"
-Write-Host "[CTPSIM-DEPLOY]     日志: $DataDir\ctpsim.log    账本: $DataDir\ctp-sim.db"
+$version = Get-Content (Join-Path $FrontDir 'VERSION') -ErrorAction SilentlyContinue
+Write-Host "[CTPSIM-DEPLOY] ==> $ExchangeService + $FrontService 已部署并运行（版本 $version）"
+Write-Host "[CTPSIM-DEPLOY]     日志: $DataDir\ctpsim-exchange.log / ctpsim-front.log    账本: $DataDir\ctp-sim.db"
 Write-Host "[CTPSIM-DEPLOY]     客户端前置: tcp://<本机IP>:17801（交易）/ tcp://<本机IP>:17802（行情）"
 exit 0

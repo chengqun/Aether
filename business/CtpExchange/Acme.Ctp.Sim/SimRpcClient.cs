@@ -219,6 +219,11 @@ public sealed class SimRpcClient : IDisposable
         => await NonNullAsync<List<CtpInstrument>>(SimOps.QueryInstruments, null, ct)
            .ConfigureAwait(false);
 
+    /// <summary>行情快照/时钟（2026-10-05 进程分离：前置行情腿的订阅快照与 TradingDay/TimeOfDay 来源）。
+    /// symbols null/空 = 只取时钟。</summary>
+    public Task<QuoteSnapshot> GetQuotesAsync(IReadOnlyList<string>? symbols, CancellationToken ct = default)
+        => NonNullAsync<QuoteSnapshot>(SimOps.Quotes, new QuoteArg(symbols), ct);
+
     public Task<CtpOrderInsertResult> InsertOrderAsync(CtpOrderRequest request, CancellationToken ct = default)
         => NonNullAsync<CtpOrderInsertResult>(SimOps.InsertOrder, request, ct);
 

@@ -1,14 +1,16 @@
 using System.Net;
 using Acme.Ctp.Domain;
 using Acme.Ctp.Front;
+using Acme.Ctp.Sim.Server;
 using Acme.Ctp.Simulator;
 
 namespace Acme.Ctp.Front.Tests;
 
 /// <summary>
-/// 测试进程内回环：<see cref="SimTradingCore"/> + <see cref="CtpFrontServer"/>（端口 0 临时端口）——
-/// 官方 SDK 客户端（<c>CtpTrader</c>，P/Invoke 官方 C++ 库）经真实 TCP loopback 走完整线协议一圈。
-/// 镜像 <c>Acme.Ctp.Simulator.Tests</c> 的 <c>SimHarness.LoopbackSim</c> 范式。
+/// 测试进程内回环（<b>进程分离形态</b>，2026-10-05 起与生产同构）：<see cref="SimTradingCore"/> +
+/// <see cref="SimRpcServer"/>（交易所，临时端口）+ <see cref="CtpFrontServer"/>/<see cref="CtpFrontMdServer"/>
+/// （前置，经真实 loopback TCP 连交易所）——官方 SDK 客户端（<c>CtpTrader</c>，P/Invoke 官方 C++ 库）
+/// 走 客户端 → 前置 → RPC → 交易所 全链路。E2E 跑的即分离架构本身（SDK 即裁判不变）。
 /// <para>价格发现归簿（walk/回放已删除）：需要成交的测试先 <see cref="SeedMaker"/> 挂双边流动性。</para>
 /// </summary>
 public sealed class FrontLoopback : IDisposable
@@ -23,6 +25,8 @@ public sealed class FrontLoopback : IDisposable
 
     public SimTradingCore Core { get; }
 
+    public SimRpcServer Exchange { get; }
+
     public CtpFrontServer Server { get; }
 
     /// <summary>行情腿前置直连地址（M3 E2E 用——CtpMarketData SDK 客户端）。</summary>
@@ -36,9 +40,10 @@ public sealed class FrontLoopback : IDisposable
 
     private CtpFrontMdServer? _mdServer;
 
-    private FrontLoopback(SimTradingCore core, CtpFrontServer server, string frontAddress, string logPath, CtpFrontMdServer mdServer, string mdAddress)
+    private FrontLoopback(SimTradingCore core, SimRpcServer exchange, CtpFrontServer server, string frontAddress, string logPath, CtpFrontMdServer mdServer, string mdAddress)
     {
         Core = core;
+        Exchange = exchange;
         Server = server;
         FrontAddress = frontAddress;
         LogPath = logPath;
@@ -80,11 +85,19 @@ public sealed class FrontLoopback : IDisposable
         var core = new SimTradingCore(options, new SimClock(() => TradingNow));
         core.InitializeAsync().GetAwaiter().GetResult(); // xunit 无同步上下文，安全
 
+        // 进程分离形态（2026-10-05 真实世界对齐）：交易所（core + SimRpcServer）与前置（CTP 线协议双腿）
+        // 经真实 loopback TCP 相连——前置每客户端会话一条交易所 RPC 连接。E2E 跑的即分离架构本身
+        // （SDK 即裁判不变：客户端 → 前置 → RPC → 交易所全链路）。交易所监听临时端口（port=0）。
+        var exchange = new SimRpcServer(core, "127.0.0.1", 0);
+        exchange.Start();
+        var exchangePort = (exchange.LocalEndpoint as IPEndPoint)?.Port
+            ?? throw new InvalidOperationException("SimRpcServer 未绑定端口");
+
         // 双写日志：Console（xunit 测试结束时随结果输出）+ 实时文件（xunit 扣留 Console 到测试结束——
         // 测试挂死时文件是唯一的诊断面；服务端逐帧日志是「模板偏移错/签名漏配」定位依据）。
         var logPath = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", $"front-{Guid.NewGuid():N}.log");
         var logWriter = new StreamWriter(logPath, append: false) { AutoFlush = true };
-        var server = new CtpFrontServer(core, "127.0.0.1", 0, msg =>
+        var server = new CtpFrontServer("127.0.0.1", exchangePort, "127.0.0.1", 0, msg =>
         {
             Console.WriteLine($"[CTP-Front] {msg}");
             logWriter.WriteLine(msg);
@@ -92,7 +105,7 @@ public sealed class FrontLoopback : IDisposable
         server.Start();
         var port = (server.LocalEndpoint as IPEndPoint)?.Port
             ?? throw new InvalidOperationException("CtpFrontServer 未绑定端口");
-        var mdServer = new CtpFrontMdServer(core, "127.0.0.1", 0, msg =>
+        var mdServer = new CtpFrontMdServer("127.0.0.1", exchangePort, "127.0.0.1", 0, msg =>
         {
             Console.WriteLine($"[CTP-Front-MD] {msg}");
             logWriter.WriteLine(msg);
@@ -100,7 +113,7 @@ public sealed class FrontLoopback : IDisposable
         mdServer.Start();
         var mdPort = (mdServer.LocalEndpoint as IPEndPoint)?.Port
             ?? throw new InvalidOperationException("CtpFrontMdServer 未绑定端口");
-        return new FrontLoopback(core, server, $"tcp://127.0.0.1:{port}", logPath, mdServer, $"tcp://127.0.0.1:{mdPort}");
+        return new FrontLoopback(core, exchange, server, $"tcp://127.0.0.1:{port}", logPath, mdServer, $"tcp://127.0.0.1:{mdPort}");
     }
 
     /// <summary>
@@ -112,6 +125,7 @@ public sealed class FrontLoopback : IDisposable
     {
         try { Server.Dispose(); } catch { }
         try { _mdServer?.Dispose(); } catch { }
+        try { Exchange.Dispose(); } catch { }
         try { Core.Dispose(); } catch { }
         Console.WriteLine($"[CTP-Front] 本测试服务端日志: {LogPath}");
     }

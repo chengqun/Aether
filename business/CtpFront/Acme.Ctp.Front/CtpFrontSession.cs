@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Channels;
 using Acme.Ctp.Domain;
-using Acme.Ctp.Simulator;
+using Acme.Ctp.Sim;
 
 namespace Acme.Ctp.Front;
 
@@ -22,6 +22,14 @@ namespace Acme.Ctp.Front;
 /// 官方 C++ SDK 自己解析帧——我们只把捕获的 S→C 帧原样回放，替换 broker/user/reqId/交易日/资金等
 /// 少数标记界定字段。密码策略：发<b>固定挑战</b> ⇒ 同密码+同 nonce ⇒ 同密文 ⇒ 存密文当哈希比对。
 /// </para>
+/// <para>
+/// <b>进程分离（2026-10-05，真实世界对齐）</b>：会话经自持的 <see cref="SimRpcClient"/> 连交易所（每客户端
+/// 会话一条连接——登录绑定账户，服务端按连接路由推送，真实券商柜台镜像）。RPC op 无账户参数（绑定账户）、
+/// 推送 payload 无 accountId（按连接路由）⇒ 本会话无需账户键与事件过滤。「应答先于推送」跨进程保持：
+/// RPC 侧 SimConnection 的 capture-during-dispatch 保证应答帧先写 wire；本会话的捕获窗（<see cref="_dispatching"/>
+/// 跨 await 有效）把 RPC 推送事件压到应答帧之后排空。密码域零改动：核心把密码当不透明字符串——
+/// 密文 hex 塞进 <c>LoginArg.Password</c> 即逐字节复刻进程内行为（域隔离由字符串值承载，非 op 承载）。
+/// </para>
 /// </summary>
 internal sealed class CtpFrontSession : IDisposable
 {
@@ -36,7 +44,7 @@ internal sealed class CtpFrontSession : IDisposable
     }
 
     private readonly TcpClient _client;
-    private readonly SimTradingCore _core;
+    private readonly SimRpcClient _rpc;
     private readonly Action<string> _log;
     private State _state = State.WaitingHandshake;
     private readonly CtpFrameParser _parser = new();
@@ -50,21 +58,20 @@ internal sealed class CtpFrontSession : IDisposable
     private byte _loginReqId;         // ⑦ 的 reqId——⑩ 回显它（SDK 以此归并登录结果）
     private byte _cmdInstance;        // 40 族应答序号（抓包 ⑫=01 ⑭=02 ⑳=03 ㉒=04——会话内自增，跨消息族共享）
     private byte _rtnInstance;        // F0 族推送/错误回报序号（抓包实证独立计数——会话内自增）
-    private string? _accountId;       // 登录后的核心账户键（core 事件按它过滤路由）
 
-    // —— 出站管道（M2）：读循环不再内联写——应答入队，单写者循环统一写 TCP；主动推送（core 事件）经
-    //    RoutePush 入队。capture-during-dispatch（镜像 SimConnection）：本会话分发线程执行 op 期间
-    //    （core 在 InsertOrder 返回前同步抛订单/成交事件，回流到本会话）推送先入捕获缓冲，
-    //    应答帧入队后同锁排空——「应答先于推送」（消费方在应答后才注册 OrderRef，先到的回报会被丢）。——
+    // —— 出站管道（M2）：读循环不再内联写——应答入队，单写者循环统一写 TCP；主动推送（RPC 推送事件）经
+    //    RoutePush 入队。capture-during-dispatch：本会话分发线程执行 op 期间（含 RPC await——_dispatching
+    //    跨 await 保持 true）推送先入捕获缓冲，应答帧入队后同锁排空——「应答先于推送」（消费方在应答后
+    //    才注册 OrderRef，先到的回报会被丢）。RPC 侧服务端另有同款捕获保证应答帧先写 wire（F1 顺序契约）。——
     private readonly Channel<byte[]> _out = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
     private readonly object _writeGate = new();
     private readonly List<byte[]> _captured = new();
     private volatile bool _dispatching;
 
-    public CtpFrontSession(TcpClient client, SimTradingCore core, Action<string> log)
+    public CtpFrontSession(TcpClient client, SimRpcClient rpc, Action<string> log)
     {
         _client = client;
-        _core = core;
+        _rpc = rpc;
         _log = log;
     }
 
@@ -76,6 +83,7 @@ internal sealed class CtpFrontSession : IDisposable
         try
         {
             using var stream = _client.GetStream();
+            _rpc.ConnectionLost += OnExchangeLost;   // 交易所死亡 ⇒ 关会话（客户端见断线）
             writer = WriterLoopAsync(stream, ct);
             var buffer = new byte[64 * 1024];
             while (_state != State.Closed && !ct.IsCancellationRequested)
@@ -105,8 +113,11 @@ internal sealed class CtpFrontSession : IDisposable
         finally
         {
             _state = State.Closed;
-            _core.OrderChanged -= OnCoreOrderChanged;
-            _core.TradeFilled -= OnCoreTradeFilled;
+            _rpc.OrderPushed -= OnRpcOrderPushed;
+            _rpc.TradePushed -= OnRpcTradePushed;
+            _rpc.ConnectionLost -= OnExchangeLost;
+            _rpc.Logout();            // 服务端清绑定/订阅 + flush（镜像进程内版的会话事件退订语义）
+            _rpc.Dispose();
             _out.Writer.TryComplete();
             try { await writer; } catch { }   // 排空剩余出站帧（含捕获的推送）
             _log($"[CTP-Front] 会话结束: {remote}");
@@ -130,8 +141,10 @@ internal sealed class CtpFrontSession : IDisposable
     }
 
     /// <summary>
-    /// 分发一个入站帧（capture-during-disdispatch 包装）：处理期间核心同步抛的事件回流进
-    /// <see cref="_captured"/>；应答帧入队后同锁排空捕获——应答先于本单推送到达客户端。
+    /// 分发一个入站帧（capture-during-dispatch 包装）：处理期间（含 RPC await）推送事件回流进
+    /// <see cref="_captured"/>；应答帧入队后同锁排空捕获——应答先于本单推送到达客户端
+    /// （RPC 侧服务端另有 capture 保证应答帧先写 wire；本会话的捕获窗跨 await 覆盖
+    /// 「应答 continuation 与推送事件在不同线程」的竞态——无论谁先跑，次序都由排空点决定）。
     /// 无应答帧且有捕获推送（成功报单路径）时先让路 10ms：客户端 CtpBrokerage 在
     /// OrderInsertAsync 返回后才把 OrderRef 注册进 tracker，loopback 无 WAN RTT，
     /// SDK 回调线程可能先于注册到达 ⇒ 回报被当手动单静默丢弃 + 看门狗误判（SimRpcServer 同款事故）。
@@ -143,7 +156,7 @@ internal sealed class CtpFrontSession : IDisposable
         lock (_writeGate) _dispatching = true;
         try
         {
-            response = ProcessFrame(frame);
+            response = await ProcessFrameAsync(frame, ct);
         }
         finally
         {
@@ -179,11 +192,11 @@ internal sealed class CtpFrontSession : IDisposable
     private static (int Id, string Msg) WireError(CtpBusinessException ex)
         => ex.ErrorId > byte.MaxValue ? (148, $"[{ex.ErrorId}] {ex.ErrorMsg}") : (ex.ErrorId, ex.ErrorMsg);
 
-    // —— M2 推送：core 事件 → OnRtnOrder/OnRtnTrade wire 帧（本账户过滤 + capture-during-dispatch 排序）——
+    // —— M2 推送：RPC 推送事件 → OnRtnOrder/OnRtnTrade wire 帧（按连接路由——本连接只收本账户的推送，无需过滤）——
 
-    private void OnCoreOrderChanged(string accountId, CtpOrder order)
+    private void OnRpcOrderPushed(CtpOrder order)
     {
-        if (_accountId is null || !string.Equals(accountId, _accountId, StringComparison.OrdinalIgnoreCase)) return;
+        if (_state != State.Authenticated) return;
         _log($"[CTP-Front] → 推送 OnRtnOrder: ref={order.OrderRef} status={(char)order.OrderStatusRaw}");
         RoutePush(BuildFrame((char)order.OrderStatusRaw switch
         {
@@ -212,12 +225,20 @@ internal sealed class CtpFrontSession : IDisposable
         _ => order.StatusMsg is { Length: > 0 } ? order.StatusMsg : "终态",
     };
 
-    private void OnCoreTradeFilled(string accountId, CtpTrade trade)
+    private void OnRpcTradePushed(CtpTrade trade)
     {
-        if (_accountId is null || !string.Equals(accountId, _accountId, StringComparison.OrdinalIgnoreCase)) return;
+        if (_state != State.Authenticated) return;
         _log($"[CTP-Front] → 推送 OnRtnTrade: ref={trade.OrderRef} {trade.Volume}@{trade.Price} id={trade.TradeId}");
         RoutePush(BuildFrame(CtpFrontTemplates.BuildRtnTrade(NextRtnInstance(), _userId, _brokerId, trade.InstrumentId, trade.OrderRef,
             trade.TradeId, trade.Price, trade.Volume, _login?.TradingDay ?? "")));
+    }
+
+    /// <summary>交易所侧连接死亡（host 挂/超时销毁）⇒ 关闭本 CTP 会话（客户端见断线——真实券商行为）。</summary>
+    private void OnExchangeLost()
+    {
+        _log("[CTP-Front] 与交易所的 RPC 连接断开——关闭会话");
+        _state = State.Closed;
+        try { _client.Close(); } catch { }   // 读写循环随之退出
     }
 
     /// <summary>主动推送入站（core 事件 → wire 帧）。分发期间入捕获缓冲（应答先于推送），否则直写队列。</summary>
@@ -232,8 +253,8 @@ internal sealed class CtpFrontSession : IDisposable
         }
     }
 
-    /// <summary>处理一个入站帧，返回应答帧（null = 无应答）。</summary>
-    private byte[]? ProcessFrame(CtpFrame frame)
+    /// <summary>处理一个入站帧，返回应答帧（null = 无应答）。业务分支含 RPC await（交易所跨进程）。</summary>
+    private async Task<byte[]?> ProcessFrameAsync(CtpFrame frame, CancellationToken ct)
     {
         _log($"[CTP-Front] ← {frame}");
 
@@ -249,8 +270,8 @@ internal sealed class CtpFrontSession : IDisposable
             {
                 State.WaitingChallengeResponse => HandleChallengeResponse(frame),
                 State.WaitingAuth => HandleAuth(frame),
-                State.WaitingLogin => HandleLogin(frame),
-                State.Authenticated => HandleBusiness(frame),
+                State.WaitingLogin => await HandleLoginAsync(frame, ct),
+                State.Authenticated => await HandleBusinessAsync(frame, ct),
                 _ => null,
             };
     }
@@ -314,7 +335,7 @@ internal sealed class CtpFrontSession : IDisposable
 
     // —— ⑦ 登录请求 → ⑧ 登录预响应（模板回放；完整登录结果由 ⑩ 承载）——
 
-    private byte[]? HandleLogin(CtpFrame frame)
+    private async Task<byte[]?> HandleLoginAsync(CtpFrame frame, CancellationToken ct)
     {
         var body = frame.Body;
         if (!MatchesSignature(body, "E101E23010"))
@@ -338,19 +359,23 @@ internal sealed class CtpFrontSession : IDisposable
 
         try
         {
-            _login = _core.Login(_brokerId, _userId, pwdHex);
-            _log($"[CTP-Front] SimTradingCore 登录成功: 交易日={_login.TradingDay} MaxOrderRef={_login.MaxOrderRef}");
+            // 进程分离（2026-10-05）：登录 = 首个交易所触点——连接 RPC + 登录（密码域零改动：核心把
+            // 密码当不透明字符串，密文 hex 塞 LoginArg.Password 即逐字节复刻进程内行为）。登录绑定账户后，
+            // 服务端把该账户的订单/成交推送路由到本连接——前置无需账户键与事件过滤。
+            await _rpc.ConnectAsync(ct);
+            _login = await _rpc.LoginAsync(new LoginArg(_brokerId, _userId, pwdHex), ct);
+            _log($"[CTP-Front] 交易所登录成功: 交易日={_login.TradingDay} MaxOrderRef={_login.MaxOrderRef}");
 
             // ⑧ 只是预响应——交易日/FrontID/SessionID/MaxOrderRef 由 ⑩（随 ⑨ 系统信息请求下发）承载
             _state = State.Authenticated;
-            _accountId = SimTradingCore.AccountIdOf(_userId);
-            _core.OrderChanged += OnCoreOrderChanged;     // M2：推送管道（会话自订阅自过滤——无需 server 级注册表）
-            _core.TradeFilled += OnCoreTradeFilled;
+            _rpc.OrderPushed += OnRpcOrderPushed;       // M2：推送管道（按连接路由——只收本账户）
+            _rpc.TradePushed += OnRpcTradePushed;
             return BuildFrame(CtpFrontTemplates.BuildLoginRsp(_brokerId, _userId));
         }
         catch (CtpBusinessException ex)
         {
-            // 登录失败帧的形状未抓包——诚实失败：记日志并断开（客户端 SDK 会报连接断开）
+            // 登录失败帧的形状未抓包——诚实失败：记日志并断开（客户端 SDK 会报连接断开）。
+            // 交易所不可达（90012）与凭据失败（90017）同走此路径——真实券商行为。
             _log($"[CTP-Front] 登录失败: [{ex.ErrorId}] {ex.ErrorMsg}——关闭连接");
             _state = State.Closed;
             return null;
@@ -359,7 +384,7 @@ internal sealed class CtpFrontSession : IDisposable
 
     // —— ⑨ 之后：业务帧按 op 签名分派（顺序敏感：先长签名后短前缀）——
 
-    private byte[]? HandleBusiness(CtpFrame frame)
+    private async Task<byte[]?> HandleBusinessAsync(CtpFrame frame, CancellationToken ct)
     {
         var body = frame.Body;
         var day = _login?.TradingDay ?? "";
@@ -394,8 +419,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E28006"))
         {
             var reqId = ExtractReqIdAfter(body, "E12EE3");
-            var accountId = SimTradingCore.AccountIdOf(_userId);
-            var account = _core.QueryAccount(accountId);
+            var account = await _rpc.QueryAccountAsync(ct);   // 绑定账户（登录时绑定）——无需账户键
             _log($"[CTP-Front] 资金查询 reqId={reqId} balance={account.Balance}");
             return reqId is { } id
                 ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(NextQrySeq(), id, _brokerId, account.AccountId, _userId, day, account.Balance))
@@ -408,7 +432,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E28004"))
         {
             var reqId = ExtractReqIdAfter(body, "E1A6E3");
-            var positions = _core.QueryPositions(SimTradingCore.AccountIdOf(_userId));
+            var positions = await _rpc.QueryPositionsAsync(null, ct);   // 绑定账户全量
             _log($"[CTP-Front] 持仓查询 reqId={reqId} → {positions.Count} 条");
             if (reqId is not { } id) return null;
             if (positions.Count == 0)
@@ -453,7 +477,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E2802E"))
         {
             var reqId = ExtractReqIdAfter(body, "E101015DE3");
-            var listed = _core.QueryListedInstruments();
+            var listed = await _rpc.QueryInstrumentsAsync(ct);   // Domain CtpInstrument（板子只读 id/交易所）
             _log($"查合约 reqId={reqId} → 上市 {listed.Count} 个: {string.Join(",", listed.Select(i => i.InstrumentId))}");
             if (reqId is not { } qryId) return null;
             if (listed.Count == 0) return null;
@@ -480,7 +504,10 @@ internal sealed class CtpFrontSession : IDisposable
             _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} TC={(char)o.TimeCondition} reqId={o.ReqId}");
             try
             {
-                _core.InsertOrder(_accountId ?? "", new CtpOrderRequest
+                // 绑定账户插入（OrderRef 直通）；应答结果弃（成功 = 无应答帧——真 CTP 语义）。
+                // RPC 侧服务端的 capture-during-dispatch 保证应答帧先于本单推送写 wire；本会话捕获窗
+                // 跨 await 覆盖推送事件 ⇒ 排空次序保持「应答先于推送」。
+                await _rpc.InsertOrderAsync(new CtpOrderRequest
                 {
                     BrokerId = _brokerId, InvestorId = _userId, InstrumentId = o.InstrumentId,
                     Direction = (CtpDirection)o.Direction, OffsetFlag = (CtpOffsetFlag)o.OffsetFlag,
@@ -490,7 +517,7 @@ internal sealed class CtpFrontSession : IDisposable
                     // 市价单映射成「对手价限价 + IOC」（吃不挂、残量作废）；漏传 ⇒ 核心按默认 GFD 入簿
                     // ⇒ 噪声账户残量单滞留簿上、后续同价单自成交跳过 ⇒ 市场冻死（mapper 注释里实测过的失败模式）。
                     TimeCondition = (CtpTimeCondition)o.TimeCondition,
-                });
+                }, ct);
                 return null;   // 无应答帧——推送走捕获缓冲（DispatchFrameAsync 的 10ms 让路护客户端 tracker 注册）
             }
             catch (CtpBusinessException ex)
@@ -523,7 +550,7 @@ internal sealed class CtpFrontSession : IDisposable
             _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
             try
             {
-                _core.CancelOrder(_accountId ?? "", new CtpOrderRef(_brokerId, _userId, 0, 0, a.OrderRef, ""));
+                await _rpc.CancelOrderAsync(new CtpOrderRef(_brokerId, _userId, 0, 0, a.OrderRef, ""), ct);
                 return BuildFrame(CtpFrontTemplates.BuildOrderActionRspOk(_cmdInstance, a.ReqId, _userId, _brokerId, a.OrderRef));
             }
             catch (CtpBusinessException ex)
