@@ -40,11 +40,15 @@ public enum SplitOrientation
 /// <param name="Orientation">分割方向。</param>
 /// <param name="Children">子布局节点。</param>
 /// <param name="Pixels">可选：每个子节点的宽度/高度提示。null = 均分 Star；<paramref name="Pixels"/>[i] &lt;= 0 → Star（弹性）；
-/// &gt; 0 → 该子节点固定像素宽/高。长度须等于 Children。用此让 chat 区固定 420px、内容区 Star。</param>
+/// &gt; 0 → <see cref="Proportional"/>=false 时该子节点固定像素宽/高（如 chat 420px）、=true 时该值作 <b>星权重</b>。长度须等于 Children。</param>
+/// <param name="Proportional">true = 比例分摊（2026-10-05「分区按比例分摊」）：子区全部按星权重随窗口缩放同比例伸缩
+/// （持久化写权重而非像素；GridSplitter 拖完会把星列改写像素，WorkspaceView 在 DragCompleted 重归一化转回星）。
+/// false（默认）= 像素语义照旧——老 JSON 无此键即 false，兼容。</param>
 public sealed record LayoutSplit(
     SplitOrientation Orientation,
     IReadOnlyList<LayoutNode> Children,
-    double[]? Pixels = null) : LayoutNode;
+    double[]? Pixels = null,
+    bool Proportional = false) : LayoutNode;
 
 /// <summary>单 panel 叶子：<see cref="RegionId"/> 对应 <see cref="PanelDescriptor.RegionId"/>，同时作为命名 region 登记。</summary>
 public sealed record LayoutRegion(string RegionId) : LayoutNode;

@@ -27,6 +27,13 @@ public partial class WorkspaceView : UserControl
     /// <summary>布局持久化键（每租户独立 preferences.json，无需带 workspace id）。</summary>
     private const string LayoutPrefKey = "workbench.layout";
 
+    // ── Proportional split 的最小尺寸钳制（防窗口缩到最小时星列被压死；MinSizeFor 表与折叠路径共用）──
+    private const double LeftTreeMinWidth = 180;
+    private const double ChatMinWidth = 320;
+    private const double TerminalMinHeight = 120;
+    private const double MainMinWidth = 300;
+    private const double MainMinHeight = 200;
+
     private IViewRegistry? _viewRegistry;
     private IRegionManager? _regionManager;
     private IWorkspace? _workspace;
@@ -44,7 +51,8 @@ public partial class WorkspaceView : UserControl
     private Grid? _terminalSplitGrid;                // 含 terminal 的 split Grid
     private int _terminalRow = -1;                   // terminal 在 grid 的 child row（= i*2）
     private int _terminalSplitterRow = -1;           // terminal 前的 GridSplitter row（= i*2-1）
-    private GridLength _terminalExpandedHeight = new(220, GridUnitType.Pixel); // 展开行高（折叠前记实际值，含拖动后）
+    private GridLength _terminalExpandedHeight = new(220, GridUnitType.Pixel); // 展开行高（折叠前记实际值，含拖动后；比例 split 为星权重长度）
+    private bool _terminalProportional;             // 终端行所在 split 是否比例分摊——折叠/展开的 MinHeight 钳制解除/恢复判据
     private ITerminalService? _terminalService;
 
     // ── 侧栏 shell 级左栏条件可见（VSCode 式）：记 lefttree region 宿主 + 父 split Grid + 列位置，
@@ -53,7 +61,8 @@ public partial class WorkspaceView : UserControl
     private Grid? _leftTreeSplitGrid;                // 含 lefttree 的外层水平 split Grid
     private int _leftTreeCol = -1;                   // lefttree 在 grid 的 child col（= i*2）
     private int _leftTreeSplitterCol = -1;           // lefttree 前的 GridSplitter col（= i*2-1）
-    private GridLength _leftTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后）
+    private GridLength _leftTreeExpandedWidth = new(240, GridUnitType.Pixel); // 展开列宽（隐藏前记实际值，含拖动后；比例 split 为星权重长度）
+    private bool _leftTreeProportional;              // 左栏列所在 split 是否比例分摊——同终端（MinWidth 钳制）
     private ILeftTreePanelService? _leftTreeService;  // 主侧栏手动 toggle（镜像 chat service；默认开）
     private int _documentsTabIndex = -1;             // documents 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显文件树）
     private int _sourceControlTabIndex = -1;         // sourcecontrol 在 LayoutTabbed.RegionIds 中的索引（-1 = 无 → 侧栏不显 SCM 面板）
@@ -67,11 +76,13 @@ public partial class WorkspaceView : UserControl
     private Grid? _chatSplitGrid;                    // 含 chat 的 split Grid
     private int _chatCol = -1;                        // chat 在 grid 的 child col（= i*2）
     private int _chatSplitterCol = -1;                // chat 前的 GridSplitter col（= i*2-1）
-    private GridLength _chatExpandedWidth = new(420, GridUnitType.Pixel); // 展开列宽（折叠前记实际值，含拖动后）
+    private GridLength _chatExpandedWidth = new(420, GridUnitType.Pixel); // 展开列宽（折叠前记实际值，含拖动后；比例 split 为星权重长度）
+    private bool _chatProportional;                 // 聊天列所在 split 是否比例分摊——同终端（MinWidth 钳制）
     private IChatPanelService? _chatService;
 
     /// <summary>隐藏宿主尺寸记忆表：折叠/切 tab 隐藏后子控件 Bounds=0，ReadPixels 用此记忆的展开尺寸替换，防持久化 0。
-    /// key=隐藏的 ContentControl（terminal/lefttree host），value=隐藏前的展开尺寸（像素值）。显隐时增删。</summary>
+    /// key=隐藏的 ContentControl（terminal/lefttree/chat host），value=隐藏前的<b>实际像素</b>（Bounds）——
+    /// 像素 split 当回退宽；比例 split 的 ReadProportionalWeights 当伪实际算权重（星权重值不是像素，故记 Bounds 而非 GridLength.Value）。显隐时增删。</summary>
     private readonly Dictionary<Control, double> _hiddenSizes = new();
 
     private bool _persistWired;
@@ -99,6 +110,9 @@ public partial class WorkspaceView : UserControl
         _chatSplitGrid = null;
         _chatCol = -1;
         _chatSplitterCol = -1;
+        _terminalProportional = false;
+        _leftTreeProportional = false;
+        _chatProportional = false;
         _hiddenSizes.Clear();
         // 解订阅旧 workspace 的 SelectedTabIndex 通知（重建/切换工作台时）。
         if (_workspaceNpc is not null)
@@ -219,13 +233,26 @@ public partial class WorkspaceView : UserControl
             else
             {
                 int childIdx = i / 2;
-                // Pixels[i] > 0 → 固定像素（如 chat 420px）；null 或 <= 0 → Star（弹性，如内容区）。
-                len = (s.Pixels is not null && childIdx < s.Pixels.Length && s.Pixels[childIdx] > 0)
-                    ? new GridLength(s.Pixels[childIdx], GridUnitType.Pixel)
-                    : new GridLength(1, GridUnitType.Star);
+                if (s.Proportional)
+                    // 比例分摊（2026-10-05）：Pixels[i] = 星权重（<=0 兜底 1）——子区随窗口缩放按比例同伸缩。
+                    // GridSplitter 拖完会把星列改写成像素长度，SyncExpandedSizes → RenormalizeProportionalSplits 转回星。
+                    len = new GridLength(
+                        s.Pixels is not null && childIdx < s.Pixels.Length && s.Pixels[childIdx] > 0 ? s.Pixels[childIdx] : 1,
+                        GridUnitType.Star);
+                else
+                    // 像素语义照旧：Pixels[i] > 0 → 固定像素（如 chat 420px）；null 或 <= 0 → Star（弹性，如内容区）。
+                    len = (s.Pixels is not null && childIdx < s.Pixels.Length && s.Pixels[childIdx] > 0)
+                        ? new GridLength(s.Pixels[childIdx], GridUnitType.Pixel)
+                        : new GridLength(1, GridUnitType.Star);
             }
             if (horiz) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = len });
             else grid.RowDefinitions.Add(new RowDefinition { Height = len });
+            // 比例 split 的星列加最小尺寸钳制——防窗口缩到最小时被压死（像素 split 不加：折叠路径只处理比例列的钳制解除）。
+            if (s.Proportional && !isSplitter && MinSizeFor(s.Children[i / 2], horiz) is { } min)
+            {
+                if (horiz) grid.ColumnDefinitions[^1].MinWidth = min;
+                else grid.RowDefinitions[^1].MinHeight = min;
+            }
         }
         // 子控件先建好再登记 split 状态——收集时读子控件 Bounds.Width/Height 取拖动后实际像素宽。
         var children = new List<Control>(n);
@@ -240,6 +267,7 @@ public partial class WorkspaceView : UserControl
                 _terminalRow = i * 2;
                 _terminalSplitterRow = i * 2 - 1; // terminal 前的 splitter（terminal 非首 child 时存在）
                 _terminalExpandedHeight = grid.RowDefinitions[i * 2].Height;
+                _terminalProportional = s.Proportional;
             }
             // 含 lefttree region 的外层水平 split：记 Grid + lefttree 的列位置，用于切 tab 时显隐左栏（VSCode 式）。
             if (ReferenceEquals(child, _leftTreeHost) && _leftTreeSplitGrid is null && horiz)
@@ -250,6 +278,7 @@ public partial class WorkspaceView : UserControl
                 // 与 chat（末 child，藏其前 splitter i*2-1）方向相反，故此处用 +1。
                 _leftTreeSplitterCol = i * 2 + 1;
                 _leftTreeExpandedWidth = grid.ColumnDefinitions[i * 2].Width;
+                _leftTreeProportional = s.Proportional;
             }
             // 含 chat region 的水平 split：记 Grid + chat 的列位置，用于折叠/展开右栏（VSCode 式可折叠侧栏）。
             // horiz 守卫——聊天是顶层水平 split 直子；若未来嵌进垂直 split 则跳过、ApplyChatVisibility 空守卫早返不崩。
@@ -259,6 +288,7 @@ public partial class WorkspaceView : UserControl
                 _chatCol = i * 2;
                 _chatSplitterCol = i * 2 - 1; // chat 前的 splitter（chat 非首 child 时存在）
                 _chatExpandedWidth = grid.ColumnDefinitions[i * 2].Width;
+                _chatProportional = s.Proportional;
             }
             int idx = i * 2;
             if (horiz) Grid.SetColumn(child, idx); else Grid.SetRow(child, idx);
@@ -360,6 +390,7 @@ public partial class WorkspaceView : UserControl
     private double[]? ReadPixels(LayoutSplit s, (Grid Grid, List<Control> Children) st)
     {
         if (s.Pixels is null) return null;
+        if (s.Proportional) return ReadProportionalWeights(s, st);   // 比例 split 持久化写星权重（窗口尺寸无关）
         var pixels = new double[s.Pixels.Length];
         for (int i = 0; i < s.Pixels.Length; i++)
         {
@@ -381,6 +412,33 @@ public partial class WorkspaceView : UserControl
             }
         }
         return pixels;
+    }
+
+    /// <summary>Proportional split 的持久化：写<b>星权重</b>（实际宽 / 子项实际总宽——窗口尺寸无关，跨机器/跨重启一致）。
+    /// 隐藏子项用 <see cref="_hiddenSizes"/> 记忆的像素当伪实际——比率是相对量，量纲无关（0.35 权重与 420px 伪实际算出同一比率）。
+    /// 任一子项既无 Bounds 又无记忆（早于首个布局 pass）→ 原样返回，免写垃圾权重。</summary>
+    private double[]? ReadProportionalWeights(LayoutSplit s, (Grid Grid, List<Control> Children) st)
+    {
+        int n = Math.Min(s.Pixels!.Length, st.Children.Count);
+        if (n == 0) return s.Pixels;
+        bool horiz = s.Orientation == SplitOrientation.Horizontal;
+        var actual = new double[n];
+        double sum = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var child = st.Children[i];
+            var sz = horiz ? child.Bounds.Width : child.Bounds.Height;
+            if (sz <= 0 && !child.IsVisible && _hiddenSizes.TryGetValue(child, out var remembered))
+                sz = remembered;   // 隐藏宿主：伪实际像素（权重语义下有效）
+            if (sz <= 0) return s.Pixels;
+            actual[i] = sz;
+            sum += sz;
+        }
+        if (sum <= 0) return s.Pixels;
+        var weights = new double[s.Pixels.Length];
+        for (int i = 0; i < weights.Length; i++)
+            weights[i] = i < n ? Math.Round(actual[i] / sum, 4) : s.Pixels[i];
+        return weights;
     }
 
     /// <summary>Loaded 时订阅宿主窗口 Closing——与 NotesView 自持久化同模式。
@@ -429,12 +487,14 @@ public partial class WorkspaceView : UserControl
         var row = _terminalSplitGrid.RowDefinitions[_terminalRow];
         if (!visible)
         {
-            if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后的实际值）
+            if (row.Height.Value > 0) _terminalExpandedHeight = row.Height; // 记当前展开高度（含用户拖动后/比例星权重）
+            row.MinHeight = 0;   // 比例行须临时解除最小高钳制（Grid 对 MinHeight 的钳制优先于 Height=0 → 折不进 0）；像素行本无钳制
             row.Height = new GridLength(0);
             SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, false);
             if (_terminalHost is not null)
             {
-                _hiddenSizes[_terminalHost] = _terminalExpandedHeight.Value > 0 ? _terminalExpandedHeight.Value : 220;
+                // 记忆值存隐藏前的实际像素（Bounds）——比例 split 的 ReadProportionalWeights 拿它当伪实际算权重。
+                _hiddenSizes[_terminalHost] = _terminalHost.Bounds.Height > 0 ? _terminalHost.Bounds.Height : 220;
                 _terminalHost.IsVisible = false;
             }
         }
@@ -443,6 +503,7 @@ public partial class WorkspaceView : UserControl
             row.Height = _terminalExpandedHeight.Value > 0
                 ? _terminalExpandedHeight
                 : new GridLength(220, GridUnitType.Pixel);
+            if (_terminalProportional) row.MinHeight = TerminalMinHeight;   // 恢复比例行的最小高钳制
             SetSplitterVisible(_terminalSplitGrid, _terminalSplitterRow, true);
             if (_terminalHost is not null)
             {
@@ -495,12 +556,13 @@ public partial class WorkspaceView : UserControl
         var col = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol];
         if (kind is null)
         {
-            if (col.Width.Value > 0) _leftTreeExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后的实际值）
+            if (col.Width.Value > 0) _leftTreeExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后/比例星权重）
             if (_leftTreeHost is not null)
             {
-                _hiddenSizes[_leftTreeHost] = _leftTreeExpandedWidth.Value > 0 ? _leftTreeExpandedWidth.Value : 240;
+                _hiddenSizes[_leftTreeHost] = _leftTreeHost.Bounds.Width > 0 ? _leftTreeHost.Bounds.Width : 240;
                 _leftTreeHost.IsVisible = false;
             }
+            col.MinWidth = 0;   // 比例列须临时解除最小宽钳制（否则 Grid 钳住折不进 0）
             col.Width = new GridLength(0);
             SetSplitterVisibleCol(_leftTreeSplitGrid, _leftTreeSplitterCol, false);
         }
@@ -509,6 +571,7 @@ public partial class WorkspaceView : UserControl
             col.Width = _leftTreeExpandedWidth.Value > 0
                 ? _leftTreeExpandedWidth
                 : new GridLength(240, GridUnitType.Pixel);
+            if (_leftTreeProportional) col.MinWidth = LeftTreeMinWidth;   // 恢复比例列的最小宽钳制
             SetSplitterVisibleCol(_leftTreeSplitGrid, _leftTreeSplitterCol, true);
             if (_leftTreeHost is not null)
             {
@@ -532,12 +595,60 @@ public partial class WorkspaceView : UserControl
     /// <c>_xxxExpandedWidth/Height</c> 仍是旧值，下次 ApplyXxxVisibility（切导航触发）用旧值覆盖 → 「切导航就重置」。</summary>
     private void SyncExpandedSizes()
     {
+        RenormalizeProportionalSplits();
         if (_terminalSplitGrid is not null && _terminalRow >= 0)
             _terminalExpandedHeight = _terminalSplitGrid.RowDefinitions[_terminalRow].Height;
         if (_leftTreeSplitGrid is not null && _leftTreeCol >= 0)
             _leftTreeExpandedWidth = _leftTreeSplitGrid.ColumnDefinitions[_leftTreeCol].Width;
         if (_chatSplitGrid is not null && _chatCol >= 0)
             _chatExpandedWidth = _chatSplitGrid.ColumnDefinitions[_chatCol].Width;
+    }
+
+    /// <summary><b>GridSplitter 拖完会把星列改写成像素长度</b>（Avalonia GridSplitter 设 GridLength(px)）——按当前实际尺寸
+    /// 重算星权重写回，窗口 resize 才能继续按比例分摊。隐藏子项（宽 0）跳过并保持 0（展开走 _xxxExpanded 记忆恢复）。
+    /// 在 SyncExpandedSizes 开头调（先归一化再捕获记忆字段 → 记住的是星长度而非拖后的像素长度）。
+    /// 按子项 Bounds 读实际尺寸（拖动期间每帧都有布局 pass，DragCompleted 时 Bounds 即拖后值）。</summary>
+    private void RenormalizeProportionalSplits()
+    {
+        foreach (var (node, st) in _splitState)
+        {
+            if (node is not LayoutSplit { Proportional: true } s) continue;
+            bool horiz = s.Orientation == SplitOrientation.Horizontal;
+            int n = st.Children.Count;
+            var actual = new double[n];
+            double sum = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var child = st.Children[i];
+                if (!child.IsVisible) continue;   // 折叠列保持 0，不参与权重重算
+                var sz = horiz ? child.Bounds.Width : child.Bounds.Height;
+                if (sz <= 0) continue;            // 未布局——保留旧权重
+                actual[i] = sz;
+                sum += sz;
+            }
+            if (sum <= 0) continue;
+            for (int i = 0; i < n; i++)
+            {
+                if (actual[i] <= 0) continue;
+                var weight = Math.Round(actual[i] / sum, 4);
+                if (horiz) st.Grid.ColumnDefinitions[i * 2].Width = new GridLength(weight, GridUnitType.Star);
+                else st.Grid.RowDefinitions[i * 2].Height = new GridLength(weight, GridUnitType.Star);
+            }
+        }
+    }
+
+    /// <summary>Proportional split 子区的最小尺寸（防窗口缩到最小时星列被压死）。已知侧区按 region id 查表；
+    /// tabbed/嵌套 split = 主内容区用主区下限。窗口 MinWidth 900 下可共存：180+300+320+6×2=812 ≤ 900-72(rail)。</summary>
+    private static double? MinSizeFor(LayoutNode child, bool horiz)
+    {
+        var regionId = (child as LayoutRegion)?.RegionId;
+        return regionId switch
+        {
+            PanelKeys.LeftTree => horiz ? (double?)LeftTreeMinWidth : null,
+            PanelKeys.Chat => horiz ? (double?)ChatMinWidth : null,
+            PanelKeys.Terminal => horiz ? null : TerminalMinHeight,
+            _ => horiz ? MainMinWidth : MainMinHeight,   // 主内容区（tabbed/嵌套 split）与未知 region 的通用下限
+        };
     }
 
     // ── 右侧 AI 聊天面板折叠/展开（VSCode 式可折叠侧栏：chat region 改 Grid 列宽，聊天视图不销毁，流式不中断） ──
@@ -562,13 +673,15 @@ public partial class WorkspaceView : UserControl
         var col = _chatSplitGrid.ColumnDefinitions[_chatCol];
         if (!visible)
         {
-            if (col.Width.Value > 0) _chatExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后的实际值）
+            if (col.Width.Value > 0) _chatExpandedWidth = col.Width; // 记当前展开宽度（含用户拖动后/比例星权重）
             if (_chatHost is not null)
             {
-                // 须在 IsVisible=false 前设 _hiddenSizes，供 ReadPixels 取回退宽（折叠态不持久化 0）。
-                _hiddenSizes[_chatHost] = _chatExpandedWidth.Value > 0 ? _chatExpandedWidth.Value : 420;
+                // 须在 IsVisible=false 前设 _hiddenSizes（供 ReadPixels/ReadProportionalWeights 取回退值——折叠态不持久化 0）：
+                // 存隐藏前的实际像素 Bounds（比例 split 当伪实际算权重）。
+                _hiddenSizes[_chatHost] = _chatHost.Bounds.Width > 0 ? _chatHost.Bounds.Width : 420;
                 _chatHost.IsVisible = false;
             }
+            col.MinWidth = 0;   // 比例列须临时解除最小宽钳制（否则 Grid 钳住折不进 0）
             col.Width = new GridLength(0);
             SetSplitterVisibleCol(_chatSplitGrid, _chatSplitterCol, false);
         }
@@ -577,6 +690,7 @@ public partial class WorkspaceView : UserControl
             col.Width = _chatExpandedWidth.Value > 0
                 ? _chatExpandedWidth
                 : new GridLength(420, GridUnitType.Pixel);
+            if (_chatProportional) col.MinWidth = ChatMinWidth;   // 恢复比例列的最小宽钳制
             SetSplitterVisibleCol(_chatSplitGrid, _chatSplitterCol, true);
             if (_chatHost is not null)
             {

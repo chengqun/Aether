@@ -47,7 +47,7 @@
             </StackPanel>
             <StackPanel Spacing="4">
               <TextBlock Text="合约代码" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-              <TextBox Text="{Binding Symbol}" />
+              <TextBox Text="{Binding Symbol}" Watermark="如 ag2610 / zx001" />
             </StackPanel>
             <StackPanel Spacing="4">
               <TextBlock Text="开始日期" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
@@ -111,7 +111,7 @@
 
             <StackPanel Spacing="4">
               <TextBlock Text="合约(逗号分隔)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
-              <TextBox Text="{Binding LiveInstruments}" />
+              <TextBox Text="{Binding LiveInstruments}" Watermark="如 ag2610,zx001（逗号分隔）" />
             </StackPanel>
             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
               <StackPanel Grid.Column="0" Spacing="4">

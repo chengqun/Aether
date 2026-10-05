@@ -396,7 +396,7 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
         }
     }
 
-    /// <summary>两棵布局树覆盖相同的 region id 序列（有序比较：面板增删或 tab 顺序变更都会不等 → 回退默认）。
+    /// <summary>两棵布局树覆盖相同的 region id 序列 + split 旗标（有序比较：面板增删、tab 顺序变更或 Proportional 语义变更都会不等 → 回退默认）。
     /// 有序而非集合：当代码默认 tab 顺序变化（如某面板提首位），旧持久化布局顺序不匹配 → 回退新默认，免被旧顺序覆盖。</summary>
     private static bool CoversSameRegions(LayoutNode a, LayoutNode b)
         => CollectRegions(a).SequenceEqual(CollectRegions(b));
@@ -410,6 +410,8 @@ public partial class WorkbenchShellViewModel : MainViewModelBase, IThemeHost
             switch (x)
             {
                 case LayoutSplit s:
+                    // split 旗标 token：Proportional 语义（像素↔星权重）变化时旧存档须回退默认——带进序列参与有序比较。
+                    list.Add($"$split:{s.Proportional}");
                     foreach (var c in s.Children) Walk(c);
                     break;
                 case LayoutRegion r:

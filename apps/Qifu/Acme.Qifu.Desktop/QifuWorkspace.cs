@@ -46,10 +46,12 @@ public static class QifuWorkspace
                         new LayoutTabbed(RegionIds: new[] { PanelKeys.Knowledge, PanelKeys.KnowledgeScm, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity }, SelectedIndex: 0),
                         new LayoutRegion(RegionId: PanelKeys.Terminal),
                     },
-                    // Pixels: [0, 220] → 主面板区 Star（弹性）+ 终端区 220px 固定（可拖高度，拖动后持久化）。
-                    Pixels: new double[] { 0, 220 }),
+                    // Proportional（2026-10-05 分区按比例分摊）：权重 [0.72, 0.28] ≈ 原 Star+220px 的分布——
+                    // 窗口缩放时主面板/终端同比例伸缩；拖动后持久化权重（WorkspaceView 重归一化回星）。
+                    Pixels: new double[] { 0.72, 0.28 }, Proportional: true),
                 new LayoutRegion(RegionId: PanelKeys.Chat),
             },
-            // Pixels: [240, 0, 420] → 文件树 240px 固定 + 中区 Star（弹性）+ chat 区 420px 固定。
-            Pixels: new double[] { 240, 0, 420 }));
+            // Proportional（2026-10-05 分区按比例分摊）：权重 [0.2, 0.45, 0.35] ≈ 原 240/Star/420 的分布——
+            // 窗口缩放时左树/中区/聊天同比例伸缩（各列有最小宽钳制防压死）；拖动后持久化权重；旧像素存档自动回退本默认。
+            Pixels: new double[] { 0.2, 0.45, 0.35 }, Proportional: true));
 }

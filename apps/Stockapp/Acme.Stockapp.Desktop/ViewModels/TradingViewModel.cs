@@ -185,7 +185,9 @@ public partial class TradingViewModel : ObservableObject
     public string[] StrategyOptions => StrategyRegistry.GetRegisteredNames().ToArray();
     public string[] ResolutionOptions { get; } = new[] { "Daily", "Hour", "Minute" };
 
-    [ObservableProperty] private string _symbol = "ag2610";
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand))]   // CanRun 含合约非空守卫——清空/填写要刷新按钮态
+    private string _symbol = "";   // 不设默认（2026-10-05 用户要求）——误导跑错合约（公网 sim 默认仅 zx001 上市）
     [ObservableProperty] private string _strategyName = "";
     [ObservableProperty] private DateTime? _startDate = DateTime.Today.AddDays(-365);
     [ObservableProperty] private DateTime? _endDate = DateTime.Today;
@@ -222,11 +224,17 @@ public partial class TradingViewModel : ObservableObject
     }
 
     // 回测/实盘共享 Lean 全局静态，绝不可并发——互查对方运行态（LeanGlobalLock 是硬兜底）。
-    private bool CanRun => !IsRunning && !IsLiveRunning;
+    // 合约非空守卫（2026-10-05）：空合约直通 Lean 引擎只会得到引擎报错——按钮态前置拦下。
+    private bool CanRun => !IsRunning && !IsLiveRunning && !string.IsNullOrWhiteSpace(Symbol);
 
     [RelayCommand(CanExecute = nameof(CanRun))]
     private async Task RunAsync()
     {
+        if (string.IsNullOrWhiteSpace(Symbol))   // 兜底（CanExecute 之外的直接调用路径）
+        {
+            Error = "请填写合约代码（如 ag2610 / zx001）";
+            return;
+        }
         IsRunning = true;
         StatusMessage = "回测运行中…";
         Error = string.Empty;
@@ -318,7 +326,7 @@ public partial class TradingViewModel : ObservableObject
 
     public string[] LiveResolutionOptions { get; } = new[] { "Minute", "Hour", "Daily", "Tick" };
 
-    [ObservableProperty] private string _liveInstruments = "ag2610";
+    [ObservableProperty] private string _liveInstruments = "";   // 不设默认（2026-10-05）；启动守卫已有「请填写至少一个合约」
     [ObservableProperty] private string _liveResolution = "Minute";
     [ObservableProperty] private bool _verboseLog;
     [ObservableProperty] private bool _isLiveMode;   // false=回测模式, true=实盘模式
