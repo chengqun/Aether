@@ -50,9 +50,12 @@ public partial class CtpBrokerage
             // （LimitOrder ctor 只设 LimitPrice 不设基类 Price；FillModel 同样读 order.LimitPrice）。
             // 传 order.Price 给限价单 = 传 0 = 映射器拒「限价单价格无效」（2026-09-28 实测第五层）。
             var orderPrice = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : order.Price;
+            // post-only（BTC 对标 2026-10-05）：Lean Tag 含 "post-only" ⇒ 只入簿不吃单（交易所插入时
+            // 会交叉即整单拒 90018——做市策略防误吃、保证付 maker 费）。Tag 是 Lean 下单 API 现成用户通道。
+            var postOnly = order.Tag?.Contains("post-only", StringComparison.OrdinalIgnoreCase) ?? false;
             var result = CtpOrderRequestMapper.Map(new CtpOrderRequestMapper.MapInput(
                 order.Direction, order.Type, orderPrice, order.Quantity, instrumentId,
-                snapshot, tick, _session.BrokerId ?? "", _session.UserId ?? "", opts.MaxOrderVolume));
+                snapshot, tick, _session.BrokerId ?? "", _session.UserId ?? "", opts.MaxOrderVolume, postOnly));
             if (result.Error != null)
             {
                 CtpLeanGateway.Log($"[Brokerage] 拒单: {result.Error}（{order.Symbol.Value} {order.Quantity} {order.Type}）");

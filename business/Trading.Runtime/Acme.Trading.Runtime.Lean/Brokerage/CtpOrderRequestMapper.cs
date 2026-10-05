@@ -43,7 +43,8 @@ public static class CtpOrderRequestMapper
         CtpTick? LatestTick,
         string BrokerId,
         string InvestorId,
-        int MaxOrderVolume);
+        int MaxOrderVolume,
+        bool PostOnly = false);      // Tag "post-only" ⇒ TC='4'（BTC 对标 2026-10-05，仅限价单）
 
     public sealed record MapResult(IReadOnlyList<CtpOrderRequest> Requests, string? Error);
 
@@ -85,6 +86,15 @@ public static class CtpOrderRequestMapper
                 break;
             default:
                 return new MapResult(Array.Empty<CtpOrderRequest>(), $"不支持的订单类型: {input.OrderType}");
+        }
+
+        // post-only（BTC 对标 2026-10-05）：只入簿不吃单——交易所插入时会交叉即整单拒（90018），
+        // 保证永远付 maker 费。仅限价单支持（与市价映射的 IOC 吃单语义互斥）。
+        if (input.PostOnly)
+        {
+            if (input.OrderType != OrderType.Limit)
+                return new MapResult(Array.Empty<CtpOrderRequest>(), "post-only 仅支持限价单");
+            timeCondition = CtpTimeCondition.PostOnly;
         }
 
         var direction = isBuy ? CtpDirection.Buy : CtpDirection.Sell;

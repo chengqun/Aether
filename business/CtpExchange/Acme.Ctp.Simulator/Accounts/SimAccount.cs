@@ -131,9 +131,14 @@ public sealed class SimAccount
     public static double MarginOf(SimInstrument instrument, double price, int volume)
         => instrument.MarginPerLot(price) * volume;
 
-    /// <summary>手续费（成交额 × 费率）。</summary>
-    public static double FeeOf(SimInstrument instrument, double price, int volume)
-        => Math.Abs(price) * instrument.VolumeMultiple * volume * instrument.CommissionRate;
+    /// <summary>
+    /// 手续费（成交额 × 费率）。isMaker：被动成交按 maker 费率（挂单便宜）、攻击成交按 taker 费率（吃单贵）
+    /// ——BTC 对标（2026-10-05）；未配置差异化费率时两者同为 <see cref="SimInstrument.CommissionRate"/>（CTP 形态）。
+    /// 下单冻结用 taker 版（最坏情形保守冻结——maker 成交实际计费更少，差额在终态/撤销释放）。
+    /// </summary>
+    public static double FeeOf(SimInstrument instrument, double price, int volume, bool isMaker = false)
+        => Math.Abs(price) * instrument.VolumeMultiple * volume
+           * (isMaker ? instrument.EffectiveMakerFeeRate : instrument.EffectiveTakerFeeRate);
 
     /// <summary>镜像成 Domain DTO（UI / AI 工具消费）。</summary>
     public CtpAccount ToDto() => new()

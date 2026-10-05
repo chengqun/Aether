@@ -168,6 +168,54 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
     }
 
     [Fact]
+    public async Task PostOnly限价单_TC4经线协议透传_入簿与整单拒收()
+    {
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        using var trader = Login(dir);
+        _sim.SeedMaker();   // bid 2999 / ask 3001
+
+        // ① 不交叉（买 2900 < bid 2999——同侧低价）：TC '4' 经 ⑲ 量 run 尾字节透传（VolShape 白名单）
+        //    ⇒ 核心按 PostOnly 受理入簿（GFD 同款挂单）。native SDK 会把非标 TC 字节原样序列化进 ⑲——
+        //    本 E2E 即裁判（改 VolShape 前 TC '4' 会让 ⑲ 解析失败静默丢单）。
+        var rest = await trader.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 2900, Volume = 1, ExchangeId = "DCE",
+            TimeCondition = TimeCondition.PostOnly,
+        });
+        Assert.True(await UntilAsync(() => _sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User))
+            .Any(o => o.OrderRef == rest.OrderRef && (char)o.OrderStatusRaw == '3')),
+            "核心侧未见 post-only 挂单（⑲ VolShape 未认 TC '4'？）");
+
+        // ② 会交叉（买 3100 ≥ maker ask 3001）：核心整单拒收 90018——拒在报单号分配/冻结之前 ⇒
+        //    QueryOrders 无该 ref 且资金零冻结（核心侧拒单是权威断言——⑳ 推送的客户端可见性是已知边界）
+        var cross = await trader.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3100, Volume = 1, ExchangeId = "DCE",
+            TimeCondition = TimeCondition.PostOnly,
+        });
+        var deadline = Environment.TickCount64 + 5000;
+        while (Environment.TickCount64 < deadline
+               && _sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User)).Any(o => o.OrderRef == cross.OrderRef))
+        {
+            await Task.Delay(50);   // ⑲ fire-and-forget：等核心侧处理完毕再断言缺席
+        }
+        Assert.DoesNotContain(_sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User)), o => o.OrderRef == cross.OrderRef);
+
+        // ③ ①的挂单撤单闭环（冻结释放）——证明 post-only 与 IOC/GFD 共用常规生命周期
+        await trader.OrderActionAsync(FrontLoopback.Broker, User, 1, 1, rest.OrderRef, "DCE");
+        Assert.True(await UntilAsync(() => _sim.Core.QueryOrders(SimTradingCore.AccountIdOf(User))
+            .Any(o => o.OrderRef == rest.OrderRef && (char)o.OrderStatusRaw == '5')), "post-only 撤单 '5' 终态未到达");
+        var acct = _sim.Core.QueryAccount(SimTradingCore.AccountIdOf(User));
+        Assert.True(acct.FrozenMargin == 0 && acct.Available == FrontLoopback.InitialBalance,
+            $"post-only 撤单后冻结未释放: FrozenMargin={acct.FrozenMargin} Available={acct.Available}");
+    }
+
+    [Fact]
     public async Task 交易所模式_双客户端互为对手_IOC吃单_撤单终态推送()
     {
         // 用户场景 E2E（做市商 + 噪声交易者经前置端口跑起来——2026-10-02 双 bot 冻结根因的回归钉）：

@@ -37,6 +37,20 @@ public sealed record SimInstrument
     /// <summary>手续费率（按成交额计，双边）。仿真的近似值，够测「手续费吃可用资金」。</summary>
     public double CommissionRate { get; init; } = 0.00005;
 
+    /// <summary>maker（被动成交）手续费率；null = 回退 <see cref="CommissionRate"/>（CTP 双边同费形态）。
+    /// BTC 对标（2026-10-05）：挂单便宜——被动成交按此计，费额 = 成交额 × 费率。</summary>
+    public double? MakerCommissionRate { get; init; }
+
+    /// <summary>taker（攻击成交）手续费率；null = 回退 <see cref="CommissionRate"/>。
+    /// BTC 对标：吃单贵——攻击成交按此计；下单冻结亦按此（最坏情形保守冻结，maker 成交差额终态释放）。</summary>
+    public double? TakerCommissionRate { get; init; }
+
+    /// <summary>实际生效的 maker 费率（未配置回退单一费率）。</summary>
+    public double EffectiveMakerFeeRate => MakerCommissionRate ?? CommissionRate;
+
+    /// <summary>实际生效的 taker 费率（未配置回退单一费率）。</summary>
+    public double EffectiveTakerFeeRate => TakerCommissionRate ?? CommissionRate;
+
     /// <summary>涨跌停板幅度（相对昨结算），默认 ±8%。随机游走与撮合价格都夹在此区间内。</summary>
     public double LimitRate { get; init; } = 0.08;
 

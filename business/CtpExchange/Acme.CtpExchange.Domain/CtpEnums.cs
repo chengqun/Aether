@@ -17,8 +17,12 @@ public enum CtpOffsetFlag : byte
 /// <summary>报单价格类型。</summary>
 public enum CtpOrderPriceType : byte { Market = (byte)'0', Limit = (byte)'2' }
 
-/// <summary>有效期类型。</summary>
-public enum CtpTimeCondition : byte { IOC = (byte)'1', FOK = (byte)'2', GFD = (byte)'3' }
+/// <summary>
+/// 有效期类型。'1'/'2'/'3' 对齐真实 CTP；<see cref="PostOnly"/> ('4') 为**本地协议扩展值**（非真实 CTP TC——
+/// crypto post-only/GTX 语义：GFD + 插入时不得交叉，会吃单整单拒收，保证永远付 maker 费率，2026-10-05 BTC 对标）。
+/// ⑲ wire 侧经量字段 run 尾字节透传（front codec VolShape 白名单须含 '4'）。
+/// </summary>
+public enum CtpTimeCondition : byte { IOC = (byte)'1', FOK = (byte)'2', GFD = (byte)'3', PostOnly = (byte)'4' }
 
 /// <summary>持仓方向。</summary>
 public enum CtpPosiDirection : byte { Net = (byte)'1', Long = (byte)'2', Short = (byte)'3' }

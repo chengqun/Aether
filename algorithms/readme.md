@@ -26,3 +26,13 @@ Windows: %LOCALAPPDATA%\Aether\Desktop-Stockapp\labs\leanalgorithms\
 ## 维护
 
 在资料库编辑器改了 labs 里的算法、想把改动记录进仓库时：把文件拷回本目录即可——`tests/Acme.Trading.Runtime.Tests/LeanBotStrategyCompileTests` 直接编译**本目录**的文件做锁定（拷回即被测试覆盖，无需再同步任何镜像副本）。
+
+## post-only（可选，做市防误吃）
+
+下单时给 Lean 订单的 `tag` 加 `post-only`（不区分大小写），该限价单只入簿不吃单——插入时会交叉（吃对手挂单）则交易所整单拒收（90018），保证永远付 maker 费率：
+
+```csharp
+LimitOrder(_symbol, volume, price, tag: "MM买 post-only");
+```
+
+仅限价单支持；市价单带此 tag 会被映射器拒单。手续费按品种：`zx` 系列为 maker 2bp / taker 5bp（BTC 对标），真实品种双边同费。

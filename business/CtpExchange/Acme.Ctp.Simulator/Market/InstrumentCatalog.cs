@@ -41,7 +41,9 @@ public static class InstrumentCatalog
     /// </summary>
     private static readonly Dictionary<string, SimInstrument> Varieties = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["zx"] = new SimInstrument { InstrumentId = "zx", ExchangeId = "SIM", VolumeMultiple = 10, MarginRate = 0.10, PriceTick = 1, BasePrice = 3800, PreSettlement = 3798 },
+        // zx = BTC 对标品种（2026-10-05 起）：maker/taker 差异化手续费（挂 2bp / 吃 5bp，永续 VIP0 量级）。
+        // 其余真实品种不设 ⇒ 回退单一 CommissionRate（CTP 双边同费形态）。
+        ["zx"] = new SimInstrument { InstrumentId = "zx", ExchangeId = "SIM", VolumeMultiple = 10, MarginRate = 0.10, PriceTick = 1, BasePrice = 3800, PreSettlement = 3798, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
         ["ag"] = new SimInstrument { InstrumentId = "ag", ExchangeId = "SHFE", VolumeMultiple = 15, MarginRate = 0.12, PriceTick = 1, BasePrice = 7000, PreSettlement = 6990 },
         ["au"] = new SimInstrument { InstrumentId = "au", ExchangeId = "SHFE", VolumeMultiple = 1000, MarginRate = 0.10, PriceTick = 0.02, BasePrice = 560, PreSettlement = 558 },
         ["cu"] = new SimInstrument { InstrumentId = "cu", ExchangeId = "SHFE", VolumeMultiple = 5, MarginRate = 0.12, PriceTick = 10, BasePrice = 78000, PreSettlement = 77900 },

@@ -41,6 +41,8 @@ public static class SimErrorCodes
     public const int NoCounterparty = 90016;
     /// <summary>凭据不匹配 / 登录锁定（已设密码的账户密码错误，或连续失败触发防爆破锁定）。</summary>
     public const int BadCredentials = 90017;
+    /// <summary>post-only 限价单插入时会吃单（对手簿在限价内有他人挂单）⇒ 整单拒收（2026-10-05 BTC 对标）。</summary>
+    public const int PostOnlyWouldCross = 90018;
 }
 
 /// <summary>风控判定结果。</summary>

@@ -56,6 +56,38 @@ public class CtpOrderRequestMapperTests
         Assert.Equal("user01", req.InvestorId);
     }
 
+    // —— post-only（BTC 对标 2026-10-05：Tag "post-only" ⇒ TC='4'，仅限价单）——
+
+    [Fact]
+    public void PostOnly_limit_order_maps_to_TC4()
+    {
+        var r = CtpOrderRequestMapper.Map(Input(+1m, type: OrderType.Limit, limitPrice: 6990m, maxVolume: 10) with { PostOnly = true });
+
+        Assert.Null(r.Error);
+        var req = Assert.Single(r.Requests);
+        Assert.Equal(CtpTimeCondition.PostOnly, req.TimeCondition);
+        Assert.Equal(6990, req.LimitPrice);
+    }
+
+    [Fact]
+    public void PostOnly_market_order_rejected()
+    {
+        var r = CtpOrderRequestMapper.Map(Input(+1m, type: OrderType.Market, maxVolume: 10) with { PostOnly = true });
+
+        Assert.NotNull(r.Error);
+        Assert.Contains("post-only", r.Error);
+        Assert.Empty(r.Requests);
+    }
+
+    [Fact]
+    public void Default_TC_remains_GFD_when_not_post_only()
+    {
+        var r = CtpOrderRequestMapper.Map(Input(+1m, type: OrderType.Limit, limitPrice: 6990m, maxVolume: 10));
+
+        Assert.Null(r.Error);
+        Assert.Equal(CtpTimeCondition.GFD, Assert.Single(r.Requests).TimeCondition);
+    }
+
     [Fact]
     public void Sell_close_long_non_shfe_uses_close_at_bid()
     {

@@ -37,7 +37,9 @@ public class CtpBusinessException(int errorId, string errorMsg)
 public enum Direction : byte { Buy = (byte)'0', Sell = (byte)'1' }
 public enum OffsetFlag : byte { Open = (byte)'0', Close = (byte)'1', CloseToday = (byte)'3', CloseYesterday = (byte)'4' }
 public enum OrderPriceType : byte { Market = (byte)'0', Limit = (byte)'2' }
-public enum TimeCondition : byte { IOC = (byte)'1', FOK = (byte)'2', GFD = (byte)'3' }
+// PostOnly ('4') = 本地协议扩展（非真实 CTP TC；crypto GTX 语义：GFD + 插入禁交叉——与 Domain CtpTimeCondition 同值对齐，
+// CtpSessionMapper 经直 cast 透传；⑲ wire 量 run 尾字节由 front codec VolShape 白名单认 '4'）。
+public enum TimeCondition : byte { IOC = (byte)'1', FOK = (byte)'2', GFD = (byte)'3', PostOnly = (byte)'4' }
 public enum PosiDirection : byte { Net = (byte)'1', Long = (byte)'2', Short = (byte)'3' }
 public enum HedgeFlag : byte { Speculation = (byte)'1', Arbitrage = (byte)'2', Hedge = (byte)'3' }
 public enum PositionDate : byte { Today = (byte)'1', History = (byte)'2' }

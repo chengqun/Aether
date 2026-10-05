@@ -61,13 +61,15 @@ public sealed class SimOrderEntry
     }
 
     /// <summary>
-    /// 按「成交手数 / 报单手数」摊算并消耗冻结额（终态时剩余冻结恰好归零 ⇒ 资金守恒）。
+    /// 消耗冻结额：保证金按「成交手数 / 报单手数」摊算；手续费消费<b>实际计费额</b>（maker/taker 角色计，
+    /// BTC 对标 2026-10-05——冻结按 taker 上限 ⇒ 被动成交实际费用更低时差额留存，终态/撤销经
+    /// <see cref="DrainFrozen"/> 释放 ⇒ 资金守恒）。
     /// </summary>
-    internal (double Margin, double Fee) ConsumeFrozen(int fillVolume)
+    internal (double Margin, double Fee) ConsumeFrozen(int fillVolume, double actualFee)
     {
         var original = Math.Max(1, Order.VolumeTotalOriginal);
         var m = Math.Min(FrozenMarginRemaining, FrozenMarginTotal * fillVolume / original);
-        var f = Math.Min(FrozenFeeRemaining, FrozenFeeTotal * fillVolume / original);
+        var f = Math.Min(FrozenFeeRemaining, Math.Max(0, actualFee));
         FrozenMarginRemaining = Math.Max(0, FrozenMarginRemaining - m);
         FrozenFeeRemaining = Math.Max(0, FrozenFeeRemaining - f);
         return (m, f);
@@ -188,8 +190,10 @@ public sealed class SimOrderManager
     /// <summary>
     /// 记一笔成交：推进 <c>VolumeTraded</c>/<c>VolumeTotal</c> 与状态，并摊算冻结额的消耗/退还。
     /// 成交手数会被裁剪到实际未成交量内（防御性）。
+    /// <paramref name="actualFee"/> = 本笔实际手续费（按成交价 × 成交角色费率，由撮合方算好传入——
+    /// 被动方 maker / 攻击方 taker，BTC 对标 2026-10-05；旧语义按冻结额比例摊、且按委托参考价计）。
     /// </summary>
-    public SimOrderUpdate ApplyFill(SimOrderEntry entry, int volume, double price, string time)
+    public SimOrderUpdate ApplyFill(SimOrderEntry entry, int volume, double price, string time, double actualFee)
     {
         var before = entry.Order;
         var fill = Math.Min(Math.Max(0, volume), entry.Remaining);
@@ -198,8 +202,8 @@ public sealed class SimOrderManager
         var traded = before.VolumeTraded + fill;
         var remaining = before.VolumeTotalOriginal - traded;
 
-        // 残量是否留在队列：IOC/FOK 成交后残量不再挂单（'2'），GFD 继续挂（'1'）
-        var staysQueued = remaining > 0 && entry.TimeCondition == CtpTimeCondition.GFD;
+        // 残量是否留在队列：IOC/FOK 成交后残量不再挂单（'2'），GFD 与 PostOnly（GFD+插入禁交叉）继续挂（'1'）
+        var staysQueued = remaining > 0 && entry.TimeCondition is CtpTimeCondition.GFD or CtpTimeCondition.PostOnly;
 
         var status = remaining == 0
             ? SimOrderStatus.AllTraded
@@ -215,7 +219,7 @@ public sealed class SimOrderManager
         };
         entry.Order = order;
 
-        var (consumedMargin, consumedFee) = entry.ConsumeFrozen(fill);
+        var (consumedMargin, consumedFee) = entry.ConsumeFrozen(fill, actualFee);
 
         // 残量不再挂单（或已全成）⇒ 剩余冻结一并退还，保证终态冻结归零
         double releasedMargin = 0, releasedFee = 0;

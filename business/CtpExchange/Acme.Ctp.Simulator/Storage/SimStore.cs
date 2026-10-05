@@ -82,7 +82,9 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             base_price      REAL NOT NULL,
             pre_settlement  REAL NOT NULL,
             commission_rate REAL NOT NULL,
-            limit_rate      REAL NOT NULL
+            limit_rate      REAL NOT NULL,
+            maker_rate      REAL,
+            taker_rate      REAL
         );
         CREATE TABLE IF NOT EXISTS sim_tick (
             instrument_id   TEXT NOT NULL,
@@ -111,11 +113,14 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
 
     public Task InitializeAsync(CancellationToken ct = default) => EnsureSchemaAsync(CreateSql, ct);
 
-    /// <summary>存量库幂等补列（2026-09-28 账号系统：密码哈希 + 经纪商元数据）。</summary>
+    /// <summary>存量库幂等补列（2026-09-28 账号系统：密码哈希 + 经纪商元数据；
+    /// 2026-10-05 BTC 对标：sim_instrument 的 maker/taker 差异化费率——NULL = 回退单一费率）。</summary>
     protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
     {
         await SqliteMigrations.AddColumnAsync(connection, "sim_account", "password_hash", "TEXT NOT NULL DEFAULT ''", ct);
         await SqliteMigrations.AddColumnAsync(connection, "sim_account", "broker_id", "TEXT NOT NULL DEFAULT ''", ct);
+        await SqliteMigrations.AddColumnAsync(connection, "sim_instrument", "maker_rate", "REAL", ct);
+        await SqliteMigrations.AddColumnAsync(connection, "sim_instrument", "taker_rate", "REAL", ct);
     }
 
     public async Task<IReadOnlyList<SimAccountSnapshot>> LoadAccountsAsync(CancellationToken ct = default)
@@ -198,7 +203,7 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT instrument_id, exchange_id, volume_multiple, margin_rate, price_tick, base_price, pre_settlement, commission_rate, limit_rate FROM sim_instrument";
+        cmd.CommandText = "SELECT instrument_id, exchange_id, volume_multiple, margin_rate, price_tick, base_price, pre_settlement, commission_rate, limit_rate, maker_rate, taker_rate FROM sim_instrument";
         var list = new List<SimInstrument>();
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
@@ -214,6 +219,9 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
                 PreSettlement = r.GetDouble(6),
                 CommissionRate = r.GetDouble(7),
                 LimitRate = r.GetDouble(8),
+                // 旧行 NULL = 未配置差异化费率 → 回退单一费率（CTP 双边同费形态）
+                MakerCommissionRate = r.IsDBNull(9) ? null : r.GetDouble(9),
+                TakerCommissionRate = r.IsDBNull(10) ? null : r.GetDouble(10),
             });
         }
         return list;
@@ -358,13 +366,14 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();        cmd.CommandText = """
-            INSERT INTO sim_instrument (instrument_id, exchange_id, volume_multiple, margin_rate, price_tick, base_price, pre_settlement, commission_rate, limit_rate)
-            VALUES (@i, @e, @vm, @mr, @pt, @bp, @ps, @cr, @lr)
+            INSERT INTO sim_instrument (instrument_id, exchange_id, volume_multiple, margin_rate, price_tick, base_price, pre_settlement, commission_rate, limit_rate, maker_rate, taker_rate)
+            VALUES (@i, @e, @vm, @mr, @pt, @bp, @ps, @cr, @lr, @mk, @tk)
             ON CONFLICT(instrument_id) DO UPDATE SET
                 exchange_id=excluded.exchange_id, volume_multiple=excluded.volume_multiple,
                 margin_rate=excluded.margin_rate, price_tick=excluded.price_tick,
                 base_price=excluded.base_price, pre_settlement=excluded.pre_settlement,
-                commission_rate=excluded.commission_rate, limit_rate=excluded.limit_rate
+                commission_rate=excluded.commission_rate, limit_rate=excluded.limit_rate,
+                maker_rate=excluded.maker_rate, taker_rate=excluded.taker_rate
             """;
         cmd.Parameters.AddWithValue("@i", i.InstrumentId);
         cmd.Parameters.AddWithValue("@e", i.ExchangeId);
@@ -375,6 +384,8 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         cmd.Parameters.AddWithValue("@ps", i.PreSettlement);
         cmd.Parameters.AddWithValue("@cr", i.CommissionRate);
         cmd.Parameters.AddWithValue("@lr", i.LimitRate);
+        cmd.Parameters.AddWithValue("@mk", (object?)i.MakerCommissionRate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@tk", (object?)i.TakerCommissionRate ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

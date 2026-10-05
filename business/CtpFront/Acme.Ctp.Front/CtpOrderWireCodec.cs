@@ -54,10 +54,11 @@ internal static class CtpOrderWireCodec
         return new ParsedOrderAction(reqId.Value, Encoding.ASCII.GetString(orderRef));
     }
 
-    /// <summary>量字段 run 形状：len 2-5、尾字节 = TimeCondition（'1' IOC / '2' FOK / '3' GFD）、前缀含低字节。</summary>
+    /// <summary>量字段 run 形状：len 2-5、尾字节 = TimeCondition（'1' IOC / '2' FOK / '3' GFD / '4' PostOnly——本地协议扩展），
+    /// 前缀含低字节。</summary>
     private static bool VolShape(ReadOnlySpan<byte> r)
         => r.Length is >= 2 and <= 5
-           && r[^1] is (byte)'1' or (byte)'2' or (byte)'3'
+           && r[^1] is (byte)'1' or (byte)'2' or (byte)'3' or (byte)'4'
            && r[..^1].ToArray().Any(b => b < 0x20);
 
     /// <summary>orderRef run 形状：恒 12 位零填充数字（D12）。</summary>

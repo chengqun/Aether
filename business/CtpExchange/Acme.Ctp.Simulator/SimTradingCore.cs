@@ -465,6 +465,19 @@ public sealed class SimTradingCore : IDisposable
                 $"无对手价：{instrument.InstrumentId} 订单簿{(request.Direction == CtpDirection.Buy ? "卖" : "买")}侧无挂单（无庄家兜底——流动性由挂单供给）。");
         }
 
+        // post-only（本地协议扩展 TC '4'，BTC 对标 2026-10-05）：只入簿不吃单——插入时会交叉 ⇒ 整单拒收
+        // （crypto GTX 语义：保证该单永远付 maker 费率；拒在报单号分配/冻结之前，无残留状态）。
+        if (request.TimeCondition == CtpTimeCondition.PostOnly
+            && request.PriceType != CtpOrderPriceType.Limit)
+        {
+            throw new CtpBusinessException(SimErrorCodes.InvalidParameter, "post-only 仅支持限价单。");
+        }
+        if (request.TimeCondition == CtpTimeCondition.PostOnly && WouldCrossBook(state, request, instrument))
+        {
+            throw new CtpBusinessException(SimErrorCodes.PostOnlyWouldCross,
+                $"post-only 会吃单：{instrument.InstrumentId} 对手簿在限价 {(request.Direction == CtpDirection.Buy ? "上方" : "下方")}有他人挂单，整单拒收（保证只付 maker 费率）。");
+        }
+
         var quote = Market.GetQuote(instrument.InstrumentId);
         var isClose = SimRiskEngine.IsClose(request.OffsetFlag);
 
@@ -472,7 +485,9 @@ public sealed class SimTradingCore : IDisposable
             ? quote?.OppositeOf(request.Direction) ?? instrument.BasePrice
             : request.LimitPrice;
 
-        // 平仓单不冻结保证金（平仓是减仓，不新增占用）；只冻手续费
+        // 平仓单不冻结保证金（平仓是减仓，不新增占用）；只冻手续费。
+        // 冻结按 taker 费率全额（最坏情形保守冻结——BTC 对标 2026-10-05：maker 成交实际计费更少，
+        // 差额留存冻结池、终态/撤销释放；未配置差异化费率的品种 taker=单一费率，行为与旧版一致）。
         var requiredMargin = isClose ? 0 : SimAccount.MarginOf(instrument, refPrice, request.Volume);
         var requiredFee = SimAccount.FeeOf(instrument, refPrice, request.Volume);
 
@@ -536,6 +551,29 @@ public sealed class SimTradingCore : IDisposable
             var state = Find(be.AccountId);
             var entry = state?.Orders.Find(be.OrderRef);
             if (entry is not null && SimOrderManager.CanCancel(entry) && entry.Remaining > 0) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// post-only 闸门用：该限价委托插入时<b>是否会立即交叉</b>（对手簿在可吃边界内有他人活单——跳本账户，
+    /// 与 <see cref="WalkBook"/> 一致的边界谓词与自成交跳过）。调用须持锁。风控拒单早于报单号分配——无残留状态。
+    /// </summary>
+    private bool WouldCrossBook(SimAccountState state, CtpOrderRequest request, SimInstrument instrument)
+    {
+        if (!_books.TryGetValue(instrument.InstrumentId, out var book) || book.Count == 0) return false;
+
+        var probe = new CtpOrder { Direction = request.Direction, PriceType = request.PriceType, LimitPrice = request.LimitPrice };
+        var (_, within) = BookCrossBound(probe);
+        var opposite = request.Direction == CtpDirection.Buy ? book.AskSide() : book.BidSide();
+        foreach (var be in opposite)
+        {
+            if (string.Equals(be.AccountId, state.AccountId, StringComparison.OrdinalIgnoreCase)) continue;   // 自成交跳过
+            if (!within(be.Price)) break;   // 档位有序 ⇒ 首个出界即止
+            var passiveState = Find(be.AccountId);
+            var passiveEntry = passiveState?.Orders.Find(be.OrderRef);
+            if (passiveEntry is not null && SimOrderManager.CanCancel(passiveEntry) && passiveEntry.Remaining > 0)
+                return true;
         }
         return false;
     }
@@ -661,8 +699,8 @@ public sealed class SimTradingCore : IDisposable
         // ① 吃簿
         updates.AddRange(WalkBook(state, entry, instrument));
 
-        // ② 残量去向
-        if (entry.Remaining > 0 && entry.TimeCondition != CtpTimeCondition.GFD)
+        // ② 残量去向（PostOnly = GFD + 插入禁交叉 ⇒ 残量照常入簿）
+        if (entry.Remaining > 0 && entry.TimeCondition is not (CtpTimeCondition.GFD or CtpTimeCondition.PostOnly))
         {
             var tail = state.Orders.FinalizeNoQueue(entry, _clock.TimeOfDay,
                 entry.TimeCondition == CtpTimeCondition.FOK ? "FOK 未能全部成交，已作废" : "IOC 未成交部分已作废");
@@ -723,13 +761,17 @@ public sealed class SimTradingCore : IDisposable
             if (volume <= 0) continue;
             var price = instrument.RoundToTick(be.Price);
 
-            // 双方各自 ApplyFill（TradeId 从各自账户序列铸）+ 各自记账；被动方先落（maker 语义上先存在）
-            var up = passiveState.Orders.ApplyFill(passiveEntry, volume, price, _clock.TimeOfDay);
+            // 双方各自 ApplyFill（TradeId 从各自账户序列铸）+ 各自记账；被动方先落（maker 语义上先存在）。
+            // 手续费按成交角色计（BTC 对标 2026-10-05）：被动方 maker 费率、攻击方 taker 费率（按成交价 × 实际量；
+            // 攻击单残量入簿后被后来者吃时自动站到 passive 侧 ⇒ 付 maker 费——角色天然自洽）。
+            var up = passiveState.Orders.ApplyFill(passiveEntry, volume, price, _clock.TimeOfDay,
+                SimAccount.FeeOf(instrument, price, volume, isMaker: true));
             ApplyFillAccounting(passiveState, instrument, up);
             updates.Add((passiveState.AccountId, up));
             if (!SimOrderManager.CanCancel(passiveEntry)) book.Remove(be.AccountId, be.OrderRef);
 
-            var ua = state.Orders.ApplyFill(entry, volume, price, _clock.TimeOfDay);
+            var ua = state.Orders.ApplyFill(entry, volume, price, _clock.TimeOfDay,
+                SimAccount.FeeOf(instrument, price, volume, isMaker: false));
             ApplyFillAccounting(state, instrument, ua);
             updates.Add((state.AccountId, ua));
 
