@@ -192,9 +192,15 @@
     <Project Path="src/Aether.AI.Memory.Sqlite/Aether.AI.Memory.Sqlite.csproj" />
     <Project Path="src/Aether.AI.Mcp/Aether.AI.Mcp.csproj" />
     <Project Path="src/Aether.AI.Workflows/Aether.AI.Workflows.csproj" />
+    <Project Path="src/Aether.Ledger/Aether.Ledger.csproj" />
+  </Folder>
+  <Folder Name="/apps/LedgerVerify/">
+    <Project Path="apps/LedgerVerify/Aether.Ledger.Verify.csproj" />
+    <Project Path="apps/LedgerNode/Aether.Ledger.Node.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />
+    <Project Path="tests/Aether.Ledger.Tests/Aether.Ledger.Tests.csproj" />
     <Project Path="tests/Acme.Ctp.Infrastructure.Tests/Acme.Ctp.Infrastructure.Tests.csproj" />
     <Project Path="tests/Acme.Ctp.Simulator.Tests/Acme.Ctp.Simulator.Tests.csproj" />
     <Project Path="tests/Acme.Ctp.Front.Tests/Acme.Ctp.Front.Tests.csproj" />

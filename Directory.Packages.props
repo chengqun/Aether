@@ -63,6 +63,9 @@
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
     <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- 虚拟币链引擎（2026-10-05 批1）：Ed25519 确定性签名——无 ECDSA nonce 失误泄漏私钥的坑；
+         32B 种子=整个钱包。FCS 对 FSharp.Core 是精确依赖（=）——NSec 无此约束 -->
+    <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenTelemetry" Version="1.12.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.12.0" />
