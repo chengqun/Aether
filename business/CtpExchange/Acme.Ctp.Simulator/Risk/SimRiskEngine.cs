@@ -52,6 +52,14 @@ public sealed class SimRiskEngine : IRiskEngine
         if (req.PriceType == CtpOrderPriceType.Limit && req.LimitPrice <= 0)
             return RiskResult.Reject(SimErrorCodes.InvalidPrice, $"限价单价格非法：{req.LimitPrice:F4}。");
 
+        // 现货禁开空（批 4，2026-10-06）：CTP 现货映射——买=开多 / 卖=平多 / **禁 Sell+Open（开空）**。
+        // Buy+Close（平空）因空头不存在会被下方 closable 检查自然拒绝（无可平空头持仓）。
+        if (context.Instrument.IsSpot
+            && req.OffsetFlag == CtpOffsetFlag.Open
+            && req.Direction == CtpDirection.Sell)
+            return RiskResult.Reject(SimErrorCodes.InvalidParameter,
+                $"现货仪器 {req.InstrumentId} 禁止开空（Sell+Open）——现货只能买开多/卖平多。");
+
         if (IsClose(req.OffsetFlag))
         {
             var closable = context.ClosableVolume ?? 0;

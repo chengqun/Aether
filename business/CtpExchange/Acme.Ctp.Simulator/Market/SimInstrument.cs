@@ -54,6 +54,22 @@ public sealed record SimInstrument
     /// <summary>涨跌停板幅度（相对昨结算），默认 ±8%。随机游走与撮合价格都夹在此区间内。</summary>
     public double LimitRate { get; init; } = 0.08;
 
+    /// <summary>
+    /// 现货模式（批 4，2026-10-06）：CTP 现货映射——**买=开多 / 卖=平多 / 禁开空**。
+    /// 风控引擎拒 Sell+Open（无空头）；MarginRate 须配 1.0（100% = 全额占用即「付款」——
+    /// MarginPerLot = price × VolumeMultiple × 1.0 = 完整名义价值）。
+    /// 供给约束（<see cref="SupplyLimitLots"/>）由交易所桥从链上 custody 余额动态更新。
+    /// </summary>
+    public bool IsSpot { get; init; }
+
+    /// <summary>
+    /// 现货供给上限（手数——总多头 OI ≤ 此值）。null = 不限（期货语义）。
+    /// **可变**（get/set）——桥在 custody 链上余额变化时更新（同进程写、核心 `_gate` 内读——
+    /// 良性竞态窗口：deposit 到位前一单最多多挂一手，下一单即恢复约束）。
+    /// 非现货仪器忽略此字段。
+    /// </summary>
+    public int? SupplyLimitLots { get; set; }
+
     /// <summary>单手保证金。</summary>
     public double MarginPerLot(double price) => price * VolumeMultiple * MarginRate;
 

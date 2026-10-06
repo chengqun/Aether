@@ -481,6 +481,11 @@ public sealed class SimTradingCore : IDisposable
         var quote = Market.GetQuote(instrument.InstrumentId);
         var isClose = SimRiskEngine.IsClose(request.OffsetFlag);
 
+        // 现货供给约束说明（批 4，2026-06-06）：**不需要插入时检查**——现货禁开空（Sell+Open 被拒）⇒
+        // 全部卖单必为平多（Sell+Close）⇒ 撮合永远是「买开多 vs 卖平多」= OI 转移（buyer 得 = seller 失），
+        // 总 OI 不经撮合增加——唯一增量入口 = CreditSpotPosition（桥充币，守 custody 余额 ≤ 链上真相）。
+        // SupplyLimitLots 保留为信息性字段（可查但撮合不卡）——桥充币侧已是唯一闸门。
+
         var refPrice = request.PriceType == CtpOrderPriceType.Market
             ? quote?.OppositeOf(request.Direction) ?? instrument.BasePrice
             : request.LimitPrice;
@@ -538,6 +543,69 @@ public sealed class SimTradingCore : IDisposable
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 现货充币直接铸造 Long 持仓（批 4——桥充币路径，绕过订单簿）。像真实券商的「存入股份」：
+    /// agent 链上充值 → 桥侦听 → 本方法直接给该账户的 Long 持仓 +volume（不经撮合——充币不是交易）。
+    /// 持仓 cost = 当前 BasePrice（后续平多按市价与 cost 差结算盯市盈亏——首笔成交前 cost 是锚定价）。
+    /// 仅现货仪器可用（期货走订单簿开仓）。
+    /// </summary>
+    public void CreditSpotPosition(string instrumentId, string accountId, int volume)
+    {
+        lock (_gate)
+        {
+            var instrument = ResolveInstrument(new CtpOrderRequest
+            {
+                InstrumentId = instrumentId, Direction = CtpDirection.Buy,
+                OffsetFlag = CtpOffsetFlag.Open, PriceType = CtpOrderPriceType.Limit,
+                LimitPrice = 1, Volume = 1, BrokerId = "", InvestorId = accountId,
+            });
+            if (!instrument.IsSpot)
+                throw new CtpBusinessException(SimErrorCodes.InvalidParameter,
+                    $"{instrumentId} 非现货仪器——CreditSpotPosition 仅现货（期货走订单簿开仓）。");
+
+            var state = GetOrCreate(accountId);
+            var book = state.Positions.GetOrCreate(instrumentId, instrument.ExchangeId);
+            // 充币铸造的持仓 cost = BasePrice（首笔成交前锚定价；成交后新开仓按成交价——标准路径不变）
+            book.Long.Today += volume;
+            book.Long.Cost = book.Long.Total > volume
+                ? (book.Long.Cost * (book.Long.Total - volume) + instrument.BasePrice * volume) / book.Long.Total
+                : instrument.BasePrice;
+            RecomputePositionProfitLocked();
+        }
+    }
+
+    /// <summary>
+    /// 现货供给上限设置（批 4）——交易所桥从链上 custody 余额变化时调用。线程安全（内部取 `_gate`）。
+    /// 非现货仪器或未知合约忽略（无操作）。
+    /// </summary>
+    public void SetSupplyLimit(string instrumentId, int? limitLots)
+    {
+        lock (_gate)
+        {
+            if (_instruments.TryGetValue(instrumentId, out var instrument) && instrument.IsSpot)
+                instrument.SupplyLimitLots = limitLots;
+        }
+    }
+
+    /// <summary>全市场多头 OI（手数——现货供给约束/测试断言用）。线程安全（内部取 `_gate`）。</summary>
+    public int GetTotalLongVolume(string instrumentId)
+    {
+        lock (_gate) return TotalLongVolume(instrumentId);
+    }
+
+    /// <summary>全市场多头 OI（手数——现货供给约束用）。调用须持锁（InsertOrderLocked 内部调用）。</summary>
+    private int TotalLongVolume(string instrumentId)
+    {
+        var total = 0;
+        foreach (var state in _states.Values)
+        {
+            foreach (var book in state.Positions.Books)
+                if (string.Equals(book.InstrumentId, instrumentId, StringComparison.OrdinalIgnoreCase))
+                    total += book.Long.Total;
+        }
+        return total;
     }
 
     /// <summary>对手侧是否有<b>他人</b>活单（市价单闸门；自己的单不算对手——自成交跳过）。调用须持锁。</summary>
