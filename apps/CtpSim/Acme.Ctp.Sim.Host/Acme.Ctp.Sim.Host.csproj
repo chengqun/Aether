@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <!-- 交易所进程（2026-10-05 分离）：只含 core + RPC 服务端——前置是独立进程（Acme.Ctp.Front.Host） -->
+    <!-- 交易所进程（2026-10-05 分离）：只含 core + RPC 服务端——前置是独立进程（Acme.Ctp.Front.Host）。
+         批 3（2026-10-06）+ LedgerBridge：托管充提币——须引链引擎（LedgerClient/LedgerBridge） -->
     <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim.Server\Acme.Ctp.Sim.Server.csproj" />
+    <ProjectReference Include="..\..\..\src\Aether.Ledger\Aether.Ledger.csproj" />
   </ItemGroup>
 
   <ItemGroup>

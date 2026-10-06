@@ -1,5 +1,6 @@
 using Acme.Ctp.Sim.Server;
 using Acme.Ctp.Simulator;
+using Aether.Ledger;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -18,6 +19,10 @@ using Microsoft.Extensions.Hosting;
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
 //   AETHER_CTP_SIM_LOGIN_MAX_FAILURES / AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC  防爆破（登录锁定）
 //
+// 批 3 交易所桥（2026-10-06）：托管充提币——须 AETHER_LEDGER_* env（链节点地址 + custody 种子）：
+//   AETHER_LEDGER_NODE_ADDR     链节点端点（默认 127.0.0.1:17805；未设且链节点未运行 = 桥不启动——交易所照常跑）
+//   AETHER_LEDGER_CUSTODY_SEED  custody 钱包种子（hex 64 字符——丢失 = 托管币不可提；生成时日志打印）
+//
 // 价格源恒为订单簿价格发现（2026-10-03 起 walk/回放已删除）：行情 = 簿顶 + 成交流，tick 事件驱动；
 // 流动性由外部客户端策略（labs leanalgorithms 做市/噪声 bot）供给——不起 bot = 空闲市场无对手价（真实交易所本义）。
 // 行情随柜台：sim 登录的行情恒为本地产生（按订阅推送）——无环境变量开关。
@@ -28,17 +33,36 @@ var builder = Host.CreateApplicationBuilder(args);
 var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
 var server = new SimRpcServer(core, opts.Host, opts.Port);
-builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts));
+
+// 批 3 交易所桥：custody 充提币（opt-in——未设 env = 不启动，交易所照常跑）
+LedgerBridge? bridge = null;
+var custodySeed = Environment.GetEnvironmentVariable("AETHER_LEDGER_CUSTODY_SEED");
+if (!string.IsNullOrWhiteSpace(custodySeed))
+{
+    var nodeAddr = Environment.GetEnvironmentVariable("AETHER_LEDGER_NODE_ADDR") ?? "127.0.0.1:17805";
+    var (nodeHost, nodePort) = nodeAddr.LastIndexOf(':') > 0
+        ? (nodeAddr[..nodeAddr.LastIndexOf(':')], int.Parse(nodeAddr[(nodeAddr.LastIndexOf(':') + 1)..]))
+        : ("127.0.0.1", 17805);
+    var custody = new LedgerWallet(Convert.FromHexString(custodySeed));
+    bridge = new LedgerBridge(new LedgerClient(nodeHost, nodePort), custody, msg => Console.WriteLine($"[LEDGER-BRIDGE] {msg}"));
+}
+
+builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts, bridge));
 await builder.Build().RunAsync();
 
-/// <summary>交易所生命周期：启动 = 恢复账本 + RPC 监听（前置进程与 E2E 参考客户端连此端口）；停止 = 关连接 + 落盘。</summary>
-internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts)
+/// <summary>交易所生命周期：启动 = 恢复账本 + RPC 监听 + 桥初始化（opt-in）；停止 = 关连接 + 落盘 + 桥停。</summary>
+internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts, LedgerBridge? bridge)
     : IHostedService
 {
     public async Task StartAsync(CancellationToken ct)
     {
         await core.InitializeAsync(ct);   // 重启恢复：挂单作废、报单号/成交号序列续排（host 启动时一次）
         server.Start();
+        if (bridge is not null)
+        {
+            await bridge.StartAsync(ct);   // 全量重扫链恢复 IOU 状态（链是唯一真相）
+            Console.WriteLine($"[LEDGER-BRIDGE] 交易所桥就绪：custody {bridge.CustodyAddress.Hex[..12]}…");
+        }
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var listed = core.QueryListedInstruments();
         var accounts = core.QueryAccounts();
@@ -53,6 +77,7 @@ internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer se
 
     public async Task StopAsync(CancellationToken ct)
     {
+        bridge?.Dispose();
         await server.StopAsync();
         core.Dispose();   // 同步 flush（重启续用靠这里落盘）
         Console.WriteLine("[CTP-SIM] 交易所已退出，账本已落盘。");
