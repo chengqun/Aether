@@ -19,6 +19,7 @@ on:
       - 'business/CtpFront/**'
       - 'business/Ctp/Acme.Ctp.Domain/**'
       - 'src/Acme.Persistence/**'
+      - 'src/Aether.Ledger/**'           # 交易所宿主的虚拟币桥依赖（批 3 起引用）
       - 'Directory.Packages.props'
       - 'scripts/ctpsim-*.ps1'
       - '.github/workflows/deploy-ctpsim.yml'
