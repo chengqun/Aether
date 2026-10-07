@@ -22,6 +22,9 @@ using Microsoft.Extensions.Hosting;
 // ──────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService();   // 服务器部署形态：SCM 启动 → ServiceLifetime（服务停止 = 停监听/优雅关停）；
+                                        // 交互运行（dotnet run）仍是 console lifetime，本地行为零变。
+                                        // 与 Sim.Host 同款——2026-10-05 分离时两 host 都漏了此调用，2026-10-06 补齐。
 
 var opts = FrontHostOptions.FromEnvironment();
 var ctpFront = new CtpFrontServer(opts.ExchangeHost, opts.ExchangePort, opts.Host, opts.TradePort, msg => Log.Line($"[CTP-Front] {msg}"));
@@ -115,6 +118,10 @@ internal static class Log
         {
             var dir = Path.GetDirectoryName(LogPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // 新文件先种 UTF-8 BOM（同 Sim.Host 的 Log——Windows PowerShell 5.1 的 Get-Content
+            // 对无 BOM 的 UTF-8 按 ANSI/GBK 读会乱码；带 BOM 即自动识别）
+            if (!File.Exists(LogPath) || new FileInfo(LogPath).Length == 0)
+                File.WriteAllBytes(LogPath, new byte[] { 0xEF, 0xBB, 0xBF });
             File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}");
         }
         catch { /* 磁盘/权限故障不打断前置 */ }

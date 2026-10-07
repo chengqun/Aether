@@ -18,6 +18,7 @@ using Microsoft.Extensions.Hosting;
 //   AETHER_CTP_SIM_BOARD   上市合约表（逗号分隔合约号；默认 zx001——「我就是交易所」的自有品种（2 字母官方命名合规），
 //                          自定义 id 经 解析链：精确→品种派生→合成 兜底；坏值容忍回默认）
 //   AETHER_CTP_SIM_LOGIN_MAX_FAILURES / AETHER_CTP_SIM_LOGIN_LOCKOUT_SEC  防爆破（登录锁定）
+//   AETHER_CTP_SIM_LOG     日志文件路径（默认空=仅控制台；Windows 服务形态部署时由 setup 脚本设置）
 //
 // 批 3 交易所桥（2026-10-06）：托管充提币——须 AETHER_LEDGER_* env（链节点地址 + custody 种子）：
 //   AETHER_LEDGER_NODE_ADDR     链节点端点（默认 127.0.0.1:17805；未设且链节点未运行 = 桥不启动——交易所照常跑）
@@ -29,6 +30,10 @@ using Microsoft.Extensions.Hosting;
 // ──────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService();   // 服务器部署形态：SCM 启动 → ServiceLifetime（服务停止 = 优雅关停 flush 账本）；
+                                        // 交互运行（dotnet run）仍是 console lifetime，本地行为零变。
+                                        // 2026-10-06 服务起不来（Start-Service 1053 超时）的根因 = 2026-10-05 进程分离
+                                        // 重写本文件时把此调用弄丢——纯 console host 不向 SCM 上报，SCM 必超时。
 
 var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
@@ -44,7 +49,7 @@ if (!string.IsNullOrWhiteSpace(custodySeed))
         ? (nodeAddr[..nodeAddr.LastIndexOf(':')], int.Parse(nodeAddr[(nodeAddr.LastIndexOf(':') + 1)..]))
         : ("127.0.0.1", 17805);
     var custody = new LedgerWallet(Convert.FromHexString(custodySeed));
-    bridge = new LedgerBridge(new LedgerClient(nodeHost, nodePort), custody, msg => Console.WriteLine($"[LEDGER-BRIDGE] {msg}"));
+    bridge = new LedgerBridge(new LedgerClient(nodeHost, nodePort), custody, msg => Log.Line($"[LEDGER-BRIDGE] {msg}"));
 }
 
 builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts, bridge));
@@ -61,18 +66,18 @@ internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer se
         if (bridge is not null)
         {
             await bridge.StartAsync(ct);   // 全量重扫链恢复 IOU 状态（链是唯一真相）
-            Console.WriteLine($"[LEDGER-BRIDGE] 交易所桥就绪：custody {bridge.CustodyAddress.Hex[..12]}…");
+            Log.Line($"[LEDGER-BRIDGE] 交易所桥就绪：custody {bridge.CustodyAddress.Hex[..12]}…");
         }
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var listed = core.QueryListedInstruments();
         var accounts = core.QueryAccounts();
-        Console.WriteLine($"[CTP-SIM] 本地仿真交易所已就绪：{opts.Host}:{port}（JSON-RPC——前置进程/E2E 客户端连接口）");
-        Console.WriteLine($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
+        Log.Line($"[CTP-SIM] 本地仿真交易所已就绪：{opts.Host}:{port}（JSON-RPC——前置进程/E2E 客户端连接口）");
+        Log.Line($"[CTP-SIM]   账本：{opts.Core.DatabasePath ?? "纯内存（不落盘）"}");
         if (accounts.Count > 0)
-            Console.WriteLine($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
-        Console.WriteLine($"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}");
-        Console.WriteLine($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
-        Console.WriteLine("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。前置进程：dotnet run --project apps/CtpSim/Acme.Ctp.Front.Host（连接 127.0.0.1:17800）。");
+            Log.Line($"[CTP-SIM]   账户 {accounts.Count} 个（{accounts.Count(a => a.HasPassword)} 个已设密码）：{string.Join(",", accounts.Select(a => a.AccountId))}");
+        Log.Line($"[CTP-SIM]   行情 交易所模式：订单簿 + 成交驱动（价格发现归簿）| 做市/噪声 = 外部客户端策略（labs leanalgorithms）| 新账户初始资金 {opts.Core.InitialBalance}");
+        Log.Line($"[CTP-SIM]   上市合约 {listed.Count} 个：{string.Join(",", listed.Select(i => i.InstrumentId))}");
+        Log.Line("[CTP-SIM] Ctrl+C 退出（账本自动落盘）。前置进程：dotnet run --project apps/CtpSim/Acme.Ctp.Front.Host（连接 127.0.0.1:17800）。");
     }
 
     public async Task StopAsync(CancellationToken ct)
@@ -80,6 +85,32 @@ internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer se
         bridge?.Dispose();
         await server.StopAsync();
         core.Dispose();   // 同步 flush（重启续用靠这里落盘）
-        Console.WriteLine("[CTP-SIM] 交易所已退出，账本已落盘。");
+        Log.Line("[CTP-SIM] 交易所已退出，账本已落盘。");
+    }
+}
+
+/// <summary>
+/// 最小可观测性：恒写控制台；<c>AETHER_CTP_SIM_LOG</c> 设了路径时（Windows 服务形态——headless 无控制台可见）
+/// 追加到文件。日志失败不致命（try/catch 吞）——遥测自身故障绝不打断交易所。
+/// </summary>
+internal static class Log
+{
+    private static readonly string? LogPath = Environment.GetEnvironmentVariable("AETHER_CTP_SIM_LOG");
+
+    public static void Line(string msg)
+    {
+        Console.WriteLine(msg);
+        if (LogPath is null) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(LogPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // 新文件先种 UTF-8 BOM（显式字节——不赌 AppendAllText 的前导行为）：Windows PowerShell 5.1 的
+            // Get-Content 对无 BOM 的 UTF-8 按默认 ANSI/GBK 读会乱码（2026-10-05 服务器实测）；带 BOM 即自动识别。
+            if (!File.Exists(LogPath) || new FileInfo(LogPath).Length == 0)
+                File.WriteAllBytes(LogPath, new byte[] { 0xEF, 0xBB, 0xBF });
+            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {msg}{Environment.NewLine}");
+        }
+        catch { /* 磁盘/权限故障不打断交易所 */ }
     }
 }

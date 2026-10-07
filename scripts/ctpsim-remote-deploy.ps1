@@ -20,11 +20,35 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 输出统一 UTF-8：SSH 会话里 PowerShell 5.1 默认按系统 ANSI/GBK 写 stdout，GitHub Actions 按 UTF-8 读 → 全乱码
+# （2026-10-06 实测：CI 里 Start-Service 的中文错误全是 mojibake）。设置失败不致命（headless 无控制台句柄时可能抛）。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
 function Fail([string]$msg) {
     [Console]::Error.WriteLine("[CTPSIM-DEPLOY] $msg")
     exit 1
 }
 function Info([string]$msg) { Write-Host "[CTPSIM-DEPLOY] $msg" }
+
+# 服务起不来的统一诊断：① host 自己的日志尾部（AETHER_*_LOG 落盘）② SCM 事件日志（1053 超时/即崩各有事件——
+# 服务进程不 connect SCM 的经典症状是「服务未及时响应启动或控制请求」）。
+function DumpStartFailure([string]$svc, [string]$logPath) {
+    if (Test-Path $logPath) {
+        Write-Host "[CTPSIM-DEPLOY] ── $logPath 尾部 30 行 ──"
+        Get-Content $logPath -Tail 30 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+    }
+    else {
+        Write-Host "[CTPSIM-DEPLOY] （日志文件不存在：$logPath——host 的 Log 未写或服务 env 未设）"
+    }
+    try {
+        $events = Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager' } -MaxEvents 200 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match $svc } | Select-Object -First 5
+        if ($events) {
+            Write-Host "[CTPSIM-DEPLOY] ── SCM 事件（System 日志，最近 5 条与 $svc 相关）──"
+            foreach ($e in $events) { Write-Host ("  {0}  {1}" -f $e.TimeCreated, $e.Message) }
+        }
+    } catch { }
+}
 
 # 1) Preflight：两服务都已注册（setup 没跑过 = 配置缺失——立即失败好过静默错配）
 foreach ($svc in @($ExchangeService, $FrontService)) {
@@ -71,24 +95,26 @@ if ($LASTEXITCODE -ge 8) { Fail "robocopy 交易所失败（code $LASTEXITCODE�
 robocopy (Join-Path $out 'front') $FrontDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
 if ($LASTEXITCODE -ge 8) { Fail "robocopy 前置失败（code $LASTEXITCODE）——交易所已更新，重跑一次部署即可恢复" }
 
-# 5) 起交易所（等 Running——前置探活会自动连上）；再起前置（等 Running）
-Start-Service -Name $ExchangeService
+# 5) 起交易所（等 Running——前置探活会自动连上）；再起前置（等 Running）。
+#    Start-Service 失败（1053 超时 / 进程即崩）不在此抛——吞掉进等待循环，统一走 DumpStartFailure 诊断收尾
+#    （2026-10-06 实测：$ErrorActionPreference=Stop 下 Start-Service 直接抛会把诊断输出全部短路掉，CI 只剩一句 mojibake）。
+try { Start-Service -Name $ExchangeService } catch { }
 $deadline = [DateTime]::Now.AddSeconds(60)
 while ((Get-Service -Name $ExchangeService).Status -ne 'Running' -and [DateTime]::Now -lt $deadline) {
     Start-Sleep -Milliseconds 500
 }
 if ((Get-Service -Name $ExchangeService).Status -ne 'Running') {
-    Get-Content (Join-Path $DataDir 'ctpsim-exchange.log') -Tail 30 -ErrorAction SilentlyContinue
-    Fail "交易所未能进入 Running（见上方 ctpsim-exchange.log 尾部）"
+    DumpStartFailure $ExchangeService (Join-Path $DataDir 'ctpsim-exchange.log')
+    Fail "交易所未能启动（见上方日志尾部与 SCM 事件——二进制已就位，修复后重跑部署即可恢复）"
 }
-Start-Service -Name $FrontService
+try { Start-Service -Name $FrontService } catch { }
 $deadline = [DateTime]::Now.AddSeconds(60)
 while ((Get-Service -Name $FrontService).Status -ne 'Running' -and [DateTime]::Now -lt $deadline) {
     Start-Sleep -Milliseconds 500
 }
 if ((Get-Service -Name $FrontService).Status -ne 'Running') {
-    Get-Content (Join-Path $DataDir 'ctpsim-front.log') -Tail 30 -ErrorAction SilentlyContinue
-    Fail "前置未能进入 Running（见上方 ctpsim-front.log 尾部）"
+    DumpStartFailure $FrontService (Join-Path $DataDir 'ctpsim-front.log')
+    Fail "前置未能启动（见上方日志尾部与 SCM 事件——交易所已在跑，重跑部署即可恢复）"
 }
 
 # 6) 汇报（显式 exit 0——robocopy 的非零退出码不能漏成本脚本退出码毒死 workflow step）
