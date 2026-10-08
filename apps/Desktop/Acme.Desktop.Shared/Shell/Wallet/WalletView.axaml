@@ -91,7 +91,7 @@
             <Border Classes="card" IsVisible="{Binding IsImporting}">
                 <StackPanel>
                     <TextBlock Classes="cardtitle" Text="导入钱包（粘贴 64 位 hex 种子）"/>
-                    <TextBox Classes="mono input" Text="{Binding ImportSeedText}" Watermark="64 位 hex 种子"
+                    <TextBox Classes="mono input" Text="{Binding ImportSeedText}" PlaceholderText="64 位 hex 种子"
                              FontFamily="Cascadia Code,Menlo,monospace" TextWrapping="Wrap" Height="52"/>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                         <Button Classes="primary" Content="导入" Command="{Binding ImportCommand}" Margin="0,0,8,0"/>
@@ -124,17 +124,17 @@
                     <TextBlock Classes="cardtitle" Text="转账（链上，不可逆）"/>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="对方地址" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferTo}" Watermark="40 位 hex 地址"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferTo}" PlaceholderText="40 位 hex 地址"/>
                     </Grid>
                     <Grid ColumnDefinitions="90,*,Auto" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferAmount}" Watermark="如 1.5（8 位小数）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferAmount}" PlaceholderText="如 1.5（8 位小数）"/>
                         <Button Grid.Column="2" Content="转账" Classes="primary" Command="{Binding TransferCommand}"
                                 IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
                     </Grid>
                     <Grid ColumnDefinitions="90,*">
                         <TextBlock Grid.Column="0" Text="备注" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferMemo}" Watermark="可选 memo（≤64 字符）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferMemo}" PlaceholderText="可选 memo（≤64 字符）"/>
                     </Grid>
                 </StackPanel>
             </Border>
@@ -145,11 +145,11 @@
                     <TextBlock Classes="cardtitle" Text="充值到交易所（充币 → 自动铸造现货持仓）"/>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="交易所账号" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAccount}" Watermark="memo 归账键——须与期货页登录账号一致"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAccount}" PlaceholderText="memo 归账键——须与期货页登录账号一致"/>
                     </Grid>
                     <Grid ColumnDefinitions="90,*,Auto">
                         <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAmount}" Watermark="如 5"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAmount}" PlaceholderText="如 5"/>
                         <Button Grid.Column="2" Content="充值" Classes="primary" Command="{Binding DepositCommand}"
                                 IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
                     </Grid>
@@ -168,15 +168,15 @@
                     </Grid>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="密码" Classes="muted" VerticalAlignment="Center"/>
-                        <PasswordBox Grid.Column="1" PasswordChar="*" Password="{Binding WithdrawPassword}"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawPassword}" PasswordChar="•"/>
                     </Grid>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="提币地址" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawTo}" Watermark="留空 = 本钱包地址"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawTo}" PlaceholderText="留空 = 本钱包地址"/>
                     </Grid>
                     <Grid ColumnDefinitions="90,*,Auto">
                         <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawAmount}" Watermark="如 2（≤ 持仓量）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawAmount}" PlaceholderText="如 2（≤ 持仓量）"/>
                         <Button Grid.Column="2" Content="提币" Classes="primary" Command="{Binding WithdrawCommand}"
                                 IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
                     </Grid>
@@ -190,15 +190,15 @@
                 <StackPanel Margin="0,8,0,0">
                     <Grid ColumnDefinitions="120,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="链节点" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding NodeAddress}" Watermark="127.0.0.1:17805（远程经 SSH 隧道）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding NodeAddress}" PlaceholderText="127.0.0.1:17805（远程经 SSH 隧道）"/>
                     </Grid>
                     <Grid ColumnDefinitions="120,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="custody 地址" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding CustodyAddress}" Watermark="交易所托管地址（充值用，向运维索取）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding CustodyAddress}" PlaceholderText="交易所托管地址（充值用，向运维索取）"/>
                     </Grid>
                     <Grid ColumnDefinitions="120,*">
                         <TextBlock Grid.Column="0" Text="交易所" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Classes="input" Text="{Binding ExchangeAddress}" Watermark="127.0.0.1:17800（提币用）"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding ExchangeAddress}" PlaceholderText="127.0.0.1:17800（提币用）"/>
                     </Grid>
                 </StackPanel>
             </Expander>
