@@ -7,6 +7,7 @@
 
 [CmdletBinding()]
 param(
+    [string]$NodeAddr = '127.0.0.1:17805',   # 绑定端点（回环=安全默认；'0.0.0.0:17805'=公网直连——自动放行防火墙，见 runbook §2.D）
     [string]$NodeService = 'AetherLedgerNode',
     [string]$NodeDir = 'C:\Aether\LedgerNode',
     [string]$WalletDir = 'C:\Aether\LedgerWallet',
@@ -53,12 +54,21 @@ else {
 #    17805 只绑回环 ⇒ 无防火墙规则、无公网暴露（远程机器经 SSH 隧道：ssh -L 17805:127.0.0.1:17805）。
 $nodeKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$NodeService"
 $nodeEnv = @(
-    'AETHER_LEDGER_ADDR=127.0.0.1:17805',
+    "AETHER_LEDGER_ADDR=$NodeAddr",
     "AETHER_LEDGER_CHAIN_FILE=$DataDir\ledger.chain",
     "AETHER_LEDGER_LOG=$DataDir\node.log"
 )
 Set-ItemProperty -Path $nodeKey -Name Environment -Type MultiString -Value $nodeEnv
-Info '链节点 env 已写入注册表（ADDR=127.0.0.1:17805 / 链文件 / 日志）'
+Info "链节点 env 已写入注册表（ADDR=$NodeAddr / 链文件 / 日志）——重跑带同参保持不变"
+
+# 防火墙：公网直连形态（非回环绑定）自动放行节点端口（幂等）
+if ($NodeAddr -notmatch '^127\.0\.0\.1|^localhost') {
+    $nodePort = ($NodeAddr -split ':')[-1]
+    if (-not (Get-NetFirewallRule -DisplayName "Aether Ledger Node ($nodePort)" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "Aether Ledger Node ($nodePort)" -Direction Inbound -Protocol TCP -LocalPort $nodePort -Action Allow | Out-Null
+    }
+    Info "公网直连形态：防火墙已放行 $nodePort（runbook §2.D）"
+}
 
 # 4) 崩溃自恢复
 sc.exe failure $NodeService reset= 86400 actions= restart/5000 | Out-Null

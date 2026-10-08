@@ -8,6 +8,7 @@
 
 [CmdletBinding()]
 param(
+    [string]$ExchangeAddr = '127.0.0.1:17800',  # 交易所绑定端点（回环=安全默认；'0.0.0.0:17800'=公网直连——自动放行防火墙，见 runbook §2.D）
     [string]$ExchangeService = 'AetherCtpExchange',
     [string]$ExchangeDir = 'C:\Aether\CtpExchange',
     [string]$FrontService = 'AetherCtpFront',
@@ -88,7 +89,7 @@ else {
 #    交易所只绑 127.0.0.1:17800（前置同机连它——比旧单进程形态 0.0.0.0 更收敛；公网只触达前置 17801/17802）。
 $exchangeKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ExchangeService"
 $exchangeEnv = @(
-    'AETHER_CTP_SIM_ADDR=127.0.0.1:17800',
+    "AETHER_CTP_SIM_ADDR=$ExchangeAddr",
     "AETHER_CTP_SIM_DB=$DataDir\ctp-sim.db",
     "AETHER_CTP_SIM_LOG=$DataDir\ctpsim-exchange.log",
     "AETHER_CTP_SIM_BOARD=$Board"
@@ -138,6 +139,15 @@ foreach ($rule in $firewallRules) {
     }
 }
 Info '防火墙已放行前置 17801/17802（交易所 17800 只绑回环——无需对外放行）'
+
+# 交易所公网直连形态（非回环绑定）：放行 17800（幂等；前置仍走本机 127.0.0.1 连它，不受影响）
+if ($ExchangeAddr -notmatch '^127\.0\.0\.1|^localhost') {
+    $exPort = ($ExchangeAddr -split ':')[-1]
+    if (-not (Get-NetFirewallRule -DisplayName "Aether CtpExchange Public ($exPort)" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "Aether CtpExchange Public ($exPort)" -Direction Inbound -Protocol TCP -LocalPort $exPort -Action Allow | Out-Null
+    }
+    Info "公网直连形态：防火墙已放行交易所 $exPort（runbook §2.D）"
+}
 
 # 11) 收尾清单
 Info '── 完成。还差三步：'

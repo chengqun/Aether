@@ -1,0 +1,58 @@
+name: Configure Aether Ports
+
+# 端口直连配置（2026-10-08，runbook §2.D 的自动化入口）：把链节点/交易所从回环绑定切到
+# 指定端点（默认公网直连 0.0.0.0——桌面钱包页/CLI 零隧道），含防火墙 + 服务重启。
+# **手动触发**（workflow_dispatch 按钮）——不在 push 上自动跑（这是配置决策不是代码变更）。
+# 收回到回环：重新触发并把两个输入填 127.0.0.1:端口。
+# 与 deploy-* 共用 CTPSIM_SSH_* Secrets（同台服务器同一把钥匙）。
+# ⚠ 重启交易所 = 未成交挂单作废 + 客户端须重登；本 workflow 不碰链文件（批 6 删链是独立动作）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      node_addr:
+        description: '链节点绑定端点'
+        default: '0.0.0.0:17805'
+      exchange_addr:
+        description: '交易所绑定端点'
+        default: '0.0.0.0:17800'
+
+concurrency:
+  group: aether-ports
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup SSH key
+      env:
+        SSH_KEY: ${{ secrets.CTPSIM_SSH_KEY }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/aether_ports_key
+        chmod 600 ~/.ssh/aether_ports_key
+
+    - name: Upload port config script -> staging
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        scp -i ~/.ssh/aether_ports_key -o StrictHostKeyChecking=accept-new -P "${SSH_PORT:-22}" \
+          scripts/aether-public-ports.ps1 "${SSH_USER}@${SSH_HOST}:C:/Aether/ctpsim-tmp/"
+
+    - name: Apply (env + firewall + restart)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+        NODE_ADDR: ${{ inputs.node_addr }}
+        EXCHANGE_ADDR: ${{ inputs.exchange_addr }}
+      run: |
+        ssh -i ~/.ssh/aether_ports_key -o StrictHostKeyChecking=accept-new -p "${SSH_PORT:-22}" \
+          "${SSH_USER}@${SSH_HOST}" \
+          "powershell -NoProfile -ExecutionPolicy Bypass -File C:/Aether/ctpsim-tmp/aether-public-ports.ps1 -NodeAddr $NODE_ADDR -ExchangeAddr $EXCHANGE_ADDR"
+        # Windows OpenSSH 默认 shell 是 cmd.exe——显式起 powershell；参数原样透传，零嵌套引号

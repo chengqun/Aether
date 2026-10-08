@@ -122,38 +122,24 @@ C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe balance --seed $seed
 
 默认形态是回环绑定（安全默认）；本节把它切到公网直连——桌面钱包页/CLI **零隧道**。
 
+**自动化（推荐）**：GitHub Actions → **「Configure Aether Ports」workflow → Run workflow**——
+SSH 进服务器跑 `scripts/aether-public-ports.ps1`（改 env + 防火墙 + 重启，幂等；不碰链文件）。
+两个输入默认 `0.0.0.0:17805 / 0.0.0.0:17800`；**收回到回环**就重新触发并填 `127.0.0.1:端口`。
+
+**手动备选**（SSH 上服务器，管理员 PowerShell，等效）：
+
 ```powershell
 # 前置安全检查：若批 6 新链未就位（节点崩溃循环 + 日志报「旧单资产协议」），先删链：
 #   Remove-Item C:\Aether\ledger-data\ledger.chain    # ⚠ 若日志已见「新链已生成 … 计价币 …」则跳过（新链上有真币勿删！）
 
-# ① 节点改绑 0.0.0.0（幂等）
-$k = 'HKLM:\SYSTEM\CurrentControlSet\Services\AetherLedgerNode'
-$envs = @((Get-ItemProperty $k).Environment | Where-Object { $_ -notlike 'AETHER_LEDGER_ADDR=*' })
-$envs += 'AETHER_LEDGER_ADDR=0.0.0.0:17805'
-Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
-
-# ② 交易所改绑 0.0.0.0（幂等——前置仍走本机 127.0.0.1 连它，不受影响）
-$k = 'HKLM:\SYSTEM\CurrentControlSet\Services\AetherCtpExchange'
-$envs = @((Get-ItemProperty $k).Environment | Where-Object { $_ -notlike 'AETHER_CTP_SIM_ADDR=*' })
-$envs += 'AETHER_CTP_SIM_ADDR=0.0.0.0:17800'
-Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
-
-# ③ 防火墙放行（幂等）
-foreach ($port in 17800, 17805) {
-    if (-not (Get-NetFirewallRule -DisplayName "Aether Public ($port)" -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName "Aether Public ($port)" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
-    }
-}
-
-# ④ 重启两服务（不动链文件）
-Restart-Service AetherLedgerNode; Start-Sleep 6
-Restart-Service AetherCtpExchange
-Get-Service AetherLedgerNode,AetherCtpExchange,AetherCtpFront | Format-Table Name,Status
+# 一条命令完成（env + 防火墙 + 重启；幂等；不碰链文件）——先 scp scripts/aether-public-ports.ps1 到服务器
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Aether\ctpsim-tmp\aether-public-ports.ps1
 ```
 
 桌面钱包页「设置」随之更新：链节点 `<IP>:17805`、交易所 `<IP>:17800`——全部操作免隧道。
 
-**诚实边界（用户已接受）**：17800 是明文 JSON + 密码登录（公网嗅探可冒充提币）；17805 无秘密（签名安全，链节点公开是 Bitcoin 常态）。**⚠ 重跑 setup 脚本会把绑定重置回环环**（脚本幂等重写 env）——重跑后须重做本节。
+**诚实边界（用户已接受）**：17800 是明文 JSON + 密码登录（公网嗅探可冒充提币）；17805 无秘密（签名安全，链节点公开是 Bitcoin 常态）。
+**setup 脚本已参数化**（`-NodeAddr` / `-ExchangeAddr`，回环为默认）：重跑 setup 带同参即保持直连形态——不带参则回安全默认（回环）。
 
 ---
 
