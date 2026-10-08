@@ -17,7 +17,7 @@
 
 
 ```
-链上（资产层，服务器 127.0.0.1:17805，只绑回环）     交易所（venue 层）
+链上（资产层，服务器 <IP>:17805，公网直连）           交易所（venue 层）
 ┌────────────────────────────────────┐            ┌────────────────────────────────────┐
 │ 国库 treasury（21M 币全部）          │──发币────→ │ 交易所账户（userId+密码首登开户）      │
 │   持 treasury 种子（= 全部供给）      │            │   ax001 现货持仓（充值自动铸造）       │
@@ -27,8 +27,8 @@
 ```
 
 - **桌面端交易**走前置 `tcp://<服务器IP>:17801/17802`（公网开放，无需隧道）。
-- **链上操作**（CLI 发币/充值/提币）走 17800/17805——只绑回环 ⇒ **SSH 隧道或在服务器上跑 CLI**：
-  `ssh -L 17805:127.0.0.1:17805 -L 17800:127.0.0.1:17800 <用户>@<服务器IP>`
+- **链上操作**（CLI 发币/充值/提币/桌面钱包页）走 17800/17805——**已开公网直连（§2.D）**，桌面端零隧道。
+  （历史形态曾为「只绑回环 + SSH 隧道」；若你的服务器仍是回环绑定，按 §2.D 开放。）
 - **三把钥匙**：`treasury 种子`（花 21M 供给）/ `producer 种子`（出块权）/ `custody 种子`（交易所托管钱包——启桥时你自己生成）。
 - CLI：服务器上 `C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe`；本地 `dotnet run --project apps/LedgerWallet/Aether.Ledger.Wallet -- <命令>`（下文简写 `wallet`）。币数支持 8 位小数。
 
@@ -115,6 +115,45 @@ C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe balance --seed $seed
 
 **AQ 从哪来**：国库（新链生成时 treasury 同拿 210 亿 AQ）——你分发。可以卖 AQ 收 RMB
 （运营上承诺 1 AQ = 1 元回购 ⇒ AQ 成为你个人的「USDT」，币价自动获得真实法币读数），也可以送（内部靶场记分模式）。
+
+---
+
+### 2.D 公网直连（17800/17805 开放——用户拍板「先不管安全问题」）
+
+默认形态是回环绑定（安全默认）；本节把它切到公网直连——桌面钱包页/CLI **零隧道**。
+
+```powershell
+# 前置安全检查：若批 6 新链未就位（节点崩溃循环 + 日志报「旧单资产协议」），先删链：
+#   Remove-Item C:\Aether\ledger-data\ledger.chain    # ⚠ 若日志已见「新链已生成 … 计价币 …」则跳过（新链上有真币勿删！）
+
+# ① 节点改绑 0.0.0.0（幂等）
+$k = 'HKLM:\SYSTEM\CurrentControlSet\Services\AetherLedgerNode'
+$envs = @((Get-ItemProperty $k).Environment | Where-Object { $_ -notlike 'AETHER_LEDGER_ADDR=*' })
+$envs += 'AETHER_LEDGER_ADDR=0.0.0.0:17805'
+Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
+
+# ② 交易所改绑 0.0.0.0（幂等——前置仍走本机 127.0.0.1 连它，不受影响）
+$k = 'HKLM:\SYSTEM\CurrentControlSet\Services\AetherCtpExchange'
+$envs = @((Get-ItemProperty $k).Environment | Where-Object { $_ -notlike 'AETHER_CTP_SIM_ADDR=*' })
+$envs += 'AETHER_CTP_SIM_ADDR=0.0.0.0:17800'
+Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
+
+# ③ 防火墙放行（幂等）
+foreach ($port in 17800, 17805) {
+    if (-not (Get-NetFirewallRule -DisplayName "Aether Public ($port)" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "Aether Public ($port)" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
+    }
+}
+
+# ④ 重启两服务（不动链文件）
+Restart-Service AetherLedgerNode; Start-Sleep 6
+Restart-Service AetherCtpExchange
+Get-Service AetherLedgerNode,AetherCtpExchange,AetherCtpFront | Format-Table Name,Status
+```
+
+桌面钱包页「设置」随之更新：链节点 `<IP>:17805`、交易所 `<IP>:17800`——全部操作免隧道。
+
+**诚实边界（用户已接受）**：17800 是明文 JSON + 密码登录（公网嗅探可冒充提币）；17805 无秘密（签名安全，链节点公开是 Bitcoin 常态）。**⚠ 重跑 setup 脚本会把绑定重置回环环**（脚本幂等重写 env）——重跑后须重做本节。
 
 ---
 
@@ -215,14 +254,14 @@ wallet withdraw --user u1 --password <登录密码> --to <alice地址> --amount 
 
 ## 6.5 钱包页（桌面客户端，2026-10-08 起——零命令行操作面）
 
-桌面 app 侧边栏「钱包」页（两租户都有）覆盖 CLI 的全部日常操作：**创建/导入钱包**（种子只此一次展示 + 备份确认）、**双余额显示**（币 + AQ）、**转账**、**充值到交易所**（币=持仓 / 计价币=现金，资产下拉选）、**从交易所提币**（币=烧持仓 / 计价币=扣现金，资产下拉选；地址留空默认本钱包）。设置区可改节点/custody/交易所地址（持久化）。用户与 agent 共用同一个钱包（`<tenantDir>/ledger/agent-wallet.seed`）。远程链/交易所仍需先开 §0 的 SSH 隧道。
+桌面 app 侧边栏「钱包」页（两租户都有）覆盖 CLI 的全部日常操作：**创建/导入钱包**（种子只此一次展示 + 备份确认）、**双余额显示**（币 + AQ）、**转账**、**充值到交易所**（币=持仓 / 计价币=现金，资产下拉选）、**从交易所提币**（币=烧持仓 / 计价币=扣现金，资产下拉选；地址留空默认本钱包）。设置区可改节点/custody/交易所地址（持久化，公网直连形态填 `<服务器IP>:17805/17800`——见 §2.D）。用户与 agent 共用同一个钱包（`<tenantDir>/ledger/agent-wallet.seed`）。
 
 ## 7. agent 玩法（可选）
 
 桌面端 agent 已带 4 个工具（专家编辑器勾选即用，cat「链上钱包」）：`LedgerGetInfo` / `LedgerGetBalance`（缺省查自己钱包）/ `LedgerTransfer`（Dangerous——链上转账不可逆）/ `LedgerDepositToExchange`（充值）。
 
 - **agent 自己的钱包**：`<tenantDir>/ledger/agent-wallet.seed`——首次签名操作自动生成（日志打印地址 ⚠ 备份提示）。种子每次调用现读（换文件免重启）、不出宿主进程、不进 LLM 上下文。给 agent 发币 = 转账到它日志里打印的地址。
-- **连服务器的链**：默认连 `127.0.0.1:17805`——跑桌面的机器开同 §0 的 SSH 隧道即可；充值工具还需 env `AETHER_LEDGER_CUSTODY_ADDRESS=<custody地址>`。
+- **连服务器的链**：公网直连形态（§2.D）设 env `AETHER_LEDGER_NODE_ADDR=<服务器IP>:17805` 即可零隧道；充值工具还需 env `AETHER_LEDGER_CUSTODY_ADDRESS=<custody地址>`。
 
 ---
 
