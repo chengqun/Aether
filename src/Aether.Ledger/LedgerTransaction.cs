@@ -13,6 +13,8 @@ namespace Aether.Ledger;
 public sealed record LedgerTransaction
 {
     public required uint ChainId { get; init; }
+    /// <summary>资产 id（<see cref="LedgerSupply.Assets"/>：0=币 AEX / 1=计价币 AQ）。入签名载荷（防跨资产重放）。</summary>
+    public required uint Asset { get; init; }
     public required string From { get; init; }        // 40 hex
     public required string To { get; init; }          // 40 hex
     public required ulong AmountAtoms { get; init; }
@@ -24,10 +26,10 @@ public sealed record LedgerTransaction
     /// <summary>memo 的 UTF-8 字节上限（设计定案：64B——归账够用 + 效用钩子留口）。</summary>
     public const int MaxMemoBytes = 64;
 
-    /// <summary>签名载荷（规范编码：chainId | from | to | amount | nonce | memo）。</summary>
+    /// <summary>签名载荷（规范编码：chainId | asset | from | to | amount | nonce | memo）。</summary>
     [JsonIgnore]
     public byte[] SignedPayload => LedgerCodec.TransactionPayload(
-        ChainId, LedgerAddress.Parse(From), LedgerAddress.Parse(To), AmountAtoms, Nonce, Memo);
+        ChainId, Asset, LedgerAddress.Parse(From), LedgerAddress.Parse(To), AmountAtoms, Nonce, Memo);
 
     /// <summary>交易哈希（SHA256(载荷+公钥+签名) 的 64 hex）——绑定签名在内的完整交易，
     /// 供区块 txRoot 与交易包含证明。</summary>
@@ -47,18 +49,19 @@ public sealed record LedgerTransaction
         }
     }
 
-    /// <summary>签名并构造交易（钱包侧入口）。memo 超 64B UTF-8 在此拒绝。</summary>
+    /// <summary>签名并构造交易（钱包侧入口；asset 默认币——兼容绝大多数调用点）。memo 超 64B UTF-8 在此拒绝。</summary>
     public static LedgerTransaction Sign(uint chainId, LedgerWallet wallet, LedgerAddress to,
-        ulong amountAtoms, ulong nonce, string? memo = null)
+        ulong amountAtoms, ulong nonce, string? memo = null, uint asset = LedgerSupply.Assets.Coin)
     {
         if (memo is not null && Encoding.UTF8.GetByteCount(memo) > MaxMemoBytes)
             throw new ArgumentException($"memo 超 {MaxMemoBytes}B UTF-8（实际 {Encoding.UTF8.GetByteCount(memo)}B）。");
         var payload = LedgerCodec.TransactionPayload(
-            chainId, wallet.Address, to, amountAtoms, nonce, memo);
+            chainId, asset, wallet.Address, to, amountAtoms, nonce, memo);
         var signature = wallet.Sign(payload);
         return new LedgerTransaction
         {
             ChainId = chainId,
+            Asset = asset,
             From = wallet.Address.Hex,
             To = to.Hex,
             AmountAtoms = amountAtoms,

@@ -98,8 +98,8 @@ public sealed class LedgerNode : IDisposable
             _genesis = LedgerGenesis.Create(_options.ChainId, treasury.Address, _producer);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_options.ChainFilePath))!);
             LedgerChainFile.Write(_options.ChainFilePath, _genesis, Array.Empty<LedgerBlock>());
-            _state[treasury.Address.Hex] = new LedgerAccountState(_genesis.TotalSupplyAtoms, 0);
-            Log($"新链已生成：创世 {_genesis.Hash[..16]}… | chainId={_options.ChainId} | treasury 拿满 {LedgerSupply.Format(_genesis.TotalSupplyAtoms)}");
+            _state[treasury.Address.Hex] = new LedgerAccountState(_genesis.TotalSupplyAtoms, _genesis.QuoteTotalSupplyAtoms, 0);
+            Log($"新链已生成：创世 {_genesis.Hash[..16]}… | chainId={_options.ChainId} | treasury 拿满 币 {LedgerSupply.Format(_genesis.TotalSupplyAtoms)} + 计价币 {LedgerSupply.Format(_genesis.QuoteTotalSupplyAtoms)}");
             Log($"  ⚠ treasury 种子（hex，丢失 = 丢失全部供给）：{Convert.ToHexString(treasury.Seed).ToLowerInvariant()}");
             Log($"  ⚠ producer 种子（hex，丢失 = 无法出块，可从备份换 producer 重建链头）：{Convert.ToHexString(_producer.Seed).ToLowerInvariant()}");
         }
@@ -181,7 +181,7 @@ public sealed class LedgerNode : IDisposable
             switch (request.Op)
             {
                 case LedgerOps.GetInfo:
-                    return Ok(new { genesisHash = _genesis.Hash, chainId = _genesis.ChainId, height = Height, mempool = _mempool.Count, totalSupplyAtoms = _genesis.TotalSupplyAtoms });
+                    return Ok(new { genesisHash = _genesis.Hash, chainId = _genesis.ChainId, height = Height, mempool = _mempool.Count, totalSupplyAtoms = _genesis.TotalSupplyAtoms, quoteTotalSupplyAtoms = _genesis.QuoteTotalSupplyAtoms });
 
                 case LedgerOps.GetBalance:
                 {
@@ -190,7 +190,7 @@ public sealed class LedgerNode : IDisposable
                     lock (_gate)
                     {
                         _state.TryGetValue(address, out var account);
-                        return Ok(new { address, balanceAtoms = account?.BalanceAtoms ?? 0, nonce = account?.Nonce ?? 0 });
+                        return Ok(new { address, balanceAtoms = account?.BalanceAtoms ?? 0, quoteBalanceAtoms = account?.QuoteBalanceAtoms ?? 0, nonce = account?.Nonce ?? 0 });
                     }
                 }
 
@@ -283,9 +283,10 @@ public sealed class LedgerNode : IDisposable
                 // 提交：状态推进 + 块登记 + mempool 清空 + 追加落盘（每块一行——链文件永远是最真相）
                 foreach (var tx in block.Transactions)
                 {
-                    _state[tx.From] = new LedgerAccountState(_state[tx.From].BalanceAtoms - tx.AmountAtoms, _state[tx.From].Nonce + 1);
-                    var toBalance = _state.TryGetValue(tx.To, out var toState) ? toState.BalanceAtoms : 0;
-                    _state[tx.To] = new LedgerAccountState(toBalance + tx.AmountAtoms, toState?.Nonce ?? 0);
+                    _state[tx.From] = _state[tx.From].Debit(tx.Asset, tx.AmountAtoms);
+                    _state[tx.To] = _state.TryGetValue(tx.To, out var toState)
+                        ? toState.Credit(tx.Asset, tx.AmountAtoms)
+                        : new LedgerAccountState(0, 0, 0).Credit(tx.Asset, tx.AmountAtoms);
                 }
                 _blocks.Add(block);
                 _mempool.RemoveAll(m => block.Transactions.Any(t => t.Hash == m.Hash));

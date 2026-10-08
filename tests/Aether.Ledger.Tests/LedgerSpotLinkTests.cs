@@ -25,12 +25,13 @@ public class LedgerSpotLinkTests
         }
     }
 
-    /// <summary>起全套：链回环 + 纯内存核心（BOARD 上 ax001）+ 接线（对账周期拉长——测试用 ReconcileNow 确定性驱动）。</summary>
-    private static async Task<Stack> StartAsync(string label, string[]? board = null)
+    /// <summary>起全套：链回环 + 纯内存核心（BOARD 上 ax001）+ 接线（对账周期拉长——测试用 ReconcileNow 确定性驱动）。
+    /// initialBalance：批 5 之前的老测试传 1e6（沙盒现金）；批 6 双资产测试传 0（零水龙头——现金只从 AQ 充值来）。</summary>
+    private static async Task<Stack> StartAsync(string label, string[]? board = null, double initialBalance = 1_000_000)
     {
         var sim = await BridgeLoopback.StartAsync($"spot-{label}");
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = null, ListedInstruments = board ?? new[] { Instrument }, InitialBalance = 1_000_000 },   // buyer 用现金买币
+            new SimOptions { DatabasePath = null, ListedInstruments = board ?? new[] { Instrument }, InitialBalance = initialBalance },
             new SimClock(() => SpotNow));
         await core.InitializeAsync();
         var link = new LedgerSpotLink(core, sim.Bridge, sim.Client, Instrument,
@@ -196,6 +197,81 @@ public class LedgerSpotLinkTests
         var (ok, error) = await stack.Link.TryBurnForWithdrawalAsync("u1", 100_000_000UL);
         Assert.False(ok);
         Assert.Contains("未上市", error);
+    }
+
+    [Fact]
+    public async Task 币安式零水龙头闭环_充AQ得现金_充币得持仓_成交_双向提币()
+    {
+        // 批 6 双资产的用户场景钉子：InitialBalance=0（无水龙头）下市场完整转起来——
+        // 现金全部来自 AQ 充值（死锁根治），币持仓来自币充值，撮合成交，双向提币回自持。
+        using var stack = await StartAsync("binance", initialBalance: 0);   // 零水龙头——本测试的全部现金来自 AQ 充值
+        var sim = stack.Sim;
+        var treasury = new LedgerWallet(Convert.FromHexString(sim.TreasurySeed));
+        var alice = LedgerHarness.Wallet("binance-alice");
+        var bob = LedgerHarness.Wallet("binance-bob");
+
+        // 0) 死锁现状钉子：新账户零现金（InitialBalance=0——夹具 SimOptions 不传 InitialBalance）
+        stack.Core.Login("SIM", "u1", "pw");
+        Assert.Equal(0, stack.Core.QueryAccount("u1").Balance, 2);
+
+        // 1) 国库发资产：alice 10 币 + 10000 AQ；bob 10000 AQ
+        await LedgerBridge.DepositAsync(sim.Client, treasury, alice.Address, 1_000_000_000UL, "seed1");   // 给 alice 币
+        await WaitForBlockAsync(sim, 1);
+        await LedgerBridge.DepositAsync(sim.Client, treasury, alice.Address, 1_000_000_000_000UL, "seed2", LedgerSupply.Assets.Quote);
+        await WaitForBlockAsync(sim, 2);
+        await LedgerBridge.DepositAsync(sim.Client, treasury, bob.Address, 1_000_000_000_000UL, "seed3", LedgerSupply.Assets.Quote);
+        await WaitForBlockAsync(sim, 3);
+        await Task.Delay(700);
+        stack.Link.ReconcileNow();
+
+        // 2) alice 充 10 币（→ 持仓）+ 200 AQ（→ 现金 200——手续费/首笔挂单的解锁金）
+        await LedgerBridge.DepositAsync(sim.Client, alice, sim.Custody.Address, 1_000_000_000UL, "u1");
+        await WaitForBlockAsync(sim, 4);
+        await LedgerBridge.DepositAsync(sim.Client, alice, sim.Custody.Address, 20_000_000_000UL, "u1", LedgerSupply.Assets.Quote);
+        await WaitForBlockAsync(sim, 5);
+        // bob 充 10000 AQ（→ 现金——买方）
+        await LedgerBridge.DepositAsync(sim.Client, bob, sim.Custody.Address, 1_000_000_000_000UL, "u2", LedgerSupply.Assets.Quote);
+        await WaitForBlockAsync(sim, 6);
+        await Task.Delay(700);
+        stack.Link.ReconcileNow();
+
+        Assert.Equal(10, LongVolume(stack.Core, "u1"));                         // 币持仓 10 手
+        var u1AfterDeposit = stack.Core.QueryAccount("u1");
+        // 现金口径 = Balance − PositionProfit（Balance 是权益含浮盈：充币零成本 ⇒ 持仓浮盈 = 最新价×量）
+        Assert.Equal(200, u1AfterDeposit.Balance - u1AfterDeposit.PositionProfit, 2);   // AQ → 现金 200
+        var u2AfterDeposit = stack.Core.QueryAccount("u2");
+        Assert.Equal(10_000, u2AfterDeposit.Balance - u2AfterDeposit.PositionProfit, 2);   // bob 现金 10000
+
+        // 3) 成交：u1 卖 5 手 @100（有现金付手续费了——死锁已解）；u2 买 5 手
+        stack.Core.InsertOrder("u1", Limit(CtpDirection.Sell, 5, 100, CtpOffsetFlag.Close));
+        stack.Core.InsertOrder("u2", Limit(CtpDirection.Buy, 5, 100));
+        Assert.Equal(5, LongVolume(stack.Core, "u2"));
+        Assert.Equal(5, LongVolume(stack.Core, "u1"));
+        var u1AfterTrade = stack.Core.QueryAccount("u1");
+        // 现金 = 200 + 500 全额卖出款（充币零成本）− taker 费 ≈ 699.75（费率 5bp：500×0.0005=0.25）
+        var u1Cash = u1AfterTrade.Balance - u1AfterTrade.PositionProfit;
+        Assert.True(u1Cash >= 699 && u1Cash <= 700, $"u1 现金异常：{u1Cash}");
+
+        // 4) 双向提币：AQ 提 100 回 alice 钱包；币提 2 回 alice
+        await sim.Bridge.WithdrawAsync("u1", alice.Address, 10_000_000_000UL, LedgerSupply.Assets.Quote);
+        await WaitForBlockAsync(sim, 7);
+        await sim.Bridge.WithdrawAsync("u1", alice.Address, 200_000_000UL, LedgerSupply.Assets.Coin);
+        await WaitForBlockAsync(sim, 8);
+        await Task.Delay(700);
+        stack.Link.ReconcileNow();
+
+        Assert.Equal(3, LongVolume(stack.Core, "u1"));                          // 币持仓 10−5（成交）−2（提币）
+        var aliceChain = await sim.Client.GetBalanceAsync(alice.Address.Hex);
+        Assert.Equal(990_000_000_000UL, aliceChain.QuoteBalanceAtoms);   // 10000 AQ − 200 充值 + 100 提回 = 9900
+        Assert.Equal(200_000_000UL, aliceChain.BalanceAtoms);                   // 币 2 枚回自持
+        var u1Final = stack.Core.QueryAccount("u1");
+        var u1FinalCash = u1Final.Balance - u1Final.PositionProfit;
+        Assert.True(u1FinalCash >= 599 && u1FinalCash <= 600, $"u1 终态现金异常：{u1FinalCash}");   // ~700−100 AQ 提现
+
+        // 5) 台账与守恒：总持仓 ≤ custody 链上币余额；总现金 ≤ custody 链上 AQ 余额（结构性保证）
+        var custody = await sim.Client.GetBalanceAsync(sim.Custody.Address.Hex);
+        // 结构性保证：总持仓（原子）== custody 链上币余额——交易所永不超发币凭证
+        Assert.Equal((ulong)stack.Core.GetTotalLongVolume(Instrument) * 100_000_000UL, custody.BalanceAtoms);
     }
 
     /// <summary>等出块（高度达到 target）。</summary>

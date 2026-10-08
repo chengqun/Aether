@@ -12,9 +12,13 @@ public sealed record LedgerReplayResult
     public required ulong TransactionsProcessed { get; init; }
     public required IReadOnlyDictionary<string, LedgerAccountState> Accounts { get; init; }
 
-    /// <summary>守恒校验（Σ 余额 ≡ 创世总量——第一不变量，逐块保持）。</summary>
+    /// <summary>币守恒（Σ 币余额 ≡ 创世币总量——第一不变量，逐块保持）。</summary>
     public bool SupplyConserved
         => Accounts.Values.Aggregate(0UL, (acc, a) => acc + a.BalanceAtoms) == (Genesis?.TotalSupplyAtoms ?? 0);
+
+    /// <summary>计价币守恒（批 6：Σ AQ 余额 ≡ 创世 AQ 总量——同一不变量的第二资产面）。</summary>
+    public bool QuoteSupplyConserved
+        => Accounts.Values.Aggregate(0UL, (acc, a) => acc + a.QuoteBalanceAtoms) == (Genesis?.QuoteTotalSupplyAtoms ?? 0);
 }
 
 /// <summary>
@@ -33,13 +37,15 @@ public static class LedgerValidator
     /// <summary>重放整条链（创世 + 全部区块）→ 终态。任一规则失败即终止并返回原因。</summary>
     public static LedgerReplayResult Replay(LedgerGenesis genesis, IReadOnlyList<LedgerBlock> blocks)
     {
-        // —— 规则 1：创世 ——
+        // —— 规则 1：创世（双资产——两套总量常量各自校验） ——
         if (genesis.TotalSupplyAtoms != LedgerSupply.TotalSupplyAtoms)
             return Fail(genesis, 0, 0, $"创世总量 {genesis.TotalSupplyAtoms} ≠ 协议常量 {LedgerSupply.TotalSupplyAtoms}（增发/改供给 = 另一条链）");
+        if (genesis.QuoteTotalSupplyAtoms != LedgerSupply.QuoteTotalSupplyAtoms)
+            return Fail(genesis, 0, 0, $"创世计价币总量 {genesis.QuoteTotalSupplyAtoms} ≠ 协议常量 {LedgerSupply.QuoteTotalSupplyAtoms}");
 
         var state = new Dictionary<string, LedgerAccountState>(StringComparer.Ordinal)
         {
-            [genesis.TreasuryAddress] = new LedgerAccountState(genesis.TotalSupplyAtoms, 0),
+            [genesis.TreasuryAddress] = new LedgerAccountState(genesis.TotalSupplyAtoms, genesis.QuoteTotalSupplyAtoms, 0),
         };
         var producerPub = Convert.FromBase64String(genesis.ProducerPublicKey);
         var previousHash = genesis.Hash;
@@ -67,9 +73,10 @@ public static class LedgerValidator
             {
                 if (ValidateTransaction(tx, genesis, state) is { } error)
                     return Fail(genesis, block.Height, 0, $"高度 {block.Height} 交易 #{txCount}（from={tx.From[..12]}… nonce={tx.Nonce}）：{error}");
-                state[tx.From] = new LedgerAccountState(state[tx.From].BalanceAtoms - tx.AmountAtoms, state[tx.From].Nonce + 1);
-                var toBalance = state.TryGetValue(tx.To, out var toState) ? toState.BalanceAtoms : 0;
-                state[tx.To] = new LedgerAccountState(toBalance + tx.AmountAtoms, toState?.Nonce ?? 0);
+                state[tx.From] = state[tx.From].Debit(tx.Asset, tx.AmountAtoms);
+                state[tx.To] = state.TryGetValue(tx.To, out var toState)
+                    ? toState.Credit(tx.Asset, tx.AmountAtoms)
+                    : new LedgerAccountState(0, 0, 0).Credit(tx.Asset, tx.AmountAtoms);
                 txCount++;
             }
 
@@ -77,10 +84,13 @@ public static class LedgerValidator
             expectedHeight++;
         }
 
-        // —— 规则 5 的全局复核：Σ 余额 ≡ 总量 ——
+        // —— 规则 5 的全局复核：Σ 余额 ≡ 各资产总量（双面） ——
         var sum = state.Values.Aggregate(0UL, (acc, a) => acc + a.BalanceAtoms);
         if (sum != genesis.TotalSupplyAtoms)
-            return Fail(genesis, expectedHeight - 1, 0, $"守恒破坏：Σ 余额 {sum} ≠ {genesis.TotalSupplyAtoms}");
+            return Fail(genesis, expectedHeight - 1, 0, $"守恒破坏：Σ 币余额 {sum} ≠ {genesis.TotalSupplyAtoms}");
+        var quoteSum = state.Values.Aggregate(0UL, (acc, a) => acc + a.QuoteBalanceAtoms);
+        if (quoteSum != genesis.QuoteTotalSupplyAtoms)
+            return Fail(genesis, expectedHeight - 1, 0, $"守恒破坏：Σ 计价币余额 {quoteSum} ≠ {genesis.QuoteTotalSupplyAtoms}");
 
         return new LedgerReplayResult
         {
@@ -98,9 +108,11 @@ public static class LedgerValidator
     public static string? ValidateTransaction(LedgerTransaction tx, LedgerGenesis genesis,
         IReadOnlyDictionary<string, LedgerAccountState> state)
     {
-        // 规则 4（跨链）：chainId 必须匹配
+        // 规则 4（跨链/跨资产）：chainId + asset 必须合法
         if (tx.ChainId != genesis.ChainId)
             return $"chainId {tx.ChainId} ≠ 本链 {genesis.ChainId}（跨链重放）";
+        if (tx.Asset is not (LedgerSupply.Assets.Coin or LedgerSupply.Assets.Quote))
+            return $"未知资产 id {tx.Asset}（合法：{LedgerSupply.Assets.Coin}=币 / {LedgerSupply.Assets.Quote}=计价币）";
 
         // 地址形状
         if (tx.From.Length != LedgerAddress.HexLength || tx.To.Length != LedgerAddress.HexLength)
@@ -129,11 +141,11 @@ public static class LedgerValidator
         if (tx.Nonce != fromState.Nonce + 1)
             return $"nonce {tx.Nonce} ≠ 期望 {fromState.Nonce + 1}（重放或乱序）";
 
-        // 规则 5：余额充足 + 转账守恒（amount > 0；溢出结构上不可能——余额 ≤ 总量）
+        // 规则 5：余额充足（按资产分账）+ 转账守恒（amount > 0；溢出结构上不可能——余额 ≤ 各资产总量）
         if (tx.AmountAtoms == 0)
             return "转账量必须 > 0";
-        if (fromState.BalanceAtoms < tx.AmountAtoms)
-            return $"余额不足：{fromState.BalanceAtoms} < {tx.AmountAtoms}";
+        if (fromState.BalanceOf(tx.Asset) < tx.AmountAtoms)
+            return $"余额不足（资产 {tx.Asset}）：{fromState.BalanceOf(tx.Asset)} < {tx.AmountAtoms}";
 
         return null;   // 合法
     }
@@ -169,9 +181,10 @@ public static class LedgerVerifier
             return $"链验证 FAIL：{result.Error}";
         var sb = new StringBuilder();
         sb.AppendLine($"链验证 OK：创世哈希 {result.Genesis!.Hash[..16]}… | 高度 {result.BlocksProcessed} | 交易 {result.TransactionsProcessed} 笔 | 账户 {result.Accounts.Count} 个");
-        sb.AppendLine($"供给守恒：{(result.SupplyConserved ? "✓" : "✗")} Σ 余额 = {LedgerSupply.Format(result.Accounts.Values.Aggregate(0UL, (acc, a) => acc + a.BalanceAtoms))}");
+        sb.AppendLine($"币供给守恒：{(result.SupplyConserved ? "✓" : "✗")} Σ 币余额 = {LedgerSupply.Format(result.Accounts.Values.Aggregate(0UL, (acc, a) => acc + a.BalanceAtoms))}");
+        sb.AppendLine($"计价币守恒：{(result.QuoteSupplyConserved ? "✓" : "✗")} Σ AQ = {LedgerSupply.Format(result.Accounts.Values.Aggregate(0UL, (acc, a) => acc + a.QuoteBalanceAtoms))}");
         foreach (var (address, account) in result.Accounts.OrderByDescending(kv => kv.Value.BalanceAtoms))
-            sb.AppendLine($"  {address}  {LedgerSupply.Format(account.BalanceAtoms),20}  nonce={account.Nonce}");
+            sb.AppendLine($"  {address}  币 {LedgerSupply.Format(account.BalanceAtoms),20}  AQ {LedgerSupply.Format(account.QuoteBalanceAtoms),20}  nonce={account.Nonce}");
         return sb.ToString().TrimEnd();
     }
 }

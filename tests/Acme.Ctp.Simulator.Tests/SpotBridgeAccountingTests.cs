@@ -21,17 +21,18 @@ public class SpotBridgeAccountingTests
     }
 
     [Fact]
-    public async Task 充币成本锚定BasePrice_等价平仓盈亏为零()
+    public async Task 充币零成本_平价卖出全额变现()
     {
-        // 2026-10-07 修正回归钉：旧版 CreditSpotPosition 把 Cost 当「均价」写（应按 Σ(价×乘数×量) 求和约定），
-        // AvgOpenPrice = Cost/(乘数×Total) 错乘数倍 → 平多盈亏凭空放大（@100 平 10 手凭空 +900）。
+        // 批 6 经济定调钉：充币持仓 venue 侧成本 = 0（币不是现金换的）⇒ 平价（@100）卖 10 手
+        // → 已实现盈亏 = 全额成交价 1000（「充币卖出全额变现」——用户模型的核心语义；
+        // 买方保证金是真实现金 backing，margin 锁定保资金守恒）。
         var core = await NewCoreAsync();
         core.CreditSpotPosition(Instrument, "mm", 10);
         core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Sell, 10, 100, CtpOffsetFlag.Close, CtpTimeCondition.GFD, Instrument));
         core.InsertOrder("buyer", SimHarness.Limit(CtpDirection.Buy, 10, 100, instrument: Instrument));
 
         var mm = core.QueryAccount("mm");
-        Assert.Equal(0, mm.CloseProfit, 2);   // 平 @100 = 成本锚 100 ⇒ 零盈亏（求和约定下的正确口径）
+        Assert.Equal(1000, mm.CloseProfit, 2);   // 10 手 × @100 全额（充币成本 0）
         Assert.DoesNotContain(core.QueryPositions("mm", Instrument), p => p.TotalPosition > 0);
     }
 
@@ -96,6 +97,57 @@ public class SpotBridgeAccountingTests
         await core.InitializeAsync();
 
         Assert.Throws<CtpBusinessException>(() => core.BurnSpotPosition("ag2610", "mm", 1));
+    }
+
+    private static async Task<SimTradingCore> NewZeroFaucetCoreAsync()
+    {
+        var core = new SimTradingCore(
+            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument }, InitialBalance = 0 },
+            new SimClock(() => SimHarness.TradingNow));
+        await core.InitializeAsync();
+        return core;
+    }
+
+    [Fact]
+    public async Task 计价币充值入账_现金到账_提现闸门()
+    {
+        var core = await NewZeroFaucetCoreAsync();
+        core.Login("SIM", "u1", "pw");
+
+        // 充 100 AQ（1 AQ = 1 现金）→ StaticBalance 100
+        core.CreditQuoteDeposit("u1", 10_000_000_000UL);
+        var after = core.QueryAccount("u1");
+        Assert.Equal(100, after.Balance - after.PositionProfit, 2);
+
+        // 提 30 AQ → 现金 70
+        core.WithdrawQuoteCash("u1", 3_000_000_000UL);
+        after = core.QueryAccount("u1");
+        Assert.Equal(70, after.Balance - after.PositionProfit, 2);
+
+        // 超可提量（70）→ 拒 90005
+        var ex = Assert.Throws<CtpBusinessException>(() => core.WithdrawQuoteCash("u1", 71_000_000_000UL));
+        Assert.Equal(SimErrorCodes.InsufficientFunds, ex.ErrorId);
+
+        // 台账（充值 100 − 提现 30 = 70 AQ 原子）
+        Assert.Equal(7_000_000_000L, core.GetQuoteMintedAtoms()["u1"]);
+    }
+
+    [Fact]
+    public async Task 计价币提现_保证金占用不可动()
+    {
+        // 闸门 = 静态可用：买入占用保证金（100% 现货）后，被占部分不可提现——动它会破坏资金守恒。
+        var core = await NewZeroFaucetCoreAsync();
+        core.CreditQuoteDeposit("u1", 2_000_000_000_000UL);   // 20000 现金
+        core.CreditQuoteDeposit("u2", 2_000_000_000_000UL);
+        core.CreditSpotPosition(Instrument, "mm", 10);          // 卖方供给
+        core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Sell, 10, 100, CtpOffsetFlag.Close, CtpTimeCondition.GFD, Instrument));
+        core.InsertOrder("u1", SimHarness.Limit(CtpDirection.Buy, 10, 100, instrument: Instrument));   // u1 买 10 手锁 1000
+
+        var u1 = core.QueryAccount("u1");
+        Assert.Equal(1000, u1.CurrMargin, 2);                  // 1000 被占用（静态可用 = 20000−1000 = 19000）
+        core.WithdrawQuoteCash("u1", 100_000_000_000UL);       // 提 1000 AQ ✓ 过闸
+        var ex = Assert.Throws<CtpBusinessException>(() => core.WithdrawQuoteCash("u1", 19_000_000_000_000UL));   // 19000 AQ > 剩余可用 → 拒
+        Assert.Equal(SimErrorCodes.InsufficientFunds, ex.ErrorId);
     }
 
     [Fact]

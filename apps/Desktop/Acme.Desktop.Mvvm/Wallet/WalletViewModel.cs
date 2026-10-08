@@ -27,7 +27,12 @@ public partial class WalletViewModel : ObservableObject
     [ObservableProperty] private string? _address;
     [ObservableProperty] private string? _balanceText;
     [ObservableProperty] private ulong _balanceAtoms;
+    [ObservableProperty] private string? _quoteBalanceText;
+    [ObservableProperty] private ulong _quoteBalanceAtoms;
     [ObservableProperty] private ulong _nonce;
+
+    /// <summary>资产选项（转账/充值/提币三区的 ComboBox——「币」烧持仓/铸造持仓，「计价币」入账/扣现金）。</summary>
+    public IReadOnlyList<string> AssetOptions { get; } = new[] { "币", "计价币" };
 
     // —— 创建/导入流程 ——
     [ObservableProperty] private bool _isCreating;
@@ -42,19 +47,22 @@ public partial class WalletViewModel : ObservableObject
     [ObservableProperty] private string _exchangeAddress = "127.0.0.1:17800";
     [ObservableProperty] private string _depositAccount = "";
 
-    // —— 转账表单 ——
+    // —— 转账表单 ──
     [ObservableProperty] private string _transferTo = "";
     [ObservableProperty] private string _transferAmount = "";
     [ObservableProperty] private string? _transferMemo;
+    [ObservableProperty] private string _transferAsset = "币";
 
     // —— 充值表单（账号默认带出设置里的 depositAccount）——
     [ObservableProperty] private string _depositAmount = "";
+    [ObservableProperty] private string _depositAsset = "币";
 
-    // —— 提币表单 ——
+    // —— 提币表单 ──
     [ObservableProperty] private string _withdrawUser = "";
     [ObservableProperty] private string _withdrawPassword = "";
     [ObservableProperty] private string _withdrawTo = "";
     [ObservableProperty] private string _withdrawAmount = "";
+    [ObservableProperty] private string _withdrawAsset = "币";
 
     // —— 反馈 ——
     [ObservableProperty] private bool _isBusy;
@@ -182,17 +190,19 @@ public partial class WalletViewModel : ObservableObject
             return;
         }
         var memo = (TransferMemo ?? "").Trim();
+        var asset = ParseAsset(TransferAsset);
+        var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
         await RunBusyAsync(async () =>
         {
             var client = CreateNodeClient();
             var wallet = LoadWallet()!;
             var info = await client.GetInfoAsync(ct);
             var account = await client.GetBalanceAsync(wallet.Address.Hex, ct);
-            if (account.BalanceAtoms < atoms)
-                throw new InvalidOperationException($"余额不足：{LedgerSupply.Format(account.BalanceAtoms)} < {LedgerSupply.Format(atoms)}");
-            var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo);
+            if (account.BalanceOf(asset) < atoms)
+                throw new InvalidOperationException($"余额不足（{assetName}）：{LedgerSupply.Format(account.BalanceOf(asset))} < {LedgerSupply.Format(atoms)}");
+            var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo, asset);
             await client.SubmitTxAsync(tx, ct);
-            StatusText = $"已提交：{LedgerSupply.Format(atoms)} → {to.Hex[..12]}…（tx {tx.Hash[..12]}…，出块约 1 秒）";
+            StatusText = $"已提交（{assetName}）：{LedgerSupply.Format(atoms)} → {to.Hex[..12]}…（tx {tx.Hash[..12]}…，出块约 1 秒）";
             await Task.Delay(600, ct);   // 给出块留半拍，顺带刷余额
             await RefreshBalanceCoreAsync(ct);
         });
@@ -220,13 +230,17 @@ public partial class WalletViewModel : ObservableObject
             return;
         }
         if (account.Length == 0) { ErrorText = "充值账号必填（memo 归账键——须与期货页登录账号一致）"; return; }
+        var asset = ParseAsset(DepositAsset);
+        var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
 
         await RunBusyAsync(async () =>
         {
             var client = CreateNodeClient();
             var wallet = LoadWallet()!;
-            await LedgerBridge.DepositAsync(client, wallet, custody, atoms, account, ct);
-            StatusText = $"已提交充值：{LedgerSupply.Format(atoms)} → custody（memo={account}）——桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓。";
+            await LedgerBridge.DepositAsync(client, wallet, custody, atoms, account, asset, ct);
+            StatusText = asset == LedgerSupply.Assets.Coin
+                ? $"已提交充值（币）：{LedgerSupply.Format(atoms)} → custody（memo={account}）——桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓。"
+                : $"已提交充值（计价币）：{LedgerSupply.Format(atoms)} → custody（memo={account}）——对账 1s 内自动入账场内现金（1 AQ = 1 现金）。";
             await Task.Delay(1500, ct);
             await RefreshBalanceCoreAsync(ct);
         });
@@ -255,11 +269,13 @@ public partial class WalletViewModel : ObservableObject
             return;
         }
         if (_exchange is null) { ErrorText = "提币客户端未注册（ILedgerExchangeClient）。"; return; }
+        var asset = WithdrawAsset.Trim() is "计价币" ? "quote" : "coin";
 
         await RunBusyAsync(async () =>
         {
-            var txHash = await _exchange.WithdrawAsync(ExchangeAddress.Trim(), user, WithdrawPassword, to, atoms, ct);
-            StatusText = $"提币已提交：{LedgerSupply.Format(atoms)} → {to[..12]}…（tx {txHash[..12]}…）——先烧持仓后签名出金，约 1 秒到账。";
+            var txHash = await _exchange.WithdrawAsync(ExchangeAddress.Trim(), user, WithdrawPassword, to, atoms, asset, ct);
+            var label = asset == "coin" ? "币（烧现货持仓）" : "计价币（扣场内现金）";
+            StatusText = $"提币已提交（{label}）：{LedgerSupply.Format(atoms)} → {to[..12]}…（tx {txHash[..12]}…）——约 1 秒到账。";
             await Task.Delay(1500, ct);
             await RefreshBalanceCoreAsync(ct);
         });
@@ -305,8 +321,10 @@ public partial class WalletViewModel : ObservableObject
         {
             var account = await CreateNodeClient().GetBalanceAsync(Address!, ct);
             BalanceAtoms = account.BalanceAtoms;
+            QuoteBalanceAtoms = account.QuoteBalanceAtoms;
             Nonce = account.Nonce;
             BalanceText = LedgerSupply.Format(account.BalanceAtoms);
+            QuoteBalanceText = LedgerSupply.Format(account.QuoteBalanceAtoms);
         }
         catch { /* 刷新尽力而为 */ }
     }
@@ -354,6 +372,18 @@ public partial class WalletViewModel : ObservableObject
             ? (addr[..colon], p)
             : ("127.0.0.1", 17805);
         return new LedgerClient(host, port);
+    }
+
+    /// <summary>资产标签（「币」/「计价币」）→ 资产 id。非法值抛异常。</summary>
+    internal static uint ParseAsset(string assetLabel)
+    {
+        var value = (assetLabel ?? "").Trim();
+        return value switch
+        {
+            "币" => LedgerSupply.Assets.Coin,
+            "计价币" => LedgerSupply.Assets.Quote,
+            _ => throw new ArgumentException($"资产非法：\"{value}\"（币 | 计价币）"),
+        };
     }
 
     /// <summary>币数（字符串，支持 8 位小数）→ 原子数。非法值抛异常（消息带原因）。</summary>

@@ -216,13 +216,13 @@ public sealed class SimRpcClient : IDisposable
 
     /// <summary>查询 host 上市合约表（「行情随柜台」的行情板数据源；无登录守卫——与其它查询一致）。</summary>
     /// <summary>
-    /// 提币（批 4 接线，2026-10-08）：须先 <see cref="LoginAsync"/> 绑定账户（绑定账户即出金账户）——
-    /// venue 先烧现货持仓再 custody 签名链上出金。返回链上交易哈希。
-    /// 服务端 90019 = 桥未配置 / 持仓不足 / 链拒绝（消息透传）。
+    /// 提币（批 4 接线；批 6 双资产）：须先 <see cref="LoginAsync"/> 绑定账户（绑定账户即出金账户）——
+    /// asset "coin"（默认）= venue 先烧现货持仓；"quote" = 扣场内可用现金；再 custody 签名链上出金。
+    /// 返回链上交易哈希。服务端 90019 = 桥未配置 / 持仓·现金不足 / 链拒绝（消息透传）。
     /// </summary>
-    public async Task<string> WithdrawAsync(string toAddressHex, ulong amountAtoms, CancellationToken ct = default)
+    public async Task<string> WithdrawAsync(string toAddressHex, ulong amountAtoms, string asset = "coin", CancellationToken ct = default)
     {
-        var r = await CallAsync<WithdrawResult>(SimOps.Withdraw, new WithdrawArg(toAddressHex, amountAtoms), ct).ConfigureAwait(false);
+        var r = await CallAsync<WithdrawResult>(SimOps.Withdraw, new WithdrawArg(toAddressHex, amountAtoms, asset), ct).ConfigureAwait(false);
         return r?.TxHash ?? throw new CtpBusinessException(SimWireErrors.Protocol, "提币应答缺少结果。");
     }
 

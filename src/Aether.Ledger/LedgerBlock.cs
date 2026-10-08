@@ -11,6 +11,9 @@ public sealed record LedgerGenesis
 {
     public required uint ChainId { get; init; }
     public required ulong TotalSupplyAtoms { get; init; }
+    /// <summary>计价币（AQ）总量（批 6 双资产）——与币同规则：创世全给 treasury、无铸造、守恒恒真。
+    /// ⚠ 字段缺失 = 旧单资产链文件 ⇒ 反序列化直接拒绝（硬分叉，见 LedgerChainFile 的友好报错）。</summary>
+    public required ulong QuoteTotalSupplyAtoms { get; init; }
     public required string TreasuryAddress { get; init; }   // 40 hex
     public required string ProducerPublicKey { get; init; } // base64(32B)
 
@@ -33,6 +36,7 @@ public sealed record LedgerGenesis
         using var w = new BinaryWriter(ms);
         w.Write(ChainId);
         w.Write(TotalSupplyAtoms);
+        w.Write(QuoteTotalSupplyAtoms);
         w.Write(treasury.Length);
         w.Write(treasury);
         w.Write(producer.Length);
@@ -41,12 +45,13 @@ public sealed record LedgerGenesis
         return ms.ToArray();
     }
 
-    /// <summary>构造创世（校验：分配合计 ≡ 总量——本模型分配即 treasury 全拿，恒真；总量须 = <see cref="LedgerSupply.TotalSupplyAtoms"/>）。</summary>
+    /// <summary>构造创世（校验：两资产分配合计 ≡ 各自总量常量——分配即 treasury 全拿，恒真）。</summary>
     public static LedgerGenesis Create(uint chainId, LedgerAddress treasury, LedgerWallet producer)
         => new()
         {
             ChainId = chainId,
             TotalSupplyAtoms = LedgerSupply.TotalSupplyAtoms,
+            QuoteTotalSupplyAtoms = LedgerSupply.QuoteTotalSupplyAtoms,
             TreasuryAddress = treasury.Hex,
             ProducerPublicKey = Convert.ToBase64String(producer.PublicKey),
         };

@@ -110,14 +110,16 @@ public static class LedgerSignature
 /// <summary>规范字节编码（签名/哈希的载荷——字段定序，无歧义）。public：测试与上层签名构造需同一编码。</summary>
 public static class LedgerCodec
 {
-    /// <summary>交易签名载荷：chainId | from | to | amount | nonce | memo——chainId 入签名防跨链重放。</summary>
-    public static byte[] TransactionPayload(uint chainId, LedgerAddress from, LedgerAddress to,
+    /// <summary>交易签名载荷：chainId | asset | from | to | amount | nonce | memo——chainId 防跨链重放、
+    /// asset 防跨资产重放（批 6：同一金额的另一资产交易不能重放本签名）。⚠ 载荷形状变更 = 硬分叉（旧链不兼容）。</summary>
+    public static byte[] TransactionPayload(uint chainId, uint asset, LedgerAddress from, LedgerAddress to,
         ulong amount, ulong nonce, string? memo)
     {
         var memoBytes = Encoding.UTF8.GetBytes(memo ?? "");
-        var buf = new byte[4 + LedgerAddress.Size * 2 + 8 + 8 + memoBytes.Length];
+        var buf = new byte[4 + 4 + LedgerAddress.Size * 2 + 8 + 8 + memoBytes.Length];
         var off = 0;
         BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(off), chainId); off += 4;
+        BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(off), asset); off += 4;
         from.ToBytes().AsSpan().CopyTo(buf.AsSpan(off)); off += LedgerAddress.Size;
         to.ToBytes().AsSpan().CopyTo(buf.AsSpan(off)); off += LedgerAddress.Size;
         BinaryPrimitives.WriteUInt64LittleEndian(buf.AsSpan(off), amount); off += 8;

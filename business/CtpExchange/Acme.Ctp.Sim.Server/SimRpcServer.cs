@@ -9,10 +9,11 @@ namespace Acme.Ctp.Sim.Server;
 /// <summary>
 /// 提币处理器（批 4 接线）：host 侧 glue 注入——桥（Aether.Ledger 的 LedgerBridge）实现在交易所宿主。
 /// <b>本项目（business/Sim.Server）不引 Aether.Ledger</b>（层化——链只进 host），契约用原语：
-/// 入参 = 绑定账户 / 目标地址 hex / 原子数；出参 = 链上交易哈希；业务失败抛
-/// <see cref="Acme.Ctp.Domain.CtpBusinessException"/>（ErrorId 90019 透传到 wire err——SimConnection catch 统一重建）。
+/// 入参 = 绑定账户 / 目标地址 hex / 原子数 / 资产（"coin" 烧现货持仓 | "quote" 扣场内现金——批 6 双资产）；
+/// 出参 = 链上交易哈希；业务失败抛 <see cref="Acme.Ctp.Domain.CtpBusinessException"/>（ErrorId 90019 透传到 wire err——
+/// SimConnection catch 统一重建）。
 /// </summary>
-public delegate Task<string> SimWithdrawHandler(string accountId, string toAddressHex, ulong amountAtoms);
+public delegate Task<string> SimWithdrawHandler(string accountId, string toAddressHex, ulong amountAtoms, string asset);
 
 /// <summary>
 /// 仿真柜台 RPC 服务端：host 内**单个** <see cref="SimTradingCore"/> 服务所有连接，按 accountId 路由推送。

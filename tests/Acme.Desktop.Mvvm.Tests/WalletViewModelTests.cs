@@ -22,7 +22,7 @@ public class WalletViewModelTests
     {
         public string? FailWith;
         public Task<string> WithdrawAsync(string exchangeEndpoint, string userId, string password,
-            string toAddressHex, ulong amountAtoms, CancellationToken ct = default)
+            string toAddressHex, ulong amountAtoms, string asset = "coin", CancellationToken ct = default)
             => FailWith is { } msg
                 ? Task.FromException<string>(new InvalidOperationException(msg))
                 : Task.FromResult("abc123def456abc123def456abc123def456abc123def456abc123def456abcd");

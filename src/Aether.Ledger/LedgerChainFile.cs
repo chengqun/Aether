@@ -2,8 +2,27 @@ using System.Text.Json;
 
 namespace Aether.Ledger;
 
-/// <summary>账户状态（重放中维护）：余额（原子单位）+ 发送序号（nonce 随每笔**发出**交易递增——以太坊模型）。</summary>
-public sealed record LedgerAccountState(ulong BalanceAtoms, ulong Nonce);
+/// <summary>
+/// 账户状态（重放中维护）：币余额 + 计价币余额（原子单位，按资产分账）+ 发送序号
+/// （nonce 随每笔**发出**交易递增——以太坊模型；nonce 单流覆盖全部资产）。
+/// </summary>
+public sealed record LedgerAccountState(ulong BalanceAtoms, ulong QuoteBalanceAtoms, ulong Nonce)
+{
+    /// <summary>记账减法（转账 from 侧——nonce +1）。调用方保证余额充足（验证器前置）。</summary>
+    public LedgerAccountState Debit(uint asset, ulong atoms)
+        => asset == LedgerSupply.Assets.Coin
+            ? this with { BalanceAtoms = BalanceAtoms - atoms, Nonce = Nonce + 1 }
+            : this with { QuoteBalanceAtoms = QuoteBalanceAtoms - atoms, Nonce = Nonce + 1 };
+
+    /// <summary>记账加法（转账 to 侧——nonce 不动）。余额上限（≤ 各资产总量）结构上保证无溢出。</summary>
+    public LedgerAccountState Credit(uint asset, ulong atoms)
+        => asset == LedgerSupply.Assets.Coin
+            ? this with { BalanceAtoms = BalanceAtoms + atoms }
+            : this with { QuoteBalanceAtoms = QuoteBalanceAtoms + atoms };
+
+    public ulong BalanceOf(uint asset)
+        => asset == LedgerSupply.Assets.Coin ? BalanceAtoms : QuoteBalanceAtoms;
+}
 
 /// <summary>
 /// 区块构建器（引擎侧——节点/测试共用）：给定父块、待打包交易、出块人钱包，产出合法区块。
@@ -33,10 +52,11 @@ public static class LedgerBlockBuilder
                 continue;
             }
             accepted.Add(tx);
-            // 立即推进工作状态——同块内同账户后续交易按推进后的 nonce/余额验证
-            working[tx.From] = new LedgerAccountState(working[tx.From].BalanceAtoms - tx.AmountAtoms, working[tx.From].Nonce + 1);
-            var toBalance = working.TryGetValue(tx.To, out var existing) ? existing.BalanceAtoms : 0;
-            working[tx.To] = new LedgerAccountState(toBalance + tx.AmountAtoms, existing?.Nonce ?? 0);
+            // 立即推进工作状态——同块内同账户后续交易按推进后的 nonce/余额验证（按资产分账）
+            working[tx.From] = working[tx.From].Debit(tx.Asset, tx.AmountAtoms);
+            working[tx.To] = working.TryGetValue(tx.To, out var existing)
+                ? existing.Credit(tx.Asset, tx.AmountAtoms)
+                : new LedgerAccountState(0, 0, 0).Credit(tx.Asset, tx.AmountAtoms);
         }
 
         // txRoot = SHA256(全部交易哈希拼接)——无 Merkle 树（本量级重放即验证），包含证明力等价
@@ -77,14 +97,24 @@ public static class LedgerChainFile
             writer.WriteLine(JsonSerializer.Serialize(block, Json));
     }
 
-    /// <summary>读入链文件（返回创世 + 区块列表，按文件序——顺序校验归验证器）。</summary>
+    /// <summary>读入链文件（返回创世 + 区块列表，按文件序——顺序校验归验证器）。
+    /// 旧单资产链（缺 QuoteTotalSupplyAtoms/Asset 字段）在此明确拒绝——批 6 双资产是硬分叉。</summary>
     public static (LedgerGenesis Genesis, IReadOnlyList<LedgerBlock> Blocks) Read(string path)
     {
         var lines = File.ReadAllLines(path).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
         if (lines.Count == 0)
             throw new InvalidDataException($"链文件为空：{path}");
-        var genesis = JsonSerializer.Deserialize<LedgerGenesis>(lines[0])
-            ?? throw new InvalidDataException("创世行反序列化为 null。");
+        LedgerGenesis genesis;
+        try
+        {
+            genesis = JsonSerializer.Deserialize<LedgerGenesis>(lines[0])
+                ?? throw new InvalidDataException("创世行反序列化为 null。");
+        }
+        catch (JsonException)
+        {
+            throw new InvalidDataException(
+                $"链文件为旧单资产协议（缺 QuoteTotalSupplyAtoms）——批 6 双资产为硬分叉。删除链文件后重启生成新链：{path}");
+        }
         var blocks = new List<LedgerBlock>(lines.Count - 1);
         foreach (var line in lines.Skip(1))
             blocks.Add(JsonSerializer.Deserialize<LedgerBlock>(line)

@@ -135,6 +135,18 @@ public sealed class SimAccount
         StaticBalance -= Round(margin);
     }
 
+    /// <summary>
+    /// 计价币提现（批 6 双资产）：AQ 托管凭证离场——静态权益直接扣减（它是现金，不是保证金占用）。
+    /// 闸门 = <b>静态可用</b>（StaticBalance − CurrMargin − Frozen——不含浮盈：浮盈是持仓盯市读数，
+    /// 落袋前不是钱；锁定保证金 backing 挂单/持仓，动了会破坏资金守恒）。
+    /// </summary>
+    public bool TryWithdrawCash(double tokens)
+    {
+        if (StaticBalance - CurrMargin - FrozenMargin - FrozenCash < tokens - 1e-9) return false;
+        StaticBalance -= Round(tokens);
+        return true;
+    }
+
     /// <summary>持仓标价（影响 <c>Balance</c>/<c>Available</c>）。</summary>
     public void SetPositionProfit(double value) => PositionProfit = value;
 

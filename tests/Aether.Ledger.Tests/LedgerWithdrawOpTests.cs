@@ -86,6 +86,50 @@ public class LedgerWithdrawOpTests
     }
 
     [Fact]
+    public async Task 提币op_quote资产_扣现金_现金不足消息透传()
+    {
+        using var stack = await StartAsync();
+        var agent = LedgerHarness.Wallet("withdraw-quote-poor");
+        // 无 AQ 充值 + 夹具无 InitialBalance（默认 0）⇒ 零现金——提巨额必拒：
+        await stack.Client.LoginAsync(new LoginArg("SIM", "u1", "任意"));
+
+        // 提 1 AQ（quote）——金额巨大必超可用现金 → 90019 消息带「可提现金不足」
+        var ex = await Assert.ThrowsAsync<CtpBusinessException>(
+            () => stack.Client.WithdrawAsync(agent.Address.Hex, 999_999_000_000UL, "quote"));
+        Assert.Equal(SimErrorCodes.WithdrawalFailed, ex.ErrorId);
+        Assert.Contains("可提现金不足", ex.ErrorMsg);
+    }
+
+    [Fact]
+    public async Task 提币op_quote资产_充AQ后提回闭环()
+    {
+        using var stack = await StartAsync();
+        var treasury = new LedgerWallet(Convert.FromHexString(stack.Sim.TreasurySeed));
+        var alice = LedgerHarness.Wallet("withdraw-quote-ok");
+
+        // alice 充 50 AQ（=5e9 atoms，memo=u1）→ 对账 → u1 现金 50 → 提 10 AQ 回钱包
+        await LedgerBridge.DepositAsync(stack.Sim.Client, treasury, stack.Sim.Custody.Address,
+            5_000_000_000UL, "u1", LedgerSupply.Assets.Quote);
+        await WaitBlockAsync(stack.Sim, 1);
+        await Task.Delay(700);
+        stack.Link.ReconcileNow();
+        var u1 = stack.Core.QueryAccount("u1");
+        Assert.Equal(50, u1.Balance - u1.PositionProfit, 2);
+
+        await stack.Client.LoginAsync(new LoginArg("SIM", "u1", "任意"));
+        var txHash = await stack.Client.WithdrawAsync(alice.Address.Hex, 1_000_000_000UL, "quote");
+        Assert.NotEmpty(txHash);
+        await WaitBlockAsync(stack.Sim, 2);
+        await Task.Delay(700);
+
+        var aliceChain = await stack.Sim.Client.GetBalanceAsync(alice.Address.Hex);
+        Assert.Equal(1_000_000_000UL, aliceChain.QuoteBalanceAtoms);   // 10 AQ 到自持钱包
+        var u1After = stack.Core.QueryAccount("u1");
+        Assert.True(u1After.Balance - u1After.PositionProfit >= 39.99 && u1After.Balance - u1After.PositionProfit <= 40,
+            $"u1 现金异常：{u1After.Balance - u1After.PositionProfit}");   // 50 − 10
+    }
+
+    [Fact]
     public async Task 提币op_未登录拒绝90001()
     {
         using var stack = await StartAsync();

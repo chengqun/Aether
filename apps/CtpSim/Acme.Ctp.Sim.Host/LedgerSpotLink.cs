@@ -4,7 +4,8 @@ using Acme.Ctp.Simulator;
 // 全局命名空间（host 惯例——同 Program.cs 的 Log/ExchangeHostedService；tests 引 exe 程序集可直接用）
 
 /// <summary>
-/// 现货桥接线（批 4 收尾——「充币 → 铸造持仓」的最后一焊）：把链侧 IOU 与交易所核心的现货持仓对齐。
+/// 现货桥接线（批 4 收尾——「充币 → 铸造持仓」的最后一焊）+ 批 6 双资产（AQ 充值 → 场内现金）：
+/// 把链侧两个 IOU（币/AQ）分别与交易所核心的现货持仓/场内现金对齐。
 /// 拓扑：LedgerBridge（链侦听）+ SimTradingCore（venue 账本）之间 <b>只有这一个类</b>，住在交易所宿主
 /// （composition root——两侧领域零互引：Aether.Ledger 纯库不碰 venue，Simulator 纯库不碰链）。
 ///
@@ -59,9 +60,26 @@ public sealed class LedgerSpotLink : ILedgerWithdrawHook, IDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>提币钩子：烧毁 venue 侧现货持仓（桥签名出金之前）。整手校验 + 持仓闸门。</summary>
-    public Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(string accountKey, ulong amountAtoms, CancellationToken ct = default)
+    /// <summary>
+    /// 提币钩子（按资产分派）：币 = 烧毁现货持仓（整手校验 + 持仓闸门）；计价币 = 扣场内现金
+    ///（静态可用闸门——锁定保证金/挂单冻结/浮盈不可提）。桥签名出金之前。
+    /// </summary>
+    public Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(string accountKey, ulong amountAtoms,
+        uint asset = LedgerSupply.Assets.Coin, CancellationToken ct = default)
     {
+        if (asset == LedgerSupply.Assets.Quote)
+        {
+            try
+            {
+                _core.WithdrawQuoteCash(accountKey, amountAtoms);
+                return Task.FromResult((true, (string?)null));
+            }
+            catch (Acme.Ctp.Domain.CtpBusinessException ex)
+            {
+                return Task.FromResult((false, ex.ErrorMsg));
+            }
+        }
+
         var instrument = _core.TryGetInstrument(_instrumentId);
         if (instrument is not { IsSpot: true })
             return Task.FromResult((false, $"{_instrumentId} 未上市或非现货——venue 无法处理提币"));
@@ -143,6 +161,38 @@ public sealed class LedgerSpotLink : ILedgerWithdrawHook, IDisposable
                         {
                             _lastBurnErrors[account] = ex.ErrorMsg;
                             Log.Line($"[LEDGER-SPOT] ⚠ 对账烧毁受阻（{account}）：{ex.ErrorMsg}");
+                        }
+                    }
+                }
+            }
+
+            // AQ 侧（批 6 双资产）：计价币铸造台账对齐链侧 AQ IOU——充值入现金 / 提现扣现金。
+            // 现金不足扣不动时（亏损后链上还有 AQ IOU 差额——提币已扣过/运营者手动链上划转）同款受限重试。
+            var quoteIou = _bridge.GetAllQuoteBalances();
+            var quoteMinted = _core.GetQuoteMintedAtoms();
+            foreach (var account in quoteIou.Keys.Concat(quoteMinted.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var targetAtoms = quoteIou.TryGetValue(account, out var qa) ? (long)qa : 0L;
+                var currentAtoms = quoteMinted.TryGetValue(account, out var ca) ? ca : 0L;
+                var quoteDelta = targetAtoms - currentAtoms;
+                if (quoteDelta > 0)
+                {
+                    _core.CreditQuoteDeposit(account, (ulong)quoteDelta);
+                    Log.Line($"[LEDGER-QUOTE] 现金入账 {(quoteDelta / (double)LedgerSupply.AtomsPerCoin):0.########} → {account}（AQ IOU {LedgerSupply.Format((ulong)quoteDelta)}）");
+                }
+                else if (quoteDelta < 0)
+                {
+                    try
+                    {
+                        _core.WithdrawQuoteCash(account, (ulong)(-quoteDelta));
+                        Log.Line($"[LEDGER-QUOTE] 现金对账扣减 {(-quoteDelta / (double)LedgerSupply.AtomsPerCoin):0.########} ← {account}");
+                    }
+                    catch (Acme.Ctp.Domain.CtpBusinessException ex)
+                    {
+                        if (!_lastBurnErrors.TryGetValue("quote:" + account, out var last) || last != ex.ErrorMsg)
+                        {
+                            _lastBurnErrors["quote:" + account] = ex.ErrorMsg;
+                            Log.Line($"[LEDGER-QUOTE] ⚠ 对账扣现受阻（{account}）：{ex.ErrorMsg}");
                         }
                     }
                 }

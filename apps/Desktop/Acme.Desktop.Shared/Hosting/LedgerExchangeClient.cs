@@ -13,13 +13,13 @@ namespace Acme.Desktop.Shared.Hosting;
 public sealed class LedgerExchangeClient : ILedgerExchangeClient
 {
     public async Task<string> WithdrawAsync(string exchangeEndpoint, string userId, string password,
-        string toAddressHex, ulong amountAtoms, CancellationToken cancellationToken = default)
+        string toAddressHex, ulong amountAtoms, string asset = "coin", CancellationToken cancellationToken = default)
     {
         var (host, port) = ParseEndpoint(exchangeEndpoint);
         using var client = new SimRpcClient(host, port);
         await client.ConnectAsync(cancellationToken);
         await client.LoginAsync(new LoginArg("SIM", userId, password), cancellationToken);
-        return await client.WithdrawAsync(toAddressHex, amountAtoms, cancellationToken);
+        return await client.WithdrawAsync(toAddressHex, amountAtoms, asset, cancellationToken);
     }
 
     /// <summary>[host:]port 解析（同钱包 CLI——空/垃圾值抛 <see cref="FormatException"/>）。</summary>

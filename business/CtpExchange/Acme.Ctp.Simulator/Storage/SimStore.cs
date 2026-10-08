@@ -94,6 +94,10 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             minted_lots   INTEGER NOT NULL,
             PRIMARY KEY (account_id, instrument_id)
         );
+        CREATE TABLE IF NOT EXISTS sim_quote_minted (
+            account_id    TEXT PRIMARY KEY,
+            minted_atoms  INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS sim_tick (
             instrument_id   TEXT NOT NULL,
             trading_day     TEXT NOT NULL DEFAULT '',
@@ -256,6 +260,34 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         while (await r.ReadAsync(ct))
             list.Add(new SpotMintedSnapshot(r.GetString(0), r.GetString(1), r.GetInt32(2)));
         return list;
+    }
+
+    public async Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT account_id, minted_atoms FROM sim_quote_minted";
+        var list = new List<QuoteMintedSnapshot>();
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            list.Add(new QuoteMintedSnapshot(r.GetString(0), r.GetInt64(1)));
+        return list;
+    }
+
+    public async Task SaveQuoteMintedAsync(string accountId, long mintedAtoms, CancellationToken ct = default)
+    {
+        await EnsureSchemaAsync(CreateSql, ct);
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO sim_quote_minted (account_id, minted_atoms)
+            VALUES (@a, @m)
+            ON CONFLICT(account_id) DO UPDATE SET minted_atoms=excluded.minted_atoms
+            """;
+        cmd.Parameters.AddWithValue("@a", accountId);
+        cmd.Parameters.AddWithValue("@m", mintedAtoms);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default)

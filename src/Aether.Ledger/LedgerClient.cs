@@ -29,14 +29,18 @@ public sealed class LedgerClient : IDisposable
             result.GetProperty("chainId").GetUInt32(),
             result.GetProperty("height").GetUInt64(),
             result.GetProperty("mempool").GetInt32(),
-            result.GetProperty("totalSupplyAtoms").GetUInt64());
+            result.GetProperty("totalSupplyAtoms").GetUInt64(),
+            result.GetProperty("quoteTotalSupplyAtoms").GetUInt64());
     }
 
     /// <summary>查账户（余额 + nonce；未知地址返回 0/0）。</summary>
     public async Task<LedgerAccountState> GetBalanceAsync(string address, CancellationToken ct = default)
     {
         var result = await CallAsync(LedgerOps.GetBalance, new { address }, ct);
-        return new LedgerAccountState(result.GetProperty("balanceAtoms").GetUInt64(), result.GetProperty("nonce").GetUInt64());
+        return new LedgerAccountState(
+            result.GetProperty("balanceAtoms").GetUInt64(),
+            result.GetProperty("quoteBalanceAtoms").GetUInt64(),
+            result.GetProperty("nonce").GetUInt64());
     }
 
     /// <summary>提交已签名交易（验签/nonce/余额不过 ⇒ CtpBusinessException 风格 err）。
@@ -97,7 +101,7 @@ public sealed class LedgerClient : IDisposable
 }
 
 /// <summary>节点信息快照。</summary>
-public sealed record LedgerNodeInfo(string GenesisHash, uint ChainId, ulong Height, int MempoolCount, ulong TotalSupplyAtoms);
+public sealed record LedgerNodeInfo(string GenesisHash, uint ChainId, ulong Height, int MempoolCount, ulong TotalSupplyAtoms, ulong QuoteTotalSupplyAtoms);
 
 /// <summary>客户端侧错误（节点 err 原样透传——验签失败/nonce 不符/余额不足等拒因都在里面）。</summary>
 public sealed class LedgerClientException(string message) : Exception(message);

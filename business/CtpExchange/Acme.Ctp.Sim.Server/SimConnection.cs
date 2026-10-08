@@ -251,13 +251,19 @@ internal sealed class SimConnection
 
                 case SimOps.Withdraw:
                 {
-                    // 提币（批 4 接线，2026-10-08）：登录即鉴权（先认证后绑定——凭据失败连接不绑账户）；
-                    // 桥未配置诚实拒绝（90019）。await 期间推送进 capture 缓冲（先应答后推送契约不变）。
+                    // 提币（批 4 接线；批 6 双资产：coin 烧持仓 / quote 扣现金）：登录即鉴权（先认证后绑定——
+                    // 凭据失败连接不绑账户）；桥未配置诚实拒绝（90019）。await 期间推送进 capture 缓冲（先应答后推送契约不变）。
                     var arg = Arg<WithdrawArg>(req);
                     if (arg is null) { err = Missing("withdraw"); break; }
                     if (string.IsNullOrWhiteSpace(arg.To) || arg.AmountAtoms == 0)
                     {
                         err = new SimWireError(SimErrorCodes.InvalidParameter, "withdraw 参数非法：To 与 AmountAtoms 必填（To 为 40 位 hex 地址）。");
+                        break;
+                    }
+                    var asset = (arg.Asset ?? "coin").Trim().ToLowerInvariant();
+                    if (asset is not ("coin" or "quote"))
+                    {
+                        err = new SimWireError(SimErrorCodes.InvalidParameter, $"withdraw 参数非法：Asset 须为 coin|quote，实际 \"{arg.Asset}\"。");
                         break;
                     }
                     string? bound;
@@ -273,7 +279,7 @@ internal sealed class SimConnection
                         err = new SimWireError(SimErrorCodes.WithdrawalFailed, "提币不可用：本部署未接链桥（交易所未设 AETHER_LEDGER_CUSTODY_SEED）。");
                         break;
                     }
-                    var txHash = await handler(bound, arg.To, arg.AmountAtoms).ConfigureAwait(false);
+                    var txHash = await handler(bound, arg.To, arg.AmountAtoms, asset).ConfigureAwait(false);
                     result = new WithdrawResult(txHash);
                     break;
                 }

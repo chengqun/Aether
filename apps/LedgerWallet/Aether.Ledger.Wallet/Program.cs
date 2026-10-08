@@ -87,7 +87,8 @@ static async Task InfoAsync(Args a)
 {
     var info = await NodeClient(a).GetInfoAsync();
     Console.WriteLine($"链就绪：高度 {info.Height} | chainId {info.ChainId} | 创世 {info.GenesisHash[..12]}…");
-    Console.WriteLine($"总供给：{LedgerSupply.Format(LedgerSupply.TotalSupplyAtoms)}（固定——不可增发）");
+    Console.WriteLine($"币总供给：{LedgerSupply.Format(info.TotalSupplyAtoms)}（固定——不可增发）");
+    Console.WriteLine($"计价币总供给：{LedgerSupply.Format(info.QuoteTotalSupplyAtoms)}（AQ——交易对的报价侧）");
 }
 
 static async Task BalanceAsync(Args a)
@@ -96,7 +97,7 @@ static async Task BalanceAsync(Args a)
     var address = a.Has("seed") ? (await LoadWallet(a)).Address.Hex
         : LedgerAddress.Parse(a.Positional(1) ?? throw new ArgumentException("balance 需要 <address> 或 --seed 参数")).Hex;
     var account = await NodeClient(a).GetBalanceAsync(address);
-    Console.WriteLine($"{address}：{LedgerSupply.Format(account.BalanceAtoms)}（nonce {account.Nonce}）");
+    Console.WriteLine($"{address}：币 {LedgerSupply.Format(account.BalanceAtoms)} | 计价币 {LedgerSupply.Format(account.QuoteBalanceAtoms)}（nonce {account.Nonce}）");
 }
 
 static async Task TransferAsync(Args a)
@@ -104,13 +105,15 @@ static async Task TransferAsync(Args a)
     var wallet = await LoadWallet(a);
     var to = LedgerAddress.Parse(a.Require("to"));
     var atoms = ParseCoins(a.Require("amount"));
+    var asset = ParseAsset(a);
     var memo = a.Get("memo") ?? "";
     var client = NodeClient(a);
     var info = await client.GetInfoAsync();
     var account = await client.GetBalanceAsync(wallet.Address.Hex);
-    var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo);
+    var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo, asset);
     await client.SubmitTxAsync(tx);
-    Console.WriteLine($"已提交：{LedgerSupply.Format(atoms)} → {to.Hex}");
+    var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
+    Console.WriteLine($"已提交（{assetName}）：{LedgerSupply.Format(atoms)} → {to.Hex}");
     Console.WriteLine($"交易哈希：{tx.Hash}（出块由节点异步完成——info 可查高度推进）");
 }
 
@@ -120,10 +123,14 @@ static async Task DepositAsync(Args a)
     var custody = LedgerAddress.Parse(a.Require("custody"));
     var accountKey = a.Require("account");
     var atoms = ParseCoins(a.Require("amount"));
+    var asset = ParseAsset(a);
     var client = NodeClient(a);
-    await LedgerBridge.DepositAsync(client, wallet, custody, atoms, accountKey);
-    Console.WriteLine($"已提交充值：{LedgerSupply.Format(atoms)} → custody {custody.Hex[..12]}…（memo={accountKey}）");
-    Console.WriteLine("桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓（交易所须已上现货并接链桥）。");
+    await LedgerBridge.DepositAsync(client, wallet, custody, atoms, accountKey, asset);
+    var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
+    Console.WriteLine($"已提交充值（{assetName}）：{LedgerSupply.Format(atoms)} → custody {custody.Hex[..12]}…（memo={accountKey}）");
+    Console.WriteLine(asset == LedgerSupply.Assets.Coin
+        ? "桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓（交易所须已上现货并接链桥）。"
+        : "桥 500ms 轮询 + 对账 1s 内自动入账场内现金（1 AQ = 1 现金）。");
 }
 
 static async Task WithdrawAsync(Args a)
@@ -132,13 +139,15 @@ static async Task WithdrawAsync(Args a)
     var password = a.Require("password");
     var to = a.Require("to");
     var atoms = ParseCoins(a.Require("amount"));
+    var assetName = (a.Get("asset") ?? "coin").Trim().ToLowerInvariant() is "quote" ? "quote" : "coin";
     var (host, port) = ParseEndpoint(a.Get("exchange") ?? "127.0.0.1:17800");
 
     using var client = new SimRpcClient(host, port);
     await client.ConnectAsync();
     await client.LoginAsync(new LoginArg("SIM", user, password));   // 登录即鉴权——绑定账户 = 出金账户
-    var txHash = await client.WithdrawAsync(to, atoms);
-    Console.WriteLine($"提币已提交：{LedgerSupply.Format(atoms)} → {to}（交易所 {host}:{port}）");
+    var txHash = await client.WithdrawAsync(to, atoms, assetName);
+    var label = assetName == "coin" ? "币（烧现货持仓）" : "计价币（扣场内现金）";
+    Console.WriteLine($"提币已提交（{label}）：{LedgerSupply.Format(atoms)} → {to}（交易所 {host}:{port}）");
     Console.WriteLine($"交易哈希：{txHash}");
 }
 
@@ -170,6 +179,18 @@ static async Task<LedgerWallet> LoadWallet(Args a)
         seed = (await File.ReadAllTextAsync(path)).Trim();
     }
     return new LedgerWallet(Convert.FromHexString(seed));
+}
+
+/// <summary>--asset coin|quote（缺省 coin）→ 资产 id。</summary>
+static uint ParseAsset(Args a)
+{
+    var value = (a.Get("asset") ?? "coin").Trim().ToLowerInvariant();
+    return value switch
+    {
+        "coin" => LedgerSupply.Assets.Coin,
+        "quote" => LedgerSupply.Assets.Quote,
+        _ => throw new ArgumentException($"--asset 非法：\"{value}\"（coin | quote）"),
+    };
 }
 
 static ulong ParseCoins(string coins)

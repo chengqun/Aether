@@ -27,7 +27,7 @@ internal static class LedgerHarness
     public static Dictionary<string, LedgerAccountState> InitialState(LedgerGenesis genesis)
         => new(StringComparer.Ordinal)
         {
-            [genesis.TreasuryAddress] = new LedgerAccountState(genesis.TotalSupplyAtoms, 0),
+            [genesis.TreasuryAddress] = new LedgerAccountState(genesis.TotalSupplyAtoms, genesis.QuoteTotalSupplyAtoms, 0),
         };
 
     /// <summary>签名一笔 treasury → to 的转账并构建含它的区块（单交易块）。</summary>
@@ -286,16 +286,52 @@ public class LedgerEngineTests
     }
 
     [Fact]
+    public void 计价币转账_余额按资产分账_币余额不动()
+    {
+        var (genesis, treasury, producer) = LedgerHarness.NewChain();
+        var alice = LedgerHarness.Wallet("alice-dual");
+
+        // treasury 给 alice 转 100 AQ（asset=Quote）
+        var tx = LedgerTransaction.Sign(LedgerHarness.ChainId, treasury, alice.Address,
+            100_000_000UL, 1, null, LedgerSupply.Assets.Quote);
+        var (block, _, rejected) = LedgerBlockBuilder.Build(genesis, null, new[] { tx }, producer, 1_000,
+            LedgerHarness.InitialState(genesis));
+        Assert.Empty(rejected);
+        var state = LedgerHarness.StateAfter(genesis, new[] { block });
+
+        Assert.Equal(100_000_000UL, state[alice.Address.Hex].QuoteBalanceAtoms);   // AQ 到账
+        Assert.Equal(0UL, state[alice.Address.Hex].BalanceAtoms);                  // 币余额不动
+        var result = LedgerValidator.Replay(genesis, new[] { block });
+        Assert.True(result.Ok, result.Error);
+        Assert.True(result.QuoteSupplyConserved);                                  // AQ 守恒
+        Assert.Equal(LedgerSupply.QuoteTotalSupplyAtoms - 100_000_000UL, state[genesis.TreasuryAddress].QuoteBalanceAtoms);
+    }
+
+    [Fact]
+    public void 资产字段篡改_签名失效被拒()
+    {
+        // 签名绑资产：合法币转账改成计价币转账（同金额同 nonce）⇒ 签名载荷变了 ⇒ 验签拒绝——防跨资产重放。
+        var (genesis, treasury, producer) = LedgerHarness.NewChain();
+        var alice = LedgerHarness.Wallet("alice-tamper");
+        var tx = LedgerTransaction.Sign(LedgerHarness.ChainId, treasury, alice.Address, 1_000_000UL, 1);
+        var forged = tx with { Asset = LedgerSupply.Assets.Quote };
+        var (_, _, rejected) = LedgerBlockBuilder.Build(genesis, null, new[] { forged }, producer, 1_000,
+            LedgerHarness.InitialState(genesis));
+        Assert.NotEmpty(rejected);   // 验签失败（载荷含 asset）
+    }
+
+    [Fact]
     public void 张冠李戴_公钥与地址不符被拒()
     {
         var (genesis, treasury, producer) = LedgerHarness.NewChain();
         var alice = LedgerHarness.Wallet("alice");
         var bob = LedgerHarness.Wallet("bob");
         // 用 treasury 的密钥签名，但 From 填 bob 的地址（对 bob 地址的伪装）
-        var payload = LedgerCodec.TransactionPayload(LedgerHarness.ChainId, bob.Address, alice.Address, 1UL, 1, null);
+        var payload = LedgerCodec.TransactionPayload(LedgerHarness.ChainId, LedgerSupply.Assets.Coin, bob.Address, alice.Address, 1UL, 1, null);
         var tx = new LedgerTransaction
         {
             ChainId = LedgerHarness.ChainId,
+            Asset = LedgerSupply.Assets.Coin,
             From = bob.Address.Hex,
             To = alice.Address.Hex,
             AmountAtoms = 1UL,

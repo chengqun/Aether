@@ -9,9 +9,10 @@ namespace Acme.Desktop.Mvvm;
 /// </summary>
 public interface ILedgerExchangeClient
 {
-    /// <summary>提币。业务失败抛 <c>CtpBusinessException</c>（90019=桥未配/持仓不足/链拒绝，消息带原因）。</summary>
+    /// <summary>提币。asset："coin"（烧现货持仓，默认）/"quote"（扣场内现金）。
+    /// 业务失败抛 <c>CtpBusinessException</c>（90019=桥未配/持仓不足/链拒绝，消息带原因）。</summary>
     Task<string> WithdrawAsync(string exchangeEndpoint, string userId, string password,
-        string toAddressHex, ulong amountAtoms, CancellationToken cancellationToken = default);
+        string toAddressHex, ulong amountAtoms, string asset = "coin", CancellationToken cancellationToken = default);
 }
 
 /// <summary>钱包种子文件位置（DI 单例——VM 与 agent 工具（AddLedgerTools）共用同一路径：单用户桌面，用户与 agent 同一个钱包）。</summary>

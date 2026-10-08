@@ -216,7 +216,7 @@ public class LedgerBridgeTests
     private sealed class StubHook(bool ok, string? error = null) : ILedgerWithdrawHook
     {
         public Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(
-            string accountKey, ulong amountAtoms, CancellationToken ct = default)
+            string accountKey, ulong amountAtoms, uint asset = LedgerSupply.Assets.Coin, CancellationToken ct = default)
             => Task.FromResult((ok, error));
     }
 

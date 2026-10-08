@@ -33,10 +33,14 @@ public class LedgerWalletTool
         public bool Success { get; set; }
         /// <summary>查询的地址（40 位 hex）。</summary>
         public string? Address { get; set; }
-        /// <summary>余额（币数显示，如 "3.50000000"）。</summary>
+        /// <summary>币余额（币数显示，如 "3.50000000"）。</summary>
         public string? Balance { get; set; }
-        /// <summary>余额原子数（1 币 = 1e8 原子）。</summary>
+        /// <summary>币余额原子数（1 币 = 1e8 原子）。</summary>
         public ulong BalanceAtoms { get; set; }
+        /// <summary>计价币余额（AQ，币数显示——充进交易所变成场内现金）。</summary>
+        public string? QuoteBalance { get; set; }
+        /// <summary>计价币余额原子数。</summary>
+        public ulong QuoteBalanceAtoms { get; set; }
         /// <summary>该地址已发出的交易数（nonce——转账前自增防重放）。</summary>
         public ulong Nonce { get; set; }
         public string? Error { get; set; }
@@ -91,17 +95,20 @@ public class LedgerWalletTool
                 Address = target,
                 Balance = LedgerSupply.Format(account.BalanceAtoms),
                 BalanceAtoms = account.BalanceAtoms,
+                QuoteBalance = LedgerSupply.Format(account.QuoteBalanceAtoms),
+                QuoteBalanceAtoms = account.QuoteBalanceAtoms,
                 Nonce = account.Nonce,
             };
         }
         catch (Exception ex) { return new BalanceOutput { Error = ex.Message }; }
     }
 
-    [Description("链上转账（用本 agent 钱包签名提交——不可逆）。金额单位是币数（支持 8 位小数，如 \"1.5\"）。memo 可选（≤64 字符，充值场景须填交易所账号）。链节点须在运行。")]
+    [Description("链上转账（用本 agent 钱包签名提交——不可逆）。金额单位是币数（支持 8 位小数，如 \"1.5\"）。asset 可选 coin（币，默认）/ quote（计价币 AQ）。memo 可选（≤64 字符，充值场景须填交易所账号）。链节点须在运行。")]
     public async Task<TransferOutput> LedgerTransfer(
         [Description("收款方链上地址（40 位 hex）")] string to,
         [Description("金额（币数，字符串，支持 8 位小数，如 \"1.5\"；必须 > 0）")] string amountCoins,
         [Description("备注 memo（可选，≤64 字符；充值到交易所时须填交易所账号）")] string? memo = null,
+        [Description("资产：coin（币，默认）/ quote（计价币 AQ）")] string? asset = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -109,17 +116,19 @@ public class LedgerWalletTool
             var wallet = LoadOrCreateWallet();
             var target = LedgerAddress.Parse(to.Trim());
             var atoms = ParseCoins(amountCoins);
+            var assetId = ParseAsset(asset);
             var client = NodeClient();
-            var result = await TransferAsync(client, wallet, target, atoms, memo ?? "", cancellationToken);
+            var result = await TransferAsync(client, wallet, target, atoms, memo ?? "", cancellationToken, assetId);
             return result;
         }
         catch (Exception ex) { return new TransferOutput { Error = ex.Message }; }
     }
 
-    [Description("充值到交易所：把币转入交易所 custody 托管地址、memo=交易所账号——桥自动侦听归账并铸造现货持仓（ax001）。须先配置环境变量 AETHER_LEDGER_CUSTODY_ADDRESS（custody 地址，40 位 hex）。")]
+    [Description("充值到交易所：把资产转入交易所 custody 托管地址、memo=交易所账号——币铸造现货持仓（ax001）；计价币（quote）入账场内现金（1 AQ = 1 现金）。须先配置环境变量 AETHER_LEDGER_CUSTODY_ADDRESS（custody 地址，40 位 hex）。")]
     public async Task<TransferOutput> LedgerDepositToExchange(
-        [Description("交易所账号（memo 归账键——充值到账的现货持仓记到这个账号名下）")] string accountKey,
+        [Description("交易所账号（memo 归账键——充值到账的资产记到这个账号名下）")] string accountKey,
         [Description("金额（币数，字符串，支持 8 位小数）")] string amountCoins,
+        [Description("资产：coin（币，默认——铸造现货持仓）/ quote（计价币——入账场内现金）")] string? asset = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -133,8 +142,9 @@ public class LedgerWalletTool
             var custody = LedgerAddress.Parse(custodyHex.Trim());
             var wallet = LoadOrCreateWallet();
             var atoms = ParseCoins(amountCoins);
+            var assetId = ParseAsset(asset);
             var client = NodeClient();
-            var result = await TransferAsync(client, wallet, custody, atoms, accountKey.Trim(), cancellationToken);
+            var result = await TransferAsync(client, wallet, custody, atoms, accountKey.Trim(), cancellationToken, assetId);
             if (result.Success is true) result.Memo = accountKey.Trim();
             return result;
         }
@@ -144,19 +154,21 @@ public class LedgerWalletTool
     // —— 内部 ——
 
     private static async Task<TransferOutput> TransferAsync(
-        LedgerClient client, LedgerWallet wallet, LedgerAddress to, ulong atoms, string memo, CancellationToken ct)
+        LedgerClient client, LedgerWallet wallet, LedgerAddress to, ulong atoms, string memo, CancellationToken ct,
+        uint asset = LedgerSupply.Assets.Coin)
     {
         var info = await client.GetInfoAsync(ct);
         var account = await client.GetBalanceAsync(wallet.Address.Hex, ct);
-        if (account.BalanceAtoms < atoms)
+        var available = account.BalanceOf(asset);
+        if (available < atoms)
             return new TransferOutput
             {
                 From = wallet.Address.Hex,
                 To = to.Hex,
                 Amount = LedgerSupply.Format(atoms),
-                Error = $"余额不足：{LedgerSupply.Format(account.BalanceAtoms)} < {LedgerSupply.Format(atoms)}",
+                Error = $"余额不足（资产 {asset}）：{LedgerSupply.Format(available)} < {LedgerSupply.Format(atoms)}",
             };
-        var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo);
+        var tx = LedgerTransaction.Sign(info.ChainId, wallet, to, atoms, account.Nonce + 1, memo, asset);
         await client.SubmitTxAsync(tx, ct);
         return new TransferOutput
         {
@@ -166,6 +178,18 @@ public class LedgerWalletTool
             To = to.Hex,
             Amount = LedgerSupply.Format(atoms),
             Memo = memo is { Length: > 0 } ? memo : null,
+        };
+    }
+
+    /// <summary>asset 参数解析：null/"coin" → 币；"quote" → 计价币；其余抛异常。</summary>
+    private static uint ParseAsset(string? asset)
+    {
+        var value = (asset ?? "coin").Trim().ToLowerInvariant();
+        return value switch
+        {
+            "coin" => LedgerSupply.Assets.Coin,
+            "quote" => LedgerSupply.Assets.Quote,
+            _ => throw new ArgumentException($"asset 非法：\"{value}\"（coin | quote）"),
         };
     }
 

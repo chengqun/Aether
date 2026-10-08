@@ -37,6 +37,13 @@ public sealed record SimPositionSnapshot(
 public sealed record SpotMintedSnapshot(string AccountId, string InstrumentId, int MintedLots);
 
 /// <summary>
+/// 计价币铸造台账（批 6 双资产）：账户已净充入的 AQ 原子数（充值 + / 提现扣 −，下限 0）。
+/// 与币侧台账同构——链侧 AQ IOU 是对账目标；**场内现金（StaticBalance）不是铸造台账**
+///（现金随交易/盈亏/手续费浮动，台账只记链上进出）。
+/// </summary>
+public sealed record QuoteMintedSnapshot(string AccountId, long MintedAtoms);
+
+/// <summary>
 /// 仿真柜台持久化端口。
 /// <para>
 /// 落在 Domain 之外的自己的命名空间里（仿真核心的内部协作面，非业务契约）——
@@ -80,6 +87,12 @@ public interface ISimStore
     /// <summary>写一行现货铸造台账（upsert——(account, instrument) 主键）。</summary>
     Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default);
 
+    /// <summary>读全部计价币铸造台账行（启动恢复——核心按账户分桶）。</summary>
+    Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default);
+
+    /// <summary>写一行计价币铸造台账（upsert——account 主键）。</summary>
+    Task SaveQuoteMintedAsync(string accountId, long mintedAtoms, CancellationToken ct = default);
+
     /// <summary>追加一条成交 tick（真实交易消息——交易所模式每笔成交的完整快照：价/量/盘口/开高低）。</summary>
     Task SaveTickAsync(CtpTick tick, CancellationToken ct = default);
 
@@ -111,6 +124,10 @@ public sealed class NullSimStore : ISimStore
     public Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<SpotMintedSnapshot>>(Array.Empty<SpotMintedSnapshot>());
     public Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default)
+        => Task.CompletedTask;
+    public Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<QuoteMintedSnapshot>>(Array.Empty<QuoteMintedSnapshot>());
+    public Task SaveQuoteMintedAsync(string accountId, long mintedAtoms, CancellationToken ct = default)
         => Task.CompletedTask;
     public Task SaveTickAsync(CtpTick tick, CancellationToken ct = default) => Task.CompletedTask;
     public Task<IReadOnlyList<CtpTick>> LoadRecentTicksAsync(string instrumentId, int limit, CancellationToken ct = default)

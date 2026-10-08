@@ -14,11 +14,17 @@ using Aether.Ledger;
 public static class LedgerWithdrawGlue
 {
     public static SimWithdrawHandler Wrap(LedgerBridge bridge)
-        => async (account, toHex, atoms) =>
+        => async (account, toHex, atoms, asset) =>
         {
             try
             {
-                return await bridge.WithdrawAsync(account, LedgerAddress.Parse(toHex), atoms);
+                var assetId = asset switch
+                {
+                    "coin" => LedgerSupply.Assets.Coin,
+                    "quote" => LedgerSupply.Assets.Quote,
+                    _ => throw new CtpBusinessException(SimErrorCodes.InvalidParameter, $"未知资产 \"{asset}\"（coin|quote）"),
+                };
+                return await bridge.WithdrawAsync(account, LedgerAddress.Parse(toHex), atoms, assetId);
             }
             catch (LedgerClientException ex)
             {

@@ -148,8 +148,9 @@ public sealed record SubscribeArg(IReadOnlyList<string> Symbols);
 /// <summary>行情快照查询参数（null/空 = 只要时钟）。</summary>
 public sealed record QuoteArg(IReadOnlyList<string>? Symbols);
 
-/// <summary>提币参数：<c>To</c> = 目标链上地址 hex（40 字符）；<c>AmountAtoms</c> = 原子数（整手校验在 venue 侧）。</summary>
-public sealed record WithdrawArg(string To, ulong AmountAtoms);
+/// <summary>提币参数：<c>To</c> = 目标链上地址 hex（40 字符）；<c>AmountAtoms</c> = 原子数（整手校验在 venue 侧）；
+/// <c>Asset</c> = "coin"（烧现货持仓）/ "quote"（扣场内现金——批 6 双资产），缺省 coin。</summary>
+public sealed record WithdrawArg(string To, ulong AmountAtoms, string? Asset = null);
 
 /// <summary>提币应答：链上交易哈希（提交进内存池即返回——出块由节点循环异步完成）。</summary>
 public sealed record WithdrawResult(string TxHash);

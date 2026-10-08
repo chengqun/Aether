@@ -10,7 +10,8 @@ namespace Aether.Ledger;
 /// </summary>
 public interface ILedgerWithdrawHook
 {
-    Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(string accountKey, ulong amountAtoms, CancellationToken ct = default);
+    /// <summary>asset：<see cref="LedgerSupply.Assets.Coin"/>（烧现货持仓）或 <see cref="LedgerSupply.Assets.Quote"/>（扣场内现金）。</summary>
+    Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(string accountKey, ulong amountAtoms, uint asset, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -36,8 +37,9 @@ public sealed class LedgerBridge : IDisposable
 {
     private readonly LedgerClient _client;
     private readonly LedgerWallet _custody;
-    private readonly Dictionary<string, ulong> _balances = new(StringComparer.Ordinal);
-    private ulong _custodyNonce;   // custody 的下一个出金 nonce（重启从链重扫恢复）
+    private readonly Dictionary<string, ulong> _balances = new(StringComparer.Ordinal);          // 币 IOU（To==custody, asset=Coin）
+    private readonly Dictionary<string, ulong> _quoteBalances = new(StringComparer.Ordinal);     // 计价币 IOU（asset=Quote——批 6 双资产）
+    private ulong _custodyNonce;   // custody 的下一个出金 nonce（单流覆盖两资产；重启从链重扫恢复）
     private ulong _scannedHeight;  // 已处理到的最大块高
     private Timer? _pollTimer;
     private readonly object _gate = new();
@@ -78,32 +80,45 @@ public sealed class LedgerBridge : IDisposable
             ProcessBlock(block);
         }
         _scannedHeight = info.Height;
-        _log($"链重扫完成：高度 {info.Height} | 账户 {_balances.Count} 个 | custody 出金 nonce={_custodyNonce}");
+        _log($"链重扫完成：高度 {info.Height} | 币 IOU {_balances.Count} 个 | 计价币 IOU {_quoteBalances.Count} 个 | custody 出金 nonce={_custodyNonce}");
 
         // 轮询（500ms——链出块间隔最小也是秒级，500ms 足够灵敏）
         _pollTimer = new Timer(async _ => await PollAsync(), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
         IsReady = true;
     }
 
-    /// <summary>查账户 IOU 余额（原子单位；未知账户 = 0）。</summary>
+    /// <summary>查账户币 IOU 余额（原子单位；未知账户 = 0）。</summary>
     public Task<ulong> GetCoinBalanceAsync(string accountKey, CancellationToken ct = default)
     {
         lock (_gate) return Task.FromResult(_balances.TryGetValue(accountKey, out var balance) ? balance : 0UL);
     }
 
-    /// <summary>列出全部 IOU 余额（快照）。</summary>
+    /// <summary>查账户计价币 IOU 余额（原子单位；未知账户 = 0）——场内现金的铸造目标。</summary>
+    public Task<ulong> GetQuoteBalanceAsync(string accountKey, CancellationToken ct = default)
+    {
+        lock (_gate) return Task.FromResult(_quoteBalances.TryGetValue(accountKey, out var balance) ? balance : 0UL);
+    }
+
+    /// <summary>列出全部币 IOU 余额（快照）。</summary>
     public IReadOnlyDictionary<string, ulong> GetAllCoinBalances()
     {
         lock (_gate) return new Dictionary<string, ulong>(_balances, StringComparer.Ordinal);
     }
 
+    /// <summary>列出全部计价币 IOU 余额（快照）——对账用。</summary>
+    public IReadOnlyDictionary<string, ulong> GetAllQuoteBalances()
+    {
+        lock (_gate) return new Dictionary<string, ulong>(_quoteBalances, StringComparer.Ordinal);
+    }
+
     /// <summary>
     /// 提币：检查余额 → 借记 → custody 签名链上转账 → 提交节点。返回链上交易哈希。
-    /// memo = accountKey（链上可推导——重启重扫自洽）。余额不足 ⇒ <see cref="LedgerClientException"/>。
-    /// <para>闸门二态（<see cref="WithdrawHook"/>）：设钩子 = venue 侧现货持仓闸门（先烧毁——「买入后提币」
-    /// IOU 可为 0 照提；借记 clamp 到 0 不为负，与重扫 debit 同语义）；未设 = 纯 IOU 闸门（批 3 语义）。</para>
+    /// asset：币（烧现货持仓）/ 计价币（扣场内现金——批 6）。memo = accountKey（链上可推导——重启重扫自洽）。
+    /// <para>闸门二态（<see cref="WithdrawHook"/>）：设钩子 = venue 侧闸门（币=现货持仓、计价币=可用现金；
+    /// 「买入后提币」IOU 可为 0 照提；借记 clamp 到 0 不为负，与重扫 debit 同语义）；未设 = 纯 IOU 闸门（批 3 语义）。</para>
     /// </summary>
-    public async Task<string> WithdrawAsync(string accountKey, LedgerAddress to, ulong amountAtoms, CancellationToken ct = default)
+    public async Task<string> WithdrawAsync(string accountKey, LedgerAddress to, ulong amountAtoms,
+        uint asset = LedgerSupply.Assets.Coin, CancellationToken ct = default)
     {
         if (!IsReady) throw new InvalidOperationException("桥未初始化（须先 StartAsync）。");
         if (amountAtoms == 0) throw new ArgumentException("提币量必须 > 0。");
@@ -111,42 +126,45 @@ public sealed class LedgerBridge : IDisposable
         // venue 钩子先烧毁（签名之前——烧不掉就不签：venue 不欠这个账户那么多可提取物）
         if (WithdrawHook is { } hook)
         {
-            var (ok, error) = await hook.TryBurnForWithdrawalAsync(accountKey, amountAtoms, ct);
+            var (ok, error) = await hook.TryBurnForWithdrawalAsync(accountKey, amountAtoms, asset, ct);
             if (!ok)
                 throw new LedgerClientException(
-                    $"venue 拒绝提币：{error ?? "现货持仓不足"}（账户 {accountKey}，提币 {LedgerSupply.Format(amountAtoms)}）");
+                    $"venue 拒绝提币：{error ?? "持仓/现金不足"}（账户 {accountKey}，资产 {asset}，提币 {LedgerSupply.Format(amountAtoms)}）");
         }
 
+        var iou = asset == LedgerSupply.Assets.Coin ? _balances : _quoteBalances;
         ulong currentBalance;
         lock (_gate)
         {
-            _balances.TryGetValue(accountKey, out currentBalance);
+            iou.TryGetValue(accountKey, out currentBalance);
             if (WithdrawHook is null && currentBalance < amountAtoms)
                 throw new LedgerClientException($"IOU 余额不足：账户 {accountKey} 余额 {currentBalance} < 提币 {amountAtoms}");
             // 借记（clamp 到 0——钩子模式下 IOU 已为 0 的「买入后提币」不 underflow；
             // 链上确认由下一轮 poll 自洽——临时超前无害，重扫 debit 同款 clamp）
-            _balances[accountKey] = currentBalance >= amountAtoms ? currentBalance - amountAtoms : 0UL;
+            iou[accountKey] = currentBalance >= amountAtoms ? currentBalance - amountAtoms : 0UL;
             _custodyNonce++;
         }
 
         // custody 签名出金（memo = accountKey——链上可推导归账）
         var tx = LedgerTransaction.Sign(
-            await GetChainIdAsync(ct), _custody, to, amountAtoms, _custodyNonce, accountKey);
+            await GetChainIdAsync(ct), _custody, to, amountAtoms, _custodyNonce, accountKey, asset);
         await _client.SubmitTxAsync(tx, ct);
-        _log($"提币：账户 {accountKey} → {to.Hex[..12]}… {LedgerSupply.Format(amountAtoms)}（tx {tx.Hash[..12]}… nonce={_custodyNonce}）");
+        var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
+        _log($"提币（{assetName}）：账户 {accountKey} → {to.Hex[..12]}… {LedgerSupply.Format(amountAtoms)}（tx {tx.Hash[..12]}… nonce={_custodyNonce}）");
         return tx.Hash;
     }
 
     /// <summary>充币的便捷入口（agent 钱包签名 → 提交节点；桥只负责侦听——本方法不归账，归账由 poll 完成）。
-    /// 调用方（agent/测试）用 wallet.Sign 转账到 custody 地址 + memo = 自己的账户键。</summary>
+    /// asset：币（铸造现货持仓）/ 计价币（变成场内现金）。调用方（agent/测试）用 wallet.Sign 转账到
+    /// custody 地址 + memo = 自己的账户键。</summary>
     public static async Task DepositAsync(LedgerClient client, LedgerWallet agentWallet, LedgerAddress custodyAddress,
-        ulong amountAtoms, string accountKey, CancellationToken ct = default)
+        ulong amountAtoms, string accountKey, uint asset = LedgerSupply.Assets.Coin, CancellationToken ct = default)
     {
         var info = await client.GetInfoAsync(ct);
         // agent 侧 nonce 须从节点查（agent 可能不在本进程）
         var account = await client.GetBalanceAsync(agentWallet.Address.Hex, ct);
         var nonce = account.Nonce + 1;
-        var tx = LedgerTransaction.Sign(info.ChainId, agentWallet, custodyAddress, amountAtoms, nonce, accountKey);
+        var tx = LedgerTransaction.Sign(info.ChainId, agentWallet, custodyAddress, amountAtoms, nonce, accountKey, asset);
         await client.SubmitTxAsync(tx, ct);
     }
 
@@ -173,45 +191,49 @@ public sealed class LedgerBridge : IDisposable
         }
     }
 
-    /// <summary>处理一个块：充币（To==custody + memo ⇒ credit）与提币确认（From==custody + memo ⇒ 幂等跳过——
-    /// 提币时已即时借记，这里只推进 nonce（重扫路径才真正 debit））。</summary>
+    /// <summary>处理一个块：充币（To==custody + memo ⇒ 按资产 credit 对应 IOU）与提币确认
+    ///（From==custody + memo ⇒ 幂等跳过——提币时已即时借记，这里只推进 nonce（重扫路径才真正 debit））。</summary>
     private void ProcessBlock(LedgerBlock block)
     {
         foreach (var tx in block.Transactions)
         {
             if (tx.To == CustodyAddress.Hex)
             {
-                // 充币：memo = 归账键
+                // 充币：memo = 归账键；资产路由（币 IOU / 计价币 IOU）
                 var accountKey = tx.Memo;
                 if (string.IsNullOrWhiteSpace(accountKey))
                 {
-                    _log($"⚠ 无 memo 充币（无法归账——链上余额在，IOU 不记）：from={tx.From[..12]}… {LedgerSupply.Format(tx.AmountAtoms)}");
+                    var assetName = tx.Asset == LedgerSupply.Assets.Coin ? "" : "（计价币）";
+                    _log($"⚠ 无 memo 充币{assetName}（无法归账——链上余额在，IOU 不记）：from={tx.From[..12]}… {LedgerSupply.Format(tx.AmountAtoms)}");
                     continue;
                 }
+                var iou = tx.Asset == LedgerSupply.Assets.Coin ? _balances : _quoteBalances;
                 lock (_gate)
                 {
-                    _balances.TryGetValue(accountKey, out var balance);
-                    _balances[accountKey] = balance + tx.AmountAtoms;
+                    iou.TryGetValue(accountKey, out var balance);
+                    iou[accountKey] = balance + tx.AmountAtoms;
                 }
-                _log($"充币：账户 {accountKey} +{LedgerSupply.Format(tx.AmountAtoms)}（from={tx.From[..12]}…）");
+                var name = tx.Asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
+                _log($"充币（{name}）：账户 {accountKey} +{LedgerSupply.Format(tx.AmountAtoms)}（from={tx.From[..12]}…）");
             }
             else if (tx.From == CustodyAddress.Hex)
             {
-                // 提币（我们签的出金）：正常路径已即时借记——这里只确保 nonce 与链同步（重扫路径 debit）
+                // 提币（我们签的出金）：正常路径已即时借记——重扫路径才真正 debit；按资产路由
                 if (tx.Memo is { Length: > 0 } memo)
                 {
+                    var iou = tx.Asset == LedgerSupply.Assets.Coin ? _balances : _quoteBalances;
                     lock (_gate)
                     {
                         // 只有重扫路径（IsReady=false 时首次扫描）才需要真正 debit；
                         // 正常运行路径已即时借记，这里幂等跳过（余额不会变负——即时借记已保证）
                         if (!IsReady)
                         {
-                            _balances.TryGetValue(memo, out var balance);
-                            _balances[memo] = balance >= tx.AmountAtoms ? balance - tx.AmountAtoms : 0;
+                            iou.TryGetValue(memo, out var balance);
+                            iou[memo] = balance >= tx.AmountAtoms ? balance - tx.AmountAtoms : 0;
                         }
                     }
                 }
-                // custody 出金 nonce 推进（无论哪条路径——nonce 始终 = 链上出金计数）
+                // custody 出金 nonce 推进（单流覆盖两资产——无论哪条路径，nonce 始终 = 链上出金计数）
                 lock (_gate) _custodyNonce = Math.Max(_custodyNonce, tx.Nonce);
             }
         }

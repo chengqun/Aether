@@ -110,11 +110,13 @@
                         <Button Grid.Column="3" Content="刷新余额" Command="{Binding RefreshBalanceCommand}" Margin="8,0,0,0"
                                 IsEnabled="{Binding !IsBusy}"/>
                     </Grid>
-                    <Grid ColumnDefinitions="Auto,Auto">
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto">
                         <TextBlock Grid.Column="0" Text="{Binding BalanceText}" Classes="balance"/>
-                        <TextBlock Grid.Column="1" Classes="muted" Text=" 币" VerticalAlignment="Bottom" Margin="4,0,0,5"/>
+                        <TextBlock Grid.Column="1" Classes="muted" Text=" 币" VerticalAlignment="Bottom" Margin="4,0,16,5"/>
+                        <TextBlock Grid.Column="2" Text="{Binding QuoteBalanceText}" Classes="balance"/>
+                        <TextBlock Grid.Column="3" Classes="muted" Text=" 计价币" VerticalAlignment="Bottom" Margin="4,0,0,5"/>
                     </Grid>
-                    <TextBlock Classes="muted" Text="总供给 21,000,000 固定（不可增发）——链是唯一真相，随时可独立验证。"/>
+                    <TextBlock Classes="muted" Text="币总供给 21,000,000 固定（不可增发）；计价币（AQ）充进交易所变现金。链是唯一真相，随时可独立验证。"/>
                 </StackPanel>
             </Border>
 
@@ -122,6 +124,11 @@
             <Border Classes="card" IsVisible="{Binding HasWallet}">
                 <StackPanel>
                     <TextBlock Classes="cardtitle" Text="转账（链上，不可逆）"/>
+                    <Grid ColumnDefinitions="90,Auto,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="资产" Classes="muted" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AssetOptions}" SelectedItem="{Binding TransferAsset}" MinWidth="100"/>
+                        <TextBlock Grid.Column="2" Classes="muted" Text="（币 = 稀缺资产；计价币 = 报价侧）" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="对方地址" Classes="muted" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferTo}" PlaceholderText="40 位 hex 地址"/>
@@ -142,7 +149,12 @@
             <!-- 充值到交易所 -->
             <Border Classes="card" IsVisible="{Binding HasWallet}">
                 <StackPanel>
-                    <TextBlock Classes="cardtitle" Text="充值到交易所（充币 → 自动铸造现货持仓）"/>
+                    <TextBlock Classes="cardtitle" Text="充值到交易所（币 → 铸造现货持仓；计价币 → 入账现金）"/>
+                    <Grid ColumnDefinitions="90,Auto,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="资产" Classes="muted" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AssetOptions}" SelectedItem="{Binding DepositAsset}" MinWidth="100"/>
+                        <TextBlock Grid.Column="2" Classes="muted" Text="（1 AQ = 1 现金——卖出币换的就是它）" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="交易所账号" Classes="muted" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAccount}" PlaceholderText="memo 归账键——须与期货页登录账号一致"/>
@@ -154,14 +166,19 @@
                                 IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
                     </Grid>
                     <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Text="币转入 custody 托管、约 1~2 秒后该账号名下自动出现 ax001 现货持仓（1 手 = 1 币）。卖出即得现金。"/>
+                               Text="币：转入 custody 托管、约 1~2 秒自动出现 ax001 现货持仓（1 手 = 1 币）。计价币：1~2 秒自动入账现金。交易所永不发钱——现金全部来自计价币充值。"/>
                 </StackPanel>
             </Border>
 
             <!-- 从交易所提币 -->
             <Border Classes="card" IsVisible="{Binding HasWallet}">
                 <StackPanel>
-                    <TextBlock Classes="cardtitle" Text="从交易所提币（持仓 → 链上钱包）"/>
+                    <TextBlock Classes="cardtitle" Text="从交易所提币（币持仓 / 计价币现金 → 链上钱包）"/>
+                    <Grid ColumnDefinitions="90,Auto,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="资产" Classes="muted" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AssetOptions}" SelectedItem="{Binding WithdrawAsset}" MinWidth="100"/>
+                        <TextBlock Grid.Column="2" Classes="muted" Text="（币=烧持仓；计价币=扣现金）" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
                     <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
                         <TextBlock Grid.Column="0" Text="交易所账号" Classes="muted" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawUser}"/>
@@ -181,7 +198,7 @@
                                 IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
                     </Grid>
                     <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Text="提币先烧毁交易所持仓再链上出金（买来的币照提）——提完的币只属于你的种子，交易所死活不再影响。"/>
+                               Text="币：先烧毁交易所持仓再链上出金（买来的照提）。计价币：扣场内可用现金（锁定保证金/浮盈不可提）。提完只属于你的种子，交易所死活不再影响。"/>
                 </StackPanel>
             </Border>
 

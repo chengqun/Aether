@@ -84,6 +84,16 @@ public sealed class SimTradingCore : IDisposable
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, int>> _spotMinted = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 计价币铸造台账（批 6 双资产，账户 → 已净充入 AQ 原子数，下限 0）：充值 + / 提现扣 −。
+    /// 对账的 DB 侧真相（链侧 AQ IOU 是目标）——**与场内现金分账**：现金随交易/盈亏/手续费浮动，
+    /// 台账只记链上进出（镜像币侧 _spotMinted 的设计理由）。
+    /// </summary>
+    private readonly Dictionary<string, long> _quoteMinted = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>计价币原子刻度（AQ 8 位小数——与链同刻度。层化禁止 Simulator 引 Aether.Ledger，两侧各持常量）。</summary>
+    public const double QuoteAtomsPerToken = 100_000_000;
+
     private int _frontId = 1;
     private int _sessionId;
 
@@ -209,6 +219,14 @@ public sealed class SimTradingCore : IDisposable
                     _spotMinted[row.InstrumentId] = perAccount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 perAccount[row.AccountId] = row.MintedLots;
             }
+        }
+
+        // 计价币铸造台账恢复（批 6 双资产）：AQ 侧对账的 DB 侧真相。
+        var quoteMinted = await _store.LoadQuoteMintedAsync(ct).ConfigureAwait(false);
+        lock (_gate)
+        {
+            foreach (var row in quoteMinted)
+                _quoteMinted[row.AccountId] = row.MintedAtoms;
         }
 
         // 重启恢复行情会话统计（2026-09-28 tick 落盘的读侧）：从最后一条成交 tick 续上最新价/累计量/开高低——
@@ -590,10 +608,10 @@ public sealed class SimTradingCore : IDisposable
 
             var state = GetOrCreate(accountId);
             var book = state.Positions.GetOrCreate(instrumentId, instrument.ExchangeId);
-            // cost 求和约定（2026-10-07 修正：旧版把 Cost 当均价写——AvgOpenPrice = Cost/(乘数×Total) 会错乘数倍，
-            // 平多盈亏凭空放大；与 ApplyOpenFill 的 Σ(price×multiple×volume) 同式，充币锚 = BasePrice）
+            // cost 求和约定（Σ(价×乘数×量)——与 ApplyOpenFill 同式）；**充币贡献零成本**（批 6 定调：
+            // 币不是现金换的——venue 侧成本 = 0 ⇒ 卖出充币持仓的 PnL = 全额成交价，即「充币卖出全额变现」。
+            // 买方付出的保证金是真实现金 backing——成交后成为卖方的已实现权益，资金守恒经 margin 锁定保持）
             book.Long.Today += volume;
-            book.Long.Cost += instrument.BasePrice * instrument.VolumeMultiple * volume;
 
             var minted = BumpSpotMintedLocked(instrumentId, accountId, volume);
             RecomputePositionProfitLocked();
@@ -649,6 +667,60 @@ public sealed class SimTradingCore : IDisposable
 
             PersistSpotAccountingLocked(state, instrumentId, minted);
         }
+    }
+
+    /// <summary>
+    /// 计价币充值入账（批 6 双资产）：链上 AQ → custody → 场内现金。1 AQ = 1 现金（<see cref="QuoteAtomsPerToken"/>）。
+    /// 静态权益 +tokens + 计价币铸造台账 +atoms（对账 DB 侧真相）+ 落盘（账户 + 台账两写）。
+    /// </summary>
+    public void CreditQuoteDeposit(string accountId, ulong atoms)
+    {
+        if (atoms == 0) throw new CtpBusinessException(SimErrorCodes.InvalidParameter, "计价币充值量必须 > 0。");
+        lock (_gate)
+        {
+            var state = GetOrCreate(accountId);
+            var tokens = atoms / QuoteAtomsPerToken;
+            state.Account.Deposit(tokens);
+            var minted = BumpQuoteMintedLocked(accountId, (long)atoms);
+            Persist(() => _store.SaveAccountAsync(state.Account.ToSnapshot()));
+            Persist(() => _store.SaveQuoteMintedAsync(accountId, minted));
+        }
+    }
+
+    /// <summary>
+    /// 计价币提现（批 6 双资产）：场内现金 → AQ 托管凭证离场。闸门 = <b>静态可用</b>（现金 − 占用保证金 − 挂单冻结
+    /// ——锁定保证金 backing 挂单/持仓，浮盈是盯市读数非现金，两者都不可动）；台账同步扣（下限 0）+ 落盘。
+    /// 静态可用不足 ⇒ 90005。
+    /// </summary>
+    public void WithdrawQuoteCash(string accountId, ulong atoms)
+    {
+        if (atoms == 0) throw new CtpBusinessException(SimErrorCodes.InvalidParameter, "计价币提现量必须 > 0。");
+        lock (_gate)
+        {
+            var state = GetOrCreate(accountId);
+            var tokens = atoms / QuoteAtomsPerToken;
+            if (!state.Account.TryWithdrawCash(tokens))
+                throw new CtpBusinessException(SimErrorCodes.InsufficientFunds,
+                    $"可提现金不足：账户 {accountId} 静态可用 {SimAccount.Round(state.Account.StaticBalance - state.Account.CurrMargin - state.Account.FrozenMargin - state.Account.FrozenCash)} < 提现 {SimAccount.Round(tokens)}（锁定保证金/挂单冻结不可提，浮盈须平仓落袋）");
+            var minted = BumpQuoteMintedLocked(accountId, -(long)atoms);
+            Persist(() => _store.SaveAccountAsync(state.Account.ToSnapshot()));
+            Persist(() => _store.SaveQuoteMintedAsync(accountId, minted));
+        }
+    }
+
+    /// <summary>计价币铸造台账快照（账户 → 已净充入 AQ 原子数）——AQ 侧对账（host LedgerSpotLink）遍历用。线程安全。</summary>
+    public IReadOnlyDictionary<string, long> GetQuoteMintedAtoms()
+    {
+        lock (_gate) return new Dictionary<string, long>(_quoteMinted);
+    }
+
+    /// <summary>台账增减（下限 0——与链侧 IOU clamp 对称）。调用须持锁。返回新值。</summary>
+    private long BumpQuoteMintedLocked(string accountId, long deltaAtoms)
+    {
+        _quoteMinted.TryGetValue(accountId, out var current);
+        var next = Math.Max(0L, current + deltaAtoms);
+        _quoteMinted[accountId] = next;
+        return next;
     }
 
     /// <summary>现货铸造台账快照（合约 → 账户 → 已净铸造手数）——桥对账（host LedgerSpotLink）遍历用。线程安全。</summary>
