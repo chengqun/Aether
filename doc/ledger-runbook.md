@@ -85,14 +85,15 @@ Select-String -Path C:\Aether\ledger-data\node.log -Pattern '种子'
 # 1) 生成 custody 种子（64位hex 随机）——交易所托管钥匙，丢了 = 托管币不可提，离线备份！
 $seed = '<64位hex>'
 
-# 2) 写进交易所服务 env（幂等，重跑安全）+ BOARD 上架 ax001 + 计价货币池（见 2.C）
+# 2) 写进交易所服务 env（幂等，重跑安全）+ BOARD 上架 ax001
 $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\AetherCtpExchange'
 $envs = @((Get-ItemProperty $k).Environment | Where-Object {
     $_ -notlike 'AETHER_LEDGER_CUSTODY_SEED=*' -and $_ -notlike 'AETHER_CTP_SIM_BOARD=*' -and $_ -notlike 'AETHER_CTP_SIM_BALANCE=*' })
 $envs += "AETHER_LEDGER_CUSTODY_SEED=$seed"
 $envs += 'AETHER_CTP_SIM_BOARD=zx001,ax001'
-$envs += 'AETHER_CTP_SIM_BALANCE=100000'
 Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
+# 注：不设 AETHER_CTP_SIM_BALANCE（默认 0）——批 6 起现金从 AQ 充值来（见 2.C）；
+#     纯期货沙盒（不起链桥测策略）才显式设它当开发水龙头。
 
 # 3) 重启生效（语义：未成交挂单作废、客户端须重登；账本/铸造台账不丢）
 Restart-Service AetherCtpExchange
@@ -104,11 +105,16 @@ C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe balance --seed $seed
 
 重启后验证：交易所日志出现 `[LEDGER-BRIDGE] 交易所桥就绪` + `[LEDGER-SPOT] 现货桥就绪：ax001`。
 
-### 2.C 计价货币池（必须理解的决策）
+### 2.C 现金从哪来（批 6 双资产——死锁已根治）
 
-`SimOptions.InitialBalance` 默认 **0**（比特币模型：首登不白送现金，币是唯一稀缺物）。但**完全为 0 时市场无法自举**：挂第一笔卖单要预冻手续费、买入要 100% 保证金——全是现金，而现金只能从卖币来，第一笔卖单又需要现金 ⇒ 死锁。
+**首登零余额（默认 0，不设 BALANCE）**。批 6 起，**场内现金 = AQ 充值的托管凭证**（1 AQ = 1 现金）——
+买方充 AQ 得到现金、卖方充币得到持仓，市场完整自转（旗舰测试钉死）。「注册就有钱」不复存在，
+「现金只能从卖币来」的死锁也根治——**现金从充 AQ 来**。
 
-**模型视角**：比特币约束的是**币的供给（21M 硬顶）**；交易所现金是**计价货币**不是价值本身。推荐 `AETHER_CTP_SIM_BALANCE=100000`（新账户 10 万现金当计价池）——稀缺的永远是币。要纯模型就设 0，代价是没人能下第一单（解死锁的代码改法「平仓单手续费从成交价款扣、不预冻」留作后续可选）。
+`AETHER_CTP_SIM_BALANCE` 仅剩一个用途：**纯期货沙盒**（不起链桥、只测 zx001 期货策略）时当开发水龙头。正常双资产玩法永远不设。
+
+**AQ 从哪来**：国库（新链生成时 treasury 同拿 210 亿 AQ）——你分发。可以卖 AQ 收 RMB
+（运营上承诺 1 AQ = 1 元回购 ⇒ AQ 成为你个人的「USDT」，币价自动获得真实法币读数），也可以送（内部靶场记分模式）。
 
 ---
 
@@ -122,9 +128,11 @@ wallet new --out alice.seed
 # 种子（hex，⚠ 丢了没人能找回）：<64位hex>
 # 地址：<40位hex>                              ← 把地址告诉付款方
 
-# 2) 国库发币（你用 treasury 种子签名；出块约 0.5-1 秒）
+# 2) 国库发资产（你用 treasury 种子签名；出块约 0.5-1 秒；发 AQ 加 --asset quote）
 wallet transfer --seed @treasury.seed --to <alice地址> --amount 5
-# 已提交：5.00000000 → <地址>（交易哈希 …）
+# 已提交（币）：5.00000000 → <地址>（交易哈希 …）
+wallet transfer --seed @treasury.seed --to <alice地址> --amount 500 --asset quote
+# 已提交（计价币）：500.00000000 → <地址>（交易哈希 …）
 
 # 3) 验证
 wallet balance <alice地址>        # 5.00000000
@@ -135,21 +143,29 @@ wallet info                        # 高度 +1
 
 ---
 
-## 4. 充值：链上币 → 交易所现货持仓
+## 4. 充值：链上资产 → 交易所（币=持仓 / AQ=现金）
 
 ```bash
+# 充币 → 现货持仓（1 手 = 1 币）
 wallet deposit --seed @alice.seed --custody <custody地址> --account u1 --amount 5
-# 已提交充值：5.00000000 → custody …（memo=u1）
+# 已提交充值（币）：5.00000000 → custody …（memo=u1）
+
+# 充 AQ → 场内现金（1 AQ = 1 现金——买币的钱）
+wallet deposit --seed @alice.seed --custody <custody地址> --account u1 --amount 500 --asset quote
+# 已提交充值（计价币）：500.00000000 → custody …（memo=u1）
 ```
 
-- **memo = 交易所 userId（归账键，必填）**——无 memo 的充值不归账（币在链上 custody 不丢，但换不到持仓）。
+- **memo = 交易所 userId（归账键，必填）**——无 memo 的充值不归账（资产在链上 custody 不丢，但换不到持仓/现金）。
 - **约 1~2 秒到账**（桥 500ms 轮询 + 对账 1s）。交易所日志：
   ```
-  [LEDGER-BRIDGE] 充币：账户 u1 +5.00000000（from=<alice地址前12位>…）
+  [LEDGER-BRIDGE] 充币（币）：账户 u1 +5.00000000（from=<alice地址前12位>…）
   [LEDGER-SPOT]   补铸 5 手 → u1（IOU 5.00000000，台账已同步）
+  [LEDGER-BRIDGE] 充币（计价币）：账户 u1 +500.00000000（from=…）
+  [LEDGER-QUOTE]  现金入账 500 → u1（AQ IOU 500.00000000）
   ```
-- 结果：`u1` 名下自动多出 **ax001 现货多头 5 手**（1 手 = 1 币）。
+- 结果：`u1` 名下多出 **ax001 现货多头 5 手 + 场内现金 500**。
 - 粉尘（不足 1 币的零头）不铸造，留在链上 custody。
+- **买方路径**：只充 AQ 就是买方（有现金）；只充币就是卖方（有持仓）——两边都是真资产充值。
 
 ---
 
@@ -161,9 +177,9 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 
 1. **期货页 → 登录窗口**：交易前置 `tcp://<服务器IP>:17801`、行情前置 `tcp://<服务器IP>:17802`；userId 填 **`u1`**（必须与充值 memo 一致）、密码任意——**首登即开户**。
 2. **行情 tab**：自动显示上市合约（`zx001` + `ax001`）。
-3. **交易顺序（现金从卖币来）**：
-   - **先卖**：`u1` 持仓 5 手 → 卖平多（2 手 @100）→ 成交得现金 ~200（扣 5bp taker 费）；
-   - **后买**：现金买开多（100% 保证金 = 全额付款，买 1 手 @100 冻 100）。
+3. **交易（两边都是真资产）**：买方（充了 AQ）用现金买开多（100% 保证金 = 全额付款）；
+   卖方（充了币）卖平多——**卖出充币持仓的全额成交价即已实现现金**（充币零成本），
+   例：充 5 币卖 5 手 @100 → 现金 +500（扣 5bp taker 费）。
 4. **规则速查**：
 
 | 项 | 值 |
@@ -176,23 +192,30 @@ dotnet run --project apps/Stockapp/Acme.Stockapp.Desktop
 
 ---
 
-## 6. 提币：交易所 → 链上
+## 6. 提币：交易所 → 链上（币=烧持仓 / AQ=扣现金）
 
 ```bash
+# 提币（默认 asset=coin——烧现货持仓出金）
 wallet withdraw --user u1 --password <登录密码> --to <alice地址> --amount 2
-# 提币已提交：2.00000000 → <地址>（交易哈希 …）
+# 提币已提交（币（烧现货持仓））：2.00000000 → <地址>（交易哈希 …）
+
+# 提 AQ（扣场内现金——静态可用闸门：锁定保证金/浮盈不可提）
+wallet withdraw --user u1 --password <登录密码> --to <alice地址> --amount 100 --asset quote
+# 提币已提交（计价币（扣场内现金））：100.00000000 → <地址>（交易哈希 …）
 ```
 
-- **登录即鉴权**（绑定账户 = 出金账户）；**先烧毁 venue 持仓**再 custody 签名出金——闸门 = 现货持仓（买来的币照样能提；烧毁带走已付价款，现金侧同步扣，不是平仓变现）。
-- 验证：`wallet balance <alice地址>` → `5 − 5 + 2 = 2.00000000（nonce 1）`；桌面端持仓查询显示 ax001 减到 3 手。
+- **登录即鉴权**（绑定账户 = 出金账户）；币 = 先烧持仓再出金（买来的照样提）；AQ = 扣静态可用现金（锁定保证金/浮盈不可提）。
+- 验证：`wallet balance <alice地址>`（双显示：币 + AQ）；桌面端持仓/资金三查。
 
-**最小闭环（照抄可复现）**：国库发 5 币 → alice 充 5 币（memo=u1）→ 登录 u1 卖 2 手得现金 → CLI 提币 2 币 → alice 链上 2.00000000。这就是整个经济的一圈。
+**最小闭环（照抄可复现，批 6 形态）**：国库发 5 币 + 500 AQ → alice 充 5 币 + 500 AQ（memo=u1）
+→ 登录 u1：持仓 5 手 + 现金 500 → 卖 2 手 @100（现金 +200）→ 提币 1 币 + 提 100 AQ
+→ alice 链上：币 1 + AQ 100。整个经济的一圈——**全程交易所没发过一分钱**。
 
 ---
 
 ## 6.5 钱包页（桌面客户端，2026-10-08 起——零命令行操作面）
 
-桌面 app 侧边栏「钱包」页（两租户都有）覆盖 CLI 的全部日常操作：**创建/导入钱包**（种子只此一次展示 + 备份确认）、**余额刷新**、**转账**、**充值到交易所**（填账号即 memo）、**从交易所提币**（账号+密码，地址留空默认本钱包）。设置区可改节点/custody/交易所地址（持久化）。用户与 agent 共用同一个钱包（`<tenantDir>/ledger/agent-wallet.seed`）。远程链/交易所仍需先开 §0 的 SSH 隧道。
+桌面 app 侧边栏「钱包」页（两租户都有）覆盖 CLI 的全部日常操作：**创建/导入钱包**（种子只此一次展示 + 备份确认）、**双余额显示**（币 + AQ）、**转账**、**充值到交易所**（币=持仓 / 计价币=现金，资产下拉选）、**从交易所提币**（币=烧持仓 / 计价币=扣现金，资产下拉选；地址留空默认本钱包）。设置区可改节点/custody/交易所地址（持久化）。用户与 agent 共用同一个钱包（`<tenantDir>/ledger/agent-wallet.seed`）。远程链/交易所仍需先开 §0 的 SSH 隧道。
 
 ## 7. agent 玩法（可选）
 
