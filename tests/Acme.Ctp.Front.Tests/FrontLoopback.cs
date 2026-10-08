@@ -96,6 +96,7 @@ public sealed class FrontLoopback : IDisposable
         // 双写日志：Console（xunit 测试结束时随结果输出）+ 实时文件（xunit 扣留 Console 到测试结束——
         // 测试挂死时文件是唯一的诊断面；服务端逐帧日志是「模板偏移错/签名漏配」定位依据）。
         var logPath = Path.Combine(Path.GetTempPath(), "ctp-front-e2e", $"front-{Guid.NewGuid():N}.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);   // macOS 临时目录清空后父目录不存在 ⇒ 12 例全挂（2026-10-07 实踩）
         var logWriter = new StreamWriter(logPath, append: false) { AutoFlush = true };
         var server = new CtpFrontServer("127.0.0.1", exchangePort, "127.0.0.1", 0, msg =>
         {

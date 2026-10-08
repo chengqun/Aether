@@ -3,6 +3,17 @@ using System.Text.Json;
 namespace Aether.Ledger;
 
 /// <summary>
+/// 提币前置钩子（venue 接线——交易所宿主的 <c>LedgerSpotLink</c> 实现）：桥签名出金<b>之前</b>先烧毁
+/// venue 侧的可提取资产（现货 Long 持仓）。返回 <c>(false, 原因)</c> = venue 侧余额不足/未上币 ⇒ 拒提
+/// （IOU 不动、不签名）。烧毁成功但链上提交失败的崩溃窗口由「链是唯一真相」重扫 + venue 对账自愈
+/// （烧掉的持仓会在下一轮对账补铸回来——币没走，仓位也不能丢）。
+/// </summary>
+public interface ILedgerWithdrawHook
+{
+    Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(string accountKey, ulong amountAtoms, CancellationToken ct = default);
+}
+
+/// <summary>
 /// 交易所桥（批 3）：链侧**托管服务**——交易所进程持有的一对密钥（custody wallet）+ 充币侦听 + 提币签名。
 /// <para>
 /// **IOU 状态完全从链可推导**（无独立持久化——重启 = 全量重扫链重建）：
@@ -37,6 +48,12 @@ public sealed class LedgerBridge : IDisposable
 
     /// <summary>桥初始化是否完成（StartAsync 后为 true——充币侦听与提币须在初始化后调用）。</summary>
     public bool IsReady { get; private set; }
+
+    /// <summary>
+    /// 提币前置钩子（venue 接线）：设了它，提币闸门 = venue 侧现货持仓（真实交易所语义——「买了币的账户
+    /// IOU=0 但持仓>0，照提」），烧毁成功才借记 + 签名；未设 = 批 3 语义（纯 IOU 闸门）。StartAsync 前设置。
+    /// </summary>
+    public ILedgerWithdrawHook? WithdrawHook { get; set; }
 
     public LedgerBridge(LedgerClient client, LedgerWallet custodyWallet, Action<string>? log = null)
     {
@@ -81,21 +98,34 @@ public sealed class LedgerBridge : IDisposable
     }
 
     /// <summary>
-    /// 提币：检查 IOU 余额 → 借记 → custody 签名链上转账 → 提交节点。
+    /// 提币：检查余额 → 借记 → custody 签名链上转账 → 提交节点。
     /// memo = accountKey（链上可推导——重启重扫自洽）。余额不足 ⇒ <see cref="LedgerClientException"/>。
+    /// <para>闸门二态（<see cref="WithdrawHook"/>）：设钩子 = venue 侧现货持仓闸门（先烧毁——「买入后提币」
+    /// IOU 可为 0 照提；借记 clamp 到 0 不为负，与重扫 debit 同语义）；未设 = 纯 IOU 闸门（批 3 语义）。</para>
     /// </summary>
     public async Task WithdrawAsync(string accountKey, LedgerAddress to, ulong amountAtoms, CancellationToken ct = default)
     {
         if (!IsReady) throw new InvalidOperationException("桥未初始化（须先 StartAsync）。");
         if (amountAtoms == 0) throw new ArgumentException("提币量必须 > 0。");
 
+        // venue 钩子先烧毁（签名之前——烧不掉就不签：venue 不欠这个账户那么多可提取物）
+        if (WithdrawHook is { } hook)
+        {
+            var (ok, error) = await hook.TryBurnForWithdrawalAsync(accountKey, amountAtoms, ct);
+            if (!ok)
+                throw new LedgerClientException(
+                    $"venue 拒绝提币：{error ?? "现货持仓不足"}（账户 {accountKey}，提币 {LedgerSupply.Format(amountAtoms)}）");
+        }
+
         ulong currentBalance;
         lock (_gate)
         {
-            if (!_balances.TryGetValue(accountKey, out currentBalance) || currentBalance < amountAtoms)
+            _balances.TryGetValue(accountKey, out currentBalance);
+            if (WithdrawHook is null && currentBalance < amountAtoms)
                 throw new LedgerClientException($"IOU 余额不足：账户 {accountKey} 余额 {currentBalance} < 提币 {amountAtoms}");
-            // 借记（链上确认由下一轮 poll 自洽——临时超前无害）
-            _balances[accountKey] = currentBalance - amountAtoms;
+            // 借记（clamp 到 0——钩子模式下 IOU 已为 0 的「买入后提币」不 underflow；
+            // 链上确认由下一轮 poll 自洽——临时超前无害，重扫 debit 同款 clamp）
+            _balances[accountKey] = currentBalance >= amountAtoms ? currentBalance - amountAtoms : 0UL;
             _custodyNonce++;
         }
 

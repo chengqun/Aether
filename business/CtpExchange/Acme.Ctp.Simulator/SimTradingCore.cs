@@ -76,6 +76,14 @@ public sealed class SimTradingCore : IDisposable
     /// <summary>上市合约 id 集（可交易/可订阅闸门——上市表 = 唯一入口）。</summary>
     private readonly HashSet<string> _listedIds = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 现货铸造台账（合约 → 账户 → 已净铸造手数，下限 0）：充币 + / 提币烧毁 −。
+    /// <b>与持仓分账</b>——交易只转移持仓不改变铸造量；全平仓后持仓行会被快照删掉，
+    /// 铸造量必须独立存活（否则重启对账重复铸造，见 sim_spot_minted 表注释）。
+    /// 桥对账的 DB 侧真相（链侧 IOU 见 LedgerBridge，接线见 host LedgerSpotLink）。
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<string, int>> _spotMinted = new(StringComparer.OrdinalIgnoreCase);
+
     private int _frontId = 1;
     private int _sessionId;
 
@@ -188,6 +196,18 @@ public sealed class SimTradingCore : IDisposable
                         }, maxTradeId);
                 }
                 _states[snapshot.AccountId] = state;
+            }
+        }
+
+        // 现货铸造台账恢复（批 4 接线）：桥对账的 DB 侧真相——重启后目标（链侧 IOU）与现值（本台账）对齐。
+        var minted = await _store.LoadSpotMintedAsync(ct).ConfigureAwait(false);
+        lock (_gate)
+        {
+            foreach (var row in minted)
+            {
+                if (!_spotMinted.TryGetValue(row.InstrumentId, out var perAccount))
+                    _spotMinted[row.InstrumentId] = perAccount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                perAccount[row.AccountId] = row.MintedLots;
             }
         }
 
@@ -547,12 +567,15 @@ public sealed class SimTradingCore : IDisposable
 
     /// <summary>
     /// 现货充币直接铸造 Long 持仓（批 4——桥充币路径，绕过订单簿）。像真实券商的「存入股份」：
-    /// agent 链上充值 → 桥侦听 → 本方法直接给该账户的 Long 持仓 +volume（不经撮合——充币不是交易）。
-    /// 持仓 cost = 当前 BasePrice（后续平多按市价与 cost 差结算盯市盈亏——首笔成交前 cost 是锚定价）。
+    /// agent 链上充值 → 桥侦听 → 对账补铸 → 本方法直接给该账户的 Long 持仓 +volume（不经撮合——充币不是交易）。
+    /// 成本额按 <b>Σ(开仓价 × 乘数 × 手数)</b> 求和约定累加（与 <see cref="Positions.SimPositionManager.ApplyOpenFill"/>
+    /// 同式——充币的成本锚 = BasePrice），不占保证金（充币的币不是 venue 现金换的）。
+    /// 同时 +铸造台账（桥对账的 DB 侧真相）并落盘（持仓/账户/台账三写——fire-and-forget 尽力而为）。
     /// 仅现货仪器可用（期货走订单簿开仓）。
     /// </summary>
     public void CreditSpotPosition(string instrumentId, string accountId, int volume)
     {
+        if (volume <= 0) throw new CtpBusinessException(SimErrorCodes.InvalidParameter, "铸造手数必须 > 0。");
         lock (_gate)
         {
             var instrument = ResolveInstrument(new CtpOrderRequest
@@ -567,13 +590,97 @@ public sealed class SimTradingCore : IDisposable
 
             var state = GetOrCreate(accountId);
             var book = state.Positions.GetOrCreate(instrumentId, instrument.ExchangeId);
-            // 充币铸造的持仓 cost = BasePrice（首笔成交前锚定价；成交后新开仓按成交价——标准路径不变）
+            // cost 求和约定（2026-10-07 修正：旧版把 Cost 当均价写——AvgOpenPrice = Cost/(乘数×Total) 会错乘数倍，
+            // 平多盈亏凭空放大；与 ApplyOpenFill 的 Σ(price×multiple×volume) 同式，充币锚 = BasePrice）
             book.Long.Today += volume;
-            book.Long.Cost = book.Long.Total > volume
-                ? (book.Long.Cost * (book.Long.Total - volume) + instrument.BasePrice * volume) / book.Long.Total
-                : instrument.BasePrice;
+            book.Long.Cost += instrument.BasePrice * instrument.VolumeMultiple * volume;
+
+            var minted = BumpSpotMintedLocked(instrumentId, accountId, volume);
             RecomputePositionProfitLocked();
+
+            PersistSpotAccountingLocked(state, instrumentId, minted);
         }
+    }
+
+    /// <summary>
+    /// 现货提币烧毁 Long 持仓（批 4 接线——桥出金前置，绕过订单簿）。「存入股份」的逆操作：
+    /// 币物理离所 → 持仓 −volume（今仓先扣）、成本/占用保证金按比例减、<b>对应保证金额度从权益中消耗</b>
+    /// （币带走价款——<see cref="Accounts.SimAccount.ConsumeMarginForWithdrawal"/>，非平仓变现；
+    /// 充币铸造的持仓 margin=0 → 零消耗）。铸造台账同步 −volume（下限 0——与链侧 IOU 的 clamp 语义对称）。
+    /// 量超持仓 ⇒ 90007（真实交易所语义：提币不能超过实际持有）。
+    /// </summary>
+    public void BurnSpotPosition(string instrumentId, string accountId, int volume)
+    {
+        if (volume <= 0) throw new CtpBusinessException(SimErrorCodes.InvalidParameter, "烧毁手数必须 > 0。");
+        lock (_gate)
+        {
+            var instrument = ResolveInstrument(new CtpOrderRequest
+            {
+                InstrumentId = instrumentId, Direction = CtpDirection.Buy,
+                OffsetFlag = CtpOffsetFlag.Open, PriceType = CtpOrderPriceType.Limit,
+                LimitPrice = 1, Volume = 1, BrokerId = "", InvestorId = accountId,
+            });
+            if (!instrument.IsSpot)
+                throw new CtpBusinessException(SimErrorCodes.InvalidParameter,
+                    $"{instrumentId} 非现货仪器——BurnSpotPosition 仅现货。");
+
+            var state = GetOrCreate(accountId);
+            var book = state.Positions.GetOrCreate(instrumentId, instrument.ExchangeId);
+            var lot = book.Long;
+            if (lot.Total < volume)
+                throw new CtpBusinessException(SimErrorCodes.CloseVolumeExceeds,
+                    $"现货提币量超持仓：账户 {accountId} 持有 {lot.Total} 手 < 提币 {volume} 手（{instrumentId}）。");
+
+            var totalBefore = lot.Total;
+            var consumedMargin = lot.Margin * volume / totalBefore;   // 比例消耗（镜像 ApplyCloseFill 的释放算式）
+            var avgCost = lot.Cost / totalBefore;
+
+            var fromToday = Math.Min(volume, lot.Today);
+            lot.Today -= fromToday;
+            lot.Yesterday -= volume - fromToday;
+            lot.Cost = Math.Max(0, lot.Cost - avgCost * volume);
+            lot.Margin = Math.Max(0, lot.Margin - consumedMargin);
+            if (lot.Total == 0) { lot.Cost = 0; lot.Margin = 0; }
+
+            state.Account.ConsumeMarginForWithdrawal(consumedMargin);
+
+            var minted = BumpSpotMintedLocked(instrumentId, accountId, -volume);
+            RecomputePositionProfitLocked();
+
+            PersistSpotAccountingLocked(state, instrumentId, minted);
+        }
+    }
+
+    /// <summary>现货铸造台账快照（合约 → 账户 → 已净铸造手数）——桥对账（host LedgerSpotLink）遍历用。线程安全。</summary>
+    public IReadOnlyDictionary<string, int> GetSpotMintedVolumes(string instrumentId)
+    {
+        lock (_gate)
+            return _spotMinted.TryGetValue(instrumentId, out var perAccount)
+                ? new Dictionary<string, int>(perAccount)
+                : new Dictionary<string, int>();
+    }
+
+    /// <summary>查询合约元数据（纯查找——不解析/不合成/不建表；未上市返回 null）。现货桥/诊断用。线程安全。</summary>
+    public SimInstrument? TryGetInstrument(string instrumentId)
+        => _instruments.TryGetValue(instrumentId ?? "", out var instrument) ? instrument : null;
+
+    /// <summary>铸造台账增减（下限 0——与链侧 IOU clamp 对称；「买入后提币」的账户 IOU 与台账都停在 0 不为负）。调用须持锁。</summary>
+    private int BumpSpotMintedLocked(string instrumentId, string accountId, int delta)
+    {
+        if (!_spotMinted.TryGetValue(instrumentId, out var perAccount))
+            _spotMinted[instrumentId] = perAccount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        perAccount.TryGetValue(accountId, out var current);
+        var next = Math.Max(0, current + delta);
+        perAccount[accountId] = next;
+        return next;
+    }
+
+    /// <summary>现货铸造/烧毁的三写落盘（持仓 + 账户 + 台账——fire-and-forget 尽力而为，同交易路径语义）。调用须持锁。</summary>
+    private void PersistSpotAccountingLocked(SimAccountState state, string instrumentId, int minted)
+    {
+        Persist(() => _store.SavePositionsAsync(state.AccountId, state.Positions.ToSnapshots().ToList()));
+        Persist(() => _store.SaveAccountAsync(state.Account.ToSnapshot()));
+        Persist(() => _store.SaveSpotMintedAsync(instrumentId, state.AccountId, minted));
     }
 
     /// <summary>

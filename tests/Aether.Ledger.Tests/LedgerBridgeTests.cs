@@ -165,6 +165,61 @@ public class LedgerBridgeTests
         Assert.Equal(2_000_000_000UL, bobIou);  // bob 不动
     }
 
+    // —— 提币钩子（批 4 接线——venue 烧毁在签名之前）——
+
+    [Fact]
+    public async Task 提币钩子拒绝_不借记不出金()
+    {
+        using var sim = await BridgeLoopback.StartAsync("hook-reject");
+        var agent = LedgerHarness.Wallet("hook-reject-agent");
+        sim.Bridge.WithdrawHook = new StubHook(ok: false, error: "现货持仓不足：账户 nobody 持有 0 手");
+
+        var ex = await Assert.ThrowsAsync<LedgerClientException>(
+            () => sim.Bridge.WithdrawAsync("nobody", agent.Address, 1_000_000UL));
+        Assert.Contains("现货持仓不足", ex.Message);
+
+        // 拒绝是无残留的：IOU 不动、链上无出金
+        Assert.Equal(0UL, await sim.Bridge.GetCoinBalanceAsync("nobody"));
+        var custody = await sim.Client.GetBalanceAsync(sim.Custody.Address.Hex);
+        Assert.Equal(0UL, custody.BalanceAtoms);
+    }
+
+    [Fact]
+    public async Task 钩子放行_IOU不足_clamp到零不underflow()
+    {
+        using var sim = await BridgeLoopback.StartAsync("hook-clamp");
+        var treasury = new LedgerWallet(Convert.FromHexString(sim.TreasurySeed));
+        var agent = LedgerHarness.Wallet("hook-clamp-agent");
+        sim.Bridge.WithdrawHook = new StubHook(ok: true);
+
+        // buyer 充 1 币、other 充 2 币（custody 合计 3 币——链上够付）
+        await LedgerBridge.DepositAsync(sim.Client, treasury, sim.Custody.Address, 1_000_000_000UL, "buyer");
+        await WaitForBlockAsync(sim, 1);
+        await LedgerBridge.DepositAsync(sim.Client, treasury, sim.Custody.Address, 2_000_000_000UL, "other");
+        await WaitForBlockAsync(sim, 2);
+        await WaitForPollAsync(sim);
+
+        // buyer 提 3 币（钩子放行——venue 持仓闸门语义）：IOU 1−3 < 0 ⇒ clamp 0（旧版 ulong underflow 成 1.8e19）
+        await sim.Bridge.WithdrawAsync("buyer", agent.Address, 3_000_000_000UL);
+        await WaitForBlockAsync(sim, 3);
+        await WaitForPollAsync(sim);
+
+        Assert.Equal(0UL, await sim.Bridge.GetCoinBalanceAsync("buyer"));   // clamp——「净提取史」停在 0
+        Assert.Equal(2_000_000_000UL, await sim.Bridge.GetCoinBalanceAsync("other"));   // other 不动
+        var custody = await sim.Client.GetBalanceAsync(sim.Custody.Address.Hex);
+        Assert.Equal(0UL, custody.BalanceAtoms);   // 3 币全数出金
+        var agentBalance = await sim.Client.GetBalanceAsync(agent.Address.Hex);
+        Assert.Equal(3_000_000_000UL, agentBalance.BalanceAtoms);
+    }
+
+    /// <summary>钩子桩：固定放行/拒绝（桥的钩子协议单测——真实 venue 烧毁见 LedgerSpotLinkTests）。</summary>
+    private sealed class StubHook(bool ok, string? error = null) : ILedgerWithdrawHook
+    {
+        public Task<(bool Ok, string? Error)> TryBurnForWithdrawalAsync(
+            string accountKey, ulong amountAtoms, CancellationToken ct = default)
+            => Task.FromResult((ok, error));
+    }
+
     /// <summary>等出块（高度达到 target）。</summary>
     private static async Task WaitForBlockAsync(BridgeLoopback sim, ulong targetHeight, int timeoutMs = 8000)
     {

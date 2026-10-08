@@ -26,6 +26,17 @@ public sealed record SimPositionSnapshot(
     double Margin);
 
 /// <summary>
+/// 现货铸造台账（落盘行）：该账户在该现货合约上的<b>已净铸造手数</b>（充币 +/提币烧毁 −，下限 0）。
+/// <para>
+/// 与持仓行分表存——铸造量是<b>托管归账</b>（「交易所欠这个账户多少币」），持仓是<b>可交易物</b>：
+/// 交易（买开/卖平）只转移持仓不改变铸造量；全平仓后持仓行会被删（快照只为非零持仓生成行），
+/// 铸造量行必须独立存活，否则重启对账会把「已卖出的存量」误判为「未铸造」而重复铸造。
+/// </para>
+/// <para>桥对账的 DB 侧真相：<c>目标 = 链侧 IOU</c>，<c>现值 = 本台账</c>，差值驱动补铸/烧毁（见 host 的 LedgerSpotLink）。</para>
+/// </summary>
+public sealed record SpotMintedSnapshot(string AccountId, string InstrumentId, int MintedLots);
+
+/// <summary>
 /// 仿真柜台持久化端口。
 /// <para>
 /// 落在 Domain 之外的自己的命名空间里（仿真核心的内部协作面，非业务契约）——
@@ -63,6 +74,12 @@ public interface ISimStore
     Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default);
     Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default);
 
+    /// <summary>读全部现货铸造台账行（启动恢复——核心按合约分组）。</summary>
+    Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default);
+
+    /// <summary>写一行现货铸造台账（upsert——(account, instrument) 主键）。</summary>
+    Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default);
+
     /// <summary>追加一条成交 tick（真实交易消息——交易所模式每笔成交的完整快照：价/量/盘口/开高低）。</summary>
     Task SaveTickAsync(CtpTick tick, CancellationToken ct = default);
 
@@ -91,6 +108,10 @@ public sealed class NullSimStore : ISimStore
     public Task SaveOrderAsync(string accountId, CtpOrder order, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<SpotMintedSnapshot>>(Array.Empty<SpotMintedSnapshot>());
+    public Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default)
+        => Task.CompletedTask;
     public Task SaveTickAsync(CtpTick tick, CancellationToken ct = default) => Task.CompletedTask;
     public Task<IReadOnlyList<CtpTick>> LoadRecentTicksAsync(string instrumentId, int limit, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<CtpTick>>(Array.Empty<CtpTick>());

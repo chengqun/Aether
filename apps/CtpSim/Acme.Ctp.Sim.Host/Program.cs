@@ -23,6 +23,9 @@ using Microsoft.Extensions.Hosting;
 // 批 3 交易所桥（2026-10-06）：托管充提币——须 AETHER_LEDGER_* env（链节点地址 + custody 种子）：
 //   AETHER_LEDGER_NODE_ADDR     链节点端点（默认 127.0.0.1:17805；未设且链节点未运行 = 桥不启动——交易所照常跑）
 //   AETHER_LEDGER_CUSTODY_SEED  custody 钱包种子（hex 64 字符——丢失 = 托管币不可提；生成时日志打印）
+//   AETHER_LEDGER_SPOT_INSTRUMENT 现货桥目标合约（默认 ax001——须同时在 AETHER_CTP_SIM_BOARD 上架；
+//                                批 4 接线：LedgerSpotLink 对账「链 IOU ↔ 铸造台账」，充币自动补铸持仓、
+//                                提币先烧持仓后签名；未上架 = 待命不报错，BOARD 加上即激活）
 //
 // 价格源恒为订单簿价格发现（2026-10-03 起 walk/回放已删除）：行情 = 簿顶 + 成交流，tick 事件驱动；
 // 流动性由外部客户端策略（labs leanalgorithms 做市/噪声 bot）供给——不起 bot = 空闲市场无对手价（真实交易所本义）。
@@ -39,8 +42,10 @@ var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
 var server = new SimRpcServer(core, opts.Host, opts.Port);
 
-// 批 3 交易所桥：custody 充提币（opt-in——未设 env = 不启动，交易所照常跑）
+// 批 3 交易所桥 + 批 4 现货接线：custody 充提币（opt-in——未设 env = 不启动，交易所照常跑）。
+// LedgerSpotLink = 「充币 → 铸造现货持仓」的最后一焊（对账「链 IOU ↔ DB 铸造台账」+ 提币烧持仓钩子）。
 LedgerBridge? bridge = null;
+LedgerSpotLink? spotLink = null;
 var custodySeed = Environment.GetEnvironmentVariable("AETHER_LEDGER_CUSTODY_SEED");
 if (!string.IsNullOrWhiteSpace(custodySeed))
 {
@@ -49,14 +54,19 @@ if (!string.IsNullOrWhiteSpace(custodySeed))
         ? (nodeAddr[..nodeAddr.LastIndexOf(':')], int.Parse(nodeAddr[(nodeAddr.LastIndexOf(':') + 1)..]))
         : ("127.0.0.1", 17805);
     var custody = new LedgerWallet(Convert.FromHexString(custodySeed));
-    bridge = new LedgerBridge(new LedgerClient(nodeHost, nodePort), custody, msg => Log.Line($"[LEDGER-BRIDGE] {msg}"));
+    var nodeClient = new LedgerClient(nodeHost, nodePort);
+    bridge = new LedgerBridge(nodeClient, custody, msg => Log.Line($"[LEDGER-BRIDGE] {msg}"));
+    spotLink = new LedgerSpotLink(core, bridge, nodeClient,
+        Environment.GetEnvironmentVariable("AETHER_LEDGER_SPOT_INSTRUMENT") ?? "ax001");
+    bridge.WithdrawHook = spotLink;   // 提币闸门 = venue 现货持仓（签名前烧毁——批 4 接线）
 }
 
-builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts, bridge));
+builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts, bridge, spotLink));
 await builder.Build().RunAsync();
 
-/// <summary>交易所生命周期：启动 = 恢复账本 + RPC 监听 + 桥初始化（opt-in）；停止 = 关连接 + 落盘 + 桥停。</summary>
-internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts, LedgerBridge? bridge)
+/// <summary>交易所生命周期：启动 = 恢复账本 + RPC 监听 + 桥初始化（opt-in）+ 现货对账；停止 = 关连接 + 落盘 + 桥停。</summary>
+internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer server, SimHostOptions opts,
+    LedgerBridge? bridge, LedgerSpotLink? spotLink)
     : IHostedService
 {
     public async Task StartAsync(CancellationToken ct)
@@ -67,6 +77,10 @@ internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer se
         {
             await bridge.StartAsync(ct);   // 全量重扫链恢复 IOU 状态（链是唯一真相）
             Log.Line($"[LEDGER-BRIDGE] 交易所桥就绪：custody {bridge.CustodyAddress.Hex[..12]}…");
+        }
+        if (spotLink is not null)
+        {
+            await spotLink.StartAsync(ct);   // 首轮对账：补铸历史充币 + custody 供给同步；此后每秒一轮
         }
         var port = server.LocalEndpoint?.Port ?? opts.Port;
         var listed = core.QueryListedInstruments();
@@ -82,6 +96,7 @@ internal sealed class ExchangeHostedService(SimTradingCore core, SimRpcServer se
 
     public async Task StopAsync(CancellationToken ct)
     {
+        spotLink?.Dispose();   // 先停对账循环（不再铸造/烧毁），桥再停
         bridge?.Dispose();
         await server.StopAsync();
         core.Dispose();   // 同步 flush（重启续用靠这里落盘）

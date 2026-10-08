@@ -124,6 +124,17 @@ public sealed class SimAccount
         StaticBalance += pnl;
     }
 
+    /// <summary>
+    /// 现货提币带走已付价款（桥烧毁路径——<b>不是平仓变现</b>）：占用保证金解除的<b>同时</b>等额扣减静态权益。
+    /// 币已物理离所，对应的价款随币走（充币铸造的持仓 margin=0——本方法零效果，币白来的白走）。
+    /// 净效果 <c>Available</c> 不变（保证金解除 + 权益扣减对冲）——区别于平仓（保证金解除 + 盈亏入权益）。
+    /// </summary>
+    public void ConsumeMarginForWithdrawal(double margin)
+    {
+        CurrMargin = Math.Max(0, CurrMargin - margin);
+        StaticBalance -= Round(margin);
+    }
+
     /// <summary>持仓标价（影响 <c>Balance</c>/<c>Available</c>）。</summary>
     public void SetPositionProfit(double value) => PositionProfit = value;
 
