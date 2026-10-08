@@ -665,6 +665,8 @@ VSCode 式集成终端：**B1 用户终端面板**（底部常驻 region——VS
 
 ### 虚拟币链引擎（Aether.Ledger，2026-10-05 批 1）
 
+> **操作手册**：部署后怎么验证/备份种子/发币/充值/交易/提币——见 `doc/ledger-runbook.md`（运维 runbook，本文是设计文档）。
+
 用户为 AI agent 经济自建的**原生代币账本**（对标比特币的固定供给 + 密钥所有权——中心化出块、资产真自持）。**两层架构**：链 = 资产层（独立于交易所存活），交易所（CTP 栈）= venue 层（批 4 上现货映射后接入）。批 1 已交付引擎 + 独立验证器；批 2 节点宿主 / 批 3 交易所桥（充提币）/ 批 4 现货上币待做。
 
 - **`src/Aether.Ledger`（纯库，唯一依赖 NSec.Cryptography 26.4.0——Ed25519 确定性签名，无 ECDSA nonce 失误泄漏私钥的坑）**：`LedgerSupply`（总量常量 21M×10⁸ 原子单位、8 位小数——`const` 刻意不可配：改供给 = 改创世哈希 = 另一条链）/ `LedgerAddress`（SHA256(pubkey) 前 20B = 40 hex；地址是公钥哈希承诺——验交易须重算派生防张冠李戴）/ `LedgerWallet`（**32B 种子 = 全部财富与身份**，同种子恒同钱包；NSec Key 不进公开 API）/ `LedgerTransaction`（唯一类型 = 转账，无铸造——结构上不可能增发；签名载荷含 chainId（防跨链重放）+ nonce（防同链重放，以太坊模型 = from.nonce+1 精确匹配）；memo ≤64B UTF-8 = 归账 + 未来效用钩子）/ `LedgerBlock` + `LedgerGenesis`（treasury 拿满 21M——发行模式 = 国库经订单簿卖出，价格从第一笔成交就是市场定的；出块人公钥在创世指定）/ `LedgerBlockBuilder`（逐笔入块前验证——同块同账户多笔按 nonce 顺序）/ `LedgerChainFile`（**JSON lines：首行创世 + 每行一块**）/ `LedgerValidator`（五条规则：创世总量/链接+出块人验签/交易验签+地址派生/nonce/余额守恒——验证 = 全量重放，本量级秒级）。
