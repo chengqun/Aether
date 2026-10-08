@@ -43,7 +43,9 @@ jobs:
       run: |
         dotnet publish apps/LedgerNode -c Release --self-contained true --runtime win-x64 -o ./publish/node
         dotnet publish apps/LedgerWallet/Aether.Ledger.Wallet -c Release --self-contained true --runtime win-x64 -o ./publish/wallet
-        dotnet publish apps/LedgerVerify/Aether.Ledger.Verify -c Release --self-contained true --runtime win-x64 -o ./publish/verify
+        dotnet publish apps/LedgerVerify -c Release --self-contained true --runtime win-x64 -o ./publish/verify
+        # 注意：LedgerNode 与 LedgerVerify 的 csproj 直接在 apps/<名>/ 下（无子目录）；
+        # LedgerWallet 有子目录 Aether.Ledger.Wallet/（slnx 的 Project Path 即权威形态）
 
     - name: Bundle (VERSION stamp + tar)
       run: |

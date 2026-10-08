@@ -176,6 +176,8 @@ public sealed class LedgerNode : IDisposable
             var request = JsonSerializer.Deserialize<LedgerRpcRequest>(line, Json);
             if (request?.Op is null)
                 return Err("请求缺 op 字段");
+            if (_genesis is null)
+                return Err("节点未完成启动（创世未加载）");   // 监听在 Start() 尾部才开——运行到不了；守卫消 CS8602（_genesis 在 Start 内赋值）
             switch (request.Op)
             {
                 case LedgerOps.GetInfo:

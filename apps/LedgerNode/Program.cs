@@ -25,11 +25,11 @@ var builder = Host.CreateApplicationBuilder(args);
 var opts = LedgerNodeOptions.FromEnvironment();
 var logPath = Environment.GetEnvironmentVariable("AETHER_LEDGER_LOG") ?? opts.ChainFilePath + ".log";
 var node = new LedgerNode(opts, logPath);
-builder.Services.AddHostedService(_ => new LedgerNodeHostedService(node, opts));
+builder.Services.AddHostedService(_ => new LedgerNodeHostedService(node));
 await builder.Build().RunAsync();
 
 /// <summary>节点生命周期：启动 = 加载/生成链 + 监听 + 出块循环；停止 = 停监听（链文件逐块落盘，无需 flush）。</summary>
-internal sealed class LedgerNodeHostedService(LedgerNode node, LedgerNodeOptions opts) : IHostedService
+internal sealed class LedgerNodeHostedService(LedgerNode node) : IHostedService
 {
     public Task StartAsync(CancellationToken ct)
     {
