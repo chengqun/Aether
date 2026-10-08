@@ -33,6 +33,10 @@ public static class PanelKeys
     /// <summary>活动热力图面板（ActivityView，GitHub 式贡献图：Agent 执行 + Git 提交按日聚合，点格看当天明细）。</summary>
     public const string Activity = "activity";
 
+    /// <summary>钱包面板（WalletView，链上钱包：生成/导入种子、余额、转账、充值到交易所、从交易所提币——
+    /// 币的自持操作面，agent 工具共用同一种子文件）。两租户共享。</summary>
+    public const string Wallet = "wallet";
+
     /// <summary>知识对象面板（KnowledgeObjectsView，文档版 <c>.md</c> 知识对象：左 .md 树 + 右表单/源码两栏）。
     /// 根目录=独立知识库目录（<see cref="Acme.Desktop.Mvvm.IKnowledgeDirectoryProvider"/>，跨项目复用，与文档页项目目录解耦）。
     /// 本面板是知识对象的唯一承载（labs 目录权威存储）。</summary>

@@ -183,6 +183,10 @@ wallet withdraw --user u1 --password <登录密码> --to <alice地址> --amount 
 
 ---
 
+## 6.5 钱包页（桌面客户端，2026-10-08 起——零命令行操作面）
+
+桌面 app 侧边栏「钱包」页（两租户都有）覆盖 CLI 的全部日常操作：**创建/导入钱包**（种子只此一次展示 + 备份确认）、**余额刷新**、**转账**、**充值到交易所**（填账号即 memo）、**从交易所提币**（账号+密码，地址留空默认本钱包）。设置区可改节点/custody/交易所地址（持久化）。用户与 agent 共用同一个钱包（`<tenantDir>/ledger/agent-wallet.seed`）。远程链/交易所仍需先开 §0 的 SSH 隧道。
+
 ## 7. agent 玩法（可选）
 
 桌面端 agent 已带 4 个工具（专家编辑器勾选即用，cat「链上钱包」）：`LedgerGetInfo` / `LedgerGetBalance`（缺省查自己钱包）/ `LedgerTransfer`（Dangerous——链上转账不可逆）/ `LedgerDepositToExchange`（充值）。

@@ -28,6 +28,7 @@ public static class StockappWorkspace
             new(PanelKeys.Experts, PanelKeys.Experts, "连接器", "connector", "运行"),
             new(PanelKeys.Automation, PanelKeys.Automation, "自动化", "automation", "运行"),
             new(PanelKeys.Activity, PanelKeys.Activity, "活动", "history", "洞察"),
+            new(PanelKeys.Wallet, PanelKeys.Wallet, "钱包", "wallet", "洞察"),
             new(PanelKeys.Knowledge, PanelKeys.Knowledge, "资料库", "knowledge", "创作"),
             new(PanelKeys.KnowledgeScm, PanelKeys.KnowledgeScm, "资料版本", "sourcecontrol", "创作"),
             new(PanelKeys.Ctp, PanelKeys.Ctp, "期货", "futures", "业务"),
@@ -46,7 +47,7 @@ public static class StockappWorkspace
                     Orientation: SplitOrientation.Vertical,
                     Children: new LayoutNode[]
                     {
-                        new LayoutTabbed(RegionIds: new[] { PanelKeys.Knowledge, PanelKeys.KnowledgeScm, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
+                        new LayoutTabbed(RegionIds: new[] { PanelKeys.Knowledge, PanelKeys.KnowledgeScm, PanelKeys.Documents, PanelKeys.SourceControl, PanelKeys.Experts, PanelKeys.Automation, PanelKeys.Activity, PanelKeys.Wallet, PanelKeys.Ctp, PanelKeys.Backtest, PanelKeys.StockTrade }, SelectedIndex: 0),
                         new LayoutRegion(RegionId: PanelKeys.Terminal),
                     },
                     // Proportional（2026-10-05 分区按比例分摊）：权重 [0.72, 0.28] ≈ 原 Star+220px 的分布——

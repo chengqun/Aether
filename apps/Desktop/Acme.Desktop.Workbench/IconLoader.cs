@@ -29,6 +29,7 @@ public static class IconLoader
         ["backtest"] = PackIconCodiconsKind.Beaker,
         ["activity"] = PackIconCodiconsKind.Pulse,
         ["history"] = PackIconCodiconsKind.History,
+        ["wallet"] = PackIconCodiconsKind.CreditCard,   // codicons 包无 Wallet——CreditCard 表「钱」
         ["knowledge"] = PackIconCodiconsKind.Collection,
         ["settings"] = PackIconCodiconsKind.SettingsGear,
         ["workflow"] = PackIconCodiconsKind.Rocket,

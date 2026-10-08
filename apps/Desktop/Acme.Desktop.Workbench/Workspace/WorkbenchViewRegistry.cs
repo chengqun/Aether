@@ -50,6 +50,11 @@ public sealed class WorkbenchViewRegistry : ViewRegistry
             () => new ActivityView(),
             () => serviceProvider.GetRequiredService<MainViewModelBase>().Activity);
 
+        // 钱包：共享 WalletView（链上钱包：种子/余额/转账/充值/提币——用户与 agent 工具共用同一种子文件）。
+        Register(PanelKeys.Wallet,
+            () => new WalletView(),
+            () => serviceProvider.GetRequiredService<MainViewModelBase>().Wallet);
+
         // 知识对象（文档版 .md 知识对象独立 nav 页）：左 .md 树 + 右上下两栏（表单/源码）。
         // 根目录=独立知识库目录（IKnowledgeDirectoryProvider，与文档页项目目录解耦，跨项目复用）。
         Register(PanelKeys.Knowledge,

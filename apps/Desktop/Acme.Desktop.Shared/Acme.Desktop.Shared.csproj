@@ -78,6 +78,8 @@
     <ProjectReference Include="..\..\..\business\DeviceManagement\Acme.DeviceManagement.Infrastructure\Acme.DeviceManagement.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\ai\SystemTools\Acme.SystemTools.AI\Acme.SystemTools.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Ledger\Acme.Ledger.AI\Acme.Ledger.AI.csproj" />
+    <!-- 钱包页提币客户端（LedgerExchangeClient 包 SimRpcClient 走 JSON-RPC withdraw op——纯托管 TCP/JSON，无 native） -->
+    <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
     <ProjectReference Include="..\..\..\ai\ApkParser\Acme.ApkParser.AI\Acme.ApkParser.AI.csproj" />
     <ProjectReference Include="..\..\..\ai\Agents\Acme.Agents.AI\Acme.Agents.AI.csproj" />
     <!-- UI 无关 shell VM 库（聊天/专家/笔记 VM，Avalonia/MAUI/WPF 共用） -->

@@ -1,0 +1,212 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Acme.Desktop.Mvvm"
+             x:Class="Acme.Desktop.Shared.Shell.WalletView"
+             Classes="form-fields"
+             Background="{DynamicResource ContentBgBrush}">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Code,Menlo,monospace"/>
+        </Style>
+        <Style Selector="TextBlock.title">
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="TextBlock.balance">
+            <Setter Property="FontSize" Value="26"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="Cascadia Code,Menlo,monospace"/>
+        </Style>
+        <Style Selector="TextBlock.warn">
+            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusCard}"/>
+            <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="TextBlock.cardtitle">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style Selector="TextBlock.status">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="FontFamily" Value="Cascadia Code,Menlo,monospace"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="720" HorizontalAlignment="Left">
+
+            <!-- 标题 + 地址 -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="钱包" Classes="title" VerticalAlignment="Center"/>
+                <TextBlock Text="（链上自持：种子 = 财富，地址 = 身份）" Classes="muted" VerticalAlignment="Center" Margin="8,2,0,0"/>
+            </StackPanel>
+
+            <!-- 未创建态：入口 -->
+            <Border Classes="card" IsVisible="{Binding !HasWallet}" Grid.Row="1">
+                <StackPanel IsVisible="{Binding !IsCreating}">
+                    <TextBlock Classes="cardtitle" Text="还没有钱包"/>
+                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                               Text="生成一个（种子=32字节随机数，谁持种子谁拥有币——链上自持、不依赖交易所），或导入已有的种子。⚠ 种子丢了没人能找回，务必离线备份。"
+                               Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Classes="primary" Content="创建新钱包" Command="{Binding StartCreateCommand}" Margin="0,0,8,0"/>
+                        <Button Content="导入钱包" Command="{Binding StartImportCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 创建流程：种子一次性展示 -->
+            <Border Classes="card" IsVisible="{Binding IsCreating}">
+                <StackPanel>
+                    <TextBlock Classes="cardtitle" Text="⚠ 新钱包种子（只此一次展示）"/>
+                    <TextBox Classes="mono input" Text="{Binding NewSeedHex}" IsReadOnly="True"
+                             FontFamily="Cascadia Code,Menlo,monospace" TextWrapping="Wrap" Height="52"/>
+                    <TextBlock Classes="warn" Margin="0,8,0,0"
+                               Text="这串 hex 是钱包的全部财富与身份：离线抄录/密码管理器保存（丢失 = 币永久丢失，没人能找回）。确认已备份后保存。"/>
+                    <CheckBox Content="我已离线备份种子" IsChecked="{Binding SeedBackedUp}" Margin="0,10,0,10"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Classes="primary" Content="保存钱包" Command="{Binding ConfirmCreateCommand}"
+                                IsEnabled="{Binding SeedBackedUp}" Margin="0,0,8,0"/>
+                        <Button Content="取消" Command="{Binding CancelCreateCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 导入流程 -->
+            <Border Classes="card" IsVisible="{Binding IsImporting}">
+                <StackPanel>
+                    <TextBlock Classes="cardtitle" Text="导入钱包（粘贴 64 位 hex 种子）"/>
+                    <TextBox Classes="mono input" Text="{Binding ImportSeedText}" Watermark="64 位 hex 种子"
+                             FontFamily="Cascadia Code,Menlo,monospace" TextWrapping="Wrap" Height="52"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Classes="primary" Content="导入" Command="{Binding ImportCommand}" Margin="0,0,8,0"/>
+                        <Button Content="取消" Command="{Binding CancelImportCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 已有钱包：地址 + 余额 -->
+            <Border Classes="card" IsVisible="{Binding HasWallet}">
+                <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
+                        <TextBlock Grid.Column="0" Text="地址" Classes="muted" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Address}" Classes="mono" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Button Grid.Column="2" Content="复制" Classes="ghost" Click="OnCopyAddress" Margin="8,0,0,0"/>
+                        <Button Grid.Column="3" Content="刷新余额" Command="{Binding RefreshBalanceCommand}" Margin="8,0,0,0"
+                                IsEnabled="{Binding !IsBusy}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding BalanceText}" Classes="balance"/>
+                        <TextBlock Grid.Column="1" Classes="muted" Text=" 币" VerticalAlignment="Bottom" Margin="4,0,0,5"/>
+                    </Grid>
+                    <TextBlock Classes="muted" Text="总供给 21,000,000 固定（不可增发）——链是唯一真相，随时可独立验证。"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 转账 -->
+            <Border Classes="card" IsVisible="{Binding HasWallet}">
+                <StackPanel>
+                    <TextBlock Classes="cardtitle" Text="转账（链上，不可逆）"/>
+                    <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="对方地址" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferTo}" Watermark="40 位 hex 地址"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferAmount}" Watermark="如 1.5（8 位小数）"/>
+                        <Button Grid.Column="2" Content="转账" Classes="primary" Command="{Binding TransferCommand}"
+                                IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*">
+                        <TextBlock Grid.Column="0" Text="备注" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding TransferMemo}" Watermark="可选 memo（≤64 字符）"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 充值到交易所 -->
+            <Border Classes="card" IsVisible="{Binding HasWallet}">
+                <StackPanel>
+                    <TextBlock Classes="cardtitle" Text="充值到交易所（充币 → 自动铸造现货持仓）"/>
+                    <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="交易所账号" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAccount}" Watermark="memo 归账键——须与期货页登录账号一致"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*,Auto">
+                        <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding DepositAmount}" Watermark="如 5"/>
+                        <Button Grid.Column="2" Content="充值" Classes="primary" Command="{Binding DepositCommand}"
+                                IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
+                    </Grid>
+                    <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Text="币转入 custody 托管、约 1~2 秒后该账号名下自动出现 ax001 现货持仓（1 手 = 1 币）。卖出即得现金。"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 从交易所提币 -->
+            <Border Classes="card" IsVisible="{Binding HasWallet}">
+                <StackPanel>
+                    <TextBlock Classes="cardtitle" Text="从交易所提币（持仓 → 链上钱包）"/>
+                    <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="交易所账号" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawUser}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="密码" Classes="muted" VerticalAlignment="Center"/>
+                        <PasswordBox Grid.Column="1" PasswordChar="*" Password="{Binding WithdrawPassword}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="提币地址" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawTo}" Watermark="留空 = 本钱包地址"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="90,*,Auto">
+                        <TextBlock Grid.Column="0" Text="金额（币）" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding WithdrawAmount}" Watermark="如 2（≤ 持仓量）"/>
+                        <Button Grid.Column="2" Content="提币" Classes="primary" Command="{Binding WithdrawCommand}"
+                                IsEnabled="{Binding !IsBusy}" Margin="8,0,0,0"/>
+                    </Grid>
+                    <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Text="提币先烧毁交易所持仓再链上出金（买来的币照提）——提完的币只属于你的种子，交易所死活不再影响。"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 设置 -->
+            <Expander Header="设置（节点 / custody / 交易所地址）" IsExpanded="False">
+                <StackPanel Margin="0,8,0,0">
+                    <Grid ColumnDefinitions="120,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="链节点" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding NodeAddress}" Watermark="127.0.0.1:17805（远程经 SSH 隧道）"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Text="custody 地址" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding CustodyAddress}" Watermark="交易所托管地址（充值用，向运维索取）"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="120,*">
+                        <TextBlock Grid.Column="0" Text="交易所" Classes="muted" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Classes="input" Text="{Binding ExchangeAddress}" Watermark="127.0.0.1:17800（提币用）"/>
+                    </Grid>
+                </StackPanel>
+            </Expander>
+
+            <!-- 状态反馈 -->
+            <TextBlock Classes="status" Text="{Binding StatusText}" Margin="0,10,0,2"/>
+            <TextBlock Classes="warn" Text="{Binding ErrorText}" Margin="0,0,0,10"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

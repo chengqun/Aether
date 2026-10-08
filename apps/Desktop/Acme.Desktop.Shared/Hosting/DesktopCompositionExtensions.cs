@@ -148,9 +148,13 @@ public static class DesktopCompositionExtensions
         // 注：不再 AddNotesTools()——note 节点降级为其侧边栏纯文本功能，AI 不直接读写 note；
         // 知识对象 AI 读写在 labs 文件版（AddDocumentKnowledgeTool，见下）。
         aether.AddSystemTools().AddApkParserTools();
-        // 链上钱包工具（批 4，2026-10-08）：agent 持币转账/充值交易所。钱包种子文件 = agent 的链上身份
-        //（hex 明文，首次签名操作自动生成——⚠ 备份提示打日志）；节点/custody 地址经 AETHER_LEDGER_* env。
-        aether.AddLedgerTools(Path.Combine(tenantDir, "ledger", "agent-wallet.seed"));
+        // 链上钱包（批 5 缺口收尾 2026-10-08）：种子文件位置 = 单一来源（钱包页 VM 与 agent 工具共用同一路径
+        //——单用户桌面，用户与 agent 同一个钱包）。agent 工具持币转账/充值；节点/custody 地址经 AETHER_LEDGER_* env。
+        var walletLocation = new LedgerWalletLocation(Path.Combine(tenantDir, "ledger", "agent-wallet.seed"));
+        services.AddSingleton(walletLocation);
+        aether.AddLedgerTools(walletLocation.SeedFilePath);
+        // 钱包页提币端口（Shared impl 包 SimRpcClient 走 JSON-RPC withdraw op——Mvvm 不引 Acme.Ctp.Sim）
+        services.AddSingleton<ILedgerExchangeClient, LedgerExchangeClient>();
         // 长期记忆工具（recall_memory/save_memory）：把 IMemoryStore 暴露为显式工具。代码规则大脑经此获取
         // 跨会话记忆（其不接 MemoryContextProvider 注入式 NL）；LLM agent 亦可显式存/查，与自动注入互补。
         aether.AddMemoryTools();

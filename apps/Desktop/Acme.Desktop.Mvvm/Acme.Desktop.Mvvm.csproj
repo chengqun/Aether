@@ -23,6 +23,8 @@
     <!-- 平台：会话存储 + 标题服务 -->
     <ProjectReference Include="..\..\..\src\Aether.AI.Memory\Aether.AI.Memory.csproj" />
     <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <!-- 钱包页 VM（2026-10-08）：链上钱包 UI（查余额/转账/充值/提币）。引纯链库（apps→src 合法方向，零传递依赖）。 -->
+    <ProjectReference Include="..\..\..\src\Aether.Ledger\Aether.Ledger.csproj" />
     <!-- MCP 稳定契约（McpServerConfig / IMcpManagementService / McpServerStatus 等，VM 直接用）——零 alpha 依赖。 -->
     <ProjectReference Include="..\..\..\src\Aether.AI.Abstractions\Aether.AI.Abstractions.csproj" />
   </ItemGroup>
