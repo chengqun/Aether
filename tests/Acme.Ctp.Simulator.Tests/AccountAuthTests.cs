@@ -35,7 +35,7 @@ public class AccountAuthTests
         var acc = core.QueryAccounts().Single(a => a.AccountId == "alice");
         Assert.True(acc.HasPassword);
         Assert.Equal("9999", acc.BrokerId);   // 经纪商记为元数据
-        Assert.Equal(SimHarness.InitialBalance, acc.Balance, 6);
+        Assert.Equal(0, acc.Balance, 6);   // 比特币模型（2026-10-08）：首登开户零余额——水龙头默认关，资金只能从卖币进来
     }
 
     [Fact]

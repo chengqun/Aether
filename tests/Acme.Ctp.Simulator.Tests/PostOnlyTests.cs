@@ -16,7 +16,7 @@ public class PostOnlyTests
     private static async Task<SimTradingCore> NewCoreAsync()
     {
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument } },
+            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument }, InitialBalance = 1_000_000 },
             new SimClock(() => SimHarness.TradingNow));
         await core.InitializeAsync();
         core.InsertOrder("maker", SimHarness.Limit(CtpDirection.Buy, 30, Bid, instrument: Instrument));

@@ -139,7 +139,9 @@ public class RoutingSessionTests
         var options = SimOptions.FromEnvironment(null);
 
         Assert.Null(options.DatabasePath);
-        Assert.Equal(1_000_000, options.InitialBalance, 6);
+        Assert.Equal(0, options.InitialBalance, 6);   // 比特币模型（2026-10-08）：水龙头默认关——资金只能从卖币进来
+        Environment.SetEnvironmentVariable("AETHER_CTP_SIM_BALANCE", "500000");
+        Assert.Equal(500_000, SimOptions.FromEnvironment(null).InitialBalance, 6);   // 显式开闸（纯期货开发沙盒）
         Assert.Null(options.ListedInstruments);   // 上市表空 ⇒ 核心 InitializeAsync 回落默认 zx001
     }
 

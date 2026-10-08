@@ -26,6 +26,14 @@ public class LayeringRulesTests
         ("Acme.Trading.AI", "Acme.Trading.Runtime.Domain"),
     };
 
+    /// <summary>ai/ 适配器 → src 平台库白名单（CLAUDE.md ai/ 节）：链上钱包工具引链引擎——
+    /// ledger 是 src 平台资产（「AI agent 经济」的资产层）非 business 上下文，工具形状与其余 tool adapter 一致
+    /// （仅注册工具 + Aether.AI.Hosting；链引擎纯库零 ProjectReference，方向单向不产生环）。</summary>
+    private static readonly (string Project, string Target)[] AdapterToSrcWhitelist =
+    {
+        ("Acme.Ledger.AI", "Aether.Ledger"),
+    };
+
     /// <summary>跨上下文「协议适配桥」白名单（CLAUDE.md DDD layering rules 节）：前置（CtpFront）→ 交易所
     /// RPC 客户端契约项目（CtpExchange 的 Sim——SimRpcClient/SimWire，Tier=Other 但只引 Ctp.Domain 的纯 wire 层）。
     /// 2026-10-05 进程分离后的合法引用形态：前置经 SimRpcClient 连交易所（不再直调 Simulator 核心——旧
@@ -226,8 +234,9 @@ public class LayeringRulesTests
                 switch (t.Layer)
                 {
                     case "src":
-                        if (!t.Name.StartsWith("Aether.AI.", StringComparison.Ordinal))
-                            violations.Add($"{p.RelativePath} → {r}（src 侧只允许引 Aether.AI.*）");
+                        if (!t.Name.StartsWith("Aether.AI.", StringComparison.Ordinal)
+                            && !AdapterToSrcWhitelist.Any(w => w.Project == p.Name && w.Target == t.Name))
+                            violations.Add($"{p.RelativePath} → {r}（src 侧只允许引 Aether.AI.*；例外见 AdapterToSrcWhitelist。若确属新例外：白名单+CLAUDE.md 两处同步改）");
                         break;
                     case "business":
                         if (t.Tier != "Application" &&

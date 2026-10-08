@@ -10,6 +10,8 @@ internal sealed class LedgerNodeLoopback : IDisposable
     private readonly string? _producerSeed;
 
     public LedgerClient Client { get; }
+    /// <summary>实际监听端口（临时端口 0 = 内核分配——LedgerWalletToolTests 把它写进工具的节点地址 env）。</summary>
+    public int Port { get; private init; }
     public string ChainFile => _chainFile;
     public LedgerGenesis Genesis => LedgerChainFile.Read(_chainFile).Genesis;
 
@@ -36,7 +38,8 @@ internal sealed class LedgerNodeLoopback : IDisposable
         var producerSeed = ExtractSeed(log, "producer");
         return new LedgerNodeLoopback(node, new LedgerClient("127.0.0.1", port), chainFile, producerSeed)
         {
-            TreasurySeed = treasurySeed
+            TreasurySeed = treasurySeed,
+            Port = port,
         };
     }
 

@@ -5,6 +5,8 @@
     <!-- LedgerSpotLink（批 4 接线类）住在交易所宿主 exe 里（composition root——两侧领域零互引），
          集成测试直接引 exe 程序集（SDK 式工程支持引 Exe）：真链回环 + 真核心 + 真接线一栈打穿。 -->
     <ProjectReference Include="..\..\apps\CtpSim\Acme.Ctp.Sim.Host\Acme.Ctp.Sim.Host.csproj" />
+    <!-- agent 链上钱包工具（批 4 缺口 2026-10-08）：LedgerWalletToolTests 直测工具类（同 LedgerNodeLoopback 夹具） -->
+    <ProjectReference Include="..\..\ai\Ledger\Acme.Ledger.AI\Acme.Ledger.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -20,7 +20,7 @@ public class PersistenceTests
 
     /// <summary>落盘到指定文件 + ag2610 上架 + maker 双边挂单（撮合价可预期）。</summary>
     private static SimOptions OptionsFor(string dbPath)
-        => new() { DatabasePath = dbPath, ListedInstruments = new[] { SimHarness.Instrument } };
+        => new() { DatabasePath = dbPath, ListedInstruments = new[] { SimHarness.Instrument }, InitialBalance = SimHarness.InitialBalance };
 
     private static async Task<SimTradingCore> OpenCoreAsync(string dbPath)
     {

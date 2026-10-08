@@ -1,0 +1,81 @@
+name: Deploy Ledger Chain
+
+# 虚拟币链部署（2026-10-08 服务器启用）：AetherLedgerNode 服务 + 钱包 CLI + 独立验证器三件套。
+# 链 = 资产层（独立于 CTP 仿真交易所存活——两部署互不依赖，可各自重部署）。
+# 服务器一次性准备 = scripts/ledger-setup-server.ps1（服务 + env 注册表；17805 只绑回环 ⇒ 无防火墙规则）。
+# 与 CTP 仿真栈共用同一台服务器与 SSH Secrets（CTPSIM_SSH_*——同 key 同 host；concurrency 独立成组
+# 与 ctpsim 部署可并行——链重启不碰交易所部署目录，交易所桥轮询自动重连）。
+# 节点重启语义：链文件逐块落盘 + 重放恢复；链数据在 C:\Aether\ledger-data（部署目录之外，/MIR 不动）。
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/Aether.Ledger/**'            # 链引擎（LedgerNode/桥/钱包 CLI/验证器共用）
+      - 'apps/LedgerNode/**'
+      - 'apps/LedgerWallet/**'
+      - 'apps/LedgerVerify/**'
+      - 'Directory.Packages.props'
+      - 'scripts/ledger-*.ps1'
+      - '.github/workflows/deploy-ledger.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ledger-deploy     # SSH 部署有状态（停服务/换文件），同组不许交错；与 ctpsim-deploy 互不阻塞
+  cancel-in-progress: false
+
+env:
+  # 服务器上的部署中转目录——与 scripts/ledger-remote-deploy.ps1 的 $StagingDir 默认值同值常量，改一处须同步另一处
+  LEDGER_STAGING: 'C:/Aether/ledger-tmp'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4   # 无需 submodules：链三件套依赖闭包全在仓内（零 externals）
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Publish (node + wallet + verify, self-contained win-x64)
+      run: |
+        dotnet publish apps/LedgerNode -c Release --self-contained true --runtime win-x64 -o ./publish/node
+        dotnet publish apps/LedgerWallet/Aether.Ledger.Wallet -c Release --self-contained true --runtime win-x64 -o ./publish/wallet
+        dotnet publish apps/LedgerVerify/Aether.Ledger.Verify -c Release --self-contained true --runtime win-x64 -o ./publish/verify
+
+    - name: Bundle (VERSION stamp + tar)
+      run: |
+        git rev-parse --short HEAD > publish/node/VERSION
+        cp publish/node/VERSION publish/wallet/VERSION
+        cp publish/node/VERSION publish/verify/VERSION
+        tar -czf ledger.tar.gz -C publish .
+
+    - name: Setup SSH key
+      env:
+        SSH_KEY: ${{ secrets.CTPSIM_SSH_KEY }}   # 与 ctpsim 共用同一台服务器的同一把钥匙
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/ledger_key
+        chmod 600 ~/.ssh/ledger_key
+
+    - name: Upload (tar + deploy script -> staging)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        scp -i ~/.ssh/ledger_key -o StrictHostKeyChecking=accept-new -P "${SSH_PORT:-22}" \
+          ledger.tar.gz scripts/ledger-remote-deploy.ps1 "${SSH_USER}@${SSH_HOST}:${LEDGER_STAGING}/"
+
+    - name: Deploy (stop -> swap three dirs -> start -> RPC probe)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        ssh -i ~/.ssh/ledger_key -o StrictHostKeyChecking=accept-new -p "${SSH_PORT:-22}" \
+          "${SSH_USER}@${SSH_HOST}" \
+          "powershell -NoProfile -ExecutionPolicy Bypass -File ${LEDGER_STAGING}/ledger-remote-deploy.ps1"
+        # Windows OpenSSH 默认 shell 是 cmd.exe——显式起 powershell 跑脚本；唯一远程命令，零嵌套引号

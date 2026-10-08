@@ -24,6 +24,9 @@
   <Folder Name="/ai/DataQuery/">
     <Project Path="ai/DataQuery/Acme.DataQuery.AI/Acme.DataQuery.AI.csproj" />
   </Folder>
+  <Folder Name="/ai/Ledger/">
+    <Project Path="ai/Ledger/Acme.Ledger.AI/Acme.Ledger.AI.csproj" />
+  </Folder>
   <Folder Name="/ai/Agents/">
     <Project Path="ai/Agents/Acme.Agents.AI/Acme.Agents.AI.csproj" />
   </Folder>
@@ -197,6 +200,7 @@
   <Folder Name="/apps/LedgerVerify/">
     <Project Path="apps/LedgerVerify/Aether.Ledger.Verify.csproj" />
     <Project Path="apps/LedgerNode/Aether.Ledger.Node.csproj" />
+    <Project Path="apps/LedgerWallet/Aether.Ledger.Wallet/Aether.Ledger.Wallet.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Acme.Ctp.AI.Tests/Acme.Ctp.AI.Tests.csproj" />

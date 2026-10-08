@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 链上钱包 AI 工具（批 4 缺口，2026-10-08）：agent 持币转账——「AI agent 经济」的最后一块。
+       适配器约定同 ai/DataQuery：仅注册工具，链节点地址/钱包种子文件由宿主接线（环境变量 + 种子文件路径）。
+       引 src/Aether.Ledger（纯库——ai/ 引 src 与引 Aether.AI.Hosting 同为合法方向，无层化违规）。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Aether.AI.Hosting\Aether.AI.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\src\Aether.Ledger\Aether.Ledger.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

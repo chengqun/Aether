@@ -14,7 +14,7 @@ public class SpotBridgeAccountingTests
     private static async Task<SimTradingCore> NewCoreAsync(string? dbPath = null)
     {
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = dbPath, ListedInstruments = new[] { Instrument } },
+            new SimOptions { DatabasePath = dbPath, ListedInstruments = new[] { Instrument }, InitialBalance = 1_000_000 },
             new SimClock(() => SimHarness.TradingNow));
         await core.InitializeAsync();
         return core;

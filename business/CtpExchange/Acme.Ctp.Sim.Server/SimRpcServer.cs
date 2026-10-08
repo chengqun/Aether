@@ -7,6 +7,14 @@ using Acme.Ctp.Simulator;
 namespace Acme.Ctp.Sim.Server;
 
 /// <summary>
+/// 提币处理器（批 4 接线）：host 侧 glue 注入——桥（Aether.Ledger 的 LedgerBridge）实现在交易所宿主。
+/// <b>本项目（business/Sim.Server）不引 Aether.Ledger</b>（层化——链只进 host），契约用原语：
+/// 入参 = 绑定账户 / 目标地址 hex / 原子数；出参 = 链上交易哈希；业务失败抛
+/// <see cref="Acme.Ctp.Domain.CtpBusinessException"/>（ErrorId 90019 透传到 wire err——SimConnection catch 统一重建）。
+/// </summary>
+public delegate Task<string> SimWithdrawHandler(string accountId, string toAddressHex, ulong amountAtoms);
+
+/// <summary>
 /// 仿真柜台 RPC 服务端：host 内**单个** <see cref="SimTradingCore"/> 服务所有连接，按 accountId 路由推送。
 /// <para>
 /// <b>路由规则</b>：订单/成交回报 → 该账户的连接（广播给全部同账户连接——见「一账户一客户端」已知限制）；
@@ -31,6 +39,7 @@ public sealed class SimRpcServer : IDisposable
     private readonly SimTradingCore _core;
     private readonly string _host;
     private readonly int _port;
+    private readonly SimWithdrawHandler? _withdrawHandler;
     private readonly List<SimConnection> _connections = new();
     private readonly object _registryLock = new();
 
@@ -39,11 +48,12 @@ public sealed class SimRpcServer : IDisposable
     private Task? _acceptLoop;
     private bool _disposed;
 
-    public SimRpcServer(SimTradingCore core, string host, int port)
+    public SimRpcServer(SimTradingCore core, string host, int port, SimWithdrawHandler? withdrawHandler = null)
     {
         _core = core;
         _host = host;
         _port = port;
+        _withdrawHandler = withdrawHandler;
 
         _core.OrderChanged += OnOrderChanged;
         _core.TradeFilled += OnTradeFilled;
@@ -52,6 +62,9 @@ public sealed class SimRpcServer : IDisposable
 
     /// <summary>实际监听端点（<c>port=0</c> 时为内核分配的临时端口，测试用）。</summary>
     public IPEndPoint? LocalEndpoint { get; private set; }
+
+    /// <summary>提币处理器（host 注入的桥实现；null = 本部署未接链——withdraw op 报 90019）。internal：SimConnection 分发用。</summary>
+    internal SimWithdrawHandler? WithdrawHandler => _withdrawHandler;
 
     /// <summary>开始监听。幂等。</summary>
     public void Start()

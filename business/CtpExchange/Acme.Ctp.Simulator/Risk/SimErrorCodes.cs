@@ -43,6 +43,8 @@ public static class SimErrorCodes
     public const int BadCredentials = 90017;
     /// <summary>post-only 限价单插入时会吃单（对手簿在限价内有他人挂单）⇒ 整单拒收（2026-10-05 BTC 对标）。</summary>
     public const int PostOnlyWouldCross = 90018;
+    /// <summary>提币失败/不可用：链桥未配置（custody seed 未设）、venue 现货持仓不足、或链节点拒绝——消息透传具体原因。</summary>
+    public const int WithdrawalFailed = 90019;
 }
 
 /// <summary>风控判定结果。</summary>

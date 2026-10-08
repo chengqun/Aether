@@ -44,8 +44,9 @@ internal static class SimHarness
     /// <summary>maker 双边挂单的每侧手数（30×2 手 × 单手保证金 ≈ 75.6 万 < 初始 100 万——双边同时冻结须留足余量）。</summary>
     public const int MakerVolume = 30;
 
-    /// <summary>默认参数：不落盘 + ag2610 上架（上市闸门恒生效——测试合约必须在上市表内）。</summary>
-    public static SimOptions Options() => new() { DatabasePath = null, ListedInstruments = new[] { Instrument } };
+    /// <summary>默认参数：不落盘 + ag2610 上架（上市闸门恒生效——测试合约必须在上市表内）+
+    /// 显式沙盒水龙头 1e6（平台默认已改 0——比特币模型；期货沙盒语义留在测试侧显式声明）。</summary>
+    public static SimOptions Options() => new() { DatabasePath = null, ListedInstruments = new[] { Instrument }, InitialBalance = InitialBalance };
 
     public static async Task<SimTradingCore> NewCoreAsync(
         SimOptions? options = null,

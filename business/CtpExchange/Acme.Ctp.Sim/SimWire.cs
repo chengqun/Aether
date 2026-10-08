@@ -58,6 +58,9 @@ public static class SimOps
     public const string CancelOrder = "cancelOrder";
     public const string Subscribe = "subscribe";
     public const string Unsubscribe = "unsubscribe";
+    /// <summary>提币（批 4 接线，2026-10-08）：须 login 绑定账户——烧毁 venue 现货持仓后 custody 签名链上出金。
+    /// 客户端操作面 = 钱包 CLI（apps/LedgerWallet 的 withdraw 命令）；CTP 线协议无法承载新 op（模板 verbatim 回放）。</summary>
+    public const string Withdraw = "withdraw";
 }
 
 /// <summary>推送事件名（推送帧的 ev 字段）。</summary>
@@ -144,6 +147,12 @@ public sealed record SubscribeArg(IReadOnlyList<string> Symbols);
 
 /// <summary>行情快照查询参数（null/空 = 只要时钟）。</summary>
 public sealed record QuoteArg(IReadOnlyList<string>? Symbols);
+
+/// <summary>提币参数：<c>To</c> = 目标链上地址 hex（40 字符）；<c>AmountAtoms</c> = 原子数（整手校验在 venue 侧）。</summary>
+public sealed record WithdrawArg(string To, ulong AmountAtoms);
+
+/// <summary>提币应答：链上交易哈希（提交进内存池即返回——出块由节点循环异步完成）。</summary>
+public sealed record WithdrawResult(string TxHash);
 
 /// <summary>单合约当前盘口快照（簿顶 bid/ask + 最新成交价——镜像 Simulator 的 SimQuote，但住 wire 层不泄漏核心类型）。</summary>
 public sealed record MarketQuote(string InstrumentId, double BidPrice, double AskPrice, double LastPrice);

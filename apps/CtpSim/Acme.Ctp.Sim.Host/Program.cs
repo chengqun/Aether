@@ -1,3 +1,4 @@
+using Acme.Ctp.Domain;
 using Acme.Ctp.Sim.Server;
 using Acme.Ctp.Simulator;
 using Aether.Ledger;
@@ -40,12 +41,12 @@ builder.Services.AddWindowsService();   // 服务器部署形态：SCM 启动 �
 
 var opts = SimHostOptions.FromEnvironment();
 var core = new SimTradingCore(opts.Core);
-var server = new SimRpcServer(core, opts.Host, opts.Port);
 
 // 批 3 交易所桥 + 批 4 现货接线：custody 充提币（opt-in——未设 env = 不启动，交易所照常跑）。
 // LedgerSpotLink = 「充币 → 铸造现货持仓」的最后一焊（对账「链 IOU ↔ DB 铸造台账」+ 提币烧持仓钩子）。
 LedgerBridge? bridge = null;
 LedgerSpotLink? spotLink = null;
+SimWithdrawHandler? withdrawHandler = null;
 var custodySeed = Environment.GetEnvironmentVariable("AETHER_LEDGER_CUSTODY_SEED");
 if (!string.IsNullOrWhiteSpace(custodySeed))
 {
@@ -59,8 +60,12 @@ if (!string.IsNullOrWhiteSpace(custodySeed))
     spotLink = new LedgerSpotLink(core, bridge, nodeClient,
         Environment.GetEnvironmentVariable("AETHER_LEDGER_SPOT_INSTRUMENT") ?? "ax001");
     bridge.WithdrawHook = spotLink;   // 提币闸门 = venue 现货持仓（签名前烧毁——批 4 接线）
+    // 提币操作面（wire op `withdraw`）：桥 → SimWithdrawHandler 契约（LedgerWithdrawGlue 共享映射；
+    // 未接桥 = handler null → op 侧诚实报 90019）
+    withdrawHandler = LedgerWithdrawGlue.Wrap(bridge);
 }
 
+var server = new SimRpcServer(core, opts.Host, opts.Port, withdrawHandler);   // wire op `withdraw`（提币操作面）
 builder.Services.AddHostedService(_ => new ExchangeHostedService(core, server, opts, bridge, spotLink));
 await builder.Build().RunAsync();
 

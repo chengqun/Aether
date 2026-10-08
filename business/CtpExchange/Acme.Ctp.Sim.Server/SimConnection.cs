@@ -249,6 +249,35 @@ internal sealed class SimConnection
                     lock (_stateLock) Subscriptions.Clear();
                     break;
 
+                case SimOps.Withdraw:
+                {
+                    // 提币（批 4 接线，2026-10-08）：登录即鉴权（先认证后绑定——凭据失败连接不绑账户）；
+                    // 桥未配置诚实拒绝（90019）。await 期间推送进 capture 缓冲（先应答后推送契约不变）。
+                    var arg = Arg<WithdrawArg>(req);
+                    if (arg is null) { err = Missing("withdraw"); break; }
+                    if (string.IsNullOrWhiteSpace(arg.To) || arg.AmountAtoms == 0)
+                    {
+                        err = new SimWireError(SimErrorCodes.InvalidParameter, "withdraw 参数非法：To 与 AmountAtoms 必填（To 为 40 位 hex 地址）。");
+                        break;
+                    }
+                    string? bound;
+                    lock (_stateLock) bound = AccountId;
+                    if (bound is null)
+                    {
+                        err = new SimWireError(SimErrorCodes.NotLoggedIn, "未登录——提币须先 login 绑定账户（绑定账户即出金账户）。");
+                        break;
+                    }
+                    var handler = _server.WithdrawHandler;
+                    if (handler is null)
+                    {
+                        err = new SimWireError(SimErrorCodes.WithdrawalFailed, "提币不可用：本部署未接链桥（交易所未设 AETHER_LEDGER_CUSTODY_SEED）。");
+                        break;
+                    }
+                    var txHash = await handler(bound, arg.To, arg.AmountAtoms).ConfigureAwait(false);
+                    result = new WithdrawResult(txHash);
+                    break;
+                }
+
                 default:
                     err = new SimWireError(SimWireErrors.Protocol, $"未知操作：{req.Op}");
                     break;

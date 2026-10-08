@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 链上钱包 CLI（批 4 缺口，2026-10-08）：发币/查余额/转账/充值/提币不用写代码。
+       定位 = 运维与用户操作面：国库分发、新人领币、交易所充值提币。
+       withdraw 走交易所 JSON-RPC（17800，须登录）；其余直连链节点（17805）。
+       远程服务器：交易所只绑回环——SSH 隧道 `ssh -L 17800:127.0.0.1:17800` 后本机可用。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Aether.Ledger\Aether.Ledger.csproj" />
+    <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aether.Ledger.Wallet</RootNamespace>
+  </PropertyGroup>
+
+</Project>

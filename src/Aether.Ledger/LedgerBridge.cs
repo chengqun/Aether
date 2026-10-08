@@ -98,12 +98,12 @@ public sealed class LedgerBridge : IDisposable
     }
 
     /// <summary>
-    /// 提币：检查余额 → 借记 → custody 签名链上转账 → 提交节点。
+    /// 提币：检查余额 → 借记 → custody 签名链上转账 → 提交节点。返回链上交易哈希。
     /// memo = accountKey（链上可推导——重启重扫自洽）。余额不足 ⇒ <see cref="LedgerClientException"/>。
     /// <para>闸门二态（<see cref="WithdrawHook"/>）：设钩子 = venue 侧现货持仓闸门（先烧毁——「买入后提币」
     /// IOU 可为 0 照提；借记 clamp 到 0 不为负，与重扫 debit 同语义）；未设 = 纯 IOU 闸门（批 3 语义）。</para>
     /// </summary>
-    public async Task WithdrawAsync(string accountKey, LedgerAddress to, ulong amountAtoms, CancellationToken ct = default)
+    public async Task<string> WithdrawAsync(string accountKey, LedgerAddress to, ulong amountAtoms, CancellationToken ct = default)
     {
         if (!IsReady) throw new InvalidOperationException("桥未初始化（须先 StartAsync）。");
         if (amountAtoms == 0) throw new ArgumentException("提币量必须 > 0。");
@@ -134,6 +134,7 @@ public sealed class LedgerBridge : IDisposable
             await GetChainIdAsync(ct), _custody, to, amountAtoms, _custodyNonce, accountKey);
         await _client.SubmitTxAsync(tx, ct);
         _log($"提币：账户 {accountKey} → {to.Hex[..12]}… {LedgerSupply.Format(amountAtoms)}（tx {tx.Hash[..12]}… nonce={_custodyNonce}）");
+        return tx.Hash;
     }
 
     /// <summary>充币的便捷入口（agent 钱包签名 → 提交节点；桥只负责侦听——本方法不归账，归账由 poll 完成）。

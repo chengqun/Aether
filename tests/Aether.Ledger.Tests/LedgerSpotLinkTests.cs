@@ -30,7 +30,7 @@ public class LedgerSpotLinkTests
     {
         var sim = await BridgeLoopback.StartAsync($"spot-{label}");
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = null, ListedInstruments = board ?? new[] { Instrument } },
+            new SimOptions { DatabasePath = null, ListedInstruments = board ?? new[] { Instrument }, InitialBalance = 1_000_000 },   // buyer 用现金买币
             new SimClock(() => SpotNow));
         await core.InitializeAsync();
         var link = new LedgerSpotLink(core, sim.Bridge, sim.Client, Instrument,

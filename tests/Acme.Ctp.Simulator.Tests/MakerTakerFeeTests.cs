@@ -17,7 +17,7 @@ public class MakerTakerFeeTests
     private static async Task<SimTradingCore> NewCoreAsync()
     {
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument } },
+            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument }, InitialBalance = 1_000_000 },
             new SimClock(() => SimHarness.TradingNow));
         await core.InitializeAsync();
         core.InsertOrder("maker", SimHarness.Limit(CtpDirection.Buy, 30, Bid, instrument: Instrument));
@@ -90,7 +90,7 @@ public class MakerTakerFeeTests
     public async Task 差异化费率落盘_重启续用()
     {
         var db = Path.Combine(Path.GetTempPath(), $"ctpsim-mt-{Guid.NewGuid():N}.db");
-        var opts = new SimOptions { DatabasePath = db, ListedInstruments = new[] { Instrument } };
+        var opts = new SimOptions { DatabasePath = db, ListedInstruments = new[] { Instrument }, InitialBalance = 1_000_000 };
         try
         {
             using (var core = new SimTradingCore(opts, new SimClock(() => SimHarness.TradingNow)))

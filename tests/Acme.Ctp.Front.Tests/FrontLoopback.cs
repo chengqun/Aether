@@ -81,6 +81,7 @@ public sealed class FrontLoopback : IDisposable
             DatabasePath = null,    // 纯内存——绝不碰 ~/.aether/ctp-sim.db（用户真实账本）
             // 上市表双品种：查合约多行钉子（wrapper 静默期收尾，2026-10-05——两行都应到达 SDK）；m2701 = 交易腿测试合约
             ListedInstruments = new[] { "zx001", Instrument },
+            InitialBalance = InitialBalance,   // 沙盒水龙头显式开（平台默认已改 0）
         };
         var core = new SimTradingCore(options, new SimClock(() => TradingNow));
         core.InitializeAsync().GetAwaiter().GetResult(); // xunit 无同步上下文，安全

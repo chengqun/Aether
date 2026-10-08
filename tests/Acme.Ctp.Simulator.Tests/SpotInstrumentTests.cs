@@ -16,7 +16,7 @@ public class SpotInstrumentTests
     private static async Task<SimTradingCore> NewSpotCoreAsync(int? supplyLimit = null)
     {
         var core = new SimTradingCore(
-            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument } },
+            new SimOptions { DatabasePath = null, ListedInstruments = new[] { Instrument }, InitialBalance = 1_000_000 },
             new SimClock(() => SimHarness.TradingNow));
         await core.InitializeAsync();
         if (supplyLimit is { } limit)
