@@ -63,15 +63,55 @@ if ((Get-Service -Name $NodeService).Status -ne 'Stopped') {
     Fail "停服务 $NodeService 超时（30s）——二进制未动，服务仍在跑旧版本，安全（手工排查后重跑）"
 }
 
+# 3b) 清理残留进程（2026-10-09 实测踩中：SCM 报 Stopped ≠ 进程已退出）。
+#     AddWindowsService 缺失的旧版本启动后不向 SCM 上报 → 1053 超时 → SCM 认为服务 Stopped，
+#     但进程可能仍在跑（或有人手工 .\Aether.Ledger.Node.exe 测试过）→ 它持有部署目录里的
+#     dll/exe（含 .pdb 的 user-mapped section）→ robocopy 必失败（ERROR 32 / ERROR 1224）。
+#     按名杀干净再换文件——比“重试”更根本（占用者不会自己松手）。
+function KillStrays {
+    $killed = $false
+    foreach ($pn in @('Aether.Ledger.Node', 'Aether.Ledger.Wallet', 'Aether.Ledger.Verify')) {
+        foreach ($proc in @(Get-Process -Name $pn -ErrorAction SilentlyContinue)) {
+            Info "发现残留进程 $pn (PID $($proc.Id))——终止（服务已停，锁着部署目录的二进制）"
+            try { $proc.Kill() } catch { }
+            try { $proc.WaitForExit(10000) | Out-Null } catch { }
+            $killed = $true
+        }
+    }
+    if ($killed) { Start-Sleep -Seconds 2 }
+}
+KillStrays
+
 # 4) 换文件：robocopy /MIR 三目录（退出码 0-7 都是成功，>=8 才失败）。链数据在 DataDir（部署目录之外）。
-robocopy (Join-Path $out 'node') $NodeDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
-if ($LASTEXITCODE -ge 8) { Fail "robocopy 节点失败（code $LASTEXITCODE）" }
-robocopy (Join-Path $out 'wallet') $WalletDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
-if ($LASTEXITCODE -ge 8) { Fail "robocopy 钱包 CLI 失败（code $LASTEXITCODE）——节点已更新，重跑一次部署即可恢复" }
-robocopy (Join-Path $out 'verify') $VerifyDir /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
-if ($LASTEXITCODE -ge 8) { Fail "robocopy 验证器失败（code $LASTEXITCODE）——节点已更新，重跑一次部署即可恢复" }
+#    失败（文件仍被占用 / 杀软正扫刚解包的文件）→ 3 秒后重试，三次后才判死 + 打印占用者。
+function ReportLockers([string]$dir) {
+    foreach ($p in @(Get-Process -ErrorAction SilentlyContinue)) {
+        $path = $null
+        try { $path = $p.Path } catch { }
+        if ($path -and $path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase)) {
+            Write-Host "[LEDGER-DEPLOY]   占用者：$($p.ProcessName) (PID $($p.Id)) → $path"
+        }
+    }
+}
+function CopyPart([string]$src, [string]$dst, [string]$label, [string]$failMsg) {
+    for ($i = 1; $i -le 3; $i++) {
+        robocopy $src $dst /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS
+        if ($LASTEXITCODE -lt 8) { return }
+        Info "robocopy $label 第 $i 次失败（code $LASTEXITCODE）——3 秒后重试"
+        Start-Sleep -Seconds 3
+    }
+    Write-Host "[LEDGER-DEPLOY] ── $dst / $StagingDir 下的进程 ──"
+    ReportLockers $dst
+    ReportLockers $StagingDir
+    Fail "$failMsg（code $LASTEXITCODE）"
+}
+CopyPart (Join-Path $out 'node') $NodeDir '节点' "robocopy 节点失败——$NodeDir 里的文件仍被占用：在服务器上 Get-Process Aether.Ledger.Node 看是否还有进程，杀掉后重跑部署"
+CopyPart (Join-Path $out 'wallet') $WalletDir '钱包 CLI' 'robocopy 钱包 CLI 失败——节点已更新，重跑一次部署即可恢复'
+CopyPart (Join-Path $out 'verify') $VerifyDir '验证器' 'robocopy 验证器失败——节点已更新，重跑一次部署即可恢复'
 
 # 5) 起节点（等 Running——首次启动生成新链：treasury/producer 种子打印进 $DataDir\node.log，务必抄录备份）
+#    再清一次残留：换文件期间若被拉起过旧进程，会和 SCM 新起的进程抢 17805 端口（bind 失败 → 起不来）。
+KillStrays
 try { Start-Service -Name $NodeService } catch { }
 $deadline = [DateTime]::Now.AddSeconds(60)
 while ((Get-Service -Name $NodeService).Status -ne 'Running' -and [DateTime]::Now -lt $deadline) {
