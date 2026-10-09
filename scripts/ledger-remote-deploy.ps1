@@ -75,6 +75,18 @@ function KillStrays {
             Info "发现残留进程 $pn (PID $($proc.Id))——终止（服务已停，锁着部署目录的二进制）"
             try { $proc.Kill() } catch { }
             try { $proc.WaitForExit(10000) | Out-Null } catch { }
+            $exited = $false
+            try { $exited = $proc.HasExited } catch { }
+            if (-not $exited) {
+                # .NET Kill() 对某些残留不生效（2026-10-09 两轮部署实测：上轮杀过的 PID 数小时后
+                # 仍在存活名单里）——taskkill 原生强杀兜底；失败必须喊出来，静默吞 = 下轮 robocopy 再挂
+                $tkOut = $null; $tkExit = 0
+                try { $tkOut = & taskkill /F /T /PID $proc.Id 2>&1; $tkExit = $LASTEXITCODE }
+                catch { $tkExit = -1; $tkOut = $_.Exception.Message }
+                if ($tkExit -ne 0) {
+                    Write-Host "[LEDGER-DEPLOY] ⚠ PID $($proc.Id) taskkill 也失败（exit $tkExit）：$tkOut——手动处理：taskkill /F /T /IM $pn.exe"
+                }
+            }
             $killed = $true
         }
     }
@@ -121,7 +133,7 @@ if ((Get-Service -Name $NodeService).Status -ne 'Running') {
     $log = Join-Path $DataDir 'node.log'
     if (Test-Path $log) {
         Write-Host "[LEDGER-DEPLOY] ── $log 尾部 30 行 ──"
-        Get-Content $log -Tail 30 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+        Get-Content $log -Tail 30 -Encoding UTF8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
     }
     Fail "链节点未能启动（见上方日志尾部——二进制已就位，修复后重跑部署即可恢复）"
 }
@@ -172,8 +184,9 @@ if (-not $tcpOk) {
     $log = Join-Path $DataDir 'node.log'
     if (Test-Path $log) {
         Write-Host "[LEDGER-DEPLOY] ── $log 尾部 30 行 ──"
-        Get-Content $log -Tail 30 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+        Get-Content $log -Tail 30 -Encoding UTF8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
     }
+    Info "提示：日志反复「链已加载」而无「链节点已就绪」= node.Start() 在生产者种子检查处抛出——服务 env 缺 AETHER_LEDGER_PRODUCER_SEED（重启已有链必须有它；种子在生成链时打印进 node.log；见 doc/ledger-runbook.md），节点此刻在 SCM 5s 崩溃自恢复循环里空转"
     Fail "链节点 Running 但 RPC 端口不可连（见上方 netstat/服务 env/日志——节点可能绑了非回环地址、监听失败或进程已退出）"
 }
 
