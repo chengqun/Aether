@@ -21,6 +21,10 @@ using Microsoft.Extensions.Hosting;
 // ──────────────────────────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddWindowsService();   // 服务器部署形态：SCM 启动 → ServiceLifetime（服务停止 = 优雅关停停出块+停监听）；
+                                        // 交互运行（dotnet run）仍是 console lifetime，本地行为零变。
+                                        // 2026-10-09 服务起不来（Start-Service 1053 超时）的根因 = 本文件漏了此调用
+                                        //（同交易所 host 2026-10-06 踩过的坑——纯 console host 不向 SCM 上报必超时）。
 
 var opts = LedgerNodeOptions.FromEnvironment();
 var logPath = Environment.GetEnvironmentVariable("AETHER_LEDGER_LOG") ?? opts.ChainFilePath + ".log";
