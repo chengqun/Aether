@@ -126,11 +126,73 @@ if ((Get-Service -Name $NodeService).Status -ne 'Running') {
     Fail "链节点未能启动（见上方日志尾部——二进制已就位，修复后重跑部署即可恢复）"
 }
 
-# 6) RPC 探针：钱包 CLI info（自包含 win-x64，服务器裸跑）——链就绪 + 高度可见即部署成功
-$probe = & (Join-Path $WalletDir 'Aether.Ledger.Wallet.exe') info --node 127.0.0.1:17805 2>&1
+# 6) RPC 探针：钱包 CLI info（自包含 win-x64，服务器裸跑）——链就绪 + 高度可见即部署成功。
+#    2026-10-09 实测踩中两个坑：
+#    ① PS 5.1 native stderr 陷阱（同 2026-10-06 ctpsim 脚本 Start-Service 短路坑）：
+#      $ErrorActionPreference=Stop 下钱包 CLI 往 stderr 写「目标计算机积极拒绝」直接把脚本炸成
+#      NativeCommandError 收场（exit 1、零诊断输出）。修：TCP 连通性先用纯 .NET TcpClient 测
+#      （零 native stderr），端口通了才跑钱包 CLI（再套 try/catch 兜底）。
+#    ② 探针目标不能写死 127.0.0.1：LedgerNode.Start 对 host 做 IPAddress.TryParse 成功即只绑那一个
+#      IP——服务 env 的 AETHER_LEDGER_ADDR 若被 aether-public-ports.ps1 配成绑公网 IP，节点健康
+#      但回环拒连。修：探针地址读服务 env（0.0.0.0 → 回环；env 读不出回退 127.0.0.1），
+#      绑非回环时显式警告（同机交易所桥默认连 127.0.0.1 会拒）。
+$nodeEnv = @()
+try { $nodeEnv = @((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$NodeService").Environment) } catch { }
+$nodeAddr = $null
+foreach ($kv in $nodeEnv) { if ($kv -like 'AETHER_LEDGER_ADDR=*') { $nodeAddr = $kv.Substring($kv.IndexOf('=') + 1) } }
+$probeHost = '127.0.0.1'
+$probePort = 17805
+if ($nodeAddr) {
+    $parts = $nodeAddr -split ':'
+    $probeHost = $parts[0]
+    if ($probeHost -eq '0.0.0.0') { $probeHost = '127.0.0.1' }
+    if ($parts.Count -ge 2) { [int]::TryParse($parts[-1], [ref]$probePort) | Out-Null }
+}
+function Test-Port([string]$host2, [int]$port2) {
+    try {
+        $tcp = New-Object Net.Sockets.TcpClient
+        $tcp.Connect($host2, $port2)
+        $ok = $tcp.Connected
+        $tcp.Close()
+        return $ok
+    } catch { return $false }
+}
+$tcpOk = Test-Port $probeHost $probePort
+if (-not $tcpOk) {
+    # 回环兜底：env 解析出的 host 连不上时再试 127.0.0.1（节点绑 Any 而 env 形态解析异常等边缘）
+    if (Test-Port '127.0.0.1' $probePort) { $tcpOk = $true; $probeHost = '127.0.0.1' }
+}
+if (-not $tcpOk) {
+    Write-Host "[LEDGER-DEPLOY] ── 探针失败诊断（$probeHost`:$probePort 不可连）──"
+    Get-Service -Name $NodeService | Format-Table Name,Status | Out-String | ForEach-Object { Write-Host $_.TrimEnd() }
+    Write-Host "[LEDGER-DEPLOY] 服务 env："
+    foreach ($kv in $nodeEnv) { Write-Host "    $kv" }
+    Write-Host "[LEDGER-DEPLOY] netstat（17805）："
+    netstat -ano | Select-String ':17805' | ForEach-Object { Write-Host "    $($_.Line.Trim())" }
+    $log = Join-Path $DataDir 'node.log'
+    if (Test-Path $log) {
+        Write-Host "[LEDGER-DEPLOY] ── $log 尾部 30 行 ──"
+        Get-Content $log -Tail 30 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+    }
+    Fail "链节点 Running 但 RPC 端口不可连（见上方 netstat/服务 env/日志——节点可能绑了非回环地址、监听失败或进程已退出）"
+}
+
+# 端口已通才跑钱包 CLI 语义探针（getInfo 走一圈 JSON-RPC）
+$probe = $null
+$probeExit = 0
+try {
+    $probe = & (Join-Path $WalletDir 'Aether.Ledger.Wallet.exe') info --node "$probeHost`:$probePort" 2>&1
+    $probeExit = $LASTEXITCODE
+} catch {
+    $probeExit = -1
+    $probe = "$($_.Exception.Message)（PS 5.1 native stderr——按探针失败处理）"
+}
 Write-Host "[LEDGER-DEPLOY] RPC 探针：$probe"
-if ($LASTEXITCODE -ne 0) {
-    Fail "链节点 Running 但 RPC 探针失败（钱包 CLI info 退出码 $LASTEXITCODE）——见上方输出"
+if ($probeExit -ne 0) {
+    Fail "链节点端口已通但钱包 CLI info 失败（退出码 $probeExit）——见上方输出"
+}
+if ($nodeAddr -and (($nodeAddr -split ':')[0] -notin @('127.0.0.1', '0.0.0.0', 'localhost'))) {
+    Write-Host "[LEDGER-DEPLOY] ⚠ 节点绑定 $nodeAddr（非回环/Any）——同机交易所桥默认连 127.0.0.1:17805 会被拒：交易所服务 env 须设 AETHER_LEDGER_NODE_ADDR=$nodeAddr，或把节点绑回 0.0.0.0（推荐，回环+公网都通）"
 }
 
 # 7) 汇报（显式 exit 0——robocopy 的非零退出码不能漏成本脚本退出码毒死 workflow step）
