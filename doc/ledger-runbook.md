@@ -379,6 +379,34 @@ wallet transfer --seed @treasury.seed --to <你钱包页显示的地址> --amoun
 | 种子保管 | treasury/custody = **财富**（丢了没人能找回）；producer = 出块权（可换 producer 重建链头） |
 | 重部署链 | `deploy-ledger.yml` 触发；链数据在 `C:\Aether\ledger-data`（部署目录之外，/MIR 不动） |
 
+## 9. 排障实录（2026-10-09 服务器部署三连坑——形态→根因→修法）
+
+**形态速查表**（看到什么 = 查什么）：
+
+| 日志/现象 | 根因 | 修法 |
+|---|---|---|
+| node.log 反复「链已加载」**永无**「链节点已就绪」，间隔 ~7-8s；服务 Running 转瞬即 Stopped | **producer 种子缺失/不匹配**：加载已有链必须有 env `AETHER_LEDGER_PRODUCER_SEED`（生成路径不需要——所以「新链已生成」后能就绪、重启后反而崩）。7-8s 节奏 = SCM `restart/5000` 崩溃自恢复循环 | env 补上**与磁盘链同一条命**的 producer hex（见下「对暗号」）→ Restart-Service |
+| `Start-Service` 1053 超时 | host 缺 `AddWindowsService()`（纯 console host 不向 SCM 上报） | 已修（`ecf48d9`）；重写 host Program.cs 时它是必查保留项 |
+| 部署 robocopy `ERROR 32/1224` | 残留进程锁着部署目录二进制（SCM 报 Stopped ≠ 进程已退）；`.pdb` 的 user-mapped section = 活进程签名 | 部署脚本已带 KillStrays（含 taskkill 兜底）；手动可 `taskkill /F /T /IM Aether.Ledger.Node.exe`（部分残留连管理员都拒杀——重启服务器清零，不挡 robocopy） |
+| CI 日志中文全乱码（「鏾惧凡鍔犺浇」） | PS 5.1 `Get-Content` 对无 BOM UTF-8 按 ANSI 解 | 排障命令一律加 `-Encoding UTF8`（部署脚本已修） |
+
+**坑中坑：环境种子与磁盘链「对暗号」**。日志里每条「新链已生成：创世 `XXXX…`」都带一对新种子——**只有创世哈希与当前链一致的那对是活链正主**，其余全是被删链留下的死链遗物。RPC `getInfo` 的 `genesisHash` 就是暗号：
+
+```powershell
+# 1) 拿暗号（公网直连也行）
+C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe info --node 127.0.0.1:17805
+# 2) 对上后取「最后一组」种子（生成在最后 = 磁盘链）
+Get-Content C:\Aether\ledger-data\node.log -Encoding UTF8 | Select-String '新链已生成|种子' | Select-Object -Last 3
+# 3) treasury 抄对了吗？查余额应见满额（21M 币 + 210亿 AQ）
+C:\Aether\LedgerWallet\Aether.Ledger.Wallet.exe balance --seed <treasury hex> --node 127.0.0.1:17805
+```
+
+**删链自愈（只对空链合法）**：崩溃循环中删掉链文件，下一轮 SCM 拉起会走「生成」路径（随机 producer、不需要 env）自愈就绪——这是当时的最快恢复法。**链一旦有真实余额（国库发过币/有人充值/有持仓），删除 = 销毁全部链上资产**（链文件就是账本本身，不是缓存；钱包种子不死但新链上余额归零）。空链判据：`getInfo` 高度对应的日志行「高度 N | 交易 0 笔」且心跳空块之外无任何交易。
+
+**备份纪律（「永不删链」的底气）**：链文件 append-only JSON lines——**任何时候 Copy-Item 一份即完整快照**，独立验证器可复核任何副本；恢复 = 拷回文件 + producer seed 在 env。灾备三件套 = 链文件定期副本 + treasury/producer 两枚种子离线（env 只在服务器磁盘上，不算离线）+ `LedgerVerify.exe`。producer 已随部署进服务 env（重启/重部署/重启服务器随身带）；treasury 只打印在日志里——生成时当场抄离线。
+
+**公网直连（2026-10-09 已验）**：`117.72.186.128:17805`（链）/ `117.72.186.128:17800`（交易所 JSON-RPC）/ `17801/17802`（CTP 前置）——桌面钱包页、CLI、agent 工具零隧道。绑 `0.0.0.0`（勿绑单一公网 IP——同机交易所桥默认连 127.0.0.1 会被拒）。
+
 ## 附：本地全栈（不经服务器）
 
 ```bash
