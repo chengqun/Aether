@@ -269,25 +269,30 @@ public sealed class SimTradingCore : IDisposable
     // —— 登录 / 登出 ——
 
     /// <summary>
-    /// 仿真登录（账号系统：自助开户 + 密码认证——**密码必填**）：
+    /// 仿真登录（账号系统：自助开户 + 密码认证——**密码必填**；2026-10-09 起**双密码域**）：
     /// <list type="bullet">
     /// <item><b>密码必填</b>（2026-09-28 用户拍板：不能不填——免认证路径关闭，账户从出生即受保护）：
     /// 空/空白密码 ⇒ <see cref="SimErrorCodes.BadCredentials"/>，开新户也不例外。</item>
-    /// <item><b>首次登录 = 开户</b>：密码入档（PBKDF2 哈希）。</item>
-    /// <item><b>已设密码的账户</b>：密码必须匹配——不匹配抛 <see cref="SimErrorCodes.BadCredentials"/>。</item>
-    /// <item><b>存量无密码账户</b>（升级前的库）：首次带密码登录 = 补设密码（平滑迁移——这是无密码账户唯一的存在来源）。</item>
+    /// <item><b>双密码域</b>（2026-10-09）：JSON-RPC 域（明文，<paramref name="frontDomain"/>=false——钱包页提币/参考客户端）
+    /// 与 CTP 前置域（<paramref name="frontDomain"/>=true——前置把 SDK 挑战响应的<b>密文 hex</b> 当密码串传入）。
+    /// 两域哈希各存一列、<b>各自</b>「首登设密 / 未设补设 / 已设校验」——同一账户两扇门都通
+    /// （此前单列互斥：经前置开的户，钱包页提币发明文永远 90017——闭环断在最后一焊）。
+    /// 一域的失败计数照常累计防爆破（计数按账户共享，不按域隔离）。</item>
+    /// <item><b>首次登录 = 开户</b>：该域密码入档（PBKDF2 哈希）；另一域留空，其首次登录补设。</item>
+    /// <item><b>该域已设密码</b>：密码必须匹配——不匹配抛 <see cref="SimErrorCodes.BadCredentials"/>。</item>
+    /// <item><b>该域未设密码</b>（含存量无密码账户）：首次带密码登录 = 补设（平滑迁移）。</item>
     /// <item><b>防爆破</b>：连续 <see cref="SimOptions.LoginMaxFailures"/> 次失败锁定
     /// <see cref="SimOptions.LoginLockoutSeconds"/> 秒（按 <see cref="SimClock"/> 计——可测），锁定期内登录即拒。</item>
     /// <item><paramref name="brokerId"/> 记为账户元数据（身份键仍是 userId——单一交易所内经纪商是形式字段）。</item>
     /// </list>
     /// 成功返回可被客户端 <c>int.Parse</c> 的 <c>MaxOrderRef</c>。
     /// </summary>
-    public CtpLoginResult Login(string brokerId, string userId, string? password = null)
+    public CtpLoginResult Login(string brokerId, string userId, string? password = null, bool frontDomain = false)
     {
         var accountId = AccountIdOf(userId);
         lock (_gate)
         {
-            // 防爆破锁定检查（先于任何账户操作）
+            // 防爆破锁定检查（先于任何账户操作；计数按账户共享——两域失败都会累计）
             if (_loginFailures.TryGetValue(accountId, out var f) && _clock.Now < f.LockedUntil)
             {
                 var remain = (int)Math.Ceiling((f.LockedUntil - _clock.Now).TotalSeconds);
@@ -301,14 +306,15 @@ public sealed class SimTradingCore : IDisposable
 
             _sessionId = _sessionId == 0 ? 1 : _sessionId;
             var state = Find(accountId);
+            var domainHash = frontDomain ? state?.Account.FrontPasswordHash : state?.Account.PasswordHash;
             if (state is null)
             {
-                state = GetOrCreate(accountId);   // 首次登录 = 开户
-                state.Account.PasswordHash = HashPassword(password);
+                state = GetOrCreate(accountId);   // 首次登录 = 开户（该域设密；另一域留空待补设）
+                SetDomainHash(state.Account, frontDomain, HashPassword(password));
             }
-            else if (!string.IsNullOrEmpty(state.Account.PasswordHash))
+            else if (!string.IsNullOrEmpty(domainHash))
             {
-                if (!VerifyPassword(password, state.Account.PasswordHash))
+                if (!VerifyPassword(password!, domainHash))
                 {
                     RegisterLoginFailure(accountId);
                     throw new CtpBusinessException(SimErrorCodes.BadCredentials,
@@ -317,7 +323,7 @@ public sealed class SimTradingCore : IDisposable
             }
             else
             {
-                state.Account.PasswordHash = HashPassword(password);   // 存量无密码账户：带密首登补设（迁移路径）
+                SetDomainHash(state.Account, frontDomain, HashPassword(password));   // 该域未设：带密首登补设（迁移路径）
             }
 
             _loginFailures.Remove(accountId);   // 成功 ⇒ 清失败计数
@@ -347,6 +353,13 @@ public sealed class SimTradingCore : IDisposable
         {
             _loginFailures[accountId] = (failures, DateTime.MinValue);
         }
+    }
+
+    /// <summary>按域写哈希列（front 域 → <see cref="SimAccount.FrontPasswordHash"/>，JSON-RPC 域 → <see cref="SimAccount.PasswordHash"/>）。</summary>
+    private static void SetDomainHash(SimAccount account, bool frontDomain, string hash)
+    {
+        if (frontDomain) account.FrontPasswordHash = hash;
+        else account.PasswordHash = hash;
     }
 
     /// <summary>密码哈希（PBKDF2-SHA256，自描述格式 <c>pbkdf2$迭代$盐hex$哈希hex</c>——单列存储免拆 schema）。</summary>
@@ -386,7 +399,7 @@ public sealed class SimTradingCore : IDisposable
                 .Select(s => new SimAccountSummary(
                     s.AccountId,
                     s.Account.BrokerId,
-                    s.Account.PasswordHash is not null,
+                    s.Account.PasswordHash is not null || s.Account.FrontPasswordHash is not null,   // 任一域已设密（2026-10-09 双域）
                     s.Account.Balance,
                     s.Account.Available,
                     s.Positions.Books.Sum(b => b.Long.Total),

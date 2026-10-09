@@ -45,8 +45,13 @@ public sealed class SimAccount
 
     public string AccountId { get; }
 
-    /// <summary>登录密码哈希（<c>pbkdf2$迭代$盐$哈希</c>；null = 未设——免认证，dev/测试路径）。</summary>
+    /// <summary>登录密码哈希——JSON-RPC 域（明文密码的 PBKDF2；<c>pbkdf2$迭代$盐$哈希</c>；null = 该域未设，首登补设）。</summary>
     public string? PasswordHash { get; internal set; }
+
+    /// <summary>登录密码哈希——CTP 前置域（前置登录的密码经 SDK 挑战响应变密文，本列存密文 hex 的 PBKDF2；
+    /// null = 该域未设，前置首登补设）。2026-10-09 双密码域：两域各自独立设密/校验，同一账户两扇门都通
+    /// （此前单列互斥——经前置开的户提币走 JSON-RPC 永远 90017，闭环断在最后一焊）。</summary>
+    public string? FrontPasswordHash { get; internal set; }
 
     /// <summary>最近一次登录的经纪商代码（元数据——账户身份键仍是 <see cref="AccountId"/>，单一交易所内经纪商是形式字段）。</summary>
     public string? BrokerId { get; internal set; }
@@ -181,7 +186,7 @@ public sealed class SimAccount
     /// <summary>落盘快照。</summary>
     public Storage.SimAccountSnapshot ToSnapshot() => new(
         AccountId, StaticBalance, CurrMargin, FrozenMargin, FrozenCash, Commission, CloseProfit, PositionProfit,
-        PasswordHash, BrokerId);
+        PasswordHash, BrokerId, FrontPasswordHash);
 
     /// <summary>从快照恢复。</summary>
     public static SimAccount FromSnapshot(Storage.SimAccountSnapshot s) => new(s.AccountId, s.StaticBalance)
@@ -194,6 +199,7 @@ public sealed class SimAccount
         PositionProfit = s.PositionProfit,
         PasswordHash = s.PasswordHash,
         BrokerId = s.BrokerId,
+        FrontPasswordHash = s.FrontPasswordHash,
     };
 
     /// <summary>金额四舍五入到分（浮点累加误差不泄漏到 UI/落盘）。</summary>

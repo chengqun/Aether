@@ -135,9 +135,11 @@ public sealed record SimHello(int ProtocolVersion);
 /// <summary>错误应答载荷（服务端 catch 到的 <see cref="CtpBusinessException"/> 或传输错误）。</summary>
 public sealed record SimWireError(int Code, string Msg);
 
-/// <summary>登录参数。刻意只带 brokerId/userId——仿真核心不校验凭据，密码不出客户端进程。</summary>
 /// <summary>登录参数（字段对齐真实 CTP 客户端登录的核心三件：经纪商/投资者/密码——AppId/AuthCode 仍留客户端侧不消费）。</summary>
-public sealed record LoginArg(string BrokerId, string UserId, string? Password = null);
+/// <para><b>密码域</b>（2026-10-09 双域）：缺省（false）= JSON-RPC 明文域（钱包页提币/参考客户端）；
+/// <c>FrontDomain</c>=true = CTP 前置域——前置把 SDK 挑战响应的<b>密文 hex</b> 当密码串传入，
+/// 核心按域独立设密/校验（同一账户两扇门都通）。旧客户端不带该字段 = 明文域，行为不变。</para>
+public sealed record LoginArg(string BrokerId, string UserId, string? Password = null, bool FrontDomain = false);
 
 /// <summary>查询参数（可选按合约过滤）。</summary>
 public sealed record InstrumentArg(string? InstrumentId);

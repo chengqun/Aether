@@ -26,7 +26,8 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             close_profit     REAL NOT NULL,
             position_profit  REAL NOT NULL,
             password_hash    TEXT NOT NULL DEFAULT '',
-            broker_id        TEXT NOT NULL DEFAULT ''
+            broker_id        TEXT NOT NULL DEFAULT '',
+            front_password_hash TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS sim_position (
             account_id    TEXT NOT NULL,
@@ -128,11 +129,13 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
     /// <summary>存量库幂等补列（2026-09-28 账号系统：密码哈希 + 经纪商元数据；
     /// 2026-10-05 BTC 对标：sim_instrument 的 maker/taker 差异化费率——NULL = 回退单一费率；
     /// 2026-10-07 批 4 接线：sim_instrument 的 is_spot/supply_limit_lots——**is_spot 不落盘则重启后
-    /// 现货仪器退化为期货**（Credit/Burn 全被「非现货」拒），铸造台账表由 CreateSql 幂等建）。</summary>
+    /// 现货仪器退化为期货**（Credit/Burn 全被「非现货」拒），铸造台账表由 CreateSql 幂等建；
+    /// 2026-10-09 双密码域：sim_account 的 front_password_hash——CTP 前置域哈希，两域并存各自补设）。</summary>
     protected override async Task MigrateAsync(SqliteConnection connection, CancellationToken ct)
     {
         await SqliteMigrations.AddColumnAsync(connection, "sim_account", "password_hash", "TEXT NOT NULL DEFAULT ''", ct);
         await SqliteMigrations.AddColumnAsync(connection, "sim_account", "broker_id", "TEXT NOT NULL DEFAULT ''", ct);
+        await SqliteMigrations.AddColumnAsync(connection, "sim_account", "front_password_hash", "TEXT NOT NULL DEFAULT ''", ct);
         await SqliteMigrations.AddColumnAsync(connection, "sim_instrument", "maker_rate", "REAL", ct);
         await SqliteMigrations.AddColumnAsync(connection, "sim_instrument", "taker_rate", "REAL", ct);
         await SqliteMigrations.AddColumnAsync(connection, "sim_instrument", "is_spot", "INTEGER NOT NULL DEFAULT 0", ct);
@@ -144,7 +147,7 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         await EnsureSchemaAsync(CreateSql, ct);
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id FROM sim_account";
+        cmd.CommandText = "SELECT account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id, front_password_hash FROM sim_account";
         var list = new List<SimAccountSnapshot>();
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct))
@@ -152,7 +155,7 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             list.Add(new SimAccountSnapshot(
                 r.GetString(0), r.GetDouble(1), r.GetDouble(2), r.GetDouble(3),
                 r.GetDouble(4), r.GetDouble(5), r.GetDouble(6), r.GetDouble(7),
-                NullIfEmpty(r.GetString(8)), NullIfEmpty(r.GetString(9))));
+                NullIfEmpty(r.GetString(8)), NullIfEmpty(r.GetString(9)), NullIfEmpty(r.GetString(10))));
         }
         return list;
     }
@@ -312,14 +315,15 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO sim_account (account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id)
-            VALUES (@a, @s, @c, @f, @fc, @cm, @cp, @pp, @ph, @b)
+            INSERT INTO sim_account (account_id, static_balance, curr_margin, frozen_margin, frozen_cash, commission, close_profit, position_profit, password_hash, broker_id, front_password_hash)
+            VALUES (@a, @s, @c, @f, @fc, @cm, @cp, @pp, @ph, @b, @fph)
             ON CONFLICT(account_id) DO UPDATE SET
                 static_balance=excluded.static_balance, curr_margin=excluded.curr_margin,
                 frozen_margin=excluded.frozen_margin, frozen_cash=excluded.frozen_cash,
                 commission=excluded.commission, close_profit=excluded.close_profit,
                 position_profit=excluded.position_profit,
-                password_hash=excluded.password_hash, broker_id=excluded.broker_id
+                password_hash=excluded.password_hash, broker_id=excluded.broker_id,
+                front_password_hash=excluded.front_password_hash
             """;
         cmd.Parameters.AddWithValue("@a", s.AccountId);
         cmd.Parameters.AddWithValue("@s", s.StaticBalance);
@@ -331,6 +335,7 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
         cmd.Parameters.AddWithValue("@pp", s.PositionProfit);
         cmd.Parameters.AddWithValue("@ph", EmptyIfNull(s.PasswordHash));
         cmd.Parameters.AddWithValue("@b", EmptyIfNull(s.BrokerId));
+        cmd.Parameters.AddWithValue("@fph", EmptyIfNull(s.FrontPasswordHash));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

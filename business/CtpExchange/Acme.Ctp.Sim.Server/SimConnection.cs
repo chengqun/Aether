@@ -156,8 +156,9 @@ internal sealed class SimConnection
                 {
                     var login = Arg<LoginArg>(req);
                     if (login is null) { err = Missing("login"); break; }
-                    // 先认证后绑定：凭据失败（90017）时连接不得绑上该账户（否则未登录连接即持有账户）
-                    var loginResult = _core.Login(login.BrokerId, login.UserId, login.Password);
+                    // 先认证后绑定：凭据失败（90017）时连接不得绑上该账户（否则未登录连接即持有账户）。
+                    // FrontDomain：前置会话传入（挑战响应密文域）——核心按域独立校验/补设
+                    var loginResult = _core.Login(login.BrokerId, login.UserId, login.Password, login.FrontDomain);
                     lock (_stateLock) AccountId = SimTradingCore.AccountIdOf(login.UserId);
                     result = loginResult;
                     break;

@@ -27,8 +27,9 @@ namespace Acme.Ctp.Front;
 /// 会话一条连接——登录绑定账户，服务端按连接路由推送，真实券商柜台镜像）。RPC op 无账户参数（绑定账户）、
 /// 推送 payload 无 accountId（按连接路由）⇒ 本会话无需账户键与事件过滤。「应答先于推送」跨进程保持：
 /// RPC 侧 SimConnection 的 capture-during-dispatch 保证应答帧先写 wire；本会话的捕获窗（<see cref="_dispatching"/>
-/// 跨 await 有效）把 RPC 推送事件压到应答帧之后排空。密码域零改动：核心把密码当不透明字符串——
-/// 密文 hex 塞进 <c>LoginArg.Password</c> 即逐字节复刻进程内行为（域隔离由字符串值承载，非 op 承载）。
+/// 跨 await 有效）把 RPC 推送事件压到应答帧之后排空。密码域（2026-10-09 双域）：密文 hex 塞进
+/// <c>LoginArg.Password</c> 且 <c>FrontDomain</c>=true——核心按域存/验（front 列独立于 JSON-RPC 明文列），
+/// 同一账户前置与提币两扇门都通（此前域隔离互斥——闭环断在提币最后一焊）。
 /// </para>
 /// </summary>
 internal sealed class CtpFrontSession : IDisposable
@@ -359,11 +360,12 @@ internal sealed class CtpFrontSession : IDisposable
 
         try
         {
-            // 进程分离（2026-10-05）：登录 = 首个交易所触点——连接 RPC + 登录（密码域零改动：核心把
-            // 密码当不透明字符串，密文 hex 塞 LoginArg.Password 即逐字节复刻进程内行为）。登录绑定账户后，
-            // 服务端把该账户的订单/成交推送路由到本连接——前置无需账户键与事件过滤。
+            // 进程分离（2026-10-05）：登录 = 首个交易所触点——连接 RPC + 登录。密码域（2026-10-09 双域）：
+            // 前置走 FrontDomain=true（挑战响应密文域）——核心存/验 FrontPasswordHash 列，与 JSON-RPC
+            // 明文域（钱包页提币）各自独立设密/补设，同一账户两扇门都通（此前单列互斥，前置开户的账户
+            // 提币永远 90017）。登录绑定账户后，服务端把该账户的订单/成交推送路由到本连接——前置无需账户键与事件过滤。
             await _rpc.ConnectAsync(ct);
-            _login = await _rpc.LoginAsync(new LoginArg(_brokerId, _userId, pwdHex), ct);
+            _login = await _rpc.LoginAsync(new LoginArg(_brokerId, _userId, pwdHex, FrontDomain: true), ct);
             _log($"[CTP-Front] 交易所登录成功: 交易日={_login.TradingDay} MaxOrderRef={_login.MaxOrderRef}");
 
             // ⑧ 只是预响应——交易日/FrontID/SessionID/MaxOrderRef 由 ⑩（随 ⑨ 系统信息请求下发）承载

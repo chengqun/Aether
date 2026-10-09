@@ -1,4 +1,5 @@
 using Acme.Ctp.Domain;
+using Acme.Ctp.Sim;
 using Acme.Ctp.Sim.Server;
 using Acme.Ctp.Simulator;
 using Acme.Ctp.Simulator.Storage;
@@ -154,6 +155,111 @@ public class AccountAuthTests
             Assert.Equal(SimErrorCodes.BadCredentials, ex.ErrorId);
             revived.Login("9999", "frank", "pw");
             Assert.True(revived.QueryAccounts().Single(a => a.AccountId == "frank").HasPassword);
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    // —— 双密码域（2026-10-09）：前置域（挑战响应密文 hex）与 JSON-RPC 明文域各自独立设密/补设——
+    //    修前单列互斥：经前置开的户，钱包页提币发明文永远 90017（闭环断在最后一焊）。
+
+    [Fact]
+    public async Task 双密码域_前置开户后明文域首登补设_两扇门都通()
+    {
+        var core = await NewAuthCoreAsync();
+        const string cipherHex = "a1b2c3d4e5f60718";   // 前置传入的挑战响应密文（核心视为不透明字符串）
+
+        core.Login("9999", "u1", cipherHex, frontDomain: true);   // 期货页（前置）首登 = 开户，front 域设密；明文域留空
+        core.Login("9999", "u1", cipherHex, frontDomain: true);   // front 域正确密文可再登
+        core.Login("9999", "u1", "plain-pw");                     // 钱包页提币（JSON-RPC 明文）首登 = 该域补设
+        core.Login("9999", "u1", "plain-pw");                     // 明文域正确可再登
+        core.Login("9999", "u1", cipherHex, frontDomain: true);   // 前置域不受明文补设影响，仍通
+
+        // 两域各自凭据受保护（互不串域：明文密码在前置域无效，密文在明文域无效）
+        Assert.Throws<CtpBusinessException>(() => core.Login("9999", "u1", "bad"));
+        Assert.Throws<CtpBusinessException>(() => core.Login("9999", "u1", "bad", frontDomain: true));
+    }
+
+    [Fact]
+    public async Task 双密码域_明文开户后前置首登补设_两扇门都通()
+    {
+        var core = await NewAuthCoreAsync();
+        const string cipherHex = "deadbeef00112233";
+
+        core.Login("9999", "u2", "plain-pw");                     // 钱包页（JSON-RPC）先开户
+        core.Login("9999", "u2", cipherHex, frontDomain: true);   // 期货页（前置）首登 = front 域补设
+        core.Login("9999", "u2", "plain-pw");                     // 明文域不受影响
+        core.Login("9999", "u2", cipherHex, frontDomain: true);   // front 域正确可再登
+
+        Assert.Throws<CtpBusinessException>(() => core.Login("9999", "u2", cipherHex));            // 密文在明文域无效
+        Assert.Throws<CtpBusinessException>(() => core.Login("9999", "u2", "plain-pw", frontDomain: true));   // 明文在前置域无效
+    }
+
+    [Fact]
+    public async Task 双密码域_防爆破计数按账户共享_跨域也锁定()
+    {
+        var now = SimHarness.TradingNow;
+        var core = new SimTradingCore(AuthOptions(maxFailures: 3, lockoutSec: 60), new SimClock(() => now));
+        await core.InitializeAsync();
+        core.Login("9999", "kate", "cipher-pw", frontDomain: true);   // 前置域开户设密
+
+        for (var i = 0; i < 3; i++)   // 前置域连续 3 次失败 ⇒ 锁定（计数按账户，不按域）
+            Assert.Throws<CtpBusinessException>(() => core.Login("9999", "kate", $"bad{i}", frontDomain: true));
+
+        var locked = Assert.Throws<CtpBusinessException>(() => core.Login("9999", "kate", "any"));   // 锁定期内明文域也被拒
+        Assert.Contains("锁定", locked.ErrorMsg);
+
+        now = now.AddSeconds(61);
+        core.Login("9999", "kate", "plain-pw");                     // 解锁后明文域首登 = 补设
+        core.Login("9999", "kate", "cipher-pw", frontDomain: true); // 前置域原密码仍通——两扇门并存
+    }
+
+    [Fact]
+    public async Task 双密码域_wire级_FrontDomain标记透传到核心()
+    {
+        using var sim = LoopbackSim.Start(o => o with { PasswordIterations = 1000 });
+        const string cipherHex = "0123456789abcdef";
+        using var client = new SimRpcClient("127.0.0.1", sim.Server.LocalEndpoint!.Port);
+
+        await client.ConnectAsync();
+        // 前置形态登录（wire 携带域标记）——若标记在序列化中丢失，此登录会错写进明文域，
+        // 下面的「明文域错密码拒」用例就会反向暴露（补设语义下首登不 throw，须靠后续错密码区分）
+        await client.LoginAsync(new LoginArg(SimHarness.Broker, "wire-u1", cipherHex, FrontDomain: true));
+        await client.LoginAsync(new LoginArg(SimHarness.Broker, "wire-u1", "plain-pw"));                     // 明文域首登 = 补设（用户提币场景，成功即闭环）
+        var ex = await Assert.ThrowsAsync<CtpBusinessException>(
+            () => client.LoginAsync(new LoginArg(SimHarness.Broker, "wire-u1", "bad")));                     // 明文域已设——错密码拒
+        Assert.Equal(SimErrorCodes.BadCredentials, ex.ErrorId);
+        var ex2 = await Assert.ThrowsAsync<CtpBusinessException>(
+            () => client.LoginAsync(new LoginArg(SimHarness.Broker, "wire-u1", "plain-pw", FrontDomain: true)));   // 明文串在前置域无效
+        Assert.Equal(SimErrorCodes.BadCredentials, ex2.ErrorId);
+        await client.LoginAsync(new LoginArg(SimHarness.Broker, "wire-u1", cipherHex, FrontDomain: true));   // 前置域原密文仍通——两域并存
+    }
+
+    [Fact]
+    public async Task 双密码域_两域哈希都落盘重启续用()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"sim-auth2-{Guid.NewGuid():N}.db");
+        try
+        {
+            // 两个域的设密分属两代核心：Persist 是 fire-and-forget（同一代内连续两次改哈希的
+            // 快照写可乱序、旧快照后到覆盖新哈希；真实场景两次设密隔着进程/会话，无此竞态——测试按真实节奏构造）
+            const string cipherHex = "cafebabe99887766";
+            var core1 = new SimTradingCore(AuthOptions() with { DatabasePath = db });
+            await core1.InitializeAsync();
+            core1.Login("9999", "grace", cipherHex, frontDomain: true);   // 第一代：front 域开户设密
+            core1.Dispose();   // 同步 flush
+
+            var core2 = new SimTradingCore(AuthOptions() with { DatabasePath = db });
+            await core2.InitializeAsync();
+            Assert.Throws<CtpBusinessException>(() => core2.Login("9999", "grace", "bad", frontDomain: true));   // front 域哈希已续用（错密码拒）
+            core2.Login("9999", "grace", "plain-pw");                     // 第二代：明文域首登补设
+            core2.Dispose();
+
+            var revived = new SimTradingCore(AuthOptions() with { DatabasePath = db });
+            await revived.InitializeAsync();
+            Assert.Throws<CtpBusinessException>(() => revived.Login("9999", "grace", "bad"));                        // 明文域错误拒（哈希续用）
+            Assert.Throws<CtpBusinessException>(() => revived.Login("9999", "grace", "bad", frontDomain: true));    // front 域错误拒（哈希续用）
+            revived.Login("9999", "grace", "plain-pw");                     // 两域正确均可登
+            revived.Login("9999", "grace", cipherHex, frontDomain: true);
         }
         finally { try { File.Delete(db); } catch { } }
     }

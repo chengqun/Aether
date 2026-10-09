@@ -2,7 +2,9 @@ using Acme.Ctp.Domain;
 
 namespace Acme.Ctp.Simulator.Storage;
 
-/// <summary>资金账户快照（落盘行）。<paramref name="PasswordHash"/> null = 未设密码（免认证——dev/测试路径）。</summary>
+/// <summary>资金账户快照（落盘行）。<paramref name="PasswordHash"/> null = 该域未设密码（首登补设——见 Login 双域）。
+/// <paramref name="FrontPasswordHash"/> = CTP 前置域哈希（2026-10-09 双密码域：前置登录走挑战响应密文，
+/// JSON-RPC 走明文——两域各自独立设密/补设，同一账户两扇门都通）。</summary>
 public sealed record SimAccountSnapshot(
     string AccountId,
     double StaticBalance,
@@ -13,7 +15,8 @@ public sealed record SimAccountSnapshot(
     double CloseProfit,
     double PositionProfit,
     string? PasswordHash = null,
-    string? BrokerId = null);
+    string? BrokerId = null,
+    string? FrontPasswordHash = null);
 
 /// <summary>持仓快照（落盘行）。<paramref name="Direction"/> 为 <c>"L"</c>/<c>"S"</c>。</summary>
 public sealed record SimPositionSnapshot(
