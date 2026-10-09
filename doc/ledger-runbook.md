@@ -94,6 +94,13 @@ $envs += 'AETHER_CTP_SIM_BOARD=zx001,ax001'
 Set-ItemProperty $k -Name Environment -Type MultiString -Value $envs
 # 注：不设 AETHER_CTP_SIM_BALANCE（默认 0）——批 6 起现金从 AQ 充值来（见 2.C）；
 #     纯期货沙盒（不起链桥测策略）才显式设它当开发水龙头。
+# BOARD 品种取舍（2026-10-09）：ax001 = 链上资产背书的现货（唯一「真实」品种——
+#   供给闸门 = custody 链上余额）；zx001 = 无背书的仿真期货（沙盒地板）。只交易链上
+#   资产可把 BOARD 设成仅 `ax001`——注意 ①Lean 双 bot 双担做市需要期货品种（现货禁
+#   开空，卖侧只能平多），想跑 bot 时加回来；②代码默认 BOARD 仍是 zx001（无链纯期货
+#   沙盒的地板——没有链时 ax001 无供给来源），服务器 env 显式指定即覆盖。下架后 DB
+#   里的历史成交/tick 记录保留（无害存档）；若还有 zx001 持仓则平不掉（市场不激活、
+#   报单拒 90002）。
 
 # 3) 重启生效（语义：未成交挂单作废、客户端须重登；账本/铸造台账不丢）
 Restart-Service AetherCtpExchange
