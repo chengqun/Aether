@@ -8,15 +8,19 @@ using QuantConnect.Algorithm;
 namespace LabsLeanAlgorithms;
 
 /// <summary>
-/// 噪声交易者机器人（Lean 版）：按节奏随机方向市价吃流动性——让盘口有成交、价格会动。
-/// 普通客户端策略（勾「真实下单」后经 wire 真实报单，与内嵌噪声交易者同款行为）。
+/// 噪声交易者机器人（Lean 版·现货）：按节奏随机方向市价吃流动性——让盘口有成交、价格会动。
+/// 普通客户端策略（勾「真实下单」后经 wire 真实报单）。
 /// <para/>
-/// 净持仓软钳（NetCap）：超界反转方向 ⇒ 持仓/OI 有界、方向自动回归；MaxLots 单笔上限。
+/// <b>现货语义（ax001：买=开多 / 卖=平多 / 禁开空）</b>：买随机开多；卖只在有库存时平多
+/// （量钳库存内），无库存方向强制转买；多头触 NetCap 强制卖（软钳——现货只有多头一边）。
+/// <para/>
 /// 对手侧无流动性（做市缺席/单边触限）时该轮报单被交易所拒 ⇒ 跳过，下一轮再试。
-/// 固定 Seed ⇒ 决策序列可复现。
+/// 固定 Seed ⇒ 决策序列可复现。MaxLots 单笔上限。
 /// <para/>
-/// 用法：实盘 tab → 策略引擎选 LeanAlgorithm → 算法选「noise-taker」→ 合约填 sim001 →
-/// 勾「真实下单」（单笔开仓上限 ≥ MaxLots）→ sim 前置登录后启动。需与做市商同时运行（吃的就是它的挂单）。
+/// 冷启动：市场需先有卖方流动性——做市账户充币获得库存挂卖（见 market-maker 注释）。
+/// <para/>
+/// 用法：实盘 tab → 策略引擎选 LeanAlgorithm → 算法选「noise-taker」→ 合约填 ax001 →
+/// 勾「真实下单」（单笔开仓上限 ≥ MaxLots）→ 前置登录后启动。需与做市商同时运行（吃的就是它的挂单）。
 /// </summary>
 public class NoiseTakerAlgo : LeanAlgorithmBase
 {
@@ -29,21 +33,21 @@ public class NoiseTakerAlgo : LeanAlgorithmBase
     {
         new StrategyParameterDef("IntervalSec", "交易间隔（秒）", "3"),
         new StrategyParameterDef("MaxLots", "单笔手数上限", "3"),
-        new StrategyParameterDef("NetCap", "净持仓软钳（手）", "3"),
+        new StrategyParameterDef("NetCap", "持仓软钳（手，现货单边多头）", "3"),
         new StrategyParameterDef("Seed", "随机种子（可复现）", "42"),
     };
 
     public override void Initialize()
     {
         ConfigureFromConfig();
-        _symbol = AddCtpData(GetParameter("symbol") ?? "sim001", Resolution.Second);
+        _symbol = AddCtpData(GetParameter("symbol") ?? "ax001", Resolution.Second);
 
         var interval = GetIntParam("IntervalSec", 3);
         _maxLots = GetIntParam("MaxLots", 3);
         _netCap = GetIntParam("NetCap", 3);
         _rng = new Random(GetIntParam("Seed", 42));
         Schedule.On(DateRules.EveryDay(), TimeRules.Every(TimeSpan.FromSeconds(Math.Max(1, interval))), TakeTurn);
-        BotLog($"[Noise] 初始化 {_symbol.Value}: 每{interval}s 随机吃 ≤{_maxLots}手 净钳±{_netCap}");
+        BotLog($"[Noise] 初始化 {_symbol.Value}: 每{interval}s 随机吃 ≤{_maxLots}手 钳{_netCap}（现货：卖=平多钳库存）");
     }
 
     // 数据订阅驱动 Security 行情价（市价单的引擎侧前置 + CtpOrderRequestMapper 的参考价）；
@@ -58,12 +62,13 @@ public class NoiseTakerAlgo : LeanAlgorithmBase
             return;
         }
 
-        var pos = security.Quantity;
+        var pos = security.Quantity;   // 现货恒 ≥ 0（禁开空）
         var dir = _rng.Next(2) == 0 ? 1 : -1;
-        if (dir == 1 && pos >= _netCap) dir = -1;        // 净持仓软钳：超界反转
-        else if (dir == -1 && pos <= -_netCap) dir = 1;
+        if (dir == 1 && pos >= _netCap) dir = -1;     // 软钳：多头触顶强制卖（平多）
+        else if (dir == -1 && pos <= 0) dir = 1;      // 无库存卖不了（现货禁开空）⇒ 转买
         var lots = _rng.Next(1, _maxLots + 1);
-        BotLog($"[Noise] 吃单 {dir * lots}手（last={security.Price} 净仓{pos}）");
+        if (dir == -1) lots = Math.Min(lots, (int)pos);   // 卖=平多，量不超库存
+        BotLog($"[Noise] 吃单 {dir * lots}手（last={security.Price} 库存{pos}）");
         MarketOrder(_symbol, dir * lots, tag: "噪声吃单");
     }
 

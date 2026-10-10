@@ -11,24 +11,31 @@ using QuantConnect.Orders;
 namespace LabsLeanAlgorithms;
 
 /// <summary>
-/// 做市商机器人（Lean 版）：围绕最新成交价上下各挂多档阶梯限价单（默认每侧 5 档），给交易所供给连续深度。
-/// 普通客户端策略（勾「真实下单」后经 wire 真实报单，与内嵌版做市机器人同款行为）。
+/// 做市商机器人（Lean 版·现货）：围绕最新成交价上下各挂多档阶梯限价单（默认每侧 5 档），给交易所供给连续深度。
+/// 普通客户端策略（勾「真实下单」后经 wire 真实报单）。
+/// <para/>
+/// <b>现货语义（ax001：买=开多 / 卖=平多 / 禁开空）</b>：买腿开多攒库存、卖腿平多出货——
+/// 卖侧预算 = 多头库存（在挂卖量 ≤ 当前持仓，超量腿会被引擎拆成「平仓+开空」、开空腿遭拒白挂）；
+/// 无库存时只挂买侧（单边），攒到库存后双边自转。这是库存做市（inventory-based）形态。
+/// <para/>
+/// <b>冷启动（鸡生蛋）</b>：所有账户都无持仓时没人挂得出卖单 ⇒ 先给做市账户充币（链上转账 memo=账户，
+/// 交易所直接铸造 ax001 持仓）或手动卖出第一笔，之后市场自转——现货的第一份库存只能来自订单簿之外。
 /// <para/>
 /// <b>防档位消失（带宽保留式维护，2026-10-04 单档改阶梯）</b>：期望档位 = last ∓ (SpreadTicks + i×LevelStepTicks) tick，
 /// 内到外。在挂腿价位仍在期望集合内 ⇒ 不动——价格滚动时只有边缘腿换防（撤最外档、补最内档），内侧腿持续在场；
 /// 单腿被吃掉其余档位仍在簿上，买1/卖1 不会突然空白，缺档下一数据事件补回。旧版每侧单档：腿被吃/移心撤单后
 /// 要等终态事件+下一数据事件才补挂，这个窗口里该侧就是空的。
 /// <para/>
-/// 义务自律（库存偏斜的连续版）：补挂预算 = PositionCap − 该向敞口（当前持仓 + 在挂剩余量）——全部成交后极限
-/// 持仓恰触仓限。仓位越满该侧深度越薄（外档先缺），触限停挂该侧全部腿，超限市价减仓（对手侧只有自己挂单时会被
+/// 义务自律（库存偏斜的连续版）：买侧补挂预算 = PositionCap − 持仓（触限停买、仓位越满买侧越薄）；
+/// 卖侧 = 持仓（库存出清即停挂）；超限市价减仓（量与在挂卖腿合计不超持仓；对手侧只有自己挂单时会被
 /// 交易所自成交跳过 ⇒ 该轮失败，下一数据事件自动重试——真实做市语义）。
 /// <para/>
 /// <b>挂单跟踪用 OrderTicket 自持</b>——brokerage 的 GetOpenOrders 刻意返空（引擎外订单不注册），
 /// 不能用它查自己的活单（会每帧重复挂单）；撤单是异步的：本轮撤、下一数据事件补（天然一跳延迟防双单——
 /// 撤单 pending 的腿仍占着价位，不会同价重复挂）。
 /// <para/>
-/// 用法：实盘 tab → 策略引擎选 LeanAlgorithm → 算法选「market-maker」→ 合约填 zx001 →
-/// 勾「真实下单」→ sim 前置登录后启动。
+/// 用法：实盘 tab → 策略引擎选 LeanAlgorithm → 算法选「market-maker」→ 合约填 ax001 →
+/// 勾「真实下单」→ 前置登录后启动。PriceTick 默认 0.01（ax001 现货最小变动价位）。
 /// </summary>
 public class MarketMakerAlgo : LeanAlgorithmBase
 {
@@ -48,23 +55,23 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         new StrategyParameterDef("SpreadTicks", "内侧点差（最内档距最新价 tick 数）", "2"),
         new StrategyParameterDef("Levels", "每侧档位数", "5"),
         new StrategyParameterDef("LevelStepTicks", "相邻档位间距（tick 数）", "1"),
-        new StrategyParameterDef("PriceTick", "最小变动价位", "1"),
+        new StrategyParameterDef("PriceTick", "最小变动价位", "0.01"),
         new StrategyParameterDef("QuoteVolume", "单档挂单手数", "5"),
-        new StrategyParameterDef("PositionCap", "单边持仓上限（手）", "200"),
+        new StrategyParameterDef("PositionCap", "持仓上限（手，现货单边多头）", "200"),
     };
 
     public override void Initialize()
     {
         ConfigureFromConfig();
-        _symbol = AddCtpData(GetParameter("symbol") ?? "sim001", Resolution.Second);
+        _symbol = AddCtpData(GetParameter("symbol") ?? "ax001", Resolution.Second);
 
-        _priceTick = GetDecimalParam("PriceTick", 1m);
+        _priceTick = GetDecimalParam("PriceTick", 0.01m);
         _spreadTicks = GetIntParam("SpreadTicks", 2);
         _levelStepTicks = GetIntParam("LevelStepTicks", 1);
         _levels = GetIntParam("Levels", 5);
         _quoteVolume = GetDecimalParam("QuoteVolume", 5m);
         _positionCap = GetDecimalParam("PositionCap", 200m);
-        BotLog($"[MM] 初始化 {_symbol.Value}: 上下各{_levels}档 点差{_spreadTicks}tick 档距{_levelStepTicks}tick 单档{_quoteVolume}手 仓限±{_positionCap}");
+        BotLog($"[MM] 初始化 {_symbol.Value}: 上下各{_levels}档 点差{_spreadTicks}tick 档距{_levelStepTicks}tick 单档{_quoteVolume}手 仓限{_positionCap}（现货：卖=平多钳库存）");
     }
 
     public override void OnData(Slice slice)
@@ -94,19 +101,24 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         var pos = security.Quantity;
         if (security.Price <= 0) return;   // 尚无行情价——市价减仓腿会被引擎拒价，等首个行情
 
-        // 超限减仓（自办强平）：市价吃非自有的对手流动性
-        if (pos > _positionCap) MarketOrder(_symbol, _positionCap - pos, tag: "超限减仓");
-        else if (pos < -_positionCap) MarketOrder(_symbol, -_positionCap - pos, tag: "超限减仓");
+        // 超限减仓（自办强平）：市价吃非自有的对手流动性。减仓量与在挂卖腿合计不超持仓——
+        // 引擎按持仓快照拆「平仓+开空」腿，现货开空腿被拒 ⇒ 超量腿白白作废（库存被在挂腿占着时减仓慢一拍，安全优先）。
+        if (pos > _positionCap)
+        {
+            var askResting = _askLegs.Sum(t => Math.Abs(t.QuantityRemaining));
+            var reduce = Math.Min(pos - _positionCap, pos - askResting);
+            if (reduce > 0) MarketOrder(_symbol, -reduce, tag: "超限减仓");
+        }
 
         var desiredBids = DesiredLevels(bid: true);
         var desiredAsks = DesiredLevels(bid: false);
 
         RollStaleLegs(_bidLegs, desiredBids, pos >= _positionCap, "买");
-        RollStaleLegs(_askLegs, desiredAsks, pos <= -_positionCap, "卖");
+        RollStaleLegs(_askLegs, desiredAsks, pos <= 0, "卖");   // 现货无空头触限——库存耗尽时防御性撤光卖腿
 
-        // 补挂预算 = 仓限 − 该向敞口：多头越满买侧越薄，空头越满卖侧越薄
+        // 补挂预算：买侧 = 仓限 − 持仓（越满越薄，触限停买）；卖侧 = 多头库存（现货卖=平多，出清即停）
         FillMissingLegs(_bidLegs, desiredBids, _positionCap - pos, isBid: true);
-        FillMissingLegs(_askLegs, desiredAsks, _positionCap + pos, isBid: false);
+        FillMissingLegs(_askLegs, desiredAsks, pos, isBid: false);
     }
 
     /// <summary>期望档位价集合（内到外）：last ∓ (SpreadTicks + i×档距)×PriceTick。</summary>
