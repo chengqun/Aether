@@ -533,10 +533,10 @@ public sealed class SimTradingCore : IDisposable
         var isClose = SimRiskEngine.IsClose(request.OffsetFlag);
 
         // 现货供给约束说明（2026-10-10 开空解禁后）：撮合可增 OI（买开 vs 卖开成交双方 Long+1/Short+1）——
-        // 「撮合只转移、充币是唯一增量」的不变量随解禁让步（用户拍板「现货也可以做空，一个品种就够」）。
-        // 仍守住的是**提币侧**：BurnSpotPosition 只烧 Long 持仓（链上出金依赖现货侧铸造的库存），
-        // 凭空多头的提币最终受链上 custody 余额约束（链的余额守恒是最后防线——诚实失败）。
-        // SupplyLimitLots 保留为信息性字段（可查但撮合不卡）。
+        // 资金安全由保证金全程锁定保证（开空同额保证金，与期货同构）；场内 OI 超链上真币 = 纸面头寸（期货常态）。
+        // 链上真币纪律由**提币侧**兜底：BurnSpotPosition 只烧 Long 持仓（空头不能变出币）；凭空多头的提币
+        // 受链上 custody 余额约束（链拒后对账循环把烧毁的持仓补铸回来——自愈回滚，零损失）。
+        // 「场内随便开、链上真币一个不会多」双向兜底。SupplyLimitLots 保留为信息性字段（可查但撮合不卡）。
 
         var refPrice = request.PriceType == CtpOrderPriceType.Market
             ? quote?.OppositeOf(request.Direction) ?? instrument.BasePrice

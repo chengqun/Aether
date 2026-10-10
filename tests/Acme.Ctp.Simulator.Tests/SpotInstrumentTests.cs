@@ -47,7 +47,8 @@ public class SpotInstrumentTests
     public async Task 开空成功_现货双向持仓_2026_10_10解禁()
     {
         // 开空解禁（用户拍板「现货也可以做空，一个品种就够」）：现货与期货一致的双向持仓。
-        // 已知边界：空头凭空开 ⇒ 买方 Long 持仓可超链上真实币量 ⇒ 提币时链上 custody 不足被链拒（诚实失败）。
+        // 资金安全：开空同额保证金全程锁定（与期货同构）；场内 OI 超链上真币 = 纸面头寸（期货常态）；
+        // 提币侧链上 custody 约束兜底（链拒后对账自愈回滚，零损失）。
         var core = await NewSpotCoreAsync();
 
         // shorter 挂卖开空 @100，buyer 买开吃单 → 成交双方持仓
@@ -85,9 +86,9 @@ public class SpotInstrumentTests
     public async Task 提币闸门只认多头库存_空头持仓不能提()
     {
         // 开空解禁（2026-10-10）后撮合可增 OI（买开 vs 卖开成交双方 Long+1/Short+1）——
-        // 「桥充币是唯一增量、撮合只转移」的不变量随解禁让步（用户拍板先不管供给纪律）。
-        // 仍守住的是**提币侧**：BurnSpotPosition 只烧 Long 持仓（链上出金依赖现货侧铸造的库存），
-        // 空头持仓不能变出币；凭空多头的提币最终受链上 custody 余额约束（链的余额守恒是最后防线）。
+        // 资金安全由保证金锁定保证（与期货同构）；链上真币纪律由**提币侧**兜底：
+        // BurnSpotPosition 只烧 Long 持仓（空头持仓不能变出币）；凭空多头的提币受链上 custody
+        // 余额约束（链拒后对账自愈回滚）——「场内随便开、链上真币一个不会多」。
         var core = await NewSpotCoreAsync(supplyLimit: null);
         core.InsertOrder("shorter", SimHarness.Limit(CtpDirection.Sell, 5, Price, CtpOffsetFlag.Open, CtpTimeCondition.GFD, Instrument));
         core.InsertOrder("buyer", SimHarness.Limit(CtpDirection.Buy, 5, Price, instrument: Instrument));

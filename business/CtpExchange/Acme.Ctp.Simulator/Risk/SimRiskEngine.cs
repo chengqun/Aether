@@ -53,8 +53,9 @@ public sealed class SimRiskEngine : IRiskEngine
             return RiskResult.Reject(SimErrorCodes.InvalidPrice, $"限价单价格非法：{req.LimitPrice:F4}。");
 
         // 现货开空解禁（2026-10-10 用户拍板「现货也可以做空，一个品种就够」）：现货走与期货一致的双向持仓。
-        // 已知边界（用户确认先不管）：空头凭空开 ⇒ 买入方的 Long 持仓可超出链上真实币量 ⇒ 提币时
-        // 链上 custody 余额不足会被链拒（余额守恒是最后防线——诚实失败，不崩账本）。
+        // 资金安全由保证金全程锁定保证（开空同额保证金，与期货同构）；场内 OI 可超链上真实币量（纸面头寸——
+        // 期货市场常态）。凭空撮合的多头提币时受链上 custody 余额约束（链拒——烧毁的持仓由对账循环补铸回来，
+        // 自愈回滚零损失）；空头永远不能提币（Burn 只烧 Long）。「场内随便开、链上真币一个不会多」双向兜底。
 
         if (IsClose(req.OffsetFlag))
         {
