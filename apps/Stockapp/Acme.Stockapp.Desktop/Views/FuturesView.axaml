@@ -8,6 +8,7 @@
   <UserControl.Resources>
     <vm:OrderCancellableConverter x:Key="OrderCancellable" />
     <vm:ChangePercentBrushConverter x:Key="ChangeBrush" />
+    <vm:PosiDirectionTextConverter x:Key="PosiDir" />
   </UserControl.Resources>
 
   <UserControl.Styles>
@@ -83,14 +84,55 @@
                   <TextBlock Text="持仓" FontSize="13" FontWeight="SemiBold"
                              Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
                 </DockPanel>
-                <ItemsControl ItemsSource="{Binding Positions}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <TextBlock Text="{Binding}" FontSize="12" Margin="0,2"
-                                 Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <!-- 持仓表：表头与行共用同一列宽字面量对齐（反射绑定下不用 DataGrid 单元格绑定——
+                     固定属性名绑定 + 固定像素列是本仓可靠路径）。品种列弹性，其余固定宽。 -->
+                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,4">
+                  <Grid ColumnDefinitions="*,48,60,48,48,88,96,96">
+                    <TextBlock Grid.Column="0" Text="品种" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="1" Text="方向" FontSize="11" FontWeight="SemiBold" TextAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="2" Text="总持仓" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="3" Text="今仓" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="4" Text="昨仓" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="5" Text="保证金" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="6" Text="持仓盈亏" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Grid.Column="7" Text="平仓盈亏" FontSize="11" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </Grid>
+                </Border>
+                <ScrollViewer MaxHeight="260">
+                  <ItemsControl ItemsSource="{Binding Positions}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid ColumnDefinitions="*,48,60,48,48,88,96,96" Margin="0,3">
+                          <TextBlock Grid.Column="0" Text="{Binding InstrumentId}" FontSize="12" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" Text="{Binding PosiDirection, Converter={StaticResource PosiDir}}"
+                                     FontSize="12" TextAlignment="Center" VerticalAlignment="Center"
+                                     Foreground="{Binding PosiDirection, Converter={StaticResource PosiDir}, ConverterParameter=brush}" />
+                          <TextBlock Grid.Column="2" Text="{Binding TotalPosition}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="{Binding TodayPosition}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                     Foreground="{DynamicResource TextSecondaryBrush}" />
+                          <TextBlock Grid.Column="4" Text="{Binding YdPosition}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                     Foreground="{DynamicResource TextSecondaryBrush}" />
+                          <TextBlock Grid.Column="5" Text="{Binding UseMargin, StringFormat={}{0:F2}}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="6" Text="{Binding PositionProfit, StringFormat={}{0:F2}}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                     Foreground="{Binding PositionProfit, Converter={StaticResource ChangeBrush}}" />
+                          <TextBlock Grid.Column="7" Text="{Binding CloseProfit, StringFormat={}{0:F2}}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                     Foreground="{Binding CloseProfit, Converter={StaticResource ChangeBrush}}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="暂无持仓——登录后点「查询持仓」" FontSize="12" Margin="0,4"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           IsVisible="{Binding !HasPositions}" />
               </StackPanel>
             </Border>
 

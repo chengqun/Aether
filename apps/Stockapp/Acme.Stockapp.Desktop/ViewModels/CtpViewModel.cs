@@ -69,6 +69,8 @@ public partial class CtpViewModel : ObservableObject
 
     [ObservableProperty] private CtpAccount? _account;
     public ObservableCollection<CtpPosition> Positions { get; } = new();
+    /// <summary>持仓表空态切换（查询前/登出后显示占位提示）。</summary>
+    [ObservableProperty] private bool _hasPositions;
 
     /// <summary>主力合约行情板（连接后自动订阅全部，250ms 节流刷新）。</summary>
     public ObservableCollection<MainFutureQuote> QuoteBoard { get; } = new();
@@ -314,7 +316,7 @@ public partial class CtpViewModel : ObservableObject
         _trading.LogoutAsync().SafeFireAndForget();
         IsConnected = false;
         ResetSubscriptionState();   // 同 Disconnected 事件的重置（事件随后到达再触发一次，幂等）
-        Account = null; Positions.Clear(); Orders.Clear(); Trades.Clear();
+        Account = null; Positions.Clear(); HasPositions = false; Orders.Clear(); Trades.Clear();
         IsConfirmingOrder = false; IsConfirmingCancel = false;
         LoginInfo = ""; StatusMessage = "已登出";
     }
@@ -333,9 +335,10 @@ public partial class CtpViewModel : ObservableObject
         if (!_trading.IsConnected) { StatusMessage = "请先登录"; return; }
         try
         {
-            StatusMessage = "查询持仓…"; Positions.Clear();
+            StatusMessage = "查询持仓…"; Positions.Clear(); HasPositions = false;
             var list = await _trading.QueryPositionAsync();
             foreach (var p in list) Positions.Add(p);
+            HasPositions = Positions.Count > 0;
             StatusMessage = $"持仓 {list.Count} 条";
         }
         catch (Exception ex) { StatusMessage = $"查询失败: {ex.Message}"; }
