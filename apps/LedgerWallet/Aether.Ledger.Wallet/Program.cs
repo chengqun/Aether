@@ -10,9 +10,9 @@ using Aether.Ledger;
 //   balance <address> [--node <addr>]     查任意地址余额（也可 --seed 看自己）
 //   transfer --seed <hex|@file> --to <addr> --amount <币数> [--memo <text>] [--node <addr>]
 //   deposit  --seed <hex|@file> --custody <addr> --account <userId> --amount <币数> [--node <addr>]
-//         充值到交易所（= transfer 到 custody 地址、memo=交易所账号——桥自动归账补铸现货持仓）
+//         充值到交易所（AQ 入金 = transfer 到 custody 地址、memo=交易所账号——桥自动归账场内现金；币通道已退役）
 //   withdraw --user <userId> --password <pw> --to <addr> --amount <币数> [--exchange <addr>]
-//         从交易所提币（JSON-RPC：登录绑定账户 → 烧毁现货持仓 → custody 签名出金）
+//         从交易所提现（JSON-RPC：登录绑定账户 → 扣场内可用现金 → custody 签名出金 AQ）
 //
 // 地址约定：--node 默认 127.0.0.1:17805（链节点）；--exchange 默认 127.0.0.1:17800（交易所，只绑回环——
 //   远程服务器先开 SSH 隧道 ssh -L 17800:127.0.0.1:17800 <user>@<host>）。
@@ -125,12 +125,9 @@ static async Task DepositAsync(Args a)
     var atoms = ParseCoins(a.Require("amount"));
     var asset = ParseAsset(a);
     var client = NodeClient(a);
-    await LedgerBridge.DepositAsync(client, wallet, custody, atoms, accountKey, asset);
-    var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
-    Console.WriteLine($"已提交充值（{assetName}）：{LedgerSupply.Format(atoms)} → custody {custody.Hex[..12]}…（memo={accountKey}）");
-    Console.WriteLine(asset == LedgerSupply.Assets.Coin
-        ? "桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓（交易所须已上现货并接链桥）。"
-        : "桥 500ms 轮询 + 对账 1s 内自动入账场内现金（1 AQ = 1 现金）。");
+    await LedgerBridge.DepositAsync(client, wallet, custody, atoms, accountKey, asset);   // coin → 桥层拒（币通道已退役）
+    Console.WriteLine($"已提交入金（AQ）：{LedgerSupply.Format(atoms)} → custody {custody.Hex[..12]}…（memo={accountKey}）");
+    Console.WriteLine("桥 500ms 轮询 + 对账 1s 内自动入账场内现金（1 AQ = 1 现金）。");
 }
 
 static async Task WithdrawAsync(Args a)
@@ -139,15 +136,14 @@ static async Task WithdrawAsync(Args a)
     var password = a.Require("password");
     var to = a.Require("to");
     var atoms = ParseCoins(a.Require("amount"));
-    var assetName = (a.Get("asset") ?? "coin").Trim().ToLowerInvariant() is "quote" ? "quote" : "coin";
+    var assetName = (a.Get("asset") ?? "quote").Trim().ToLowerInvariant() is "coin" ? "coin" : "quote";   // 默认 quote（币通道已退役）
     var (host, port) = ParseEndpoint(a.Get("exchange") ?? "127.0.0.1:17800");
 
     using var client = new SimRpcClient(host, port);
     await client.ConnectAsync();
     await client.LoginAsync(new LoginArg("SIM", user, password));   // 登录即鉴权——绑定账户 = 出金账户
-    var txHash = await client.WithdrawAsync(to, atoms, assetName);
-    var label = assetName == "coin" ? "币（烧现货持仓）" : "计价币（扣场内现金）";
-    Console.WriteLine($"提币已提交（{label}）：{LedgerSupply.Format(atoms)} → {to}（交易所 {host}:{port}）");
+    var txHash = await client.WithdrawAsync(to, atoms, assetName);   // coin → 服务端拒 90019（币通道已退役）
+    Console.WriteLine($"提现已提交（AQ ← 场内可用现金）：{LedgerSupply.Format(atoms)} → {to}（交易所 {host}:{port}）");
     Console.WriteLine($"交易哈希：{txHash}");
 }
 

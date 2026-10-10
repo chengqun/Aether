@@ -55,18 +55,14 @@ public sealed record SimInstrument
     public double LimitRate { get; init; } = 0.08;
 
     /// <summary>
-    /// 现货模式（批 4，2026-10-06；**2026-10-10 开空解禁**）：CTP 现货映射——双向持仓与期货一致
-    /// （买=开多 / 卖=开空 / 平多平空）。MarginRate 配 1.0（100% = 全额占用：开多即「付款」、
-    /// 开空全额保证金——MarginPerLot = price × VolumeMultiple × 1.0 = 完整名义价值）。
-    /// 充币铸造（CreditSpotPosition）与提币烧毁（BurnSpotPosition，只烧 Long）仍是链上资产进出的唯一闸门。
+    /// 现货标记（批 4；**2026-10-10 币通道退役后为纯标记**——原「充币铸造/提币烧毁/供给约束」行为已整体拆除，
+    /// 无任何行为差异。交易所单资产化（只收付 AQ）后现货与期货品种在撮合/风控/账本上完全同构；
+    /// 字段保留仅为 DB schema（is_spot 列）与品种分类显示兼容。
     /// </summary>
     public bool IsSpot { get; init; }
 
     /// <summary>
-    /// 现货供给上限（手数——总多头 OI ≤ 此值）。null = 不限（期货语义）。
-    /// **可变**（get/set）——桥在 custody 链上余额变化时更新（同进程写、核心 `_gate` 内读——
-    /// 良性竞态窗口：deposit 到位前一单最多多挂一手，下一单即恢复约束）。
-    /// 非现货仪器忽略此字段。
+    /// 已退役字段（批 4 现货供给上限——币通道拆除后无消费者）：保留仅为 DB schema（supply_limit_lots 列）兼容。
     /// </summary>
     public int? SupplyLimitLots { get; set; }
 

@@ -44,14 +44,12 @@ public static class InstrumentCatalog
         // zx = BTC 对标品种（2026-10-05 起）：maker/taker 差异化手续费（挂 2bp / 吃 5bp，永续 VIP0 量级）。
         // 其余真实品种不设 ⇒ 回退单一 CommissionRate（CTP 双边同费形态）。
         ["zx"] = new SimInstrument { InstrumentId = "zx", ExchangeId = "SIM", VolumeMultiple = 10, MarginRate = 0.10, PriceTick = 1, BasePrice = 3800, PreSettlement = 3798, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
-        // ax = Aether 现货币（批 4，2026-10-06；2026-10-10 开空解禁）：CTP 现货映射——买=开多/卖=开空，
-        // 双向持仓与期货一致（开空解禁=用户拍板「现货也可以做空，一个品种就够」——保证金全程锁定保资金安全，
-        // 场内 OI 可超链上真币（纸面头寸=期货常态）；凭空多头的提币受链上 custody 约束（链拒后对账自愈回滚，
-        // 零损失）、空头不能提币（Burn 只烧 Long）——「场内随便开、链上真币一个不会多」双向兜底）。
-        // 1 手 = 1 币；MarginRate=1.0（全额占用——开多=「付款」、开空=全额保证金）。充币铸造
-        // （CreditSpotPosition）仍是链上资产入场的唯一闸门（桥对账只认 Long 持仓）。
-        // maker/taker 费率镜像 zx（BTC 对标）。PriceTick=0.01（精细报价——币价应该能分到分级精度）。
-        ["ax"] = new SimInstrument { InstrumentId = "ax", ExchangeId = "AETHER", VolumeMultiple = 1, MarginRate = 1.0, PriceTick = 0.01, BasePrice = 100, PreSettlement = 100, IsSpot = true, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
+        // ax = Aether 币价合约（批 4 现货 → 2026-10-10 币通道退役 + 开空解禁后的最终形态）：AQ 计价的保证金
+        // 品种，与期货完全一致（买=开多/卖=开空/双向持仓/10% 保证金=10 倍杠杆）。交易所单资产化——只收付
+        // 计价币 AQ（像股票/期货账户充钱）；coin 不进交易所（充币铸造/提币烧毁通道已拆除），场内头寸全部纸面。
+        // 1 手 = 1 币名义；基价 100（冷启动记价基准，运行后订单簿价格发现）。maker/taker 费率镜像 zx
+        // （BTC 对标）。PriceTick=0.01（精细报价——币价应该能分到分级精度）。
+        ["ax"] = new SimInstrument { InstrumentId = "ax", ExchangeId = "AETHER", VolumeMultiple = 1, MarginRate = 0.10, PriceTick = 0.01, BasePrice = 100, PreSettlement = 100, IsSpot = true, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
         ["ag"] = new SimInstrument { InstrumentId = "ag", ExchangeId = "SHFE", VolumeMultiple = 15, MarginRate = 0.12, PriceTick = 1, BasePrice = 7000, PreSettlement = 6990 },
         ["au"] = new SimInstrument { InstrumentId = "au", ExchangeId = "SHFE", VolumeMultiple = 1000, MarginRate = 0.10, PriceTick = 0.02, BasePrice = 560, PreSettlement = 558 },
         ["cu"] = new SimInstrument { InstrumentId = "cu", ExchangeId = "SHFE", VolumeMultiple = 5, MarginRate = 0.12, PriceTick = 10, BasePrice = 78000, PreSettlement = 77900 },

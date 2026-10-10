@@ -38,9 +38,12 @@ public class LedgerWalletToolTests
             Assert.True(self.Success, self.Error);
             Assert.Equal(0UL, self.BalanceAtoms);
 
-            // treasury 给 agent 钱包打 2 币（手动走链——模拟国库发币）
+            // treasury 给 agent 钱包打 2 币（手动走链——模拟国库发币；直接签名提交：
+            // LedgerBridge.DepositAsync 现为充值专用入口（coin 拒），普通转账不再借道它）
             var treasury = new LedgerWallet(Convert.FromHexString(node.TreasurySeed));
-            await LedgerBridge.DepositAsync(node.Client, treasury, LedgerAddress.Parse(self.Address!), 200_000_000UL, "gift");
+            var chainInfo = await node.Client.GetInfoAsync();
+            await node.Client.SubmitTxAsync(LedgerTransaction.Sign(
+                chainInfo.ChainId, treasury, LedgerAddress.Parse(self.Address!), 200_000_000UL, 1, "gift", LedgerSupply.Assets.Coin));
             await WaitHeightAsync(node, 1);
 
             var after = await tool.LedgerGetBalance();
@@ -65,7 +68,9 @@ public class LedgerWalletToolTests
             var tool = new LedgerWalletTool(seedFile);
             var self = await tool.LedgerGetBalance();   // 触发种子文件生成
             var treasury = new LedgerWallet(Convert.FromHexString(node.TreasurySeed));
-            await LedgerBridge.DepositAsync(node.Client, treasury, LedgerAddress.Parse(self.Address!), 300_000_000UL, "gift");
+            var chainInfo = await node.Client.GetInfoAsync();
+            await node.Client.SubmitTxAsync(LedgerTransaction.Sign(
+                chainInfo.ChainId, treasury, LedgerAddress.Parse(self.Address!), 300_000_000UL, 1, "gift", LedgerSupply.Assets.Coin));
             await WaitHeightAsync(node, 1);
 
             // agent 转给另一个钱包 1.5 币（带 memo）

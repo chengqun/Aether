@@ -31,7 +31,7 @@ public partial class WalletViewModel : ObservableObject
     [ObservableProperty] private ulong _quoteBalanceAtoms;
     [ObservableProperty] private ulong _nonce;
 
-    /// <summary>资产选项（转账/充值/提币三区的 ComboBox——「币」烧持仓/铸造持仓，「计价币」入账/扣现金）。</summary>
+    /// <summary>资产选项（转账区 ComboBox——链上资产互转，币/计价币都合法；充值/提现已固定 AQ：币通道已退役）。</summary>
     public IReadOnlyList<string> AssetOptions { get; } = new[] { "币", "计价币" };
 
     // —— 创建/导入流程 ——
@@ -53,16 +53,14 @@ public partial class WalletViewModel : ObservableObject
     [ObservableProperty] private string? _transferMemo;
     [ObservableProperty] private string _transferAsset = "币";
 
-    // —— 充值表单（账号默认带出设置里的 depositAccount）——
+    // —— 充值表单（AQ 入金——币通道已退役；账号默认带出设置里的 depositAccount）——
     [ObservableProperty] private string _depositAmount = "";
-    [ObservableProperty] private string _depositAsset = "币";
 
-    // —— 提币表单 ──
+    // —— 提现表单（AQ 出金——扣场内可用现金）──
     [ObservableProperty] private string _withdrawUser = "";
     [ObservableProperty] private string _withdrawPassword = "";
     [ObservableProperty] private string _withdrawTo = "";
     [ObservableProperty] private string _withdrawAmount = "";
-    [ObservableProperty] private string _withdrawAsset = "币";
 
     // —— 反馈 ——
     [ObservableProperty] private bool _isBusy;
@@ -230,17 +228,13 @@ public partial class WalletViewModel : ObservableObject
             return;
         }
         if (account.Length == 0) { ErrorText = "充值账号必填（memo 归账键——须与期货页登录账号一致）"; return; }
-        var asset = ParseAsset(DepositAsset);
-        var assetName = asset == LedgerSupply.Assets.Coin ? "币" : "计价币";
 
         await RunBusyAsync(async () =>
         {
             var client = CreateNodeClient();
             var wallet = LoadWallet()!;
-            await LedgerBridge.DepositAsync(client, wallet, custody, atoms, account, asset, ct);
-            StatusText = asset == LedgerSupply.Assets.Coin
-                ? $"已提交充值（币）：{LedgerSupply.Format(atoms)} → custody（memo={account}）——桥 500ms 轮询 + 对账 1s 内自动补铸现货持仓。"
-                : $"已提交充值（计价币）：{LedgerSupply.Format(atoms)} → custody（memo={account}）——对账 1s 内自动入账场内现金（1 AQ = 1 现金）。";
+            await LedgerBridge.DepositAsync(client, wallet, custody, atoms, account, LedgerSupply.Assets.Quote, ct);
+            StatusText = $"已提交入金（AQ）：{LedgerSupply.Format(atoms)} → custody（memo={account}）——对账 1s 内自动入账场内现金（1 AQ = 1 现金）。";
             await Task.Delay(1500, ct);
             await RefreshBalanceCoreAsync(ct);
         });
@@ -268,14 +262,12 @@ public partial class WalletViewModel : ObservableObject
             ErrorText = ex.Message;
             return;
         }
-        if (_exchange is null) { ErrorText = "提币客户端未注册（ILedgerExchangeClient）。"; return; }
-        var asset = WithdrawAsset.Trim() is "计价币" ? "quote" : "coin";
+        if (_exchange is null) { ErrorText = "提现客户端未注册（ILedgerExchangeClient）。"; return; }
 
         await RunBusyAsync(async () =>
         {
-            var txHash = await _exchange.WithdrawAsync(ExchangeAddress.Trim(), user, WithdrawPassword, to, atoms, asset, ct);
-            var label = asset == "coin" ? "币（烧现货持仓）" : "计价币（扣场内现金）";
-            StatusText = $"提币已提交（{label}）：{LedgerSupply.Format(atoms)} → {to[..12]}…（tx {txHash[..12]}…）——约 1 秒到账。";
+            var txHash = await _exchange.WithdrawAsync(ExchangeAddress.Trim(), user, WithdrawPassword, to, atoms, "quote", ct);
+            StatusText = $"提现已提交（AQ ← 场内可用现金）：{LedgerSupply.Format(atoms)} → {to[..12]}…（tx {txHash[..12]}…）——约 1 秒到账。";
             await Task.Delay(1500, ct);
             await RefreshBalanceCoreAsync(ct);
         });

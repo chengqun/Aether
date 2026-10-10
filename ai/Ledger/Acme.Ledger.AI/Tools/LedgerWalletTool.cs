@@ -124,11 +124,11 @@ public class LedgerWalletTool
         catch (Exception ex) { return new TransferOutput { Error = ex.Message }; }
     }
 
-    [Description("充值到交易所：把资产转入交易所 custody 托管地址、memo=交易所账号——币铸造现货持仓（ax001）；计价币（quote）入账场内现金（1 AQ = 1 现金）。须先配置环境变量 AETHER_LEDGER_CUSTODY_ADDRESS（custody 地址，40 位 hex）。")]
+    [Description("充值到交易所（AQ 入金）：把计价币 AQ 转入交易所 custody 托管地址、memo=交易所账号——1~2 秒自动入账场内现金（1 AQ = 1 现金，像股票/期货账户充钱）。须先配置环境变量 AETHER_LEDGER_CUSTODY_ADDRESS（custody 地址，40 位 hex）。币（coin）通道已退役——coin 不进交易所。")]
     public async Task<TransferOutput> LedgerDepositToExchange(
-        [Description("交易所账号（memo 归账键——充值到账的资产记到这个账号名下）")] string accountKey,
-        [Description("金额（币数，字符串，支持 8 位小数）")] string amountCoins,
-        [Description("资产：coin（币，默认——铸造现货持仓）/ quote（计价币——入账场内现金）")] string? asset = null,
+        [Description("交易所账号（memo 归账键——充值到账的现金记到这个账号名下）")] string accountKey,
+        [Description("金额（AQ 数，字符串，支持 8 位小数）")] string amountCoins,
+        [Description("资产：quote（计价币 AQ，默认——唯一可充值资产；coin 已退役会被拒绝）")] string? asset = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -142,7 +142,12 @@ public class LedgerWalletTool
             var custody = LedgerAddress.Parse(custodyHex.Trim());
             var wallet = LoadOrCreateWallet();
             var atoms = ParseCoins(amountCoins);
-            var assetId = ParseAsset(asset);
+            var assetId = ParseAsset(asset ?? "quote");   // 充值默认 AQ（币通道已退役）
+            if (assetId == LedgerSupply.Assets.Coin)
+                return new TransferOutput
+                {
+                    Error = "币通道已退役（2026-10-10 拆除——交易所单资产化只收付计价币 AQ；coin 留在链上钱包）。充值请用 quote（AQ）。",
+                };
             var client = NodeClient();
             var result = await TransferAsync(client, wallet, custody, atoms, accountKey.Trim(), cancellationToken, assetId);
             if (result.Success is true) result.Memo = accountKey.Trim();

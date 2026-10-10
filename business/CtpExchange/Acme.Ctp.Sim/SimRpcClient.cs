@@ -220,7 +220,7 @@ public sealed class SimRpcClient : IDisposable
     /// asset "coin"（默认）= venue 先烧现货持仓；"quote" = 扣场内可用现金；再 custody 签名链上出金。
     /// 返回链上交易哈希。服务端 90019 = 桥未配置 / 持仓·现金不足 / 链拒绝（消息透传）。
     /// </summary>
-    public async Task<string> WithdrawAsync(string toAddressHex, ulong amountAtoms, string asset = "coin", CancellationToken ct = default)
+    public async Task<string> WithdrawAsync(string toAddressHex, ulong amountAtoms, string asset = "quote", CancellationToken ct = default)
     {
         var r = await CallAsync<WithdrawResult>(SimOps.Withdraw, new WithdrawArg(toAddressHex, amountAtoms, asset), ct).ConfigureAwait(false);
         return r?.TxHash ?? throw new CtpBusinessException(SimWireErrors.Protocol, "提币应答缺少结果。");

@@ -252,19 +252,6 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
     private static bool SafeGetBoolean(Microsoft.Data.Sqlite.SqliteDataReader r, int ordinal)
         => !r.IsDBNull(ordinal) && r.GetInt32(ordinal) != 0;
 
-    public async Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default)
-    {
-        await EnsureSchemaAsync(CreateSql, ct);
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT account_id, instrument_id, minted_lots FROM sim_spot_minted";
-        var list = new List<SpotMintedSnapshot>();
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct))
-            list.Add(new SpotMintedSnapshot(r.GetString(0), r.GetString(1), r.GetInt32(2)));
-        return list;
-    }
-
     public async Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default)
     {
         await EnsureSchemaAsync(CreateSql, ct);
@@ -290,22 +277,6 @@ public sealed class SimStore : SqliteStoreBase, ISimStore
             """;
         cmd.Parameters.AddWithValue("@a", accountId);
         cmd.Parameters.AddWithValue("@m", mintedAtoms);
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
-
-    public async Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default)
-    {
-        await EnsureSchemaAsync(CreateSql, ct);
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO sim_spot_minted (account_id, instrument_id, minted_lots)
-            VALUES (@a, @i, @m)
-            ON CONFLICT(account_id, instrument_id) DO UPDATE SET minted_lots=excluded.minted_lots
-            """;
-        cmd.Parameters.AddWithValue("@a", accountId);
-        cmd.Parameters.AddWithValue("@i", instrumentId);
-        cmd.Parameters.AddWithValue("@m", mintedLots);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

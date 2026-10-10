@@ -29,17 +29,6 @@ public sealed record SimPositionSnapshot(
     double Margin);
 
 /// <summary>
-/// 现货铸造台账（落盘行）：该账户在该现货合约上的<b>已净铸造手数</b>（充币 +/提币烧毁 −，下限 0）。
-/// <para>
-/// 与持仓行分表存——铸造量是<b>托管归账</b>（「交易所欠这个账户多少币」），持仓是<b>可交易物</b>：
-/// 交易（买开/卖平）只转移持仓不改变铸造量；全平仓后持仓行会被删（快照只为非零持仓生成行），
-/// 铸造量行必须独立存活，否则重启对账会把「已卖出的存量」误判为「未铸造」而重复铸造。
-/// </para>
-/// <para>桥对账的 DB 侧真相：<c>目标 = 链侧 IOU</c>，<c>现值 = 本台账</c>，差值驱动补铸/烧毁（见 host 的 LedgerSpotLink）。</para>
-/// </summary>
-public sealed record SpotMintedSnapshot(string AccountId, string InstrumentId, int MintedLots);
-
-/// <summary>
 /// 计价币铸造台账（批 6 双资产）：账户已净充入的 AQ 原子数（充值 + / 提现扣 −，下限 0）。
 /// 与币侧台账同构——链侧 AQ IOU 是对账目标；**场内现金（StaticBalance）不是铸造台账**
 ///（现金随交易/盈亏/手续费浮动，台账只记链上进出）。
@@ -84,13 +73,7 @@ public interface ISimStore
     Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default);
     Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default);
 
-    /// <summary>读全部现货铸造台账行（启动恢复——核心按合约分组）。</summary>
-    Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default);
-
-    /// <summary>写一行现货铸造台账（upsert——(account, instrument) 主键）。</summary>
-    Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default);
-
-    /// <summary>读全部计价币铸造台账行（启动恢复——核心按账户分桶）。</summary>
+    /// <summary>读全部计价币铸造台账行（启动恢复——核心按账户分桶）。币通道退役后是唯一的铸造台账。</summary>
     Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default);
 
     /// <summary>写一行计价币铸造台账（upsert——account 主键）。</summary>
@@ -124,10 +107,6 @@ public sealed class NullSimStore : ISimStore
     public Task SaveOrderAsync(string accountId, CtpOrder order, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveTradeAsync(string accountId, CtpTrade trade, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveInstrumentAsync(SimInstrument instrument, CancellationToken ct = default) => Task.CompletedTask;
-    public Task<IReadOnlyList<SpotMintedSnapshot>> LoadSpotMintedAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<SpotMintedSnapshot>>(Array.Empty<SpotMintedSnapshot>());
-    public Task SaveSpotMintedAsync(string instrumentId, string accountId, int mintedLots, CancellationToken ct = default)
-        => Task.CompletedTask;
     public Task<IReadOnlyList<QuoteMintedSnapshot>> LoadQuoteMintedAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<QuoteMintedSnapshot>>(Array.Empty<QuoteMintedSnapshot>());
     public Task SaveQuoteMintedAsync(string accountId, long mintedAtoms, CancellationToken ct = default)

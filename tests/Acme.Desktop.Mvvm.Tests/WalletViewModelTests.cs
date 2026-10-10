@@ -178,7 +178,7 @@ public class WalletViewModelTests
 
             Assert.Null(vm.ErrorText);
             Assert.NotNull(vm.StatusText);
-            Assert.Contains("提币已提交", vm.StatusText);
+            Assert.Contains("提现已提交（AQ", vm.StatusText);   // 2026-10-10 币通道退役：提现固定 AQ
         }
         finally { TryCleanup(path); }
     }
