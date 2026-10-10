@@ -44,9 +44,12 @@ public static class InstrumentCatalog
         // zx = BTC 对标品种（2026-10-05 起）：maker/taker 差异化手续费（挂 2bp / 吃 5bp，永续 VIP0 量级）。
         // 其余真实品种不设 ⇒ 回退单一 CommissionRate（CTP 双边同费形态）。
         ["zx"] = new SimInstrument { InstrumentId = "zx", ExchangeId = "SIM", VolumeMultiple = 10, MarginRate = 0.10, PriceTick = 1, BasePrice = 3800, PreSettlement = 3798, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
-        // ax = Aether 现货币（批 4，2026-10-06）：CTP 现货映射——买=开多/卖=平多/禁开空/100% 保证金/供给上限（桥从链上 custody 更新）。
-        // 1 手 = 1 币；MarginRate=1.0（全额占用 = 「付款」——买 1 手锁全部名义，平多释放+盯市盈亏 = 当前值）。
-        // maker/taker 费率镜像 zx（BTC 对标）。PriceTick=0.01（精细报价——币价应该能分到分级精度）。
+        // ax = Aether 现货币（批 4，2026-10-06；2026-10-10 开空解禁）：CTP 现货映射——买=开多/卖=开空，
+        // 双向持仓与期货一致（开空解禁=用户拍板「现货也可以做空，一个品种就够」；已知边界：空头凭空开 ⇒
+        // Long 持仓可超链上真实币量 ⇒ 提币时链上 custody 不足被链拒——诚实失败）。1 手 = 1 币；
+        // MarginRate=1.0（全额占用——开多=「付款」、开空=全额保证金）。充币铸造（CreditSpotPosition）仍是
+        // 链上资产入场的唯一闸门（桥对账只认 Long 持仓）。maker/taker 费率镜像 zx（BTC 对标）。
+        // PriceTick=0.01（精细报价——币价应该能分到分级精度）。
         ["ax"] = new SimInstrument { InstrumentId = "ax", ExchangeId = "AETHER", VolumeMultiple = 1, MarginRate = 1.0, PriceTick = 0.01, BasePrice = 100, PreSettlement = 100, IsSpot = true, MakerCommissionRate = 0.0002, TakerCommissionRate = 0.0005 },
         ["ag"] = new SimInstrument { InstrumentId = "ag", ExchangeId = "SHFE", VolumeMultiple = 15, MarginRate = 0.12, PriceTick = 1, BasePrice = 7000, PreSettlement = 6990 },
         ["au"] = new SimInstrument { InstrumentId = "au", ExchangeId = "SHFE", VolumeMultiple = 1000, MarginRate = 0.10, PriceTick = 0.02, BasePrice = 560, PreSettlement = 558 },

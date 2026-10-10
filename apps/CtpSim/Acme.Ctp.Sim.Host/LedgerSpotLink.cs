@@ -20,7 +20,8 @@ using Acme.Ctp.Simulator;
 /// <para><b>提币闸门 = venue 现货持仓</b>（经 <see cref="ILedgerWithdrawHook"/>，签名前烧毁）——不是 IOU：
 /// 「买入后提币」的账户 IOU=0 但持仓>0（真实交易所语义）；烧毁带上已付价款（margin 消耗）。</para>
 ///
-/// <para><b>供给约束</b>：撮合不增 OI（现货禁开空的结构性保证）+ Credit/Burn 是唯一铸造入口 ⇒
+/// <para><b>供给约束</b>（2026-10-10 开空解禁后）：撮合可增 OI（现货双向持仓）——「撮合只转移」的
+/// 结构性保证随解禁让步（用户拍板先不管）；Credit/Burn 仍是链上资产进出的唯一铸造入口 ⇒
 /// 总持仓 ≤ custody 链上余额恒成立；<see cref="SimTradingCore.SetSupplyLimit"/> 只是把 custody 余额同步成
 /// 信息性字段（可查不卡撮合）。</para>
 ///
@@ -198,7 +199,7 @@ public sealed class LedgerSpotLink : ILedgerWithdrawHook, IDisposable
                 }
             }
 
-            // 供给上限（信息性——撮合不卡，结构性闸门在 Credit/Burn + 禁开空）：custody 链上余额 → 手数
+            // 供给上限（信息性——撮合不卡，链上资产进出的闸门在 Credit/Burn）：custody 链上余额 → 手数
             try
             {
                 var custody = _client.GetBalanceAsync(_bridge.CustodyAddress.Hex).GetAwaiter().GetResult();

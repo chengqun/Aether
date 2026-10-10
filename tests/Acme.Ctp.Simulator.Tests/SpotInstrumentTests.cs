@@ -4,8 +4,8 @@ using Acme.Ctp.Simulator;
 namespace Acme.Ctp.Simulator.Tests;
 
 /// <summary>
-/// 批 4 现货上币验收：CTP 现货映射（买=开多 100% 保证金 / 卖=平多 / **禁开空** / 供给上限 ≤ custody 链上余额）。
-/// 品种 `ax`（Aether 币）：1 手 = 1 币、MarginRate=1.0、IsSpot=true。
+/// 批 4 现货上币验收：CTP 现货映射（买=开多 / 卖=开空 / 平多平空——**2026-10-10 开空解禁**，双向持仓与期货一致）。
+/// 品种 `ax`（Aether 币）：1 手 = 1 币、MarginRate=1.0（全额占用）、IsSpot=true。
 /// </summary>
 public class SpotInstrumentTests
 {
@@ -44,15 +44,22 @@ public class SpotInstrumentTests
     }
 
     [Fact]
-    public async Task 开空被拒_现货禁SellOpen()
+    public async Task 开空成功_现货双向持仓_2026_10_10解禁()
     {
+        // 开空解禁（用户拍板「现货也可以做空，一个品种就够」）：现货与期货一致的双向持仓。
+        // 已知边界：空头凭空开 ⇒ 买方 Long 持仓可超链上真实币量 ⇒ 提币时链上 custody 不足被链拒（诚实失败）。
         var core = await NewSpotCoreAsync();
 
-        var ex = Assert.Throws<CtpBusinessException>(() =>
-            core.InsertOrder("shorter", SimHarness.Limit(CtpDirection.Sell, 1, Price, instrument: Instrument)));
+        // shorter 挂卖开空 @100，buyer 买开吃单 → 成交双方持仓
+        core.InsertOrder("shorter", SimHarness.Limit(CtpDirection.Sell, 1, Price, CtpOffsetFlag.Open, CtpTimeCondition.GFD, Instrument));
+        core.InsertOrder("buyer", SimHarness.Limit(CtpDirection.Buy, 1, Price, instrument: Instrument));
 
-        Assert.Equal(SimErrorCodes.InvalidParameter, ex.ErrorId);
-        Assert.Contains("禁", ex.ErrorMsg);
+        var shorts = core.QueryPositions("shorter", Instrument);
+        Assert.Contains(shorts, p => p.TotalPosition == 1 && p.PosiDirection == CtpPosiDirection.Short);
+        var longs = core.QueryPositions("buyer", Instrument);
+        Assert.Contains(longs, p => p.TotalPosition == 1 && p.PosiDirection == CtpPosiDirection.Long);
+        // 开空全额保证金（MarginRate=1.0）：1 手 @100 占 100
+        Assert.Equal(100, core.QueryAccount("shorter").CurrMargin, 2);
     }
 
     [Fact]
@@ -75,25 +82,21 @@ public class SpotInstrumentTests
     }
 
     [Fact]
-    public async Task 供给约束_桥充币是唯一闸门_撮合不增OI()
+    public async Task 提币闸门只认多头库存_空头持仓不能提()
     {
-        // 现货禁开空 ⇒ 全部卖单必为平多 ⇒ 撮合只转移 OI 不增加——CreditSpotPosition 是唯一增量入口。
-        // 桥充 5 手（= custody 余额 5），之后交易只能转移不能增。
+        // 开空解禁（2026-10-10）后撮合可增 OI（买开 vs 卖开成交双方 Long+1/Short+1）——
+        // 「桥充币是唯一增量、撮合只转移」的不变量随解禁让步（用户拍板先不管供给纪律）。
+        // 仍守住的是**提币侧**：BurnSpotPosition 只烧 Long 持仓（链上出金依赖现货侧铸造的库存），
+        // 空头持仓不能变出币；凭空多头的提币最终受链上 custody 余额约束（链的余额守恒是最后防线）。
         var core = await NewSpotCoreAsync(supplyLimit: null);
-        core.CreditSpotPosition(Instrument, "mm", 5);
-        core.SetSupplyLimit(Instrument, 5);
-
-        core.InsertOrder("mm", SimHarness.Limit(CtpDirection.Sell, 5, Price, CtpOffsetFlag.Close, CtpTimeCondition.GFD, Instrument));
+        core.InsertOrder("shorter", SimHarness.Limit(CtpDirection.Sell, 5, Price, CtpOffsetFlag.Open, CtpTimeCondition.GFD, Instrument));
         core.InsertOrder("buyer", SimHarness.Limit(CtpDirection.Buy, 5, Price, instrument: Instrument));
 
-        // buyer 持仓 5（= mm 的 5 转移过来——总 OI 不变）
-        var buyer = core.QueryPositions("buyer", Instrument);
-        Assert.Contains(buyer, p => p.TotalPosition == 5);
-        // mm 持仓归零
-        var mm = core.QueryPositions("mm", Instrument);
-        Assert.DoesNotContain(mm, p => p.TotalPosition > 0);
-        // 全市场总 Long = 5（不变——供给约束由 CreditSpotPosition 守门，撮合只转移）
+        // 撮合新造 OI：buyer 多头 5（非充币铸造）、shorter 空头 5
         Assert.Equal(5, core.GetTotalLongVolume(Instrument));
+        // 空头不能提币：shorter 无 Long 库存 ⇒ 烧毁拒
+        var ex = Assert.Throws<CtpBusinessException>(() => core.BurnSpotPosition(Instrument, "shorter", 1));
+        Assert.Equal(SimErrorCodes.CloseVolumeExceeds, ex.ErrorId);
     }
 
     [Fact]

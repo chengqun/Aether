@@ -55,10 +55,10 @@ public sealed record SimInstrument
     public double LimitRate { get; init; } = 0.08;
 
     /// <summary>
-    /// 现货模式（批 4，2026-10-06）：CTP 现货映射——**买=开多 / 卖=平多 / 禁开空**。
-    /// 风控引擎拒 Sell+Open（无空头）；MarginRate 须配 1.0（100% = 全额占用即「付款」——
-    /// MarginPerLot = price × VolumeMultiple × 1.0 = 完整名义价值）。
-    /// 供给约束（<see cref="SupplyLimitLots"/>）由交易所桥从链上 custody 余额动态更新。
+    /// 现货模式（批 4，2026-10-06；**2026-10-10 开空解禁**）：CTP 现货映射——双向持仓与期货一致
+    /// （买=开多 / 卖=开空 / 平多平空）。MarginRate 配 1.0（100% = 全额占用：开多即「付款」、
+    /// 开空全额保证金——MarginPerLot = price × VolumeMultiple × 1.0 = 完整名义价值）。
+    /// 充币铸造（CreditSpotPosition）与提币烧毁（BurnSpotPosition，只烧 Long）仍是链上资产进出的唯一闸门。
     /// </summary>
     public bool IsSpot { get; init; }
 

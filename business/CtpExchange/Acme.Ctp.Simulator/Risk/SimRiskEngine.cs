@@ -52,13 +52,9 @@ public sealed class SimRiskEngine : IRiskEngine
         if (req.PriceType == CtpOrderPriceType.Limit && req.LimitPrice <= 0)
             return RiskResult.Reject(SimErrorCodes.InvalidPrice, $"限价单价格非法：{req.LimitPrice:F4}。");
 
-        // 现货禁开空（批 4，2026-10-06）：CTP 现货映射——买=开多 / 卖=平多 / **禁 Sell+Open（开空）**。
-        // Buy+Close（平空）因空头不存在会被下方 closable 检查自然拒绝（无可平空头持仓）。
-        if (context.Instrument.IsSpot
-            && req.OffsetFlag == CtpOffsetFlag.Open
-            && req.Direction == CtpDirection.Sell)
-            return RiskResult.Reject(SimErrorCodes.InvalidParameter,
-                $"现货仪器 {req.InstrumentId} 禁止开空（Sell+Open）——现货只能买开多/卖平多。");
+        // 现货开空解禁（2026-10-10 用户拍板「现货也可以做空，一个品种就够」）：现货走与期货一致的双向持仓。
+        // 已知边界（用户确认先不管）：空头凭空开 ⇒ 买入方的 Long 持仓可超出链上真实币量 ⇒ 提币时
+        // 链上 custody 余额不足会被链拒（余额守恒是最后防线——诚实失败，不崩账本）。
 
         if (IsClose(req.OffsetFlag))
         {
