@@ -17,13 +17,13 @@ using Microsoft.Extensions.Logging;
 // 全部复用桌面端同款组件（ICtpSession 官方 SDK 链路 + ILiveTradingRuntime），
 // 无 GUI 依赖：SSH 挂机跑 bot / 服务器无人值守 / 轻量手动交易。
 //
-// 用法（登录参数）：
-//   dotnet run --project apps/CtpConsole/Acme.Ctp.Console -- \
-//     --front tcp://127.0.0.1:17801 --md-front tcp://127.0.0.1:17802 \
-//     --user bot1 --pass xxx [--broker 9999] [--labs <dir>] [--data <dir>]
+// 用法（配置档案——推荐）：前置/凭据存 ~/.aether/ctp-console/config.json 的档案（首次启动生成模板），
+//   之后只需 --profile <名>；命令行参数逐项覆盖档案。
+//   dotnet run --project apps/CtpConsole/Acme.Ctp.Console -- --profile botmm
+//   （也可全命令行：--front tcp://x:17801 --md-front tcp://x:17802 --user xx --pass xx）
 //
-// 默认 labs 与桌面端 Stockapp 共享（策略笔记/leanalgorithms bot 直接可用）；
-// 数据目录默认 ~/.aether/ctp-console（独立 ctp.db，不与桌面端并发写）。
+// **完全独立**（2026-10-11 用户定调）：配置 / labs / ctp.db / 编译缓存全在 ~/.aether/ctp-console 下，
+// 不与桌面端共享任何东西。算法笔记（leanalgorithms/*.lean.cs）拷一份到自己的 labs 目录。
 //
 // REPL 命令（help 可打印）：
 //   sub <合约>...                          订阅行情（tick 实时打印）
@@ -40,26 +40,55 @@ using Microsoft.Extensions.Logging;
 //   quit
 // ═══════════════════════════════════════════════════════════════════════════
 
+// —— 配置文件 + 档案解析（命令行 > 配置档案 > 内置默认）——
+// console 完全独立（用户定调 2026-10-11）：配置/labs/数据库全部在 ~/.aether/ctp-console 下，
+// 不与桌面端共享任何东西。配置文件 ~/<data>/config.json 存多套登录档案（--profile 选择）。
 var args2 = new Args(args);
-var front = args2.Get("front") ?? throw new ArgumentException("缺少 --front <交易前置 tcp://ip:port>");
-var mdFront = args2.Get("md-front") ?? "";
-var user = args2.Get("user") ?? throw new ArgumentException("缺少 --user <账户>");
-var password = args2.Get("pass") ?? throw new ArgumentException("缺少 --pass <密码>");
-var broker = args2.Get("broker") ?? "9999";
-var appId = args2.Get("app") ?? "simnow_client_test";
-var authCode = args2.Get("auth") ?? "0000000000000000";
-
-// 默认与桌面端 Stockapp 共享 labs（bot 算法笔记直接可用）；--labs 可指向别的目录。
 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var defaultLabs = OperatingSystem.IsMacOS()
-    ? Path.Combine(home, "Library", "Application Support", "Aether", "Desktop-Stockapp", "labs")
-    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Aether", "Desktop-Stockapp", "labs");
-var labsRoot = args2.Get("labs") ?? defaultLabs;
-// console 独立数据目录（ctp.db 凭据缓存 + lean-algo-cache 编译 dll 缓存）
 var dataDir = args2.Get("data") ?? Path.Combine(home, ".aether", "ctp-console");
+var configPath = args2.Get("config") ?? Path.Combine(dataDir, "config.json");
+
+ConsoleConfig config;
+if (File.Exists(configPath))
+{
+    config = ConsoleConfig.Load(configPath);
+}
+else
+{
+    // 首次启动：生成模板（占位凭据）——填好后重跑，或继续用命令行参数
+    config = ConsoleConfig.Template();
+    config.Save(configPath);
+    Console.WriteLine($"已生成配置模板：{configPath}（填好 front/user/password 后用 --profile 登录；命令行参数可直接覆盖）");
+}
+
+// 档案选择：--profile 显式 > defaultProfile > 唯一档案；命令行参数逐项覆盖档案
+var profileName = args2.Get("profile") ?? config.DefaultProfile;
+ConsoleProfile? profile = null;
+if (!string.IsNullOrWhiteSpace(profileName))
+{
+    if (!config.Profiles.TryGetValue(profileName, out profile))
+        throw new ArgumentException($"配置档案 {profileName} 不存在（{configPath} 的 profiles 段：{string.Join(", ", config.Profiles.Keys)}）");
+}
+else if (config.Profiles.Count == 1)
+{
+    profile = config.Profiles.Values.First();
+}
+
+var front = args2.Get("front") ?? profile?.Front ?? throw new ArgumentException("缺少 --front <交易前置>（或配置档案的 front）");
+var mdFront = args2.Get("md-front") ?? profile?.MdFront ?? "";
+var user = args2.Get("user") ?? profile?.User ?? throw new ArgumentException("缺少 --user <账户>（或配置档案的 user）");
+var password = args2.Get("pass") ?? profile?.Password ?? throw new ArgumentException("缺少 --pass <密码>（或配置档案的 password）");
+var broker = args2.Get("broker") ?? profile?.Broker ?? "9999";
+var appId = args2.Get("app") ?? profile?.AppId ?? "simnow_client_test";
+var authCode = args2.Get("auth") ?? profile?.AuthCode ?? "0000000000000000";
+if (!string.IsNullOrWhiteSpace(profileName)) Console.WriteLine($"档案：{profileName}");
+
+// labs 完全独立（console 自己的目录——不读桌面端笔记）：命令行 > 配置 > ~/.aether/ctp-console/labs。
+// 算法/策略笔记放这里（leanalgorithms/*.lean.cs / coderules/*.coderule.cs / strategies/…）。
+var labsRoot = args2.Get("labs") ?? config.Labs ?? Path.Combine(dataDir, "labs");
 Directory.CreateDirectory(dataDir);
 if (!Directory.Exists(labsRoot))
-    Console.WriteLine($"⚠ labs 目录不存在：{labsRoot}（策略/算法笔记加载将为空——用 --labs 指定）");
+    Console.WriteLine($"⚠ labs 目录不存在：{labsRoot}（策略/算法加载为空）——把笔记放进来或 --labs 指定");
 
 // —— DI 组装（全部现成组件；与 Stockapp App.axaml.cs 同款顺序）——
 var services = new ServiceCollection();
