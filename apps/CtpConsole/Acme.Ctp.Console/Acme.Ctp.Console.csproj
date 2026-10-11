@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Acme.Ctp.Console</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 引擎 ILogger → console（AddLogging + ConsoleLoggerProvider；CPM 版本在根 Directory.Packages.props） -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 登录/交易/行情（官方 SDK 链路直连 CTP 前置——本地仿真或真实前置同链路） -->
+    <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
+    <!-- 实盘策略引擎端口（LiveTradingRuntimeRequest / ILiveTradingRuntime） -->
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Domain\Acme.Trading.Runtime.Domain.csproj" />
+    <!-- Lean 实盘引擎 impl（AddTradingRuntimeLean / AddLeanAlgorithmServices / LeanAlgorithmRegistry） -->
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Lean\Acme.Trading.Runtime.Lean.csproj" />
+    <!-- IStrategy 壳引擎的脚本加载（AddStrategyScripting / StrategyRegistry） -->
+    <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Scripting\Acme.Trading.Scripting.csproj" />
+    <!-- labs 笔记源（DirectoryNoteCatalogSource）+ 桥接类用的 NoteNodeType/CatalogNoteDirectory -->
+    <ProjectReference Include="..\..\..\business\Notes\Acme.Notes.Infrastructure\Acme.Notes.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- libctp_native.dylib 的 @rpath 依赖三个 macOS frameworks（thosttraderapi_se/thostmduserapi_se/MacDataCollect）——
+       Ctp.Net.Core 的 Content 只带 build/native 的 dylib/so/dll，frameworks 不在其中；
+       dyld 载入时全部链接镜像即解析，缺一个就 DllNotFoundException。构建后复制到输出目录
+       （cp -R 保留 frameworks 的 Versions/A symlink 结构；重复执行为幂等合并覆盖）。
+       同款 target 在 tests/Acme.Ctp.Front.Tests.csproj（E2E）与本仓其它 CTP 客户端宿主。 -->
+  <PropertyGroup>
+    <CtpSdkDir>$(MSBuildThisFileDirectory)../../../externals/Ctp.Net.Core/ctp-sdk/macos-universal</CtpSdkDir>
+  </PropertyGroup>
+  <Target Name="CopyCtpMacFrameworks" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Message Importance="high" Text="复制 CTP macOS frameworks → $(OutDir)" />
+    <Exec Command='cp -R "$(CtpSdkDir)/thosttraderapi_se.framework" "$(OutDir)"' />
+    <Exec Command='cp -R "$(CtpSdkDir)/thostmduserapi_se.framework" "$(OutDir)"' />
+    <Exec Command='cp -R "$(CtpSdkDir)/MacDataCollect.framework" "$(OutDir)"' />
+  </Target>
+
+</Project>

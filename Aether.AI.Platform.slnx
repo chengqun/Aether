@@ -57,6 +57,9 @@
     <Project Path="apps/CtpSim/Acme.Ctp.Front.Host/Acme.Ctp.Front.Host.csproj" />
     <Project Path="apps/CtpSim/Acme.Ctp.ProtoCapture/Acme.Ctp.ProtoCapture.csproj" />
   </Folder>
+  <Folder Name="/apps/CtpConsole/">
+    <Project Path="apps/CtpConsole/Acme.Ctp.Console/Acme.Ctp.Console.csproj" />
+  </Folder>
   <Folder Name="/server/">
     <Project Path="server/Aether.Server.Domain.Shared/Aether.Server.Domain.Shared.csproj" />
     <Project Path="server/Aether.Server.Domain/Aether.Server.Domain.csproj" />
