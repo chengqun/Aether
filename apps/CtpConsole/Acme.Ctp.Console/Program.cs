@@ -22,8 +22,9 @@ using Microsoft.Extensions.Logging;
 //   dotnet run --project apps/CtpConsole/Acme.Ctp.Console -- --profile botmm
 //   （也可全命令行：--front tcp://x:17801 --md-front tcp://x:17802 --user xx --pass xx）
 //
-// **完全独立**（2026-10-11 用户定调）：配置 / labs / ctp.db / 编译缓存全在 ~/.aether/ctp-console 下，
-// 不与桌面端共享任何东西。算法笔记（leanalgorithms/*.lean.cs）拷一份到自己的 labs 目录。
+// **一个目录一个完整实例**（2026-10-11 用户定调）：config.json / labs/ / ctp.db / lean-algo-cache
+// 全部默认落在**当前工作目录**——不碰 ~/.aether、不与桌面端共享任何东西。双 bot = 两个目录各跑一个
+// console（各自 config.json + labs），完全隔离；发布目录拷到哪就在哪跑（self-contained 部署友好）。
 //
 // REPL 命令（help 可打印）：
 //   sub <合约>...                          订阅行情（tick 实时打印）
@@ -41,12 +42,13 @@ using Microsoft.Extensions.Logging;
 // ═══════════════════════════════════════════════════════════════════════════
 
 // —— 配置文件 + 档案解析（命令行 > 配置档案 > 内置默认）——
-// console 完全独立（用户定调 2026-10-11）：配置/labs/数据库全部在 ~/.aether/ctp-console 下，
-// 不与桌面端共享任何东西。配置文件 ~/<data>/config.json 存多套登录档案（--profile 选择）。
+// **一个目录一个完整实例**（用户定调 2026-10-11）：config.json / labs/ / ctp.db / lean-algo-cache
+// 全部默认落在**当前工作目录**——不碰 ~/.aether、不碰桌面端任何东西。双 bot = 两个目录各跑一个
+// console（各自 config.json + labs），完全隔离；发布目录拷到哪就在哪跑（self-contained 部署友好）。
+// --config / --labs / --data 可逐项覆盖。
 var args2 = new Args(args);
-var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var dataDir = args2.Get("data") ?? Path.Combine(home, ".aether", "ctp-console");
-var configPath = args2.Get("config") ?? Path.Combine(dataDir, "config.json");
+var cwd = Directory.GetCurrentDirectory();
+var configPath = args2.Get("config") ?? Path.Combine(cwd, "config.json");
 
 ConsoleConfig config;
 if (File.Exists(configPath))
@@ -83,8 +85,9 @@ var appId = args2.Get("app") ?? profile?.AppId ?? "simnow_client_test";
 var authCode = args2.Get("auth") ?? profile?.AuthCode ?? "0000000000000000";
 if (!string.IsNullOrWhiteSpace(profileName)) Console.WriteLine($"档案：{profileName}");
 
-// labs 完全独立（console 自己的目录——不读桌面端笔记）：命令行 > 配置 > ~/.aether/ctp-console/labs。
-// 算法/策略笔记放这里（leanalgorithms/*.lean.cs / coderules/*.coderule.cs / strategies/…）。
+// labs 同样落当前目录（命令行 > 配置 > ./labs）。算法/策略笔记放这里：
+// leanalgorithms/*.lean.cs / coderules/*.coderule.cs / strategies/*.yaml。
+var dataDir = args2.Get("data") ?? cwd;   // ctp.db + lean-algo-cache 也随实例目录走
 var labsRoot = args2.Get("labs") ?? config.Labs ?? Path.Combine(dataDir, "labs");
 Directory.CreateDirectory(dataDir);
 if (!Directory.Exists(labsRoot))
