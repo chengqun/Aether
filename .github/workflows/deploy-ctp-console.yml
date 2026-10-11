@@ -1,0 +1,92 @@
+name: Deploy CTP Console
+
+# CTP console 客户端部署（2026-10-11）：无 GUI 的登录/交易/行情/跑策略宿主（Lean 实盘引擎含 bot）。
+# 形态 = **一个目录一个完整实例**（用户定调）：C:\Aether\ctp-console\publish\ 是程序本体（每次部署整替换）；
+# C:\Aether\ctp-console\<实例名>\ 是运行实例（config.json + labs + ctp.db + lean-algo-cache）——
+# 实例 config.json **永不被部署覆盖**（密码在里面）；labs\leanalgorithms 每次部署覆盖拷贝
+#（algorithms/ 仓库分发副本是权威——改算法 push 即生效，下次启动策略用新版）。
+# 与 deploy-ctpsim.yml 同台服务器（复用 CTPSIM_SSH_* secrets）、同模式（ubuntu 交叉 publish win-x64
+# self-contained → tar → scp → 远端 powershell 脚本）。无 Windows 服务（console 是交互/挂机进程，
+# 部署不停任何东西——跑着的实例继续跑，新实例启动用新程序）。
+# **与 ctpsim 不同**：console 引 Trading.Runtime.Lean → externals/Lean 源码（ProjectReference）+
+# Ctp.Infrastructure → externals/Ctp.Net.Core——须 init 这两个 submodule（shallow，见 .gitmodules）。
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/CtpConsole/**'
+      - 'algorithms/**'                    # labs 模板源（远端覆盖拷贝进实例）
+      - 'business/Ctp/**'                 # ICtpSession 官方 SDK 链路
+      - 'business/Trading/**'             # StrategyRegistry / MarketBar 等域层
+      - 'business/Trading.Runtime/**'    # LiveTradingRuntime 端口 + Lean 引擎 + Scripting
+      - 'business/Notes/**'              # labs 目录源（DirectoryNoteCatalogSource）
+      - 'Directory.Packages.props'
+      - 'scripts/ctp-console-*.ps1'
+      - '.github/workflows/deploy-ctp-console.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ctp-console-deploy      # 部署换文件有状态，两个 run 不许交错
+  cancel-in-progress: false
+
+env:
+  # 服务器上的部署中转目录——与 scripts/ctp-console-remote-deploy.ps1 的 $StagingDir 默认值同值常量，改一处须同步另一处
+  CTP_CONSOLE_STAGING: 'C:/Aether/ctp-console-staging'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: false   # 只拉需要的两个（Lean + Ctp.Net.Core），不拉 MAF/FlaUI-MCP——见下方手动 init
+
+    - name: Init submodules (Lean engine + CTP native wrapper——console 依赖闭包)
+      run: |
+        git submodule update --init externals/Lean externals/Ctp.Net.Core
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Publish (self-contained win-x64)
+      run: |
+        dotnet publish apps/CtpConsole/Acme.Ctp.Console -c Release --self-contained true --runtime win-x64 -o ./publish/console
+
+    - name: Bundle (labs 算法模板 + VERSION stamp + tar)
+      run: |
+        # labs 模板：算法笔记的仓库分发副本（远端部署覆盖拷贝进实例目录——algorithms/ 是权威）
+        mkdir -p publish/console/labs/leanalgorithms
+        cp algorithms/market-maker.lean.cs algorithms/noise-taker.lean.cs publish/console/labs/leanalgorithms/
+        git rev-parse --short HEAD > publish/console/VERSION
+        tar -czf ctp-console.tar.gz -C publish .
+
+    - name: Setup SSH key
+      env:
+        SSH_KEY: ${{ secrets.CTPSIM_SSH_KEY }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/ctpsim_key
+        chmod 600 ~/.ssh/ctpsim_key
+
+    - name: Upload (tar + deploy script -> staging)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        scp -i ~/.ssh/ctpsim_key -o StrictHostKeyChecking=accept-new -P "${SSH_PORT:-22}" \
+          ctp-console.tar.gz scripts/ctp-console-remote-deploy.ps1 "${SSH_USER}@${SSH_HOST}:${CTP_CONSOLE_STAGING}/"
+
+    - name: Deploy (swap publish -> ensure instances; no services to restart)
+      env:
+        SSH_HOST: ${{ secrets.CTPSIM_SSH_HOST }}
+        SSH_USER: ${{ secrets.CTPSIM_SSH_USER }}
+        SSH_PORT: ${{ secrets.CTPSIM_SSH_PORT }}
+      run: |
+        ssh -i ~/.ssh/ctpsim_key -o StrictHostKeyChecking=accept-new -p "${SSH_PORT:-22}" \
+          "${SSH_USER}@${SSH_HOST}" \
+          "powershell -NoProfile -ExecutionPolicy Bypass -File ${CTP_CONSOLE_STAGING}/ctp-console-remote-deploy.ps1"
+        # Windows OpenSSH 默认 shell 是 cmd.exe——显式起 powershell 跑脚本；这是唯一远程命令，零嵌套引号
