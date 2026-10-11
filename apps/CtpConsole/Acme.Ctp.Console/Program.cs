@@ -76,13 +76,15 @@ else if (config.Profiles.Count == 1)
     profile = config.Profiles.Values.First();
 }
 
-var front = args2.Get("front") ?? profile?.Front ?? throw new ArgumentException("缺少 --front <交易前置>（或配置档案的 front）");
-var mdFront = args2.Get("md-front") ?? profile?.MdFront ?? "";
-var user = args2.Get("user") ?? profile?.User ?? throw new ArgumentException("缺少 --user <账户>（或配置档案的 user）");
-var password = args2.Get("pass") ?? profile?.Password ?? throw new ArgumentException("缺少 --pass <密码>（或配置档案的 password）");
-var broker = args2.Get("broker") ?? profile?.Broker ?? "9999";
-var appId = args2.Get("app") ?? profile?.AppId ?? "simnow_client_test";
-var authCode = args2.Get("auth") ?? profile?.AuthCode ?? "0000000000000000";
+// 全字段 Trim：账户名/前置地址带尾空格 = 连到「同名带空格」的幽灵账户上 0 余额（2026-10-12 服务器实测踩中——
+// config.json 手填密码时不小心带上的空格让 botmm 登成了「botmm 」）。账户名永远不会以空格开头/结尾，一律去。
+var front = (args2.Get("front") ?? profile?.Front ?? throw new ArgumentException("缺少 --front <交易前置>（或配置档案的 front）")).Trim();
+var mdFront = (args2.Get("md-front") ?? profile?.MdFront ?? "").Trim();
+var user = (args2.Get("user") ?? profile?.User ?? throw new ArgumentException("缺少 --user <账户>（或配置档案的 user）")).Trim();
+var password = (args2.Get("pass") ?? profile?.Password ?? throw new ArgumentException("缺少 --pass <密码>（或配置档案的 password）")).Trim();
+var broker = (args2.Get("broker") ?? profile?.Broker ?? "9999").Trim();
+var appId = (args2.Get("app") ?? profile?.AppId ?? "simnow_client_test").Trim();
+var authCode = (args2.Get("auth") ?? profile?.AuthCode ?? "0000000000000000").Trim();
 if (!string.IsNullOrWhiteSpace(profileName)) Console.WriteLine($"档案：{profileName}");
 
 // labs 同样落当前目录（命令行 > 配置 > ./labs）。算法/策略笔记放这里：
