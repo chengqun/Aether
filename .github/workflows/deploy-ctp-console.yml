@@ -55,13 +55,23 @@ jobs:
       run: |
         dotnet publish apps/CtpConsole/Acme.Ctp.Console -c Release --self-contained true --runtime win-x64 -o ./publish/console
 
-    - name: Bundle (labs 算法模板 + VERSION stamp + tar)
+    - name: Bundle (labs 算法模板 + 实例 config 模板 + VERSION stamp + tar)
       run: |
         # labs 模板：算法笔记的仓库分发副本（远端部署覆盖拷贝进实例目录——algorithms/ 是权威）
         mkdir -p publish/console/labs/leanalgorithms
         cp algorithms/market-maker.lean.cs algorithms/noise-taker.lean.cs publish/console/labs/leanalgorithms/
+        # 实例 config 模板（预填默认凭据——**账户名 = 密码**，服务器本机前置 127.0.0.1——部署后
+        # 远端脚本拷进不存在的实例目录 = 开箱即跑；实例 config.json 已存在则永不被覆盖（用户改过的密保留存）。
+        # 注意公网开放 + 默认弱口令：登录失败 5 次锁 60s（交易所防爆破），想改密直接编辑实例 config.json）
+        for inst in botmm botnoise; do
+          printf '{"defaultProfile":"%s","labs":null,"data":null,"profiles":{"%s":{"front":"tcp://127.0.0.1:17801","mdFront":"tcp://127.0.0.1:17802","user":"%s","password":"%s","broker":"9999","appId":"simnow_client_test","authCode":"0000000000000000"}}}' \
+            "$inst" "$inst" "$inst" "$inst" > "publish/console/config.$inst.json"
+        done
         git rev-parse --short HEAD > publish/console/VERSION
-        tar -czf ctp-console.tar.gz -C publish .
+        # tar 根 = publish/console 的**内容**（-C publish/console .）——解压到 $Root\publish 后
+        # 直接是 exe/labs/VERSION（不是再套一层 console\）。首次部署曾用 -C publish . 导致
+        # publish\console\labs 错位、远端 Copy-Item 找不到路径（CI 实测踩中）。
+        tar -czf ctp-console.tar.gz -C publish/console .
 
     - name: Setup SSH key
       env:

@@ -44,12 +44,16 @@ foreach ($name in $Instances) {
     Copy-Item (Join-Path $algoSrc '*.lean.cs') $labs -Force
     Info "实例 $name ：labs 已同步（$(( Get-ChildItem $labs -Filter *.lean.cs | Measure-Object ).Count) 个算法）"
 
-    # config.json：永不被部署覆盖（密码在里面）。不存在 → 提示首启生成模板。
+    # config.json：永不被部署覆盖（密码在里面）。不存在 → 从 CI 打包的实例模板拷贝
+    #（config.<实例名>.json——预填默认凭据「账户名=密码」+ 本机前置，开箱即跑）。
     $config = Join-Path $dir 'config.json'
     if (Test-Path $config) {
         Info "实例 $name ：config.json 已存在（部署不覆盖——密码/档案保持不变）"
+    } elseif (Test-Path (Join-Path $Root "publish\config.$name.json")) {
+        Copy-Item (Join-Path $Root "publish\config.$name.json") $config
+        Info "实例 $name ：config.json 已按模板生成（默认凭据 $name/$name——可直接启动；改密编辑此文件）"
     } else {
-        Info "实例 $name ：config.json 不存在——首次启动时自动生成模板（填 user/password 后用 --profile 登录）"
+        Info "实例 $name ：无模板（publish\config.$name.json 缺失）——首次启动时自动生成配置模板"
     }
 }
 
