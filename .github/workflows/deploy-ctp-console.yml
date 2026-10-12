@@ -55,8 +55,14 @@ jobs:
       run: |
         dotnet publish apps/CtpConsole/Acme.Ctp.Console -c Release --self-contained true --runtime win-x64 -o ./publish/console
 
-    - name: Bundle (labs 算法模板 + 实例 config 模板 + VERSION stamp + tar)
+    - name: Bundle (LeanData 最小子集 + labs 算法模板 + 实例 config 模板 + VERSION stamp + tar)
       run: |
+        # LeanData 最小子集（Lean 引擎 handler 装配必需——MarketHoursDatabase/SymbolPropertiesDatabase：
+        # 源码仓走 externals/Lean/Data 定位，打包部署回退 <exe>/LeanData——BacktestEnvironment 的设计，
+        # 首次服务器部署漏拷导致 LiveTradingRealTimeHandler 装配 DirectoryNotFoundException，2026-10-12 实测踩中）
+        mkdir -p publish/console/LeanData/market-hours publish/console/LeanData/symbol-properties
+        cp -r externals/Lean/Data/market-hours/. publish/console/LeanData/market-hours/
+        cp -r externals/Lean/Data/symbol-properties/. publish/console/LeanData/symbol-properties/
         # labs 模板：算法笔记的仓库分发副本（远端部署覆盖拷贝进实例目录——algorithms/ 是权威）
         mkdir -p publish/console/labs/leanalgorithms
         cp algorithms/market-maker.lean.cs algorithms/noise-taker.lean.cs publish/console/labs/leanalgorithms/
