@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Acme.Ctp.AI;
+using Acme.Ctp.Application;
 using Acme.Ctp.Application.DependencyInjection;
 using Acme.Ctp.Infrastructure.DependencyInjection;
 using Acme.Desktop.Shared.Hosting;
@@ -12,7 +13,9 @@ using Acme.Desktop.Workbench.Abstractions;
 using Acme.Quotes.AI;
 using Acme.Quotes.Application.DependencyInjection;
 using Acme.Quotes.Infrastructure.DependencyInjection;
+using Acme.Securities.Application;
 using Acme.Securities.Application.DependencyInjection;
+using Acme.Securities.Domain;
 using Acme.Securities.Infrastructure.DependencyInjection;
 using Acme.Stockapp.Desktop.ViewModels;
 using Acme.Trading.AI;
@@ -195,8 +198,14 @@ public partial class App : global::Avalonia.Application
         // 复合连接器 = CTP + 同花顺，实现 IConnectorViewModel 注入 ExpertsViewModel
         services.AddSingleton<StockappConnectorViewModel>();
         services.AddSingleton<IConnectorViewModel>(sp => sp.GetRequiredService<StockappConnectorViewModel>());
-        // 期货页 ViewModel（行情 + 交易）
-        services.AddSingleton<CtpViewModel>();
+        // 期货页 ViewModel（行情 + 交易；注入 IPreferencesStore 供涨幅基准跨会话存档）
+        services.AddSingleton<CtpViewModel>(sp =>
+            new CtpViewModel(
+                sp.GetRequiredService<ICtpTradingService>(),
+                sp.GetRequiredService<StockappConnectorViewModel>().Ctp,
+                sp.GetRequiredService<ISecurityManager>(),
+                sp.GetRequiredService<ISecurityClientSyncService>(),
+                sp.GetService<IPreferencesStore>()));
         // 回测/实盘页 ViewModel
         services.AddSingleton<TradingViewModel>();
         // 股票交易页 ViewModel

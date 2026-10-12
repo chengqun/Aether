@@ -60,6 +60,8 @@ public partial class CtpViewModel : ObservableObject
     private readonly ICtpTradingService _trading;
     private readonly ISecurityManager _securities;
     private readonly ISecurityClientSyncService _securitySync;
+    /// <summary>涨幅基准存档（可空——手机/无 prefs 场景退化为进程内首价）。</summary>
+    private readonly IPreferencesStore? _preferences;
     public CtpConnectorViewModel Connector { get; }
 
     [ObservableProperty] private bool _isConnected;
@@ -101,12 +103,13 @@ public partial class CtpViewModel : ObservableObject
     [ObservableProperty] private string _pendingCancelSummary = "";
     private CtpOrder? _pendingCancelOrder;
 
-    public CtpViewModel(ICtpTradingService trading, CtpConnectorViewModel connector, ISecurityManager securities, ISecurityClientSyncService securitySync)
+    public CtpViewModel(ICtpTradingService trading, CtpConnectorViewModel connector, ISecurityManager securities, ISecurityClientSyncService securitySync, IPreferencesStore? preferences = null)
     {
         _trading = trading;
         Connector = connector;
         _securities = securities;
         _securitySync = securitySync;
+        _preferences = preferences;
 
         _trading.OrderReceived += OnOrderReceived;
         _trading.TradeReceived += OnTradeReceived;
@@ -455,14 +458,45 @@ public partial class CtpViewModel : ObservableObject
                 q.Volume = tick.Volume;
                 q.OpenPrice = tick.OpenPrice;
                 // MdTick wire 帧没有 PreSettlement 槽位（SDK 解析恒 0）+ 查合约的 CThostFtdcInstrumentField
-                // 也无此字段（C++ wrapper 恒 0）——首帧 tick 的 last 即基价（sim 撮合起点 = BasePrice = PreSettlement，
+                // 也无此字段（C++ wrapper 恒 0）。首帧 tick 的 last 即基价（sim 撮合起点 = BasePrice = PreSettlement，
                 // 2026-10-03 涨幅不动修复）。后续 tick 带 PreSettlement > 0 时优先用真值。
+                // **基准跨会话留存（2026-10-12）**：旧版首价随板重建漂移（CI 部署断线重连后首个 tick=当前价 ⇒
+                // 首价=现价 ⇒ 涨幅恒 0——「没有留前一日的价格」的实测根因）。现按 合约+交易日 键存档
+                // IPreferencesStore：同日重连/重启复用当日基准（不漂移），跨日自然重置（首个 tick 记新基准）。
                 if (tick.PreSettlement > 0) q.PreSettlement = tick.PreSettlement;
-                else if (q.PreSettlement == 0 && tick.LastPrice > 0) q.PreSettlement = tick.LastPrice;
+                else if (q.PreSettlement == 0 && tick.LastPrice > 0)
+                    q.PreSettlement = LoadOrStoreDailyBasis(symbol, tick.TradingDay, tick.LastPrice);
                 q.UpdateTime = $"{tick.UpdateTime}.{tick.UpdateMillisec:D3}";
             }
         }
         _pendingTicks.Clear();
+    }
+
+    /// <summary>
+    /// 当日涨幅基准的取/存（合约+交易日键）：同日已有存档 ⇒ 复用（重连/重启不漂移）；新日/无存档 ⇒
+    /// 记当前价为新基准。存档失败（prefs 不可用）退化为进程内首价（旧版行为）。GetAsync 同步完成
+    /// （Task.FromResult）⇒ tick 批处理内直接读安全；SetAsync 真异步 ⇒ Task.Run fire-and-forget。
+    /// </summary>
+    private double LoadOrStoreDailyBasis(string symbol, string tradingDay, double firstTickPrice)
+    {
+        if (_preferences is null) return firstTickPrice;
+        var key = $"ctp.basis.{symbol}";
+        try
+        {
+            var stored = _preferences.GetAsync(key).GetAwaiter().GetResult();
+            // 存档格式 "<yyyyMMdd>|<价格>"——同交易日复用；跨日/空/坏值 ⇒ 记新基准
+            var parts = (stored ?? "").Split('|');
+            if (parts.Length == 2 && parts[0] == tradingDay
+                && double.TryParse(parts[1], out var basis) && basis > 0)
+                return basis;
+        }
+        catch { /* prefs 读故障 ⇒ 退化进程内首价 */ }
+        try
+        {
+            Task.Run(async () => await _preferences.SetAsync(key, $"{tradingDay}|{firstTickPrice}")).SafeFireAndForget();
+        }
+        catch { /* 存档失败不阻断行情 */ }
+        return firstTickPrice;
     }
 
     private void OnOrderReceived(object? sender, CtpOrder order)
