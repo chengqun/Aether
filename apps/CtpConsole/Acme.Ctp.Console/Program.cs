@@ -166,6 +166,17 @@ if (args.FirstOrDefault(a => a.Equals("--run-strategy", StringComparison.Ordinal
         if (a != rsFlag) passThrough.Add(a);
 
     await SweepOpenOrdersAsync();
+    // 清场（旁路撤 30+ 张单触发前置推送流）期间 CTP 会话可能被断（4097——SDK 自动重连）——
+    // 立即启策略会被「CTP 未登录」拒。等会话恢复（最多 30s）再启动。
+    var reconnectStart = Environment.TickCount64;
+    while (!session.IsConnected && Environment.TickCount64 - reconnectStart < 30_000)
+        await Task.Delay(500);
+    if (!session.IsConnected)
+    {
+        Console.WriteLine("[bot] 清场后 CTP 会话 30s 未恢复——退出（重跑即可）。");
+        session.Logout();
+        return;
+    }
     Console.WriteLine($"[bot] 启动策略 {strategyName}（合约 {string.Join(",", instruments)}）——Ctrl+C 或输 quit 停止");
     await StrategyRunAsync(passThrough.ToArray());
     // 等引擎脱离 Starting（StartAsync 返回时可能仍在 Starting——立即查 IsRunning 会误判启动失败）
