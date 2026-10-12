@@ -26,6 +26,11 @@ using Microsoft.Extensions.Logging;
 // 全部默认落在**当前工作目录**——不碰 ~/.aether、不与桌面端共享任何东西。双 bot = 两个目录各跑一个
 // console（各自 config.json + labs），完全隔离；发布目录拷到哪就在哪跑（self-contained 部署友好）。
 //
+// 直跑模式（挂机——2026-10-12）：
+//   dotnet run -- --run-strategy market-maker ax001 --real --max-volume 5 [--data <实例目录>] [--exchange 127.0.0.1:17800]
+//   登录 → 清场（JSON-RPC 旁路撤接管前活单）→ 启策略 → 阻塞挂机；Ctrl+C 或输 quit 优雅停（停时撤单腿），
+//   stdin 可用命令：quit/exit（退出）、stop（停策略）、status（引擎状态）。服务器 RDP 两窗口各跑一条即双 bot 驻留。
+//
 // REPL 命令（help 可打印）：
 //   sub <合约>...                          订阅行情（tick 实时打印）
 //   unsub                                  退订全部行情
@@ -145,6 +150,36 @@ Console.WriteLine($"已登录：交易日 {login.TradingDay} FrontId={login.Fron
 await scripting.LoadAsync();
 await leanScripting.LoadAsync();
 PrintStrategies();
+
+// —— 直跑模式（--run-strategy <名> [合约...] [选项]——无 REPL 挂机：登录→清场→启策略→阻塞）——
+// 位置参数（合约）不在 Args（--key value）里——从原始 args 扫描 --run-strategy 值后的非 -- token。
+if (args.FirstOrDefault(a => a.Equals("--run-strategy", StringComparison.OrdinalIgnoreCase)) is { } rsFlag
+    && Array.IndexOf(args, rsFlag) is var rsIdx && rsIdx >= 0 && rsIdx + 1 < args.Length)
+{
+    var strategyName = args[rsIdx + 1];
+    var instruments = args.Skip(rsIdx + 2).TakeWhile(a => !a.StartsWith("--")).ToList();
+    // StrategyRunAsync 的 parts[0] = 策略名（REPL 调它时已剥 "strategy run" 前缀）——这里同样不带前缀
+    var passThrough = new List<string> { strategyName };
+    passThrough.AddRange(instruments);
+    // 其余 -- 选项（--real/--max-volume/--engine/--resolution/--param/--verbose/--cash）原样透传给 StrategyRunAsync
+    foreach (var a in args.Skip(rsIdx + 1).Skip(1 + instruments.Count))
+        if (a != rsFlag) passThrough.Add(a);
+
+    await SweepOpenOrdersAsync();
+    Console.WriteLine($"[bot] 启动策略 {strategyName}（合约 {string.Join(",", instruments)}）——Ctrl+C 或输 quit 停止");
+    await StrategyRunAsync(passThrough.ToArray());
+    // 等引擎脱离 Starting（StartAsync 返回时可能仍在 Starting——立即查 IsRunning 会误判启动失败）
+    while (live.Status is LiveTradingRuntimeStatus.Starting or LiveTradingRuntimeStatus.Idle)
+        await Task.Delay(500);
+    if (live.Status == LiveTradingRuntimeStatus.Running)
+        await WaitBotExitAsync();
+    else
+        Console.WriteLine($"[bot] 引擎未进入运行态（{live.Status}）——退出。");
+    if (live.IsRunning) { try { await live.StopAsync(); } catch { } }
+    session.Logout();
+    Console.WriteLine("[bot] 已退出。");
+    return;
+}
 
 // —— REPL ——
 Console.WriteLine("输入 help 查看命令。");
@@ -372,6 +407,76 @@ async Task ShutdownAsync()
     }
     session.Logout();
     Console.WriteLine("已退出。");
+}
+
+/// <summary>启动清场（直跑模式「接管」语义）：撤掉本账户全部活单。bot 意外死亡/被硬杀后旧挂单留在
+/// 交易所簿上，而新实例的 OrderTicket 票根不认识它们（GetOpenOrders 刻意返空）——不清场会双份挂单。
+/// **走 JSON-RPC 直连交易所旁路**（--exchange 覆盖，默认 127.0.0.1:17800——服务器上 bot 与交易所同机）：
+/// CTP 线协议的查报单是已知边界（SDK 不派发 17B 空应答，恒 30s 超时）不可用。失败不阻断启动（提示后继续）。</summary>
+async Task SweepOpenOrdersAsync()
+{
+    var exchangeAddr = args2.Get("exchange") ?? "127.0.0.1:17800";
+    var parts = exchangeAddr.Split(':');
+    var host = parts.Length == 2 ? parts[0] : "127.0.0.1";
+    var port = parts.Length == 2 && int.TryParse(parts[1], out var p) ? p : 17800;
+    try
+    {
+        using var rpc = new Acme.Ctp.Sim.SimRpcClient(host, port);
+        await rpc.ConnectAsync();
+        // 明文域登录（密码与前置域独立——未设时首登补设，同密码则两域同通）
+        await rpc.LoginAsync(new Acme.Ctp.Sim.LoginArg(broker, user, password));
+        var orders = await rpc.QueryOrdersAsync(null);
+        var openOrders = orders.Where(o => o.OrderStatusRaw is (byte)'3' or (byte)'1').ToList();   // '3' 未成交在队列 / '1' 部分成交在队列
+        if (openOrders.Count == 0) { Console.WriteLine("[bot] 清场：无活单"); return; }
+        Console.WriteLine($"[bot] 清场：撤 {openOrders.Count} 张接管前活单…");
+        foreach (var o in openOrders)
+        {
+            try
+            {
+                await rpc.CancelOrderAsync(new CtpOrderRef(broker, user, 0, 0, o.OrderRef, ""));
+                Console.WriteLine($"[bot] 清场撤单 {o.InstrumentId} ref={o.OrderRef}");
+            }
+            catch (Exception ex) { Console.WriteLine($"[bot] 清场撤单失败 ref={o.OrderRef}：{ex.Message}（继续）"); }
+        }
+    }
+    catch (Exception ex) { Console.WriteLine($"[bot] 清场旁路不可用（{exchangeAddr}：{ex.Message}）——继续启动"); }
+}
+
+/// <summary>直跑模式的挂机等待：Ctrl+C（CancelKeyPress，e.Cancel 防立即死）或 stdin 输 quit/exit 退出；
+/// stop = 只停策略不退出（可再次 strategy run？直跑模式无 REPL——stop 后输 quit 退出）。
+/// stdin EOF（管道结束）不退出——挂机场景无输入者。</summary>
+async Task WaitBotExitAsync()
+{
+    var exit = new TaskCompletionSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;   // 拦截默认终止——走优雅路径（StopAsync 撤单腿）
+        Console.WriteLine("[bot] 收到 Ctrl+C——优雅停止…");
+        exit.TrySetResult();
+    };
+    _ = Task.Run(async () =>
+    {
+        while (!exit.Task.IsCompleted)
+        {
+            var line = await Console.In.ReadLineAsync();
+            if (line is null) { await Task.Delay(1000); continue; }   // EOF（无人值守）不退出
+            switch (line.Trim().ToLowerInvariant())
+            {
+                case "quit" or "exit":
+                    Console.WriteLine("[bot] 收到退出命令。");
+                    exit.TrySetResult();
+                    return;
+                case "stop":
+                    Console.WriteLine("[bot] 停止策略（输 quit 退出）…");
+                    try { await live.StopAsync(); } catch { }
+                    break;
+                case "status":
+                    Console.WriteLine($"[bot] 状态 {live.Status}（运行中={live.IsRunning}）");
+                    break;
+            }
+        }
+    });
+    await exit.Task;
 }
 
 void PrintStrategies()

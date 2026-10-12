@@ -16,6 +16,8 @@
   <ItemGroup>
     <!-- 登录/交易/行情（官方 SDK 链路直连 CTP 前置——本地仿真或真实前置同链路） -->
     <ProjectReference Include="..\..\..\business\Ctp\Acme.Ctp.Infrastructure\Acme.Ctp.Infrastructure.csproj" />
+    <!-- JSON-RPC 薄客户端（交易所直连旁路——直跑模式的启动清场用：CTP 线协议查报单恒超时不可用） -->
+    <ProjectReference Include="..\..\..\business\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
     <!-- 实盘策略引擎端口（LiveTradingRuntimeRequest / ILiveTradingRuntime） -->
     <ProjectReference Include="..\..\..\business\Trading.Runtime\Acme.Trading.Runtime.Domain\Acme.Trading.Runtime.Domain.csproj" />
     <!-- Lean 实盘引擎 impl（AddTradingRuntimeLean / AddLeanAlgorithmServices / LeanAlgorithmRegistry） -->
