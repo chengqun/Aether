@@ -234,8 +234,8 @@ async Task SubscribeAsync(string[] symbols)
 
 async Task OrderAsync(string[] parts)
 {
-    // buy|sell <o|c|ct|cy> <合约> <价格|market> <数量>
-    if (parts.Length != 6) { Console.WriteLine("用法：buy|sell <o|c|ct|cy> <合约> <价格|market> <数量>"); return; }
+    // buy|sell <o|c|ct|cy> <合约> <价格|market> <数量> —— 5 个 token
+    if (parts.Length != 5) { Console.WriteLine("用法：buy|sell <o|c|ct|cy> <合约> <价格|market> <数量>"); return; }
     var direction = parts[0].Equals("buy", StringComparison.OrdinalIgnoreCase) ? CtpDirection.Buy : CtpDirection.Sell;
     var offset = parts[1].ToLowerInvariant() switch
     {

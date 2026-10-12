@@ -9,4 +9,7 @@
          层化例外随之删除；前置成为干净的协议适配层，真实世界券商前置形态）。 -->
     <ProjectReference Include="..\..\CtpExchange\Acme.Ctp.Sim\Acme.Ctp.Sim.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Acme.Ctp.Front.Tests" />
+  </ItemGroup>
 </Project>

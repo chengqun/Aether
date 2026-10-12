@@ -509,7 +509,7 @@ internal sealed class CtpFrontSession : IDisposable
                 _log($"[CTP-Front] 报单解析失败: body={Convert.ToHexString(body)}");
                 return null;
             }
-            _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} TC={(char)o.TimeCondition} reqId={o.ReqId}");
+            _log($"[CTP-Front] 报单: ref={o.OrderRef} {o.InstrumentId} {(o.Direction == '0' ? "买" : "卖")}{(o.OffsetFlag == '0' ? "开" : "平")} {o.Volume}@{o.LimitPrice} TC={(char)o.TimeCondition} reqId={o.ReqId} body={Convert.ToHexString(body)}");
             try
             {
                 // 绑定账户插入（OrderRef 直通）；应答结果弃（成功 = 无应答帧——真 CTP 语义）。
