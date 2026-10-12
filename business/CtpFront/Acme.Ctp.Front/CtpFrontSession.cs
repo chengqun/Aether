@@ -347,8 +347,14 @@ internal sealed class CtpFrontSession : IDisposable
 
         _loginReqId = ReqIdAfterOp(body) ?? 0;
         _brokerId = CtpFieldCodec.ExtractField(body, 0xFE) ?? _brokerId;
-        _userId = CtpFieldCodec.ExtractField(body, 0xE7) ?? _userId;
         var appId = CtpFieldCodec.ExtractField(body, 0xE5) ?? "";
+        // **⑦ 的 user 槽是定长 6 字节**（客户端 SDK 内部序列化实测：botmm→"botmm "补空格、
+        // botnoise→"botnoi"截断——2026-10-12 服务器实测踩中：绑定被等宽污染的账户名 ⇒ 连到
+        // 幽灵户 0 余额）。**绑定账户名以 ⑤ 认证帧的变长完整 user 为准**（状态机保证 ⑤ 先于 ⑦ 必达，
+        // HandleAuthAsync 已存完整 _userId）——⑦ 的 user 解析结果丢弃。
+        _userId = string.IsNullOrEmpty(_userId)
+            ? CtpFieldCodec.ExtractField(body, 0xE7) ?? _userId
+            : _userId;
 
         // 加密密码（E6 标记）——存密文当哈希（同密码+同挑战 ⇒ 同密文）
         var encryptedPwd = CtpFieldCodec.ExtractEncrypted(body);

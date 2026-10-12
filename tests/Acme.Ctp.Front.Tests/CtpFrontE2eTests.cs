@@ -125,4 +125,30 @@ public sealed class CtpFrontE2eTests : IDisposable
         var positions = await trader.QueryInvestorPositionAsync(FrontLoopback.Broker, "tst1");
         Assert.DoesNotContain(positions, p => p.TotalPosition != 0 || p.TodayPosition != 0 || p.YdPosition != 0);
     }
+
+    /// <summary>
+    /// 非 6 字符用户：客户端 SDK 把 <b>⑦ 登录帧的 user 序列化成定长 6 字节槽</b>（2026-10-12 服务器实测踩中：
+    /// botmm(5)→"botmm "补空格、botnoise(8)→"botnoi"截断 ⇒ 前置绑定被污染的账户名 ⇒ 连到 0 余额幽灵户，
+    /// 真身 300 万永远查不到）。修复 = <b>绑定账户名以 ⑤ 认证帧的变长完整 user 为准</b>（⑦ 的解析结果丢弃）。
+    /// 分辨手段 = 资金差：真身充 7 AQ（Balance=1000007）；错绑幽灵户 = 首登开户 1000000。
+    /// </summary>
+    [Theory]
+    [InlineData("botmm")]      // 5 字符——⑦ 定长槽补空格场景
+    [InlineData("botnoise")]   // 8 字符——⑦ 定长槽截断场景
+    public async Task 非6字符用户_绑定以认证帧完整user为准(string user)
+    {
+        var flowDir = NewFlowDir();
+        Directory.CreateDirectory(flowDir);
+        using var trader = new CtpTrader(flowDir);
+
+        _sim.Core.CreditQuoteDeposit(user, 700_000_000);   // 真身 +7 AQ（1 AQ = 1 现金）
+
+        var login = await trader.LoginAsync(Connect(_sim, user, "e2e-pass"));
+        Assert.Equal("20260923", login.TradingDay);
+
+        await trader.ConfirmSettlementAsync(FrontLoopback.Broker, user);
+
+        var account = await trader.QueryTradingAccountAsync(FrontLoopback.Broker, user);
+        Assert.Equal(1_000_007, account.Balance, 2);   // 绑定真身（错绑幽灵 = 1000000）
+    }
 }
