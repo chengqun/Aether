@@ -29,7 +29,7 @@ public partial class MainFutureQuote : ObservableObject
     [ObservableProperty] private double _preSettlement;
     [ObservableProperty] private string _updateTime = "";
 
-    /// <summary>今日涨幅%（以昨结算 PreSettlement 为基准）。</summary>
+    /// <summary>今日涨幅%（以昨结算 PreSettlement 为基准——461 行 tick 首价兜底后非 0）。</summary>
     public double ChangePercent => PreSettlement != 0
         ? (LastPrice - PreSettlement) / PreSettlement * 100.0
         : 0;
