@@ -23,23 +23,29 @@ internal static class CtpOrderWireCodec
     internal static ParsedOrderInsert? ParseOrderInsert(ReadOnlySpan<byte> body)
     {
         var reqId = ByteAfter(body, "E101017BE3");
-        // orderRef：**形状锚定**（2026-10-12 探针定案）——tag 是动态值（实测 orderRef 的 tag = 0xEE − len(用户名)：
-        // 6字符⇒E8、7⇒E7、8⇒E6、3⇒EB——随用户名长度反比漂移），按固定 tag 找天然脆弱。12 位纯数字 run
-        // 全帧唯一（枚举"200" 3 位、量 run 含低字节、价格 run 含非数字），任意 tag 扫描取之。
+        // **全形状锚定**（2026-10-12 三轮探针定案）：SDK 的 tag 是动态值（实测随用户名长度/字段值宽联动漂移——
+        // orderRef 的 tag = 0xEE−len(user)（6字符⇒E8、5⇒E9、3⇒EB）；枚举 tag = orderRef tag+2；量的 tag 实测
+        // 出现 E3/E8/E9 三种；价格的 tag 实测恒 E4 但不保证）。按固定 tag 找字段天然脆弱——除 reqId 外全部
+        // 改为「任意 tag + 形状谓词」锚定（形状在全帧内的唯一性见各谓词注释）。
         var orderRef = RunLast(body, 0, OrderRefShape);
-        // 枚举三元组（PriceType/Direction/OffsetFlag 的 ASCII '0'-'4'）——**形状锚定**（2026-10-12 探针定案）：
-        // tag 动态（实测 = orderRef 的 tag + 2：E8⇒EA、E7⇒E9、EB⇒ED——随用户名长度联动漂移）。
-        // 3 字节纯 [0-4] 数字 run 全帧唯一（orderRef 12 位、量 run 含低字节、价格 run 含非数字）。
+        // 枚举三元组（PriceType/Direction/OffsetFlag 的 ASCII '0'-'4'）——3 字节纯 [0-4] run 唯一
+        //（orderRef 12 位、量 run 含低字节、价格 run 含非数字）。
         var enums = RunLast(body, 0, r => r.Length == 3 && r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'4'));
-        // 价格谓词（2026-10-12 修正）：尾剥零大端 double——**不能要求值内含 ≥0x80 字节**（旧谓词对
-        // 抓包价 2999=0x40A7… 恰好成立，而 ax001 价 100=0x4059… 全字节 <0x80 ⇒ 价格 <1024 的单全被
-        // 解析失败静默丢弃——服务器实测 bot 全部丢单的根因）。改为「非纯 ASCII 数字」：二进制价格 run
-        // 必含非数字字节（0x40='@' 等），而帧内纯数字的 E4 run（计数器 04/"1"）被排除。
-        var price = RunAfter(body, 0xE4, r => r.Length is >= 2 and <= 8 && !r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'9'));
-        // 量的 tag 随值宽/形状变：1 字节量 ⇒ E8 或 E9（实测量1+GFD 编码 E9 01 33——2026-10-12 服务器
-        // 丢单实测；M2 抓包 oracle 曾实证 E8 2B run），2 字节量（≥256 手）⇒ E7（3B run）——先 E8 后 E7 后 E9，
-        // VolShape 谓词（前缀含 <0x20 低字节 + 尾字节 TimeCondition）闸住误中。
-        var vol = RunAfter(body, 0xE8, VolShape) ?? RunAfter(body, 0xE7, VolShape) ?? RunAfter(body, 0xE9, VolShape);
+        // 量：VolShape（前缀含 <0x20 低字节 + 尾字节 TimeCondition '1'-'4'）——任意 tag（实测 E3/E8/E9
+        // 均出现过；帧内无其它「低字节+尾 TimeCondition」形状的 run）。先定位它的 tag 索引——价格锚点用。
+        var volTagIdx = FindRunIndex(body, VolShape);
+        if (volTagIdx < 0) return null;
+        var volRun = ExtractRunAt(body, volTagIdx);
+        // 价格：尾剥零大端 double——2-8B、非纯 ASCII 数字（4049='@I' 之类）、解析值在 (0,1e9) 合理区间。
+        // **位置锚定**：价格紧跟在量 run 之前（帧序：…枚举 → "1" → 价格 → 量 → …）——在量的前缀里取
+        // 最后一个合格 run（防帧头 reqId 族 01017B / 量后 0131 等小字节垃圾 run 误中——形状谓词对
+        // 1e-303 量级的小值不设防，位置才是硬闸）。低价（<1024，如 ax001 的 100.x）的 double 全字节
+        // 可 <0x80——旧谓词 Any(b≥0x80) 对其失效是首轮丢单根因。
+        var price = volTagIdx > 0
+            ? RunLast(body[..volTagIdx], 0, r => r.Length is >= 2 and <= 8
+                && !r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'9')
+                && ParseTrimmedDouble(r) is > 0 and < 1e9)
+            : null;
         // 合约形状 ^[A-Za-z]{1,2}\d{3,4}$（官方命名——1-2 字母；本地品种已改名 zx 对齐，排除用户名/交易所码）
         // 取**最后一个**匹配（合约近帧尾、用户近帧头——避免 3 字母+3 数字的用户名误中）
         var inst = RunLast(body, 0, r =>
@@ -49,10 +55,41 @@ internal static class CtpOrderWireCodec
             return letters is >= 1 and <= 2 && r.Length - letters is >= 3 and <= 4
                 && r[letters..].ToArray().All(IsDigit);
         });
-        if (reqId is null || orderRef is null || enums is null || price is null || vol is null || inst is null) return null;
+        if (reqId is null || orderRef is null || enums is null || price is null || volRun is null || inst is null) return null;
         return new ParsedOrderInsert(reqId.Value, Encoding.ASCII.GetString(orderRef), Encoding.ASCII.GetString(inst),
             (char)enums[0], (char)enums[1], (char)enums[2],
-            ParseTrimmedDouble(price), (int)ParseMinimalInt(vol[..^1]), (char)vol[^1]);
+            ParseTrimmedDouble(price), (int)ParseMinimalInt(volRun[..^1]), (char)volRun[^1]);
+    }
+
+    /// <summary>定位第一个满足形状谓词的 run 的 tag 起始索引（找不到 −1）——量字段定位 + 价格位置锚点。</summary>
+    private static int FindRunIndex(ReadOnlySpan<byte> body, Func<ReadOnlySpan<byte>, bool> match)
+    {
+        for (var i = 0; i < body.Length; i++)
+        {
+            if (!IsTag(body[i])) continue;
+            var j = i + 1;
+            while (j < body.Length)
+            {
+                if (body[j] == 0xE0 && j + 1 < body.Length) { j += 2; continue; }
+                if (IsTag(body[j])) break;
+                j++;
+            }
+            if (j > i + 1 && match(body[(i + 1)..j])) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>提取指定 tag 索引处的 run 值（E0 转义感知）。</summary>
+    private static byte[]? ExtractRunAt(ReadOnlySpan<byte> body, int tagIdx)
+    {
+        var j = tagIdx + 1;
+        while (j < body.Length)
+        {
+            if (body[j] == 0xE0 && j + 1 < body.Length) { j += 2; continue; }
+            if (IsTag(body[j])) break;
+            j++;
+        }
+        return j > tagIdx + 1 ? body[(tagIdx + 1)..j].ToArray() : null;
     }
 
     internal static ParsedOrderAction? ParseOrderAction(ReadOnlySpan<byte> body)
