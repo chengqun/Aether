@@ -50,6 +50,19 @@ public class RiskRejectionTests
     }
 
     [Fact]
+    public async Task 限价低于一个最小变动价位被拒_编码损坏防御()
+    {
+        // 2026-10-13 双 bot 本地实测：⑲ codec 把含 FE 字节的 99.97 解成 5.11e-210 入簿——
+        // 垃圾卖单穿透买侧 + tick ask 垃圾反馈环。健全带 = 拒绝 < PriceTick 的限价。
+        var core = await SimHarness.NewLoggedInCoreAsync();
+
+        RejectedWith(core, SimHarness.Limit(CtpDirection.Buy, 1, 5.11e-210), SimErrorCodes.InvalidPrice);
+        RejectedWith(core, SimHarness.Limit(CtpDirection.Sell, 1, 0.001), SimErrorCodes.InvalidPrice);   // ag2610 PriceTick=1
+        // 正常价（≥ 一个 tick）不受影响
+        Assert.Equal("000000000001", core.InsertOrder(SimHarness.Account, SimHarness.Limit(CtpDirection.Buy, 1, SimHarness.Bid)).OrderRef);
+    }
+
+    [Fact]
     public async Task 未上市合约被拒()
     {
         // 上市闸门恒生效：上市表 = 唯一可交易集合——zz9999 不在上市表 ⇒ 拒 90002（品种可派生也不行，上架是显式决定）

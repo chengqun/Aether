@@ -52,6 +52,13 @@ public sealed class SimRiskEngine : IRiskEngine
         if (req.PriceType == CtpOrderPriceType.Limit && req.LimitPrice <= 0)
             return RiskResult.Reject(SimErrorCodes.InvalidPrice, $"限价单价格非法：{req.LimitPrice:F4}。");
 
+        // 价格健全带（2026-10-13 双 bot 本地实测防御）：低于一个最小变动价位的限价必为编码损坏——
+        // ⑲ codec 曾把含 FE 字节的 99.97 解成 5.11e-210 入簿（垃圾卖单穿透买侧 + tick ask 垃圾反馈环）。
+        // codec 层已修源头（IsTag 去 FE + E0 转义感知），此处兜底防未来的解码损坏单手穿簿。
+        if (req.PriceType == CtpOrderPriceType.Limit && req.LimitPrice < context.Instrument.PriceTick)
+            return RiskResult.Reject(SimErrorCodes.InvalidPrice,
+                $"限价低于一个最小变动价位（{context.Instrument.PriceTick}）——疑似编码损坏：{req.LimitPrice:F4}。");
+
         // 现货开空解禁（2026-10-10 用户拍板「现货也可以做空，一个品种就够」）：现货走与期货一致的双向持仓。
         // 资金安全由保证金全程锁定保证（开空同额保证金，与期货同构）；场内 OI 可超链上真实币量（纸面头寸——
         // 期货市场常态）。凭空撮合的多头提币时受链上 custody 余额约束（链拒——烧毁的持仓由对账循环补铸回来，

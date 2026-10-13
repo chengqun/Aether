@@ -88,25 +88,34 @@ internal static class CtpFrontTemplates
     /// 价格槽等宽编码（恒 width 字节）——<b>宽度随值的 TrimmedDouble 是 2026-10-13 ax001 双 bot 断连风暴的根因</b>：
     /// 88/92/96/100（整数价，double 第 3 字节 0x00）剥尾零后 2B、92.03 等非二进小数价 8B 且内含 tag 字节 ⇒
     /// 帧缩/撑 ⇒ SDK 记录遍历失步 ⇒ 其后全部推送静默失效 + 4097 重连循环（服务器实测：MM 阶梯 90/89 恰 3B
-    /// 能收回报、88 起全丢；E2E CtpFrontPriceWidthTests 钉死）。编码 = ①量化到 width 字节可精确表示的最近值
-    /// （四舍五入——3B 槽 [64,128) 的 ulp=1/64，ax001 的 0.01 tick 价回显有 ≤半 ulp 失真，已知边界）；
-    /// ②剥/补尾零到恒 width；③避开 tag 字母表字节（E0..EF/FE——值内出现会被「读到下一 tag」式解析截断，
-    /// SDK ⑲ 请求侧对含 tag 字节的价格做 E0 转义实证了这一点；递减 1 ulp 让位，量化回显本就近似）。
+    /// 能收回报、88 起全丢；E2E CtpFrontPriceWidthTests 钉死）。编码 = ①量化到 width 字节可精确表示的值
+    /// （<paramref name="roundUp"/>：null=四舍五入 / true=向上取整 / false=向下截断——MD tick 的 ask 用 ceil、
+    /// bid 用 floor：taker 拿到的对手价回显恒保证越过真实价（3B 槽 [64,128) ulp=1/64 &gt; ax001 的 0.01 tick ⇒
+    /// 最近值回显可能比真实价低 0.0044 ⇒ noise 的 IOC 限价够不到真实卖价 ⇒ 双 bot 市场恒不成交——2026-10-13
+    /// 本地双 bot 实测；成交仍按 maker 价，ceil 无经济副作用）；②剥/补尾零到恒 width；③避开 tag 字母表字节
+    /// （E0..EF/FE——值内出现会被「读到下一 tag」式解析截断，SDK ⑲ 请求侧对含 tag 字节的价格做 E0 转义
+    /// 实证了这一点；递减 1 ulp 让位，量化回显本就近似）。
     /// </summary>
-    internal static byte[] PriceSlot(double v, int width = 3)
+    internal static byte[] PriceSlot(double v, int width = 3, bool? roundUp = null)
     {
         var raw = Money(v);
-        // ① 四舍五入进位到 width 字节网格（第 width+1 字节 ≥ 0x80 → 前缀 +1；进位链/溢出退截断）
-        if (raw.Length > width && raw[width] >= 0x80)
+        // ① 量化进位（最近值：第 width+1 字节 ≥ 0x80 → 前缀 +1；ceil：截掉字节非零即进位；floor：恒不进位）
+        var carry = roundUp switch
+        {
+            true => raw[width..].Any(b => b != 0),
+            false => false,
+            _ => raw[width] >= 0x80,
+        };
+        if (carry)
         {
             var prefix = raw.ToArray()[..width];
-            var carry = true;
-            for (var i = width - 1; i >= 0 && carry; i--)
+            var carryOn = true;
+            for (var i = width - 1; i >= 0 && carryOn; i--)
             {
                 prefix[i]++;
-                carry = prefix[i] == 0;
+                carryOn = prefix[i] == 0;
             }
-            if (!carry) raw = Cat(prefix, new byte[raw.Length - width]);
+            if (!carryOn) raw = Cat(prefix, new byte[raw.Length - width]);
         }
         // ② 剥尾零（量化后低位恒 0）→ 不足 width 右补零——恒 width 字节
         var n = width;
@@ -695,8 +704,10 @@ internal static class CtpFrontTemplates
         "0103344CE4F103E504E1D2E42439E1866D32373031EFEB30323A32313A3139E53230323630393330E16D32373031EFEFEFEFEFE12433E11C40AA56E60C3DCE42192CC8E0E5E0E8E24142BF9B80E32434E11840AA54E7045140AA56E703282481E10840E0E073C994E0E15FE0E6"
     );
 
-    /// <summary>tick 推送（E4F103 流式 op——E4F101 快照 op 重复推送触发 native 重投，勿改回）；last/bid/ask
-    /// PriceSlot 等宽（旧 PadTrimmedDouble 截断式——本次统一为四舍五入 + 避 tag 字节），量串 verbatim。</summary>
+    /// <summary>tick 推送（E4F103 流式 op——E4F101 快照 op 重复推送触发 native 重投，勿改回）；last=最近值、
+    /// <b>bid=floor / ask=ceil</b>（对手价回显方向语义：taker 的 IOC 限价恒越过真实价——3B 槽 1/64 ulp &gt;
+    /// ax001 0.01 tick 时最近值回显可能低 0.0044 ⇒ noise IOC 够不到真实卖价 ⇒ 双 bot 市场不成交，2026-10-13
+    /// 实测；成交按 maker 价，ceil 无经济副作用），量串 verbatim。</summary>
     internal static byte[] BuildMdTick(string instrumentId, string tradingDay, string updateTime, double lastPrice, double bidPrice, double askPrice) =>
         Apply(MdTickTemplate,
             new Edit(32, 8, A(tradingDay)),
@@ -704,7 +715,7 @@ internal static class CtpFrontTemplates
             new Edit(41, 5, F(instrumentId, 5)),
             new Edit(23, 8, A(updateTime)),
             new Edit(56, 3, PriceSlot(lastPrice)),
-            new Edit(82, 3, PriceSlot(bidPrice)),
-            new Edit(88, 3, PriceSlot(askPrice))
+            new Edit(82, 3, PriceSlot(bidPrice, 3, roundUp: false)),
+            new Edit(88, 3, PriceSlot(askPrice, 3, roundUp: true))
         );
 }

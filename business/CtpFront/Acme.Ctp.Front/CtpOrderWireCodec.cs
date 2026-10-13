@@ -17,7 +17,11 @@ internal static class CtpOrderWireCodec
 
     internal sealed record ParsedOrderAction(byte ReqId, string OrderRef);
 
-    private static bool IsTag(byte b) => b is >= 0xE1 and <= 0xEF or 0xFE;
+    /// <summary>tag 判定 = E1..EF（**不含 FE**——2026-10-13 双 bot 本地实测：SDK 对 99.984375 价
+    /// （double 含 0xFE + 0xE1）只转义 E1（E0 前插）、**FE 原样保留** ⇒ FE 不在其转义字母表 ⇒
+    /// 不是 wire tag；旧版把 FE 当 tag ⇒ 价格 run 在 FE 处截断 ⇒ 尾部 6B 被当价格解析成
+    /// 5.11E-210 垃圾价入簿（垃圾卖单穿透买侧 + tick ask 垃圾反馈环）。E0 = 转义前缀亦非 tag。</summary>
+    private static bool IsTag(byte b) => b is >= 0xE1 and <= 0xEF;
     private static bool IsDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
 
     internal static ParsedOrderInsert? ParseOrderInsert(ReadOnlySpan<byte> body)

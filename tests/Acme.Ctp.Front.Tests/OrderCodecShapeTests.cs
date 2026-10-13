@@ -29,11 +29,19 @@ public class OrderCodecShapeTests
     private const string FrameEscapedPrice =
         "E101E240E40EE101017BE30E04E1017739393939E7707875736572EFEFE8303030303030303030303031E1707875736572EA323030E431E4405701E0EB851EB852E30133E931E30131E830EFEFE7444345EFEFEFEFEFED6D32373031EFEFEFEFEFEFEFE4";
 
+    // user=botmm（5字符）价格 **99.97**（double = 40 58 FE 14 7A E1 47 AE——值内含 0xFE【SDK 不转义，
+    // FE 非其字母表】+ 0xE1【E0 前插转义】；对照 99.98 = 40 58 EB B8 … 含 0xEB 亦转义）量 5 GFD 买开——
+    // 2026-10-13 双 bot 本地全栈实测帧（修前 IsTag 含 FE ⇒ 价格 run 在 FE 截断 ⇒ 尾 6B 解出
+    // 5.11E-210 垃圾价入簿 ⇒ 垃圾卖单穿透买侧 + tick ask 垃圾反馈环）。
+    private const string FrameFePrice =
+        "E101E240E405E101017BE30804E1017739393939E7626F746D6DEFEFE9303030303030303030303032E1626F746D6DEB323030E431E44058FE147AE0E147AEE30533E931E30131E830EFEFEFEFEFEFEFEFE86178303031EFEFEFEFEFEFEFE4";
+
     [Theory]
     [InlineData(FrameE2Eusr,   "000000000001", "ax001", '0', '0', '2', 2998.0, 5, '3')]
     [InlineData(FrameMm1,      "000000000001", "ax001", '0', '0', '2', 50.0,   1, '3')]
     [InlineData(FrameBotmmLadder, "000000000021", "ax001", '0', '0', '2', 99.94, 5, '3')]
     [InlineData(FrameEscapedPrice, "000000000001", "m2701", '0', '0', '2', 92.03, 1, '3')]
+    [InlineData(FrameFePrice,  "000000000002", "ax001", '0', '0', '2', 99.97, 5, '3')]
     public void 实测帧_形状锚定解析_各字段精确还原(string hex, string refId, string inst,
         char dir, char off, char pt, double price, int vol, char tc)
     {

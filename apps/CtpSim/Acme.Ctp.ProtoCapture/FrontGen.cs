@@ -493,7 +493,7 @@ internal static class FrontGen
             e.Add((instClean[0].Off, instClean[0].Len, $"F(instrumentId, {instClean[0].Len})"));
             e.Add((times[0].Off, 8, "A(updateTime)"));
             e.Add((lastSlot[0].Off + 1, 3, "PriceSlot(lastPrice)"));
-            e.Add((bidSlot[0].Off + 1, 3, "PriceSlot(bidPrice)"));
+            e.Add((bidSlot[0].Off + 1, 3, "PriceSlot(bidPrice, 3, roundUp: false)"));
             // ask 槽 wire 偏移 = 跳过前 2 个逻辑字节（bidvol）后的 wire 位置——bidvol 字节若落在
             // tag 字母表（E0..EF/FE）会被 E0 转义、wire 额外 +1（107B 帧实证：bidvol [02,E9] → wire [02,E0,E9]，
             // 朴素 +2 编辑撞进转义对 → SDK 读出捕获值 3372 而非注入价）。转义感知跳字节。
@@ -505,7 +505,7 @@ internal static class FrontGen
                 else askOff += 1;
                 askSkip++;
             }
-            e.Add((askOff, 3, "PriceSlot(askPrice)"));
+            e.Add((askOff, 3, "PriceSlot(askPrice, 3, roundUp: true)"));
             CheckDisjoint("MdTick", e.ToArray());
             eTick = e;
             pTick = t;
@@ -982,19 +982,25 @@ internal static class FrontGen
         sb.AppendLine("    /// ⇒ 帧缩/撑 ⇒ SDK 记录遍历失步 ⇒ 其后全部推送静默失效 + 4097 重连循环。编码 = ①量化到 width 字节");
         sb.AppendLine("    /// 可精确表示的最近值（四舍五入）；②剥/补尾零到恒 width；③避开 tag 字母表字节（E0..EF/FE——递减 1 ulp 让位）。");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine("    internal static byte[] PriceSlot(double v, int width = 3)");
+        sb.AppendLine("    internal static byte[] PriceSlot(double v, int width = 3, bool? roundUp = null)");
         sb.AppendLine("    {");
         sb.AppendLine("        var raw = Money(v);");
-        sb.AppendLine("        if (raw.Length > width && raw[width] >= 0x80)");
+        sb.AppendLine("        var carry = roundUp switch");
+        sb.AppendLine("        {");
+        sb.AppendLine("            true => raw[width..].Any(b => b != 0),");
+        sb.AppendLine("            false => false,");
+        sb.AppendLine("            _ => raw[width] >= 0x80,");
+        sb.AppendLine("        };");
+        sb.AppendLine("        if (carry)");
         sb.AppendLine("        {");
         sb.AppendLine("            var prefix = raw.ToArray()[..width];");
-        sb.AppendLine("            var carry = true;");
-        sb.AppendLine("            for (var i = width - 1; i >= 0 && carry; i--)");
+        sb.AppendLine("            var carryOn = true;");
+        sb.AppendLine("            for (var i = width - 1; i >= 0 && carryOn; i--)");
         sb.AppendLine("            {");
         sb.AppendLine("                prefix[i]++;");
-        sb.AppendLine("                carry = prefix[i] == 0;");
+        sb.AppendLine("                carryOn = prefix[i] == 0;");
         sb.AppendLine("            }");
-        sb.AppendLine("            if (!carry) raw = Cat(prefix, new byte[raw.Length - width]);");
+        sb.AppendLine("            if (!carryOn) raw = Cat(prefix, new byte[raw.Length - width]);");
         sb.AppendLine("        }");
         sb.AppendLine("        var n = width;");
         sb.AppendLine("        while (n > 1 && raw[n - 1] == 0) n--;");
