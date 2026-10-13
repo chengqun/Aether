@@ -5,6 +5,13 @@
 //     生成器计算，needle 唯一命中/编辑区无重叠/余额像钱均生成期断言——零人工转录。）
 // 抓包源: /var/folders/wf/6fth7gs95xzfhk1n59kpzhvc0000gn/T/ctp-proto-capture/20260929-031656/trade.txt（22 帧）
 // 帧字节为抓包原样（含 SimNow 认证 token/密文/账号）——仅本地仿真用，勿入公网/勿分发。
+//
+// **2026-10-13 手改批（与 FrontGen.cs 同步更新——再生成须保留同款编码）**：推送/应答帧的
+// 价格槽改 PriceSlot（等宽 + 量化 + 避 tag 字节）、orderRef 改 F(,12) 等宽、状态消息改
+// EscapedGbkFixed（转义膨胀安全）、量槽 VolumeEdit（≥256 切 E7）——根因：TrimmedDouble 宽度随值
+// （88/92/96/100 → 2B、92.03 → 8B 含 tag 字节）⇒ 帧缩/撑 ⇒ SDK 记录遍历失步 ⇒ ax001 双 bot
+// 断连风暴（E2E CtpFrontPriceWidthTests + RtnOrderWidthShapeTests 钉死）。原始抓包文件已随临时
+// 目录清空，无法再生成——本文件即权威。
 // ─────────────────────────────────────────────────────────────────────────────
 
 using System.Buffers.Binary;
@@ -69,11 +76,56 @@ internal static class CtpFrontTemplates
         return r;
     }
 
-    /// <summary>价格槽等宽填充：TrimmedDouble 右补零到槽宽（解析侧右补零到 8B 还原同值——M3 实证变宽即失步）。</summary>
+    /// <summary>价格槽等宽填充：TrimmedDouble 右补零到槽宽（解析侧右补零到 8B 还原同值——M3 实证变宽即失步）。
+    /// 已被 <see cref="PriceSlot"/> 取代（同宽 + 量化 + 避 tag 字节）——保留供生成器历史形状对照。</summary>
     internal static byte[] PadTrimmedDouble(double v, int width)
     {
         var t = TrimmedDouble(v);
         return t.Length >= width ? t[..width] : Cat(t, new byte[width - t.Length]);
+    }
+
+    /// <summary>
+    /// 价格槽等宽编码（恒 width 字节）——<b>宽度随值的 TrimmedDouble 是 2026-10-13 ax001 双 bot 断连风暴的根因</b>：
+    /// 88/92/96/100（整数价，double 第 3 字节 0x00）剥尾零后 2B、92.03 等非二进小数价 8B 且内含 tag 字节 ⇒
+    /// 帧缩/撑 ⇒ SDK 记录遍历失步 ⇒ 其后全部推送静默失效 + 4097 重连循环（服务器实测：MM 阶梯 90/89 恰 3B
+    /// 能收回报、88 起全丢；E2E CtpFrontPriceWidthTests 钉死）。编码 = ①量化到 width 字节可精确表示的最近值
+    /// （四舍五入——3B 槽 [64,128) 的 ulp=1/64，ax001 的 0.01 tick 价回显有 ≤半 ulp 失真，已知边界）；
+    /// ②剥/补尾零到恒 width；③避开 tag 字母表字节（E0..EF/FE——值内出现会被「读到下一 tag」式解析截断，
+    /// SDK ⑲ 请求侧对含 tag 字节的价格做 E0 转义实证了这一点；递减 1 ulp 让位，量化回显本就近似）。
+    /// </summary>
+    internal static byte[] PriceSlot(double v, int width = 3)
+    {
+        var raw = Money(v);
+        // ① 四舍五入进位到 width 字节网格（第 width+1 字节 ≥ 0x80 → 前缀 +1；进位链/溢出退截断）
+        if (raw.Length > width && raw[width] >= 0x80)
+        {
+            var prefix = raw.ToArray()[..width];
+            var carry = true;
+            for (var i = width - 1; i >= 0 && carry; i--)
+            {
+                prefix[i]++;
+                carry = prefix[i] == 0;
+            }
+            if (!carry) raw = Cat(prefix, new byte[raw.Length - width]);
+        }
+        // ② 剥尾零（量化后低位恒 0）→ 不足 width 右补零——恒 width 字节
+        var n = width;
+        while (n > 1 && raw[n - 1] == 0) n--;
+        var slot = n >= width ? raw[..width].ToArray() : Cat(raw[..n], new byte[width - n]);
+        // ③ 避开 tag 字母表（E0..EF/FE）：递减 1 ulp 让位（big-endian 减法；全 0 放弃——0 值天然无 tag 字节）
+        for (var guardI = 0; guardI < 4 && slot.Any(b => b is (>= 0xE0 and <= 0xEF) or 0xFE); guardI++)
+        {
+            var done = false;
+            for (var i = width - 1; i >= 0; i--)
+            {
+                if (slot[i] == 0) { slot[i] = 0xFF; continue; }
+                slot[i]--;
+                done = true;
+                break;
+            }
+            if (!done) break;
+        }
+        return slot;
     }
 
     /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>
@@ -267,6 +319,8 @@ internal static class CtpFrontTemplates
             new Edit(38, 6, F(investorId, 6)),
             new Edit(45, 4, F(brokerId, 4)),
             new Edit(50, 3, A($"{directionChar}{'1'}{positionDateChar}")),
+            // 量槽捕获 1B（E7 tag + MinimalInt）——总仓 ≥256 时 MinimalInt 2B 撑宽（MM 仓限 ±200 达不到；
+            // SDK 请求侧对大整数有 E7 切换惯例但本槽 tag 已是 E7，未实测边界——如实撑宽）。
             new Edit(54, 1, MinimalInt(totalPosition)),
             new Edit(123, 8, A(tradingDay)),
             new Edit(163, 3, F(exchangeId, 3)),
@@ -335,14 +389,15 @@ internal static class CtpFrontTemplates
         "0103344CE102E2F001E306E1010353E40401034F39393939E7323437313633E76D32373031EFEB303030303030303030303032E1323437313633EA323030E431E440A9C8E80133E931E30131E830EFEE202020202020202034363536E1444345E16D323730E139393939E131E3C9E139393939323437313431E16D32373031EFEB39393939636166E139393939E131E131E1393939E40133E3013230323630393239E401202020202020202039353037EA33E8013230323630393239E131303A35303A3437EFEFE739393939636166EFEC1341E301C8E0E69C40EBCEB4B3C9BDBBEFEFEFEFEFE510E710E86558E17FE3FDE66F70369F8C7FECFFFFFFE39CEFEFE53138302E3135382E3233322E313837EFE76D32373031EFEFEFEFEFE16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E13230323730313135E13230323730313230E13138302E3135382E3233322E313837EFEFE401"
     );
 
-    /// <summary>OnRtnOrder '3'（未成交在队——受理/挂单状态推送）。</summary>
+    /// <summary>OnRtnOrder '3'（未成交在队——受理/挂单状态推送）。价格/量槽等宽（PriceSlot/VolumeEdit——
+    /// 变宽即失步，见 PriceSlot 注释）。</summary>
     internal static byte[] BuildRtnOrder3(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
         Apply(RtnOrder3Template,
             new Edit(10, 1, [instance]),
-            new Edit(39, 12, A(orderRef)),
+            new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
-            new Edit(65, 3, TrimmedDouble(limitPrice)),
-            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(65, 3, PriceSlot(limitPrice)),
+            VolumeEdit(69, volume, timeCondition),
             new Edit(25, 6, F(userId, 6)),
             new Edit(52, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
@@ -365,14 +420,14 @@ internal static class CtpFrontTemplates
         "0103344CE102E2F001E309E1010353E40401034F39393939E7323437313633E76D32373031EFEB303030303030303030303033E1323437313633EA323030E431E440AA90E80133E931E30131E830EFEE202020202020202034363537E1444345E16D323730E139393939E131E3C9E139393939323437313431E16D32373031EFEB39393939636166E139393939E131E131E1393939E40130E43230323630393239E401202020202020202039353038E9303030E301E43230323630393239E131303A35303A3530EFEFE739393939636166EFEC1342E301C8E0E69C40EBC8ABB2BFB3C9BDBBB1A8B5A5D2D1CCE0E1BDBBEFEFEFEFE810E710E8655AE17FE3FDE66F70369F8C7FECFFFFFFE39CEFEFE53138302E3135382E3233322E313837EFE76D32373031EFEFEFEFEFE16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E13230323730313135E13230323730313230E13138302E3135382E3233322E313837EFEFE402"
     );
 
-    /// <summary>OnRtnOrder '0'（全部成交推送）。</summary>
+    /// <summary>OnRtnOrder '0'（全部成交推送）。价格/量槽等宽（PriceSlot/VolumeEdit）。</summary>
     internal static byte[] BuildRtnOrder0(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
         Apply(RtnOrder0Template,
             new Edit(10, 1, [instance]),
-            new Edit(39, 12, A(orderRef)),
+            new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
-            new Edit(65, 3, TrimmedDouble(limitPrice)),
-            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(65, 3, PriceSlot(limitPrice)),
+            VolumeEdit(69, volume, timeCondition),
             new Edit(25, 6, F(userId, 6)),
             new Edit(52, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
@@ -397,10 +452,10 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildRtnOrderTerminated(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay, char status, string statusMsg) =>
         Apply(RtnOrder3Template,
             new Edit(10, 1, [instance]),
-            new Edit(39, 12, A(orderRef)),
+            new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
-            new Edit(65, 3, TrimmedDouble(limitPrice)),
-            new Edit(69, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
+            new Edit(65, 3, PriceSlot(limitPrice)),
+            VolumeEdit(69, volume, timeCondition),
             new Edit(25, 6, F(userId, 6)),
             new Edit(52, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
@@ -417,7 +472,7 @@ internal static class CtpFrontTemplates
             new Edit(154, 8, A(tradingDay)),
             new Edit(180, 8, A(tradingDay)),
             new Edit(177, 1, [(byte)status]),
-            new Edit(219, 6, EscapedGbk(TruncateGbk(statusMsg, 6)))
+            new Edit(219, 6, EscapedGbkFixed(statusMsg, 6))
         );
 
     /// <summary>按 GBK 字节宽截断（消息槽 6B——汉字 2B/个；调用方传 ≤3 汉字时为直通）。</summary>
@@ -432,18 +487,47 @@ internal static class CtpFrontTemplates
         return text;
     }
 
+    /// <summary>GBK 文本 E0 转义并<b>锁定输出宽度</b>：逐字符累加（转义 +1/字节计入预算），超预算即止、
+    /// 不足右补空格——恒 width 字节。直接 TruncateGbk 再 EscapedGbk 会因转义膨胀撑破槽（值内
+    /// E0..EF/FE 字节前插 E0——每字节 +1）⇒ 帧撑失步。</summary>
+    private static byte[] EscapedGbkFixed(string text, int width)
+    {
+        var body = new List<byte>();
+        for (var i = 0; i < text.Length; i++)
+        {
+            var raw = Encoding.GetEncoding("GBK").GetBytes([text[i]]);
+            var cost = raw.Length + raw.Count(b => b is (>= 0xE0 and <= 0xEF) or 0xFE);
+            if (body.Count + cost > width) break;
+            foreach (var b in raw)
+            {
+                if (b is (>= 0xE0 and <= 0xEF) or 0xFE) body.Add(0xE0);
+                body.Add(b);
+            }
+        }
+        while (body.Count < width) body.Add((byte)' ');
+        return body.ToArray();
+    }
+
+    /// <summary>量槽 Edit（F001 OnRtnOrder 的 [量+TimeCondition] run，模板 @69 宽 2B）：量 ≤255 走捕获形状
+    /// （1B 量 + TC）；≥256 切 E7 + 2B 量 + TC（镜像 SDK ⑲ 请求侧自编码惯例——量 tag 随宽度变，E8=1B/E7=2B；
+    /// 响应方向未实测——bot 量级 ≤ MaxOrderVolume 远达不到，防御性对齐）。</summary>
+    private static Edit VolumeEdit(int offset, int volume, char timeCondition) => volume <= 255
+        ? new Edit(offset, 2, Cat(MinimalInt(volume), A(timeCondition.ToString())))
+        : new Edit(offset - 1, 3, Cat(H("E7"), MinimalInt(volume), A(timeCondition.ToString())));
+
     // ===== M2 帧 OnRtnTrade（283B payload：成交回报推送——F002） =====
     internal static readonly byte[] RtnTradeTemplate = H(
         "0103344CE102E2F002E30AE10101E0EFE4040901E0EB39393939E1444345E139E1323437313633E139393939E26D32373031EFEB303030303030303030303033E1323437313633EA444345E635333936EFE230202020202020202039353038E939393939E739393939323437313431E26D32373031EFEB303140AA3AE8013230323630393239E131303A35303A3530E130E139393939636166EE202020202020202034363537E139393939EFEF13433230323630393239E401E2655A30EFE26D32373031E1444345E16D32373031E16D32373031E16DE131E132303237E131E131303030E131E131303030E131E13130E131E13230323630313139E13230323630313139E13230323730313135E132E16D32373031EFEFEFEFEFE1"
     );
 
-    /// <summary>OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。</summary>
+    /// <summary>OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。
+    /// 价格槽 PriceSlot 等宽（变宽即失步）；量槽捕获 1B——>255 手时 MinimalInt 2B 撑宽（bot 量级达不到，未实测边界）。</summary>
     internal static byte[] BuildRtnTrade(byte instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay) =>
         Apply(RtnTradeTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(52, 12, A(orderRef)),
+            new Edit(52, 12, F(orderRef, 12)),
             new Edit(76, 4, F(tradeId, 4)),
-            new Edit(121, 3, TrimmedDouble(price)),
+            new Edit(121, 3, PriceSlot(price)),
             new Edit(184, 1, MinimalInt(volume)),
             new Edit(33, 6, F(userId, 6)),
             new Edit(65, 6, F(userId, 6)),
@@ -468,13 +552,13 @@ internal static class CtpFrontTemplates
         "0103344CE101E24001E303E10201E0E5E307E355E3944354503ACEDED0A7B5C445786368616E67654944D7D6B6CEA3ACC7E0EBCCE0EEC8E0EBD5FDC8B7B5C445786368616E67654944EFEFE304E1018839393939E7323437313633E7616732353132EFEA303030303030303030303032E1323437313633EA323030E431E440BEDCE80133E931E30131E830EFEFEFEFEFEFEFEFE8616732353132EFEFEFEFEFEFEFEFE401"
     );
 
-    /// <summary>⑳-4001 拒绝（payload；会话层与 F003 各自 BuildFrame 后拼接一次写）。</summary>
+    /// <summary>⑳-4001 拒绝（payload；会话层与 F003 各自 BuildFrame 后拼接一次写）。价格槽 PriceSlot 等宽。</summary>
     internal static byte[] BuildOrderInsertRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
         Apply(OrderInsertRspErrTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(100, 12, A(orderRef)),
+            new Edit(100, 12, F(orderRef, 12)),
             new Edit(120, 3, A($"{priceType}{direction}{offsetFlag}")),
-            new Edit(126, 3, TrimmedDouble(limitPrice)),
+            new Edit(126, 3, PriceSlot(limitPrice)),
             new Edit(130, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
             new Edit(85, 6, F(userId, 6)),
             new Edit(113, 6, F(userId, 6)),
@@ -490,13 +574,13 @@ internal static class CtpFrontTemplates
         "0103344CE102E2F003E301E10201E0E5E404E1018839393939E7323437313633E7616732353132EFEA303030303030303030303032E1323437313633EA323030E431E440BEDCE80133E931E30131E830EFEFEFEFEFEFEFEFE8616732353132EFEFEFEFEFEFEFEFE401E355E3944354503ACEDED0A7B5C445786368616E67654944D7D6B6CEA3ACC7E0EBCCE0EEC8E0EBD5FDC8B7B5C445786368616E67654944EFEFE3"
     );
 
-    /// <summary>⑳-F003 报单错误回报（拒单 → RspError 事件）。</summary>
+    /// <summary>⑳-F003 报单错误回报（拒单 → RspError 事件）。价格槽 PriceSlot 等宽。</summary>
     internal static byte[] BuildErrRtnOrderInsert(byte instance, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
         Apply(ErrRtnOrderInsertTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(41, 12, A(orderRef)),
+            new Edit(41, 12, F(orderRef, 12)),
             new Edit(61, 3, A($"{priceType}{direction}{offsetFlag}")),
-            new Edit(67, 3, TrimmedDouble(limitPrice)),
+            new Edit(67, 3, PriceSlot(limitPrice)),
             new Edit(71, 2, Cat(MinimalInt(volume), A(timeCondition.ToString()))),
             new Edit(26, 6, F(userId, 6)),
             new Edit(54, 6, F(userId, 6)),
@@ -515,7 +599,7 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildOrderActionRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(64, 12, A(orderRef)),
+            new Edit(64, 12, F(orderRef, 12)),
             new Edit(57, 6, F(userId, 6)),
             new Edit(90, 6, F(userId, 6)),
             new Edit(52, 4, F(brokerId, 4)),
@@ -527,7 +611,7 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildOrderActionRspOk(byte instance, byte reqId, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(64, 12, A(orderRef)),
+            new Edit(64, 12, F(orderRef, 12)),
             new Edit(57, 6, F(userId, 6)),
             new Edit(90, 6, F(userId, 6)),
             new Edit(52, 4, F(brokerId, 4)),
@@ -562,7 +646,7 @@ internal static class CtpFrontTemplates
     internal static byte[] BuildErrRtnOrderAction(byte instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
         Apply(ErrRtnOrderActionTemplate,
             new Edit(10, 1, [instance]),
-            new Edit(32, 12, A(orderRef)),
+            new Edit(32, 12, F(orderRef, 12)),
             new Edit(25, 6, F(userId, 6)),
             new Edit(66, 6, F(userId, 6)),
             new Edit(20, 4, F(brokerId, 4)),
@@ -611,15 +695,16 @@ internal static class CtpFrontTemplates
         "0103344CE4F103E504E1D2E42439E1866D32373031EFEB30323A32313A3139E53230323630393330E16D32373031EFEFEFEFEFE12433E11C40AA56E60C3DCE42192CC8E0E5E0E8E24142BF9B80E32434E11840AA54E7045140AA56E703282481E10840E0E073C994E0E15FE0E6"
     );
 
-    /// <summary>tick 推送（E4F103 流式 op——E4F101 快照 op 重复推送触发 native 重投，勿改回）；last/bid/ask 等宽填充，量串 verbatim。</summary>
+    /// <summary>tick 推送（E4F103 流式 op——E4F101 快照 op 重复推送触发 native 重投，勿改回）；last/bid/ask
+    /// PriceSlot 等宽（旧 PadTrimmedDouble 截断式——本次统一为四舍五入 + 避 tag 字节），量串 verbatim。</summary>
     internal static byte[] BuildMdTick(string instrumentId, string tradingDay, string updateTime, double lastPrice, double bidPrice, double askPrice) =>
         Apply(MdTickTemplate,
             new Edit(32, 8, A(tradingDay)),
             new Edit(16, 5, F(instrumentId, 5)),
             new Edit(41, 5, F(instrumentId, 5)),
             new Edit(23, 8, A(updateTime)),
-            new Edit(56, 3, PadTrimmedDouble(lastPrice, 3)),
-            new Edit(82, 3, PadTrimmedDouble(bidPrice, 3)),
-            new Edit(88, 3, PadTrimmedDouble(askPrice, 3))
+            new Edit(56, 3, PriceSlot(lastPrice)),
+            new Edit(82, 3, PriceSlot(bidPrice)),
+            new Edit(88, 3, PriceSlot(askPrice))
         );
 }

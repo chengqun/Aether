@@ -272,18 +272,18 @@ internal static class FrontGen
             e.Add(LocFull(p, Cat(op, [0xE3]), 1, "[instance]", $"{name} instance"));
             var or_ = ShapedRuns(p, r => r.Length == 12 && AllAsciiDigits(r));
             if (or_.Count != 1) throw Fail($"{name}: OrderRef run 命中 {or_.Count} 处（期望 1）");
-            e.Add((or_[0].Off, 12, "A(orderRef)"));
+            e.Add((or_[0].Off, 12, "F(orderRef, 12)"));
             var en = TaggedRuns(p, 0xEA).Where(r => r.Len == 3 && p.AsSpan(r.Off, 3).ToArray().All(b => b is >= (byte)'0' and <= (byte)'4')).ToList();
             if (en.Count != 1) throw Fail($"{name}: 枚举 run 命中 {en.Count} 处（期望 1）");
             e.Add((en[0].Off, 3, "A($\"{priceType}{direction}{offsetFlag}\")"));
             var pr = TaggedRuns(p, 0xE4).Where(r => r.Len is >= 2 and <= 8 && p.AsSpan(r.Off, r.Len).ToArray().Any(b => b >= 0x80)).ToList();
             if (pr.Count != 1) throw Fail($"{name}: 价格 run 命中 {pr.Count} 处（期望 1）");
-            e.Add((pr[0].Off, pr[0].Len, "TrimmedDouble(limitPrice)"));
+            e.Add((pr[0].Off, pr[0].Len, "PriceSlot(limitPrice)"));
             var vol = TaggedRuns(p, 0xE8).Where(r => r.Len is >= 2 and <= 5
                 && p[r.Off + r.Len - 1] is (byte)'1' or (byte)'2' or (byte)'3'
                 && p.AsSpan(r.Off, r.Len - 1).ToArray().Any(b => b < 0x20)).ToList();
             if (vol.Count != 1) throw Fail($"{name}: 量+TC run 命中 {vol.Count} 处（期望 1）");
-            e.Add((vol[0].Off, vol[0].Len, "Cat(MinimalInt(volume), A(timeCondition.ToString()))"));
+            e.Add((vol[0].Off, vol[0].Len, $"VolumeEdit({vol[0].Off}, volume, timeCondition)"));
             // FrontID/SessionID 编辑整段移除（2026-10-01 实证）：替换破坏 E0 转义结构的逻辑长度 ⇒ SDK
             // 解析失步（InstrumentID 读空）。保留捕获 verbatim——客户端回报匹配按 OrderRef（wrapper 实证
             // 不看 FrontID/SessionID），⑩ 与推送的会话值不一致是已知边界（README 记录）。
@@ -326,7 +326,7 @@ internal static class FrontGen
             eRtnT.Add(LocFull(pRtnT, Cat(Hx("E102E2F002"), [0xE3]), 1, "[instance]", "RtnTrade instance"));
             var or_ = ShapedRuns(pRtnT, r => r.Length == 12 && AllAsciiDigits(r));
             if (or_.Count != 1) throw Fail($"RtnTrade: OrderRef 命中 {or_.Count}");
-            eRtnT.Add((or_[0].Off, 12, "A(orderRef)"));
+            eRtnT.Add((or_[0].Off, 12, "F(orderRef, 12)"));
             var tid = TaggedRuns(pRtnT, 0xE6).Where(r => r.Len is >= 1 and <= 12 && AllAsciiDigits(pRtnT.AsSpan(r.Off, r.Len).ToArray())).ToList();
             if (tid.Count != 1) throw Fail($"RtnTrade: TradeID 命中 {tid.Count}");
             eRtnT.Add((tid[0].Off, tid[0].Len, $"F(tradeId, {tid[0].Len})"));   // 等宽（实证：变宽即失步；超长截断为边界）
@@ -334,7 +334,7 @@ internal static class FrontGen
             var px = TaggedRuns(pRtnT, 0xEB).Where(r => r.Len is >= 3 and <= 10
                 && pRtnT.AsSpan(r.Off, r.Len).ToArray().Any(b => b >= 0x80)).ToList();
             if (px.Count != 1) throw Fail($"RtnTrade: 价格 run 命中 {px.Count}");
-            eRtnT.Add((px[0].Off + 2, px[0].Len - 2, "TrimmedDouble(price)"));
+            eRtnT.Add((px[0].Off + 2, px[0].Len - 2, "PriceSlot(price)"));
             // 量：E4 + 短二进制 run（≤0x09）
             var vol = TaggedRuns(pRtnT, 0xE4).Where(r => r.Len is 1 or 2 && pRtnT.AsSpan(r.Off, r.Len).ToArray().All(b => b <= 0x09)).ToList();
             if (vol.Count != 1) throw Fail($"RtnTrade: 量 run 命中 {vol.Count}");
@@ -377,7 +377,7 @@ internal static class FrontGen
             e.Add(LocFull(p, Cat(op, [0xE3]), 1, "[instance]", $"{name} instance"));
             var or_ = ShapedRuns(p, r => r.Length == 12 && AllAsciiDigits(r));
             if (or_.Count != 1) throw Fail($"{name}: OrderRef 命中 {or_.Count}");
-            e.Add((or_[0].Off, 12, "A(orderRef)"));
+            e.Add((or_[0].Off, 12, "F(orderRef, 12)"));
             foreach (var off in AllHits(p, Asc(user))) e.Add((off, user.Length, $"F(userId, {user.Length})"));
             foreach (var off in AllHits(p, Asc(broker))) e.Add((off, broker.Length, $"F(brokerId, {broker.Length})"));
             return e;
@@ -492,8 +492,8 @@ internal static class FrontGen
             e.Add((instPref[0].Off + 1, 5, "F(instrumentId, 5)"));   // 0x86 前缀后的合约体
             e.Add((instClean[0].Off, instClean[0].Len, $"F(instrumentId, {instClean[0].Len})"));
             e.Add((times[0].Off, 8, "A(updateTime)"));
-            e.Add((lastSlot[0].Off + 1, 3, "PadTrimmedDouble(lastPrice, 3)"));
-            e.Add((bidSlot[0].Off + 1, 3, "PadTrimmedDouble(bidPrice, 3)"));
+            e.Add((lastSlot[0].Off + 1, 3, "PriceSlot(lastPrice)"));
+            e.Add((bidSlot[0].Off + 1, 3, "PriceSlot(bidPrice)"));
             // ask 槽 wire 偏移 = 跳过前 2 个逻辑字节（bidvol）后的 wire 位置——bidvol 字节若落在
             // tag 字母表（E0..EF/FE）会被 E0 转义、wire 额外 +1（107B 帧实证：bidvol [02,E9] → wire [02,E0,E9]，
             // 朴素 +2 编辑撞进转义对 → SDK 读出捕获值 3372 而非注入价）。转义感知跳字节。
@@ -505,7 +505,7 @@ internal static class FrontGen
                 else askOff += 1;
                 askSkip++;
             }
-            e.Add((askOff, 3, "PadTrimmedDouble(askPrice, 3)"));
+            e.Add((askOff, 3, "PriceSlot(askPrice)"));
             CheckDisjoint("MdTick", e.ToArray());
             eTick = e;
             pTick = t;
@@ -976,6 +976,50 @@ internal static class FrontGen
         sb.AppendLine("        return t.Length >= width ? t[..width] : Cat(t, new byte[width - t.Length]);");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// 价格槽等宽编码（恒 width 字节）——宽度随值的 TrimmedDouble 是 2026-10-13 ax001 双 bot 断连风暴的根因：");
+        sb.AppendLine("    /// 88/92/96/100（整数价，double 第 3 字节 0x00）剥尾零后 2B、92.03 等非二进小数价 8B 且内含 tag 字节");
+        sb.AppendLine("    /// ⇒ 帧缩/撑 ⇒ SDK 记录遍历失步 ⇒ 其后全部推送静默失效 + 4097 重连循环。编码 = ①量化到 width 字节");
+        sb.AppendLine("    /// 可精确表示的最近值（四舍五入）；②剥/补尾零到恒 width；③避开 tag 字母表字节（E0..EF/FE——递减 1 ulp 让位）。");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    internal static byte[] PriceSlot(double v, int width = 3)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var raw = Money(v);");
+        sb.AppendLine("        if (raw.Length > width && raw[width] >= 0x80)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var prefix = raw.ToArray()[..width];");
+        sb.AppendLine("            var carry = true;");
+        sb.AppendLine("            for (var i = width - 1; i >= 0 && carry; i--)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                prefix[i]++;");
+        sb.AppendLine("                carry = prefix[i] == 0;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            if (!carry) raw = Cat(prefix, new byte[raw.Length - width]);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        var n = width;");
+        sb.AppendLine("        while (n > 1 && raw[n - 1] == 0) n--;");
+        sb.AppendLine("        var slot = n >= width ? raw[..width].ToArray() : Cat(raw[..n], new byte[width - n]);");
+        sb.AppendLine("        for (var guardI = 0; guardI < 4 && slot.Any(b => b is (>= 0xE0 and <= 0xEF) or 0xFE); guardI++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var done = false;");
+        sb.AppendLine("            for (var i = width - 1; i >= 0; i--)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (slot[i] == 0) { slot[i] = 0xFF; continue; }");
+        sb.AppendLine("                slot[i]--;");
+        sb.AppendLine("                done = true;");
+        sb.AppendLine("                break;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            if (!done) break;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return slot;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>量槽 Edit（F001 [量+TimeCondition] run，捕获宽 2B）：量 ≤255 走捕获形状（1B 量 + TC）；");
+        sb.AppendLine("    /// ≥256 切 E7 + 2B 量 + TC（镜像 SDK ⑲ 请求侧自编码惯例——量 tag 随宽度变；响应方向未实测，防御性对齐）。</summary>");
+        sb.AppendLine("    private static Edit VolumeEdit(int offset, int volume, char timeCondition) => volume <= 255");
+        sb.AppendLine("        ? new Edit(offset, 2, Cat(MinimalInt(volume), A(timeCondition.ToString())))");
+        sb.AppendLine("        : new Edit(offset - 1, 3, Cat(H(\"E7\"), MinimalInt(volume), A(timeCondition.ToString())));");
+        sb.AppendLine();
         sb.AppendLine("    /// <summary>大端 double 剥尾零（8000.0 → 40BF40 三字节——⑲/推送价格实证；整槽替换宽度随值）。</summary>");
         sb.AppendLine("    internal static byte[] TrimmedDouble(double v)");
         sb.AppendLine("    {");
@@ -1061,7 +1105,10 @@ internal static class FrontGen
         for (var i = 0; i < edits.Count; i++)
         {
             var (off, len, expr) = edits[i];
-            sb.Append($"            new Edit({off}, {len}, {expr})");
+            // VolumeEdit(...) 自返回 Edit（量 tag 随宽度切换 E8→E7——2026-10-13 等宽纪律批）——直接内联
+            sb.Append(expr.StartsWith("VolumeEdit(")
+                ? $"            {expr}"
+                : $"            new Edit({off}, {len}, {expr})");
             if (i + 1 < edits.Count) sb.Append(',');
             sb.AppendLine();
         }

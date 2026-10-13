@@ -36,13 +36,17 @@ internal static class CtpOrderWireCodec
         var volTagIdx = FindRunIndex(body, VolShape);
         if (volTagIdx < 0) return null;
         var volRun = ExtractRunAt(body, volTagIdx);
-        // 价格：尾剥零大端 double——2-8B、非纯 ASCII 数字（4049='@I' 之类）、解析值在 (0,1e9) 合理区间。
+        // 价格：尾剥零大端 double——解码后 2-8B、非纯 ASCII 数字（4049='@I' 之类）、解析值在 (0,1e9) 合理区间。
         // **位置锚定**：价格紧跟在量 run 之前（帧序：…枚举 → "1" → 价格 → 量 → …）——在量的前缀里取
         // 最后一个合格 run（防帧头 reqId 族 01017B / 量后 0131 等小字节垃圾 run 误中——形状谓词对
         // 1e-303 量级的小值不设防，位置才是硬闸）。低价（<1024，如 ax001 的 100.x）的 double 全字节
         // 可 <0x80——旧谓词 Any(b≥0x80) 对其失效是首轮丢单根因。
+        // **E0 转义感知（2026-10-13）**：SDK 对含 tag 字母表字节（E0..EF/FE）的价格值做 E0 前插转义
+        // （实测 92.03 → 40 57 01 [E0] EB 85 1E B8 52，线上 run 比逻辑值长 1-8B）——谓词按**去转义后**
+        // 的长度/值判形状（旧版按裸 run 判 ⇒ 9B 转义 run 被长度帽 ≤8 拒收 ⇒ 价格误锚到 broker 字段
+        // 解出 1.35E-301 垃圾价入簿）。
         var price = volTagIdx > 0
-            ? RunLast(body[..volTagIdx], 0, r => r.Length is >= 2 and <= 8
+            ? RunLast(body[..volTagIdx], 0, r => UnescapeRun(r).Length is >= 2 and <= 8
                 && !r.ToArray().All(b => b is >= (byte)'0' and <= (byte)'9')
                 && ParseTrimmedDouble(r) is > 0 and < 1e9)
             : null;
@@ -183,12 +187,28 @@ internal static class CtpOrderWireCodec
         return null;
     }
 
-    /// <summary>尾剥零大端 double 的解码（右补零到 8B）——模板 TrimmedDouble 的逆。</summary>
+    /// <summary>尾剥零大端 double 的解码（右补零到 8B）——模板 TrimmedDouble 的逆。
+    /// E0 转义感知：值内 {E0..EF,FE} 字节前插 E0（SDK 请求侧实证 92.03 → 40 57 01 [E0] EB 85 1E B8 52；
+    /// 旧版直读转义字节 ⇒ 非二进小数价被解成 1.35E-301 量级垃圾价入簿——修前实测踩中）。</summary>
     internal static double ParseTrimmedDouble(ReadOnlySpan<byte> wire)
     {
+        var un = UnescapeRun(wire);
         var b = new byte[8];
-        wire.CopyTo(b);
+        un.AsSpan(0, Math.Min(un.Length, 8)).CopyTo(b);
         return BinaryPrimitives.ReadDoubleBigEndian(b);
+    }
+
+    /// <summary>剥离 run 值内的 E0 转义（E0 + 下一字节 = 一个字面值字节；E0 自身亦被转义为 E0 E0）。</summary>
+    private static byte[] UnescapeRun(ReadOnlySpan<byte> wire)
+    {
+        var r = new byte[wire.Length];
+        var n = 0;
+        for (var i = 0; i < wire.Length; i++)
+        {
+            if (wire[i] == 0xE0 && i + 1 < wire.Length) i++;   // 丢弃转义前缀，保留被转义的字面字节
+            r[n++] = wire[i];
+        }
+        return r[..n];
     }
 
     /// <summary>去前导零大端 int 的解码（左补零到 8B）——模板 MinimalInt 的逆。</summary>

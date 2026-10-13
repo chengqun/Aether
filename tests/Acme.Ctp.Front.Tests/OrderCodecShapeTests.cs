@@ -22,10 +22,18 @@ public class OrderCodecShapeTests
     private const string FrameBotmmLadder =
         "E101E240E412E101017BE31604E1017739393939E7626F746D6DEFEFE9303030303030303030303231E1626F746D6DEB323030E431E44058FC28F5C28F5CE30533E931E30131E830EFEFEFEFEFEFEFEFE86178303031EFEFEFEFEFEFEFE4";
 
+    // user=pxuser（6字符）价格 **92.03**（非二进小数——double 值内含 0xEB tag 字节，SDK 编码为
+    // E0 前插转义：40 57 01 [E0] EB 85 1E B8 52，线上 run 9B > 逻辑 8B）量 1 GFD 买开——
+    // 2026-10-13 CtpFrontPriceWidthTests E2E 实测帧（修前 codec 把转义 run 拒于长度帽外、
+    // 价格误锚 broker 字段解出 1.35E-301 垃圾价）。
+    private const string FrameEscapedPrice =
+        "E101E240E40EE101017BE30E04E1017739393939E7707875736572EFEFE8303030303030303030303031E1707875736572EA323030E431E4405701E0EB851EB852E30133E931E30131E830EFEFE7444345EFEFEFEFEFED6D32373031EFEFEFEFEFEFEFE4";
+
     [Theory]
     [InlineData(FrameE2Eusr,   "000000000001", "ax001", '0', '0', '2', 2998.0, 5, '3')]
     [InlineData(FrameMm1,      "000000000001", "ax001", '0', '0', '2', 50.0,   1, '3')]
     [InlineData(FrameBotmmLadder, "000000000021", "ax001", '0', '0', '2', 99.94, 5, '3')]
+    [InlineData(FrameEscapedPrice, "000000000001", "m2701", '0', '0', '2', 92.03, 1, '3')]
     public void 实测帧_形状锚定解析_各字段精确还原(string hex, string refId, string inst,
         char dir, char off, char pt, double price, int vol, char tc)
     {

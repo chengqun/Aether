@@ -167,13 +167,23 @@ if (args.FirstOrDefault(a => a.Equals("--run-strategy", StringComparison.Ordinal
 
     await SweepOpenOrdersAsync();
     // 清场（旁路撤 30+ 张单触发前置推送流）期间 CTP 会话可能被断（4097——SDK 自动重连）——
-    // 立即启策略会被「CTP 未登录」拒。等会话恢复（最多 30s）再启动。
+    // 立即启策略会被「CTP 未登录」拒。等会话恢复再启动：CtpSessionService.ReconnectAsync 重建
+    // trader 走完整登录（连接→认证→登录→结算确认各 15s 超时——最坏 ~60s），30s 窗口不够
+    // （2026-10-13 服务器实测踩中：重连重登已到「登录响应」但结算确认未完 ⇒ 会话未 Connected
+    // ⇒ 30s 到点误判退出）。等 90s，每 10s 报进度。
     var reconnectStart = Environment.TickCount64;
-    while (!session.IsConnected && Environment.TickCount64 - reconnectStart < 30_000)
+    CtpConnectionStatus lastStatus = CtpConnectionStatus.Reconnecting;
+    session.ConnectionStateChanged += (_, s) => lastStatus = s;
+    while (!session.IsConnected && Environment.TickCount64 - reconnectStart < 90_000)
+    {
         await Task.Delay(500);
+        var elapsed = Environment.TickCount64 - reconnectStart;
+        if (elapsed % 10_000 < 500)
+            Console.WriteLine($"[bot] 等待 CTP 会话恢复…（{elapsed / 1000}s/90s，当前 {lastStatus}）");
+    }
     if (!session.IsConnected)
     {
-        Console.WriteLine("[bot] 清场后 CTP 会话 30s 未恢复——退出（重跑即可）。");
+        Console.WriteLine("[bot] 清场后 CTP 会话 90s 未恢复——退出（重跑即可）。");
         session.Logout();
         return;
     }
