@@ -8,6 +8,11 @@ namespace Ctp.Net.Core.MarketData;
 /// <summary>CTP 行情接口封装。生命周期：Create → LoginAsync → SubscribeMarketDataAsync → (OnTick) → Dispose。</summary>
 public sealed class CtpMarketData : IDisposable
 {
+    // 真控制台流（同 CtpTrader.RealOut 的理由：绕开 Lean 引擎的 Console.SetOut(algorithm.Debug) 重定向，
+    // 防回调线程被算法消息管道堵死——2026-10-14 实测 4:20 周期性 4097 死循环根因）。
+    private static readonly TextWriter RealOut =
+        TextWriter.Synchronized(new StreamWriter(Console.OpenStandardOutput(), Console.OutputEncoding) { AutoFlush = true });
+
     // 注册 GB18030 编码提供程序（解码 CTP 的 GBK 中文报文）。与 CtpTrader 共用，任一被使用即注册。
     static CtpMarketData()
     {
@@ -121,7 +126,7 @@ public sealed class CtpMarketData : IDisposable
     private void OnFrontConnectedCb(IntPtr ctx)
     {
         var self = Self(ctx);
-        Console.WriteLine("[ctp-md] 前置已连接");
+        RealOut.WriteLine("[ctp-md] 前置已连接");
         self._frontConnectedTcs.TrySetResult(true);
         self.FrontConnected?.Invoke(self, EventArgs.Empty);
     }
@@ -129,7 +134,7 @@ public sealed class CtpMarketData : IDisposable
     private void OnFrontDisconnectedCb(IntPtr ctx, int reason)
     {
         var self = Self(ctx);
-        Console.WriteLine($"[ctp-md] 前置断开 reason={reason}");
+        RealOut.WriteLine($"[ctp-md] 前置断开 reason={reason}");
         self.FrontDisconnected?.Invoke(self, reason);
     }
 
@@ -137,7 +142,7 @@ public sealed class CtpMarketData : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-md] RspError ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-md] RspError ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
         self.RspError?.Invoke(self, new RspErrorEventArgs(i.ErrorID, DecodeMsg(i.ErrorMsg), requestId));
         self.TryCompletePending(requestId, new RspCallback(i, null));
     }
@@ -147,7 +152,7 @@ public sealed class CtpMarketData : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = field != IntPtr.Zero ? Marshal.PtrToStructure<RspUserLoginField>(field) : default;
-        Console.WriteLine($"[ctp-md] 登录响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} TradingDay={f.TradingDay}");
+        RealOut.WriteLine($"[ctp-md] 登录响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} TradingDay={f.TradingDay}");
         self._loginTcs.TrySetResult(new RspCallback(i, null));
     }
 
@@ -155,14 +160,14 @@ public sealed class CtpMarketData : IDisposable
     {
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = field != IntPtr.Zero ? Marshal.PtrToStructure<SpecificInstrumentField>(field) : default;
-        Console.WriteLine($"[ctp-md] 订阅响应 InstrumentID={f.InstrumentID} ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-md] 订阅响应 InstrumentID={f.InstrumentID} ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} isLast={isLast}");
         Self(ctx).SubMarketDataResult?.Invoke(Self(ctx), (f.InstrumentID, i.ErrorID, DecodeMsg(i.ErrorMsg), isLast));
     }
 
     private void OnRspUnSubMarketDataCb(IntPtr ctx, IntPtr field, IntPtr info, int requestId, bool isLast)
     {
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-md] 退订响应 ErrorID={i.ErrorID} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-md] 退订响应 ErrorID={i.ErrorID} isLast={isLast}");
     }
 
     private void OnRtnDepthMarketDataCb(IntPtr ctx, IntPtr field)
@@ -170,7 +175,7 @@ public sealed class CtpMarketData : IDisposable
         var self = Self(ctx);
         if (field == IntPtr.Zero) return;
         var f = Marshal.PtrToStructure<DepthMarketDataField>(field);
-        Console.WriteLine($"[ctp-md] Tick {f.InstrumentID} last={f.LastPrice} bid={f.BidPrice1}x{f.BidVolume1} ask={f.AskPrice1}x{f.AskVolume1} vol={f.Volume} {f.UpdateTime}.{f.UpdateMillisec}");
+        RealOut.WriteLine($"[ctp-md] Tick {f.InstrumentID} last={f.LastPrice} bid={f.BidPrice1}x{f.BidVolume1} ask={f.AskPrice1}x{f.AskVolume1} vol={f.Volume} {f.UpdateTime}.{f.UpdateMillisec}");
         self.TickReceived?.Invoke(self, TickData.From(f));
     }
 

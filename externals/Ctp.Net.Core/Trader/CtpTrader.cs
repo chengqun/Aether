@@ -13,6 +13,16 @@ public sealed class CtpTrader : IDisposable
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
+    // 真控制台流（static ctor 捕获 = 首个 CtpTrader 创建时，早于任何引擎重定向）：Lean 实盘引擎的
+    // LiveTradingResultHandler.SetAlgorithm 会 Console.SetOut(algorithm.Debug)——本类回调线程的高频
+    // 诊断打印若走 Console.WriteLine 会被喂进算法消息管道（有界/限流）⇒ 回调线程在管道满时阻塞 ⇒
+    // SDK 派发全停 ⇒ 未应答队列堆满 rc=-2 ⇒ 4097 重连循环（2026-10-14 双 bot 浸泡实测 ~4:20 周期性
+    // 死亡——每次会话 ~110 单 + ~80 查询后准时断）。写 OpenStandardOutput 真流：绕开重定向、线程安全
+    // （Synchronized 包装），桌面 GUI 无控制台时与旧行为同（写到无人看的 stdout，无副作用）。
+    private static readonly TextWriter RealOut =
+        TextWriter.Synchronized(new StreamWriter(Console.OpenStandardOutput(), Console.OutputEncoding) { AutoFlush = true });
+
+
     private static string DecodeMsg(byte[]? bytes) =>
         bytes is null ? string.Empty :
         Encoding.GetEncoding("GB18030").GetString(bytes).TrimEnd('\0').TrimEnd();
@@ -146,7 +156,7 @@ public sealed class CtpTrader : IDisposable
 
         // 确认结算结果（每个交易日下单前必须；登录后自动确认，使后续下单可用。失败不影响登录）
         try { await ConfirmSettlementAsync(req.BrokerId, req.UserId, ct); }
-        catch (Exception ex) { Console.WriteLine($"[ctp-trader] 结算确认失败（不影响登录）: {ex.Message}"); }
+        catch (Exception ex) { RealOut.WriteLine($"[ctp-trader] 结算确认失败（不影响登录）: {ex.Message}"); }
 
         return new LoginResult(f.TradingDay, f.LoginTime, f.FrontID, f.SessionID, f.MaxOrderRef);
     }
@@ -292,7 +302,7 @@ public sealed class CtpTrader : IDisposable
     private void OnFrontConnectedCb(IntPtr ctx)
     {
         var self = Self(ctx);
-        Console.WriteLine("[ctp-trader] 前置已连接");
+        RealOut.WriteLine("[ctp-trader] 前置已连接");
         self._frontConnectedTcs.TrySetResult(true);
         self.FrontConnected?.Invoke(self, EventArgs.Empty);
     }
@@ -300,7 +310,7 @@ public sealed class CtpTrader : IDisposable
     private void OnFrontDisconnectedCb(IntPtr ctx, int reason)
     {
         var self = Self(ctx);
-        Console.WriteLine($"[ctp-trader] 前置断开 reason={reason}");
+        RealOut.WriteLine($"[ctp-trader] 前置断开 reason={reason}");
         self.FrontDisconnected?.Invoke(self, reason);
     }
 
@@ -308,7 +318,7 @@ public sealed class CtpTrader : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-trader] RspError ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-trader] RspError ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
         self.RspError?.Invoke(self, new RspErrorEventArgs(i.ErrorID, DecodeMsg(i.ErrorMsg), requestId));
         self.TryCompletePending(requestId, new RspCallback(i, null));
     }
@@ -318,7 +328,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = field != IntPtr.Zero ? Marshal.PtrToStructure<RspAuthenticateField>(field) : default;
-        Console.WriteLine($"[ctp-trader] 认证响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} AppID={f.AppID}");
+        RealOut.WriteLine($"[ctp-trader] 认证响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} AppID={f.AppID}");
         self.TryCompletePending(requestId, new RspCallback(i, f));
     }
 
@@ -327,7 +337,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = field != IntPtr.Zero ? Marshal.PtrToStructure<RspUserLoginField>(field) : default;
-        Console.WriteLine($"[ctp-trader] 登录响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} TradingDay={f.TradingDay} FrontID={f.FrontID} SessionID={f.SessionID} MaxOrderRef={f.MaxOrderRef}");
+        RealOut.WriteLine($"[ctp-trader] 登录响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} TradingDay={f.TradingDay} FrontID={f.FrontID} SessionID={f.SessionID} MaxOrderRef={f.MaxOrderRef}");
         self.TryCompletePending(requestId, new RspCallback(i, f));
     }
 
@@ -336,7 +346,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var a = account != IntPtr.Zero ? Marshal.PtrToStructure<CtpAccountInfo>(account) : default;
-        Console.WriteLine($"[ctp-trader] 资金查询响应 ErrorID={i.ErrorID} isLast={isLast} Account={a.AccountID} Available={a.Available}");
+        RealOut.WriteLine($"[ctp-trader] 资金查询响应 ErrorID={i.ErrorID} isLast={isLast} Account={a.AccountID} Available={a.Available}");
         self.OnQueryItem(requestId, a, i, isLast);
     }
 
@@ -345,7 +355,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var p = position != IntPtr.Zero ? Marshal.PtrToStructure<CtpPositionInfo>(position) : default;
-        Console.WriteLine($"[ctp-trader] 持仓查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={p.InstrumentID} Pos={p.Position}");
+        RealOut.WriteLine($"[ctp-trader] 持仓查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={p.InstrumentID} Pos={p.Position}");
         self.OnQueryItem(requestId, p, i, isLast);
     }
 
@@ -354,7 +364,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var o = order != IntPtr.Zero ? Marshal.PtrToStructure<CtpOrderInfo>(order) : default;
-        Console.WriteLine($"[ctp-trader] 报单查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={o.InstrumentID}");
+        RealOut.WriteLine($"[ctp-trader] 报单查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={o.InstrumentID}");
         self.OnQueryItem(requestId, o, i, isLast);
     }
 
@@ -363,7 +373,7 @@ public sealed class CtpTrader : IDisposable
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
         var f = instrument != IntPtr.Zero ? Marshal.PtrToStructure<CtpInstrumentInfo>(instrument) : default;
-        Console.WriteLine($"[ctp-trader] 合约查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={f.InstrumentID}");
+        RealOut.WriteLine($"[ctp-trader] 合约查询响应 ErrorID={i.ErrorID} isLast={isLast} Instr={f.InstrumentID}");
         self.OnQueryItem(requestId, f, i, isLast);
     }
 
@@ -371,7 +381,7 @@ public sealed class CtpTrader : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-trader] 下单响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-trader] 下单响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
         self.TryCompletePending(requestId, new RspCallback(i, null));
     }
 
@@ -379,7 +389,7 @@ public sealed class CtpTrader : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-trader] 下单错误回报 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)}");
+        RealOut.WriteLine($"[ctp-trader] 下单错误回报 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)}");
         self.RspError?.Invoke(self, new RspErrorEventArgs(i.ErrorID, DecodeMsg(i.ErrorMsg), 0));
     }
 
@@ -387,7 +397,7 @@ public sealed class CtpTrader : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-trader] 撤单响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-trader] 撤单响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
         self.TryCompletePending(requestId, new RspCallback(i, null));
     }
 
@@ -397,7 +407,7 @@ public sealed class CtpTrader : IDisposable
         if (order == IntPtr.Zero) return;
         var o = Marshal.PtrToStructure<CtpOrderInfo>(order);
         var ord = Order.From(o);
-        Console.WriteLine($"[ctp-trader] 报单回报 {ord}");
+        RealOut.WriteLine($"[ctp-trader] 报单回报 {ord}");
         self.OrderReceived?.Invoke(self, ord);
     }
 
@@ -407,7 +417,7 @@ public sealed class CtpTrader : IDisposable
         if (trade == IntPtr.Zero) return;
         var t = Marshal.PtrToStructure<CtpTradeInfo>(trade);
         var trd = Trade.From(t);
-        Console.WriteLine($"[ctp-trader] 成交回报 {trd}");
+        RealOut.WriteLine($"[ctp-trader] 成交回报 {trd}");
         self.TradeReceived?.Invoke(self, trd);
     }
 
@@ -415,7 +425,7 @@ public sealed class CtpTrader : IDisposable
     {
         var self = Self(ctx);
         var i = info != IntPtr.Zero ? Marshal.PtrToStructure<RspInfoField>(info) : default;
-        Console.WriteLine($"[ctp-trader] 结算确认响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
+        RealOut.WriteLine($"[ctp-trader] 结算确认响应 ErrorID={i.ErrorID} {DecodeMsg(i.ErrorMsg)} reqId={requestId} isLast={isLast}");
         self.TryCompletePending(requestId, new RspCallback(i, null));
     }
 
