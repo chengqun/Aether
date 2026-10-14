@@ -144,12 +144,18 @@ internal static class CtpOrderWireCodec
     private static bool OrderRefShape(ReadOnlySpan<byte> r)
         => r.Length == 12 && r.ToArray().All(IsDigit);
 
-    /// <summary>needle（hex）后紧跟的 1 字节。</summary>
+    /// <summary>needle（hex）后紧跟的 1 字节值——<b>E0 转义感知</b>（2026-10-14：SDK 对值字节落在
+    /// tag 字母表 {E0..EF,FE} 的写法是 [E0][值] 前插转义——实测 ⑰ reqId=224 → `E1A6E3 E0E0`；
+    /// 旧版裸读会拿到转义前缀 E0（224 恰好同值纯属巧合，225 起错位）。</summary>
     private static byte? ByteAfter(ReadOnlySpan<byte> body, string needleHex)
     {
         var needle = Convert.FromHexString(needleHex);
         var hit = body.IndexOf(needle);
-        return hit >= 0 && hit + needle.Length < body.Length ? body[hit + needle.Length] : null;
+        if (hit < 0 || hit + needle.Length >= body.Length) return null;
+        var v = body[hit + needle.Length];
+        if (v == 0xE0 && hit + needle.Length + 1 < body.Length)
+            return body[hit + needle.Length + 1];   // 剥转义取真值
+        return v;
     }
 
     /// <summary>任意 tag 下满足形状谓词的**最后一个** run（合约字段近帧尾——用户字段近帧头的形状冲突防误中）。</summary>

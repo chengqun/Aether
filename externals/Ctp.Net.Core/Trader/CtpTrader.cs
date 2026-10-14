@@ -115,7 +115,22 @@ public sealed class CtpTrader : IDisposable
             throw new InvalidOperationException("CtpTrader_Create 失败");
     }
 
-    private int NextRequestId() => Interlocked.Increment(ref _nextRequestId);
+    // reqId 序列跳过 tag 字母表 {E0..EF, FE}（2026-10-14 4:20 死循环根因的客户端侧防线）：
+    // reqId 经 SDK 序列化上 wire，值落在字母表时 SDK 写 [E0][值] 转义；前置应答的 reqId 回显槽是
+    // **定宽 1B**（实测 18B 转义形式同样被 SDK 丢弃不派发）⇒ 应答无法承载字母表值 ⇒ 查询挂死
+    // rc=-2 ⇒ 4097 周期断连。reqId 只是对关联令牌（唯一即可、跳号无害）——在客户端源头永不产生
+    // 字母表值：1..0xDF → 0xF0..0xFD → 回卷 1（回卷时旧 reqId 的 pending 早已完成，安全）。
+    private int NextRequestId()
+    {
+        while (true)
+        {
+            var n = Interlocked.Increment(ref _nextRequestId);
+            var b = n & 0xFF;
+            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) continue;   // 跳过字母表字节
+            if (n >= 0xFD) _nextRequestId = 0;                    // 回卷（下一轮从 1 起）
+            return n;
+        }
+    }
 
     /// <summary>完整登录流程：连接前置 → 认证 → 登录。</summary>
     public async Task<LoginResult> LoginAsync(CtpConnectRequest req, CancellationToken ct = default)

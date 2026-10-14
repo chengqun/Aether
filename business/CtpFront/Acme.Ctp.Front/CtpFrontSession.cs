@@ -180,14 +180,62 @@ internal sealed class CtpFrontSession : IDisposable
         }
     }
 
-    private byte NextRtnInstance() => _rtnInstance = (byte)Math.Min(255, _rtnInstance + 1);
+    /// <summary>F0 推送序号——跳过 tag 字母表 {E0..EF,FE}（值落在其中 = SDK 解析歧义：E0 被当转义前缀
+    /// 吞下一字节、E1.. 被当 tag 提前终结值 run ⇒ 帧丢弃不派发——2026-10-14 停摆根因的同类面）。
+    /// 增到 0xFD 后饱和 0xFF（原设计 Math.Min(255) 语义保留，字母表跳段）。</summary>
+    private byte NextRtnInstance()
+    {
+        var v = _rtnInstance >= 0xFD ? 0xFF : _rtnInstance + 1;
+        if (v is (>= 0xE0 and <= 0xEF) or 0xFE) v = 0xF0;   // 跳过字母表段
+        return _rtnInstance = (byte)v;
+    }
 
     /// <summary>应答侧 80 族记录流水（⑯/⑱/查合约/查报单应答的 `E3` 后 1B）——**逐条递增，非请求回显**。
     /// 2026-10-03 SimNow 过滤查报单实证：请求 op `E104E280E4` 的计数在 op 字节里（03/04…），
     /// 而应答 `E3` = 09 = 会话内全部 80 族应答记录的流水（⑯=01、⑱=02、二进制报单 6 行内部消耗
     /// 03-08、空应答=09）。客户端按它丢弃过期帧——回显请求计数会被判过期静默丢弃。多行应答逐行消耗。 </summary>
     private byte _qrySeq;
-    private byte NextQrySeq() => _qrySeq = (byte)((_qrySeq + 1) % 256);
+    /// <summary>80 族应答流水——跳过 tag 字母表 {E0..EF,FE}（同 <see cref="NextRtnInstance"/>），
+    /// 0xFD 后回卷 1（客户端按该值丢重复帧——回卷到 1 若被判过期是长会话（&gt;253 应答）的已知边界，
+    /// 生产会话远早于此重连）。</summary>
+    /// <summary>提取请求 op 后的 80 族链路计数原始字节 run（E0 转义原样保留——回显即 wire 正确）。
+    /// <b>2026-10-14 定案：⑯/⑱/查合约应答的 E3 = 请求侧计数的回显</b>（客户端按「E3 == 我的请求计数」
+    /// 校验，非单调——实测自计数在 SDK 计数跨 0xE0（转义区）后错位即被丢帧不派发 ⇒ 查询挂死 rc=-2
+    /// ⇒ 4097 的 4:20 周期断连根因；小会话自计数与请求计数巧合一致故 2026-10-03 的回显修复被
+    /// NextQrySeq 顶替后 E2E 仍全绿——盲区）。</summary>
+    private byte[] ExtractInstanceRun(ReadOnlySpan<byte> body, string opSigHex)
+    {
+        var op = Convert.FromHexString(opSigHex);
+        var hit = body.IndexOf(op);
+        if (hit < 0 || hit + op.Length >= body.Length || body[hit + op.Length] != 0xE3)
+            return [0x01];
+        var i = hit + op.Length + 1;
+        var run = new List<byte>();
+        while (i < body.Length && run.Count < 4)
+        {
+            var b = body[i];
+            if (b == 0xE0 && i + 1 < body.Length) { run.Add(b); run.Add(body[i + 1]); i += 2; continue; }   // 转义对原样入 run
+            if (b is (>= 0xE1 and <= 0xEF) or 0xFE) break;   // 下一 tag = 值 run 结束
+            run.Add(b);
+            i++;
+        }
+        return run.Count == 0 ? [0x01] : run.ToArray();
+    }
+
+    /// <summary>40 族应答序号——跳过 tag 字母表（同 <see cref="NextRtnInstance"/>）。</summary>
+    private byte NextCmdInstance()
+    {
+        var v = _cmdInstance >= 0xFD ? 0xFF : _cmdInstance + 1;
+        if (v is (>= 0xE0 and <= 0xEF) or 0xFE) v = 0xF0;
+        return _cmdInstance = (byte)v;
+    }
+
+    private byte NextQrySeq()
+    {
+        var v = _qrySeq >= 0xFD ? 1 : _qrySeq + 1;
+        if (v is (>= 0xE0 and <= 0xEF) or 0xFE) v = 0xF0;
+        return _qrySeq = (byte)v;
+    }
 
     /// <summary>核心错误码 → wire 错误码（捕获槽 1 字节：>255 的核心码降级为 148 通用码，真码进 GBK 文本前缀）。</summary>
     private static (int Id, string Msg) WireError(CtpBusinessException ex)
@@ -415,7 +463,7 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E101E24013"))
         {
             var reqId = ExtractReqIdAfter(body, "E101E143E3");
-            _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+            _cmdInstance = NextCmdInstance();
             _log($"[CTP-Front] 结算确认 #{_cmdInstance} reqId={reqId}");
             return reqId is { } id
                 ? BuildFrame(CtpFrontTemplates.BuildSettleRsp(_cmdInstance, id, _brokerId, _userId, day))
@@ -427,10 +475,11 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E28006"))
         {
             var reqId = ExtractReqIdAfter(body, "E12EE3");
+            var instRun = ExtractInstanceRun(body, "E104E28006");   // 回显请求侧计数（见 ExtractInstanceRun 注释）
             var account = await _rpc.QueryAccountAsync(ct);   // 绑定账户（登录时绑定）——无需账户键
             _log($"[CTP-Front] 资金查询 reqId={reqId} balance={account.Balance}");
             return reqId is { } id
-                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(NextQrySeq(), id, _brokerId, account.AccountId, _userId, day, account.Balance))
+                ? BuildFrame(CtpFrontTemplates.BuildQryAccountRsp(instRun, id, _brokerId, account.AccountId, _userId, day, account.Balance))
                 : null;
         }
 
@@ -440,13 +489,14 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E28004"))
         {
             var reqId = ExtractReqIdAfter(body, "E1A6E3");
+            var instRun = ExtractInstanceRun(body, "E104E28004");   // 回显请求侧计数
             var positions = await _rpc.QueryPositionsAsync(null, ct);   // 绑定账户全量
             _log($"[CTP-Front] 持仓查询 reqId={reqId} → {positions.Count} 条");
             if (reqId is not { } id) return null;
             if (positions.Count == 0)
-                return BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(NextQrySeq(), id));
+                return BuildFrame(CtpFrontTemplates.BuildQryPositionEmptyRsp(instRun, id));
             var frames = positions.Select(p => BuildFrame(CtpFrontTemplates.BuildQryPositionRsp(
-                NextQrySeq(), id, _brokerId, _userId, p.InstrumentId, p.ExchangeId, day,
+                instRun, id, _brokerId, _userId, p.InstrumentId, p.ExchangeId, day,
                 (char)p.PosiDirection, (char)p.PositionDate, p.TotalPosition))).ToArray();
             var total = frames.Sum(b => b.Length);
             var buf = new byte[total];
@@ -485,12 +535,13 @@ internal sealed class CtpFrontSession : IDisposable
         if (MatchesSignature(body, "E104E2802E"))
         {
             var reqId = ExtractReqIdAfter(body, "E101015DE3");
+            var instRun = ExtractInstanceRun(body, "E104E2802E");   // 回显请求侧计数
             var listed = await _rpc.QueryInstrumentsAsync(ct);   // Domain CtpInstrument（板子只读 id/交易所）
             _log($"查合约 reqId={reqId} → 上市 {listed.Count} 个: {string.Join(",", listed.Select(i => i.InstrumentId))}");
             if (reqId is not { } qryId) return null;
             if (listed.Count == 0) return null;
             var frames = listed.Select(i =>
-                BuildFrame(CtpFrontTemplates.BuildQryInstrumentRsp(NextQrySeq(), qryId, i.InstrumentId, i.ExchangeId))).ToArray();
+                BuildFrame(CtpFrontTemplates.BuildQryInstrumentRsp(instRun, qryId, i.InstrumentId, i.ExchangeId))).ToArray();
             var total = frames.Sum(b => b.Length);
             var buf = new byte[total];
             var off = 0;
@@ -531,7 +582,7 @@ internal sealed class CtpFrontSession : IDisposable
             catch (CtpBusinessException ex)
             {
                 _log($"[CTP-Front] 报单拒绝: [{ex.ErrorId}] {ex.ErrorMsg}");
-                _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+                _cmdInstance = NextCmdInstance();
                 var echo = (_userId, _brokerId, o.InstrumentId, o.OrderRef, o.PriceType, o.Direction, o.OffsetFlag, o.LimitPrice, o.Volume, o.TimeCondition);
                 var (wireId, wireMsg) = WireError(ex);
                 var rsp = BuildFrame(CtpFrontTemplates.BuildOrderInsertRspErr(_cmdInstance, o.ReqId, wireId, wireMsg,
@@ -555,7 +606,7 @@ internal sealed class CtpFrontSession : IDisposable
                 return null;
             }
             _log($"[CTP-Front] 撤单: ref={a.OrderRef} reqId={a.ReqId}");
-            _cmdInstance = (byte)Math.Min(255, _cmdInstance + 1);
+            _cmdInstance = NextCmdInstance();
             try
             {
                 await _rpc.CancelOrderAsync(new CtpOrderRef(_brokerId, _userId, 0, 0, a.OrderRef, ""), ct);
