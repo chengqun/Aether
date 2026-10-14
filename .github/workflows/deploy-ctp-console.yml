@@ -16,6 +16,7 @@ on:
     branches: [ main ]
     paths:
       - 'apps/CtpConsole/**'
+      - 'externals/Ctp.Net.Core/**'        # 官方 SDK wrapper（CtpTrader/CtpMarketData 打印流等——console 依赖闭包）
       - 'algorithms/**'                    # labs 模板源（远端覆盖拷贝进实例）
       - 'business/Ctp/**'                 # ICtpSession 官方 SDK 链路
       - 'business/Trading/**'             # StrategyRegistry / MarketBar 等域层
