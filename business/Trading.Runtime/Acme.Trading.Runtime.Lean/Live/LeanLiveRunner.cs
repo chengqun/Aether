@@ -87,6 +87,9 @@ internal sealed class LeanLiveRunner
 
         var algorithmHandlers = Initializer.GetAlgorithmHandlers();
         var algorithmManager = new AlgorithmManager(Globals.LiveMode, job);
+        // 宿主级强停钩子：算法不协作（bot 算法无 StopRequested 检查）时，StopAsync 经此直接翻转
+        // AlgorithmManager 状态——镜像 algorithm.Quit() 内部路径，引擎走正常 teardown 而非僵尸滞留。
+        TradingGateway.ForceStop = () => algorithmManager.SetStatus(AlgorithmStatus.Stopped);
         systemHandlers.LeanManager.Initialize(systemHandlers, algorithmHandlers, job, algorithmManager);
 
         string? error = null;

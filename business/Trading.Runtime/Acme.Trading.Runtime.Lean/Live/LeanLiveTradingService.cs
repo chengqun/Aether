@@ -95,15 +95,27 @@ public sealed class LeanLiveTradingService : ILiveTradingRuntime
     {
         if (_status != LiveTradingRuntimeStatus.Running && _status != LiveTradingRuntimeStatus.Starting) return;
         SetStatus(LiveTradingRuntimeStatus.Stopping);
-        TradingGateway.StopRequested = true;   // 共享算法 OnData 检测后 Quit
+        TradingGateway.StopRequested = true;   // 协作路径：TradingHostAlgorithm 的 Schedule/OnData 检测后 Quit
         EmitLog("停止请求已发出，等待引擎退出…");
         if (_runTask != null)
         {
-            try { await _runTask.WaitAsync(TimeSpan.FromSeconds(30), ct); EmitLog("引擎已正常退出，实盘已停止"); }
-            catch (TimeoutException) { EmitLog("引擎 30s 内未退出，可能仍在处理"); }
+            try { await _runTask.WaitAsync(TimeSpan.FromSeconds(5), ct); }
+            catch (TimeoutException)
+            {
+                // 5s 未自行退出 = 算法不协作（bot 算法无 StopRequested 检查）⇒ 宿主级强停：
+                // AlgorithmManager.SetStatus(Stopped) 镜像 Quit() 内部路径，引擎正常 teardown（brokerage 断连）。
+                if (TradingGateway.RequestForceStop())
+                    EmitLog("引擎 5s 未自行退出——已发出宿主级强制停止，等待引擎退出…");
+            }
+            catch (OperationCanceledException) { }
+            try { await _runTask.WaitAsync(TimeSpan.FromSeconds(60), ct); }
+            catch (TimeoutException) { EmitLog("引擎 60s 内仍未退出——引擎线程可能仍在运行（状态如实保持 Stopping）"); }
             catch (OperationCanceledException) { }
         }
-        if (_status == LiveTradingRuntimeStatus.Stopping) SetStatus(LiveTradingRuntimeStatus.Stopped);
+        // 只在引擎任务真正结束时才宣告 Stopped——旧版超时也硬置 Stopped = 「显示已停止但引擎仍在跑」
+        // （2026-10-14 桌面/控制台双实测：僵尸引擎继续交易 + LeanGlobalLock 被占 → 再启动恒挂）。
+        if (_status == LiveTradingRuntimeStatus.Stopping && _runTask?.IsCompleted == true)
+            SetStatus(LiveTradingRuntimeStatus.Stopped);
     }
 
     private void SetStatus(LiveTradingRuntimeStatus s)

@@ -46,6 +46,8 @@ using Microsoft.Extensions.Logging;
 //   quit
 // ═══════════════════════════════════════════════════════════════════════════
 
+HostLog.Init();   // 真流捕获须在引擎 Console.SetOut 重定向之前（见 HostLog 注释）
+
 // —— 配置文件 + 档案解析（命令行 > 配置档案 > 内置默认）——
 // **一个目录一个完整实例**（用户定调 2026-10-11）：config.json / labs/ / ctp.db / lean-algo-cache
 // 全部默认落在**当前工作目录**——不碰 ~/.aether、不碰桌面端任何东西。双 bot = 两个目录各跑一个
@@ -65,7 +67,7 @@ else
     // 首次启动：生成模板（占位凭据）——填好后重跑，或继续用命令行参数
     config = ConsoleConfig.Template();
     config.Save(configPath);
-    Console.WriteLine($"已生成配置模板：{configPath}（填好 front/user/password 后用 --profile 登录；命令行参数可直接覆盖）");
+    HostLog.Line($"已生成配置模板：{configPath}（填好 front/user/password 后用 --profile 登录；命令行参数可直接覆盖）");
 }
 
 // 档案选择：--profile 显式 > defaultProfile > 唯一档案；命令行参数逐项覆盖档案
@@ -90,7 +92,7 @@ var password = (args2.Get("pass") ?? profile?.Password ?? throw new ArgumentExce
 var broker = (args2.Get("broker") ?? profile?.Broker ?? "9999").Trim();
 var appId = (args2.Get("app") ?? profile?.AppId ?? "simnow_client_test").Trim();
 var authCode = (args2.Get("auth") ?? profile?.AuthCode ?? "0000000000000000").Trim();
-if (!string.IsNullOrWhiteSpace(profileName)) Console.WriteLine($"档案：{profileName}");
+if (!string.IsNullOrWhiteSpace(profileName)) HostLog.Line($"档案：{profileName}");
 
 // labs 同样落当前目录（命令行 > 配置 > ./labs）。算法/策略笔记放这里：
 // leanalgorithms/*.lean.cs / coderules/*.coderule.cs / strategies/*.yaml。
@@ -98,7 +100,7 @@ var dataDir = args2.Get("data") ?? cwd;   // ctp.db + lean-algo-cache 也随实�
 var labsRoot = args2.Get("labs") ?? config.Labs ?? Path.Combine(dataDir, "labs");
 Directory.CreateDirectory(dataDir);
 if (!Directory.Exists(labsRoot))
-    Console.WriteLine($"⚠ labs 目录不存在：{labsRoot}（策略/算法加载为空）——把笔记放进来或 --labs 指定");
+    HostLog.Line($"⚠ labs 目录不存在：{labsRoot}（策略/算法加载为空）——把笔记放进来或 --labs 指定");
 
 // —— DI 组装（全部现成组件；与 Stockapp App.axaml.cs 同款顺序）——
 var services = new ServiceCollection();
@@ -121,19 +123,19 @@ var leanScripting = sp.GetRequiredService<ILeanAlgorithmScriptingService>();
 // —— 事件 → console 打印 ——
 var tickOn = true;
 var subscribed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-session.ConnectionStateChanged += (_, s) => Console.WriteLine($"[连接] {s}");
-session.OrderReceived += (_, o) => Console.WriteLine($"[报单] {o}");
-session.TradeReceived += (_, t) => Console.WriteLine($"[成交] {t}");
+session.ConnectionStateChanged += (_, s) => HostLog.Line($"[连接] {s}");
+session.OrderReceived += (_, o) => HostLog.Line($"[报单] {o}");
+session.TradeReceived += (_, t) => HostLog.Line($"[成交] {t}");
 session.TickReceived += (_, t) =>
 {
     if (tickOn)
-        Console.WriteLine($"[tick] {t.InstrumentId} last={Fmt(t.LastPrice)} bid={Fmt(t.BidPrice)}/{t.BidVolume} ask={Fmt(t.AskPrice)}/{t.AskVolume} vol={t.Volume} {t.UpdateTime}.{t.UpdateMillisec:000}");
+        HostLog.Line($"[tick] {t.InstrumentId} last={Fmt(t.LastPrice)} bid={Fmt(t.BidPrice)}/{t.BidVolume} ask={Fmt(t.AskPrice)}/{t.AskVolume} vol={t.Volume} {t.UpdateTime}.{t.UpdateMillisec:000}");
 };
-live.LogReceived += (_, line) => Console.WriteLine(line);
-live.StatusChanged += (_, s) => Console.WriteLine($"[实盘] 状态: {s}");
+live.LogReceived += (_, line) => HostLog.Line(line);
+live.StatusChanged += (_, s) => HostLog.Line($"[实盘] 状态: {s}");
 
 // —— 登录 ——
-Console.WriteLine($"登录中：{front} 账户 {user} …");
+HostLog.Line($"登录中：{front} 账户 {user} …");
 var login = await session.LoginAsync(new CtpLoginRequest
 {
     FrontAddress = front,
@@ -144,7 +146,7 @@ var login = await session.LoginAsync(new CtpLoginRequest
     AppId = appId,
     AuthCode = authCode,
 });
-Console.WriteLine($"已登录：交易日 {login.TradingDay} FrontId={login.FrontId} SessionId={login.SessionId} MaxOrderRef={login.MaxOrderRef}");
+HostLog.Line($"已登录：交易日 {login.TradingDay} FrontId={login.FrontId} SessionId={login.SessionId} MaxOrderRef={login.MaxOrderRef}");
 
 // —— 策略/算法笔记加载（labs → 编译 → 注册表；console 生命周期内加载一次，改笔记重跑）——
 await scripting.LoadAsync();
@@ -179,15 +181,15 @@ if (args.FirstOrDefault(a => a.Equals("--run-strategy", StringComparison.Ordinal
         await Task.Delay(500);
         var elapsed = Environment.TickCount64 - reconnectStart;
         if (elapsed % 10_000 < 500)
-            Console.WriteLine($"[bot] 等待 CTP 会话恢复…（{elapsed / 1000}s/90s，当前 {lastStatus}）");
+            HostLog.Line($"[bot] 等待 CTP 会话恢复…（{elapsed / 1000}s/90s，当前 {lastStatus}）");
     }
     if (!session.IsConnected)
     {
-        Console.WriteLine("[bot] 清场后 CTP 会话 90s 未恢复——退出（重跑即可）。");
+        HostLog.Line("[bot] 清场后 CTP 会话 90s 未恢复——退出（重跑即可）。");
         session.Logout();
         return;
     }
-    Console.WriteLine($"[bot] 启动策略 {strategyName}（合约 {string.Join(",", instruments)}）——Ctrl+C 或输 quit 停止");
+    HostLog.Line($"[bot] 启动策略 {strategyName}（合约 {string.Join(",", instruments)}）——Ctrl+C 或输 quit 停止");
     await StrategyRunAsync(passThrough.ToArray());
     // 等引擎脱离 Starting（StartAsync 返回时可能仍在 Starting——立即查 IsRunning 会误判启动失败）
     while (live.Status is LiveTradingRuntimeStatus.Starting or LiveTradingRuntimeStatus.Idle)
@@ -195,18 +197,18 @@ if (args.FirstOrDefault(a => a.Equals("--run-strategy", StringComparison.Ordinal
     if (live.Status == LiveTradingRuntimeStatus.Running)
         await WaitBotExitAsync();
     else
-        Console.WriteLine($"[bot] 引擎未进入运行态（{live.Status}）——退出。");
+        HostLog.Line($"[bot] 引擎未进入运行态（{live.Status}）——退出。");
     if (live.IsRunning) { try { await live.StopAsync(); } catch { } }
     session.Logout();
-    Console.WriteLine("[bot] 已退出。");
+    HostLog.Line("[bot] 已退出。");
     return;
 }
 
 // —— REPL ——
-Console.WriteLine("输入 help 查看命令。");
+HostLog.Line("输入 help 查看命令。");
 while (true)
 {
-    Console.Write("> ");
+    HostLog.Prompt("> ");
     var line = Console.ReadLine();
     if (line is null) break;   // EOF（Ctrl+D / 管道结束）
     var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -227,14 +229,14 @@ while (true)
             case "unsub":
                 session.UnsubscribeMarketData();
                 subscribed.Clear();
-                Console.WriteLine("已退订全部行情");
+                HostLog.Line("已退订全部行情");
                 break;
             case "tick":
                 tickOn = parts.Length < 2 || !string.Equals(parts[1], "off", StringComparison.OrdinalIgnoreCase);
-                Console.WriteLine($"tick 打印 {(tickOn ? "开" : "关")}");
+                HostLog.Line($"tick 打印 {(tickOn ? "开" : "关")}");
                 break;
             case "account":
-                Console.WriteLine(await session.QueryAccountAsync());
+                HostLog.Line((await session.QueryAccountAsync()).ToString() ?? "");
                 break;
             case "positions" or "pos":
                 PrintList(await session.QueryPositionAsync(parts.Length > 1 ? parts[1] : null));
@@ -255,10 +257,10 @@ while (true)
                 await StrategyAsync(parts);
                 break;
             case "status":
-                Console.WriteLine($"引擎 {live.Status}（运行中={live.IsRunning}）tick 打印={(tickOn ? "开" : "关")}");
+                HostLog.Line($"引擎 {live.Status}（运行中={live.IsRunning}）tick 打印={(tickOn ? "开" : "关")}");
                 break;
             default:
-                Console.WriteLine($"未知命令 {parts[0]}（help 查看命令）");
+                HostLog.Line($"未知命令 {parts[0]}（help 查看命令）");
                 break;
         }
     }
@@ -266,11 +268,11 @@ while (true)
     {
         // 已知边界（CLAUDE.md CTP 前置节）：查报单空表时 SDK 不派发 17B tag 空应答 ⇒ 30s 超时后管线自动恢复
         //（真前置首查过滤时同样超时——录制实证）。查询超时不影响后续命令。
-        Console.WriteLine("[超时] 空表查询 SDK 不派发应答（已知边界——委托/持仓空表时可能发生），管线已恢复，可继续。");
+        HostLog.Line("[超时] 空表查询 SDK 不派发应答（已知边界——委托/持仓空表时可能发生），管线已恢复，可继续。");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[错误] {ex.Message}");
+        HostLog.Line($"[错误] {ex.Message}");
     }
 }
 
@@ -278,20 +280,20 @@ while (true)
 
 async Task SubscribeAsync(string[] symbols)
 {
-    if (symbols.Length == 0) { Console.WriteLine("用法：sub <合约> <合约>…"); return; }
-    if (mdFront.Length == 0) { Console.WriteLine("缺少行情前置（启动参数 --md-front tcp://ip:port）"); return; }
+    if (symbols.Length == 0) { HostLog.Line("用法：sub <合约> <合约>…"); return; }
+    if (mdFront.Length == 0) { HostLog.Line("缺少行情前置（启动参数 --md-front tcp://ip:port）"); return; }
     await session.SubscribeMarketDataAsync(new CtpMarketDataConnect
     {
         MdFrontAddress = mdFront, BrokerId = broker, UserId = user, Password = password,
     }, symbols);
     foreach (var s in symbols) subscribed.Add(s);
-    Console.WriteLine($"已订阅：{string.Join(' ', symbols)}");
+    HostLog.Line($"已订阅：{string.Join(' ', symbols)}");
 }
 
 async Task OrderAsync(string[] parts)
 {
     // buy|sell <o|c|ct|cy> <合约> <价格|market> <数量> —— 5 个 token
-    if (parts.Length != 5) { Console.WriteLine("用法：buy|sell <o|c|ct|cy> <合约> <价格|market> <数量>"); return; }
+    if (parts.Length != 5) { HostLog.Line("用法：buy|sell <o|c|ct|cy> <合约> <价格|market> <数量>"); return; }
     var direction = parts[0].Equals("buy", StringComparison.OrdinalIgnoreCase) ? CtpDirection.Buy : CtpDirection.Sell;
     var offset = parts[1].ToLowerInvariant() switch
     {
@@ -311,41 +313,41 @@ async Task OrderAsync(string[] parts)
         PriceType = isMarket ? CtpOrderPriceType.Market : CtpOrderPriceType.Limit,
         LimitPrice = price, Volume = volume,
     });
-    Console.WriteLine($"已报单 ref={result.OrderRef} reqId={result.RequestId}（回报异步推送——orders 查状态）");
+    HostLog.Line($"已报单 ref={result.OrderRef} reqId={result.RequestId}（回报异步推送——orders 查状态）");
 }
 
 async Task CancelAsync(string[] parts)
 {
-    if (parts.Length != 2) { Console.WriteLine("用法：cancel <OrderRef>"); return; }
+    if (parts.Length != 2) { HostLog.Line("用法：cancel <OrderRef>"); return; }
     var loginResult = session.LoginResult ?? throw new InvalidOperationException("未登录");
     await session.OrderActionAsync(new CtpOrderRef(broker, user, loginResult.FrontId, loginResult.SessionId, parts[1], ""));
-    Console.WriteLine("撤单请求已发（结果经报单回报推送）");
+    HostLog.Line("撤单请求已发（结果经报单回报推送）");
 }
 
 async Task StrategyAsync(string[] parts)
 {
-    if (parts.Length < 2) { Console.WriteLine("用法：strategy list | run <名> <合约>... [选项] | stop"); return; }
+    if (parts.Length < 2) { HostLog.Line("用法：strategy list | run <名> <合约>... [选项] | stop"); return; }
     switch (parts[1].ToLowerInvariant())
     {
         case "list":
             PrintStrategies();
             break;
         case "stop":
-            Console.WriteLine("请求停止…");
+            HostLog.Line("请求停止…");
             await live.StopAsync();
             break;
         case "run":
             await StrategyRunAsync(parts[2..]);
             break;
         default:
-            Console.WriteLine($"未知子命令 {parts[1]}（list / run / stop）");
+            HostLog.Line($"未知子命令 {parts[1]}（list / run / stop）");
             break;
     }
 }
 
 async Task StrategyRunAsync(string[] parts)
 {
-    if (parts.Length < 2) { Console.WriteLine("用法：strategy run <名> <合约>... [--engine lean|strategy] [--real] [--max-volume N] [--param k=v]..."); return; }
+    if (parts.Length < 2) { HostLog.Line("用法：strategy run <名> <合约>... [--engine lean|strategy] [--real] [--max-volume N] [--param k=v]..."); return; }
     var name = parts[0];
     var engine = LiveStrategyEngine.LeanAlgorithm;   // console 主场景 = bot（Lean 算法）
     var instruments = new List<string>();
@@ -395,10 +397,10 @@ async Task StrategyRunAsync(string[] parts)
                 break;
         }
     }
-    if (instruments.Count == 0) { Console.WriteLine("至少一个合约（strategy run <名> <合约>…）"); return; }
-    if (mdFront.Length == 0) { Console.WriteLine("缺少行情前置（启动参数 --md-front tcp://ip:port）"); return; }
+    if (instruments.Count == 0) { HostLog.Line("至少一个合约（strategy run <名> <合约>…）"); return; }
+    if (mdFront.Length == 0) { HostLog.Line("缺少行情前置（启动参数 --md-front tcp://ip:port）"); return; }
 
-    Console.WriteLine($"[实盘] 启动：合约={string.Join(",", instruments)} 引擎={engine} 策略={name} 分辨率={resolution} " +
+    HostLog.Line($"[实盘] 启动：合约={string.Join(",", instruments)} 引擎={engine} 策略={name} 分辨率={resolution} " +
                       $"真实下单={(real ? $"开（单笔开仓上限 {maxVolume} 手）" : "关（仅信号）")}");
     var (ok, err) = await live.StartAsync(new LiveTradingRuntimeRequest
     {
@@ -416,18 +418,18 @@ async Task StrategyRunAsync(string[] parts)
             MdFrontAddress = mdFront, BrokerId = broker, UserId = user, Password = password,
         },
     });
-    if (!ok) Console.WriteLine($"[实盘] 启动失败：{err}");
+    if (!ok) HostLog.Line($"[实盘] 启动失败：{err}");
 }
 
 async Task ShutdownAsync()
 {
     if (live.IsRunning)
     {
-        Console.WriteLine("停止策略引擎…");
+        HostLog.Line("停止策略引擎…");
         try { await live.StopAsync(); } catch { }
     }
     session.Logout();
-    Console.WriteLine("已退出。");
+    HostLog.Line("已退出。");
 }
 
 /// <summary>启动清场（直跑模式「接管」语义）：撤掉本账户全部活单。bot 意外死亡/被硬杀后旧挂单留在
@@ -448,19 +450,19 @@ async Task SweepOpenOrdersAsync()
         await rpc.LoginAsync(new Acme.Ctp.Sim.LoginArg(broker, user, password));
         var orders = await rpc.QueryOrdersAsync(null);
         var openOrders = orders.Where(o => o.OrderStatusRaw is (byte)'3' or (byte)'1').ToList();   // '3' 未成交在队列 / '1' 部分成交在队列
-        if (openOrders.Count == 0) { Console.WriteLine("[bot] 清场：无活单"); return; }
-        Console.WriteLine($"[bot] 清场：撤 {openOrders.Count} 张接管前活单…");
+        if (openOrders.Count == 0) { HostLog.Line("[bot] 清场：无活单"); return; }
+        HostLog.Line($"[bot] 清场：撤 {openOrders.Count} 张接管前活单…");
         foreach (var o in openOrders)
         {
             try
             {
                 await rpc.CancelOrderAsync(new CtpOrderRef(broker, user, 0, 0, o.OrderRef, ""));
-                Console.WriteLine($"[bot] 清场撤单 {o.InstrumentId} ref={o.OrderRef}");
+                HostLog.Line($"[bot] 清场撤单 {o.InstrumentId} ref={o.OrderRef}");
             }
-            catch (Exception ex) { Console.WriteLine($"[bot] 清场撤单失败 ref={o.OrderRef}：{ex.Message}（继续）"); }
+            catch (Exception ex) { HostLog.Line($"[bot] 清场撤单失败 ref={o.OrderRef}：{ex.Message}（继续）"); }
         }
     }
-    catch (Exception ex) { Console.WriteLine($"[bot] 清场旁路不可用（{exchangeAddr}：{ex.Message}）——继续启动"); }
+    catch (Exception ex) { HostLog.Line($"[bot] 清场旁路不可用（{exchangeAddr}：{ex.Message}）——继续启动"); }
 }
 
 /// <summary>直跑模式的挂机等待：Ctrl+C（CancelKeyPress，e.Cancel 防立即死）或 stdin 输 quit/exit 退出；
@@ -472,7 +474,7 @@ async Task WaitBotExitAsync()
     Console.CancelKeyPress += (_, e) =>
     {
         e.Cancel = true;   // 拦截默认终止——走优雅路径（StopAsync 撤单腿）
-        Console.WriteLine("[bot] 收到 Ctrl+C——优雅停止…");
+        HostLog.Line("[bot] 收到 Ctrl+C——优雅停止…");
         exit.TrySetResult();
     };
     _ = Task.Run(async () =>
@@ -484,15 +486,15 @@ async Task WaitBotExitAsync()
             switch (line.Trim().ToLowerInvariant())
             {
                 case "quit" or "exit":
-                    Console.WriteLine("[bot] 收到退出命令。");
+                    HostLog.Line("[bot] 收到退出命令。");
                     exit.TrySetResult();
                     return;
                 case "stop":
-                    Console.WriteLine("[bot] 停止策略（输 quit 退出）…");
+                    HostLog.Line("[bot] 停止策略（输 quit 退出）…");
                     try { await live.StopAsync(); } catch { }
                     break;
                 case "status":
-                    Console.WriteLine($"[bot] 状态 {live.Status}（运行中={live.IsRunning}）");
+                    HostLog.Line($"[bot] 状态 {live.Status}（运行中={live.IsRunning}）");
                     break;
             }
         }
@@ -503,24 +505,24 @@ async Task WaitBotExitAsync()
 void PrintStrategies()
 {
     var lean = LeanAlgorithmRegistry.GetRegisteredNames();
-    Console.WriteLine(lean.Count > 0
+    HostLog.Line(lean.Count > 0
         ? $"Lean 算法（--engine lean）：{string.Join(", ", lean.OrderBy(n => n, StringComparer.Ordinal))}"
         : "Lean 算法：无（labs leanalgorithms 目录为空或编译失败）");
     var strats = StrategyRegistry.GetRegisteredNames();
-    Console.WriteLine(strats.Count > 0
+    HostLog.Line(strats.Count > 0
         ? $"IStrategy（--engine strategy）：{string.Join(", ", strats.OrderBy(n => n, StringComparer.Ordinal))}"
         : "IStrategy：无（labs coderules/strategies 目录为空或编译失败）");
 }
 
 static void PrintList<T>(IReadOnlyList<T> list)
 {
-    if (list.Count == 0) { Console.WriteLine("（空）"); return; }
-    foreach (var item in list) Console.WriteLine(item);
+    if (list.Count == 0) { HostLog.Line("（空）"); return; }
+    foreach (var item in list) HostLog.Line(item?.ToString() ?? "");
 }
 
 static void PrintHelp()
 {
-    Console.WriteLine("""
+    HostLog.Line("""
         sub <合约>...            订阅行情（tick 实时打印）
         unsub                    退订全部
         tick on|off              tick 打印开关（bot 挂机建议 off）
@@ -543,6 +545,22 @@ static double ParseDouble(string s) => double.Parse(s, CultureInfo.InvariantCult
 static decimal ParseDecimal(string s) => decimal.Parse(s, CultureInfo.InvariantCulture);
 
 static string Fmt(double v) => v == 0 ? "-" : v.ToString("0.##", CultureInfo.InvariantCulture);
+
+/// <summary>
+/// 宿主日志输出——一律写「真 stdout」（<see cref="Init"/> 启动期经 <see cref="Console.OpenStandardOutput"/> 捕获，
+/// 不受引擎期重定向影响）。<b>为什么不用 Console.WriteLine：</b>Lean 的 LiveTradingResultHandler.SetAlgorithm 会
+/// Console.SetOut(algorithm.Debug)——实盘引擎运行期宿主的 Console 输出被回收成「算法 Debug 消息」→ Messaging
+/// 又 Log.Trace("Debug: …") → CtpLeanLogForwarder → LogReceived → 宿主再 Console.WriteLine → 再被回收 ⇒
+/// 回声递归（每圈内容嵌套翻倍——2026-10-14 实测 7min 112MB、输出滞后分钟级、CPU 被字符串拼装吃掉，
+/// console「好像不行」的主因；桌面端日志走 UI 不碰 Console 故无此症）。写真 OS 流 = 回声链断于第一跳。
+/// </summary>
+internal static class HostLog
+{
+    private static TextWriter? _out;
+    public static void Init() => _out = new StreamWriter(Console.OpenStandardOutput(), Console.OutputEncoding) { AutoFlush = true };
+    public static void Line(string s) => (_out ?? Console.Out).WriteLine(s);
+    public static void Prompt(string s) => (_out ?? Console.Out).Write(s);
+}
 
 /// <summary>极简 --key value 参数表（与 apps/LedgerWallet 的 Args 同款模式）。</summary>
 internal sealed class Args
