@@ -44,7 +44,8 @@ if (directArgs.Length > 0 && directArgs[0].StartsWith("tcp:", StringComparison.O
         directArgs.Length > 1 ? directArgs[1] : "testuser",
         directArgs.Length > 2 ? directArgs[2] : "testpass",
         directArgs.Length > 3 && int.TryParse(directArgs[3], out var idle) ? idle : 0,
-        directArgs.Length > 4 && directArgs[4] == "proxy");
+        directArgs.Length > 4 && directArgs[4] == "proxy",
+        directArgs.Length > 5 && int.TryParse(directArgs[5], out var soakN) ? soakN : 0);
     return;
 }
 

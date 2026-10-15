@@ -157,6 +157,31 @@ internal static class CtpFrontTemplates
         return b[n..];
     }
 
+    /// <summary>应答计数器字段统一编码（<b>真前置 2026-10-15 300 笔实抓定案</b>，2467163@182.254.243.31:30001
+    /// 录制实证）：计数器为 <b>int 永不回卷</b>——值 1-223 = `E3 &lt;裸字节&gt;`；224-239（E0..EF）= `E3 [E0][值]`
+    /// 转义对（本地实测客户端接受；真前置实抓为跳段 223→240，两形态皆过）；240-255 = `E3 &lt;裸字节&gt;`
+    /// （含 FE/FF——真前置 254/255 轮 17B 实证）；≥256 = **`E2 &lt;hi&gt;&lt;lo&gt;` 两字节大端**（真前置 18B 应答
+    /// `E2 01 2A`=298 实证——客户端对 ≥256 的校验只认此形态；E3 单字节无法表达且骤降回卷必被拒收）。</summary>
+    internal static byte[] InstanceField(int value)
+    {
+        if (value <= 255)
+        {
+            var b = (byte)value;
+            return b is (>= 0xE0 and <= 0xEF)
+                ? new byte[] { 0xE3, 0xE0, b }              // 转义对（224-239）
+                : new byte[] { 0xE3, b };                    // 裸值（含 FE/FF）
+        }
+        // ≥256：E2 + 2B 大端——值内 E0..EF 字节须转义（480=0x01E0 的 E0 被客户端当转义前缀吞下一
+        // 字段 ⇒ 帧丢弃——2026-10-15 复现器 480 轮实测；EscapedMoney 同一字母表纪律）；FE/FF 裸值
+        var run = new List<byte> { 0xE2 };
+        foreach (var b in new[] { (byte)(value >> 8), (byte)value })
+        {
+            if (b is (>= 0xE0 and <= 0xEF)) { run.Add(0xE0); }
+            run.Add(b);
+        }
+        return run.ToArray();
+    }
+
     /// <summary>单字节/短值转义：值字节落在 tag 字母表 {E0..EF, FE} 内时前插 E0（E0 自身亦转义）——
     /// <b>2026-10-14 4:20 死循环根因的修复面</b>：reqId/instance 等「请求衍生或计数器」值写入响应帧时，
     /// SDK（请求侧实证 224=0xE0 → E3 E0E0）会转义、真前置同款——前置写裸字母表字节（尤其末尾裸 E0
@@ -273,9 +298,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>⑫⑭ 结算确认应答（instance 自增：首次 01、二次 02）。</summary>
-    internal static byte[] BuildSettleRsp(byte instance, byte reqId, string brokerId, string userId, string tradingDay) =>
+    internal static byte[] BuildSettleRsp(int instance, byte reqId, string brokerId, string userId, string tradingDay) =>
         Apply(SettleRspTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(16, 1, EscapedValue(reqId)),
             new Edit(34, 4, F(brokerId, 4)),
             new Edit(39, 6, F(userId, 6)),
@@ -293,9 +318,9 @@ internal static class CtpFrontTemplates
     /// 过滤查报单定案：非请求回显）——客户端按它丢弃过期帧：旧版恒回 captured 的 01 ⇒ 同一会话第二次
     /// ⑮ 起应答被客户端静默丢弃（读而不派发——Recv-Q=0、无断线事件、30s 超时），bot 长会话必死。
     /// </summary>
-    internal static byte[] BuildQryAccountRsp(byte[] instanceRun, byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
+    internal static byte[] BuildQryAccountRsp(int instance, byte reqId, string brokerId, string accountId, string userId, string tradingDay, double balance) =>
         Apply(QryAccountRspTemplate,
-            new Edit(10, 1, instanceRun),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(16, 1, EscapedValue(reqId)),
             new Edit(21, 4, F(brokerId, 4)),
             new Edit(26, 5, A(accountId.Length >= 5 ? accountId[..5] : accountId.PadLeft(5, '0'))),
@@ -315,9 +340,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>⑱ 持仓应答·空表（instance = 请求侧 80 族计数回显——见 <see cref="BuildQryAccountRsp"/>）。</summary>
-    internal static byte[] BuildQryPositionEmptyRsp(byte[] instanceRun, byte reqId) =>
+    internal static byte[] BuildQryPositionEmptyRsp(int instance, byte reqId) =>
         Apply(QryPositionEmptyRspTemplate,
-            new Edit(10, 1, instanceRun),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(12, 1, EscapedValue(reqId))
         );
 
@@ -339,10 +364,10 @@ internal static class CtpFrontTemplates
     /// 券商 offset 决策不消费。多行收集在 wrapper 静默期收尾（2026-10-05——与查合约同路径：tag 帧恒
     /// isLast=true，多仓行全部到达 CtpTrader.OnQueryItem 静默窗）。
     /// </summary>
-    internal static byte[] BuildQryPositionRsp(byte[] instanceRun, byte reqId, string brokerId, string investorId,
+    internal static byte[] BuildQryPositionRsp(int instance, byte reqId, string brokerId, string investorId,
         string instrumentId, string exchangeId, string tradingDay, char directionChar, char positionDateChar, int totalPosition) =>
         Apply(QryPositionRspTemplate,
-            new Edit(10, 1, instanceRun),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(16, 1, EscapedValue(reqId)),
             new Edit(21, 5, F(instrumentId, 5)),
             new Edit(28, 4, F(brokerId, 4)),
@@ -370,9 +395,9 @@ internal static class CtpFrontTemplates
     internal static readonly byte[] QryOrderEmptyRspTemplate = H("0103344CE104E28001E309E708");
 
     /// <summary>查报单空应答（E3 值槽 = offset 10、E7 reqId 值槽 = offset 12）。op 用 +1 惯例（E4→E5）。</summary>
-    internal static byte[] BuildQryOrderEmptyRsp(byte e3Value, byte reqId) =>
+    internal static byte[] BuildQryOrderEmptyRsp(int e3Value, byte reqId) =>
         Apply(QryOrderEmptyRspTemplate,
-            new Edit(10, 1, [e3Value]),
+            new Edit(9, 2, InstanceField(e3Value)),
             new Edit(12, 1, EscapedValue(reqId))
         );
 
@@ -421,9 +446,9 @@ internal static class CtpFrontTemplates
 
     /// <summary>OnRtnOrder '3'（未成交在队——受理/挂单状态推送）。价格/量槽等宽（PriceSlot/VolumeEdit——
     /// 变宽即失步，见 PriceSlot 注释）。</summary>
-    internal static byte[] BuildRtnOrder3(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+    internal static byte[] BuildRtnOrder3(int instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
         Apply(RtnOrder3Template,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
             new Edit(65, 3, PriceSlot(limitPrice)),
@@ -451,9 +476,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>OnRtnOrder '0'（全部成交推送）。价格/量槽等宽（PriceSlot/VolumeEdit）。</summary>
-    internal static byte[] BuildRtnOrder0(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
+    internal static byte[] BuildRtnOrder0(int instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay) =>
         Apply(RtnOrder0Template,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
             new Edit(65, 3, PriceSlot(limitPrice)),
@@ -479,9 +504,9 @@ internal static class CtpFrontTemplates
     /// OnRtnOrder 终态（'5' 已撤销 / '2' 部成后作废 / '4' 未成交作废——'3' 模板 + 状态槽(177)/消息槽(219) 等宽编辑）。
     /// 客户端（CtpBrokerage tracker）按状态字节收敛订单生命周期——掩成 '3' 会让已撤/已废单成僵尸。
     /// </summary>
-    internal static byte[] BuildRtnOrderTerminated(byte instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay, char status, string statusMsg) =>
+    internal static byte[] BuildRtnOrderTerminated(int instance, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition, string tradingDay, char status, string statusMsg) =>
         Apply(RtnOrder3Template,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(39, 12, F(orderRef, 12)),
             new Edit(59, 3, A($"{priceType}{direction}{offsetFlag}")),
             new Edit(65, 3, PriceSlot(limitPrice)),
@@ -552,9 +577,9 @@ internal static class CtpFrontTemplates
 
     /// <summary>OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。
     /// 价格槽 PriceSlot 等宽（变宽即失步）；量槽捕获 1B——>255 手时 MinimalInt 2B 撑宽（bot 量级达不到，未实测边界）。</summary>
-    internal static byte[] BuildRtnTrade(byte instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay) =>
+    internal static byte[] BuildRtnTrade(int instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay) =>
         Apply(RtnTradeTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(52, 12, F(orderRef, 12)),
             new Edit(76, 4, F(tradeId, 4)),
             new Edit(121, 3, PriceSlot(price)),
@@ -583,9 +608,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>⑳-4001 拒绝（payload；会话层与 F003 各自 BuildFrame 后拼接一次写）。价格槽 PriceSlot 等宽。</summary>
-    internal static byte[] BuildOrderInsertRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
+    internal static byte[] BuildOrderInsertRspErr(int instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
         Apply(OrderInsertRspErrTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(100, 12, F(orderRef, 12)),
             new Edit(120, 3, A($"{priceType}{direction}{offsetFlag}")),
             new Edit(126, 3, PriceSlot(limitPrice)),
@@ -605,9 +630,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>⑳-F003 报单错误回报（拒单 → RspError 事件）。价格槽 PriceSlot 等宽。</summary>
-    internal static byte[] BuildErrRtnOrderInsert(byte instance, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
+    internal static byte[] BuildErrRtnOrderInsert(int instance, int errorId, string errorMsg, string userId, string brokerId, string instrumentId, string orderRef, char priceType, char direction, char offsetFlag, double limitPrice, int volume, char timeCondition) =>
         Apply(ErrRtnOrderInsertTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(41, 12, F(orderRef, 12)),
             new Edit(61, 3, A($"{priceType}{direction}{offsetFlag}")),
             new Edit(67, 3, PriceSlot(limitPrice)),
@@ -626,9 +651,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>㉒-4007 撤单应答·失败（RspInfo ← 核心错误码/消息，等宽 25B——变宽即失步）。</summary>
-    internal static byte[] BuildOrderActionRspErr(byte instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
+    internal static byte[] BuildOrderActionRspErr(int instance, byte reqId, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(64, 12, F(orderRef, 12)),
             new Edit(57, 6, F(userId, 6)),
             new Edit(90, 6, F(userId, 6)),
@@ -638,9 +663,9 @@ internal static class CtpFrontTemplates
         );
 
     /// <summary>㉒-4007 撤单应答·成功（RspInfo errorId=0 +「撤单成功」，等宽 25B——成功撤单不发 F004）。</summary>
-    internal static byte[] BuildOrderActionRspOk(byte instance, byte reqId, string userId, string brokerId, string orderRef) =>
+    internal static byte[] BuildOrderActionRspOk(int instance, byte reqId, string userId, string brokerId, string orderRef) =>
         Apply(OrderActionRspTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(64, 12, F(orderRef, 12)),
             new Edit(57, 6, F(userId, 6)),
             new Edit(90, 6, F(userId, 6)),
@@ -673,9 +698,9 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>㉒-F004 撤单错误回报（payload；会话层与 4007 拼接一次写）。</summary>
-    internal static byte[] BuildErrRtnOrderAction(byte instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
+    internal static byte[] BuildErrRtnOrderAction(int instance, int errorId, string errorMsg, string userId, string brokerId, string orderRef) =>
         Apply(ErrRtnOrderActionTemplate,
-            new Edit(10, 1, EscapedValue(instance)),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(32, 12, F(orderRef, 12)),
             new Edit(25, 6, F(userId, 6)),
             new Edit(66, 6, F(userId, 6)),
@@ -695,9 +720,9 @@ internal static class CtpFrontTemplates
 
     /// <summary>查合约应答（板子数据源——instance/reqId 回显请求值；多合约=每合约一帧同写）。多行收集在 wrapper
     /// 静默期收尾（2026-10-05 定案：tag 帧恒 isLast=true 无 false 编码——见 CtpTrader.OnQueryItem）。</summary>
-    internal static byte[] BuildQryInstrumentRsp(byte[] instanceRun, byte reqId, string instrumentId, string exchangeId) =>
+    internal static byte[] BuildQryInstrumentRsp(int instance, byte reqId, string instrumentId, string exchangeId) =>
         Apply(QryInstrumentRspTemplate,
-            new Edit(10, 1, instanceRun),
+            new Edit(9, 2, InstanceField(instance)),
             new Edit(16, 1, EscapedValue(reqId)),
             new Edit(33, 6, F(instrumentId, 6)),
             new Edit(40, 6, F(instrumentId, 6)),

@@ -9,11 +9,12 @@ namespace Acme.Ctp.ProtoCapture;
 
 internal static class DirectTest
 {
-    public static async Task RunAsync(string front, string user, string pwd, int idleSec = 0, bool proxy = false)
+    public static async Task RunAsync(string front, string user, string pwd, int idleSec = 0, bool proxy = false, int soak = 0)
     {
         Console.WriteLine($"[Test] 直连 {front} user={user} idle={idleSec}s proxy={proxy}");
 
-        var flowDir = Path.Combine(Path.GetTempPath(), "ctp-direct-test");
+        // 每次独立流目录（复用会重放旧流 ⇒ 真前置拒收「不合法的登录」——2026-10-15 实测踩中）
+        var flowDir = Path.Combine(Path.GetTempPath(), "ctp-direct-test", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(flowDir);
 
         // 代理录制模式：官方 SDK → RecordingProxy(17001) → front——线级对比「真实前置 vs 本地前置」
@@ -59,18 +60,46 @@ internal static class DirectTest
             var account = await trader.QueryTradingAccountAsync("9999", user, CancellationToken.None);
             Console.WriteLine($"[Test] ✓ 资金: Balance={account.Balance} Available={account.Available}");
 
-            Console.WriteLine("[Test] QueryInvestorPosition…");
-            var positions = await trader.QueryInvestorPositionAsync("9999", user, ct: CancellationToken.None);
-            Console.WriteLine($"[Test] ✓ 持仓 {positions.Count} 条");
+            // 启动查询容错（真前置限频 ~1s/同型——背靠背发会被限流超时；soak 循环才是本体，
+            // 单个启动查询超时不该终止 run。间隔 1.2s 尽量避开限频窗）
+            try
+            {
+                await Task.Delay(1200);
+                Console.WriteLine("[Test] QueryInvestorPosition…");
+                var positions = await trader.QueryInvestorPositionAsync("9999", user, ct: CancellationToken.None);
+                Console.WriteLine($"[Test] ✓ 持仓 {positions.Count} 条");
+            }
+            catch (Exception ex) { Console.WriteLine($"[Test] 启动持仓查询超时（限频，继续）: {ex.Message}"); }
+            try
+            {
+                await Task.Delay(1200);
+                Console.WriteLine("[Test] QueryOrder（过滤 au2610——预期空，首查）…");
+                var filtered = await trader.QueryOrderAsync("9999", user, "au2610", CancellationToken.None);
+                Console.WriteLine($"[Test] ✓ 过滤报单 {filtered.Count} 条");
+                Console.WriteLine("[Test] QueryOrder…");
+                var orders = await trader.QueryOrderAsync("9999", user, ct: CancellationToken.None);
+                Console.WriteLine($"[Test] ✓ 报单 {orders.Count} 条（首条: {(orders.Count > 0 ? orders[0].ToString() : "无")}）");
+            }
+            catch (Exception ex) { Console.WriteLine($"[Test] 启动报单查询超时（限频，继续）: {ex.Message}"); }
 
-            // 过滤查询放最前（无匹配报单的合约）——验证「首查即空」是否也走 17B tag 格式
-            // （此前抓包里 tag 应答都在二进制应答之后——顺序是变量）
-            Console.WriteLine("[Test] QueryOrder（过滤 au2610——预期空，首查）…");
-            var filtered = await trader.QueryOrderAsync("9999", user, "au2610", CancellationToken.None);
-            Console.WriteLine($"[Test] ✓ 过滤报单 {filtered.Count} 条");
-            Console.WriteLine("[Test] QueryOrder…");
-            var orders = await trader.QueryOrderAsync("9999", user, ct: CancellationToken.None);
-            Console.WriteLine($"[Test] ✓ 报单 {orders.Count} 条（首条: {(orders.Count > 0 ? orders[0].ToString() : "无")}）");
+            // Soak 模式（2026-10-15 ≥256 计数形态取证）：连打 N 笔持仓查询（真前置限频 ~1s/同型查询，
+            // 350ms 间隔 + 失败退避），proxy 录制两侧字节——第 257+ 笔的 S→C 应答 = 客户端接受的 ≥256
+            // instance 编码的地表真值（本地前置四候选形态全被拒后停止猜测、直取证据）。
+            for (var i = 1; i <= soak; i++)
+            {
+                try
+                {
+                    var p = await trader.QueryInvestorPositionAsync("9999", user, ct: CancellationToken.None);
+                    if (i % 25 == 0 || i >= 250) Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] soak#{i} ✓ 持仓 {p.Count} 条");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] soak#{i} ✗ {ex.Message}（退避 1.5s）");
+                    await Task.Delay(1500);
+                }
+                await Task.Delay(350);
+            }
+            if (soak > 0) Console.WriteLine($"[Test] soak 完成 {soak} 笔");
 
             // 空转观测：每 30s 一次轻查询（应答活着 = 心跳/连接健康；超时 = 被掐的指征）
             var deadline = Environment.TickCount64 + idleSec * 1000L;

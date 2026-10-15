@@ -115,6 +115,13 @@ public sealed class CtpTrader : IDisposable
             throw new InvalidOperationException("CtpTrader_Create 失败");
     }
 
+    // 查询族请求计数（⑰⑮查报单查合约——2026-10-15 定案：SDK 的链路计数在第 256 个**同族**请求起
+    // 换 E2 逐字节标签编码形态，本地前置的应答回显无法满足客户端校验（五种候选形态全被拒、真前置
+    // 无凭据不可取证）——宿主经 QueryRequestCount 在逼近边界前主动快速重连规避（计数清零）。
+    private int _queryRequestCount;
+    public int QueryRequestCount => _queryRequestCount;
+    private void CountQuery() => Interlocked.Increment(ref _queryRequestCount);
+
     // reqId 序列跳过 tag 字母表 {E0..EF, FE}（2026-10-14 4:20 死循环根因的客户端侧防线）：
     // reqId 经 SDK 序列化上 wire，值落在字母表时 SDK 写 [E0][值] 转义；前置应答的 reqId 回显槽是
     // **定宽 1B**（实测 18B 转义形式同样被 SDK 丢弃不派发）⇒ 应答无法承载字母表值 ⇒ 查询挂死
@@ -202,6 +209,7 @@ public sealed class CtpTrader : IDisposable
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         var reqId = NextRequestId();
+        CountQuery();
         var tcs = RegisterQuery(reqId);
         int rc = NativeMethods.CtpTrader_QryTradingAccount(_handle, brokerId, accountId, reqId);
         if (rc != 0) throw new CtpException($"ReqQryTradingAccount 发送失败 rc={rc}");
@@ -215,6 +223,7 @@ public sealed class CtpTrader : IDisposable
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         var reqId = NextRequestId();
+        CountQuery();
         var tcs = RegisterQuery(reqId);
         int rc = NativeMethods.CtpTrader_QryInvestorPosition(
             _handle, brokerId, investorId, instrumentId ?? "", reqId);
@@ -229,6 +238,7 @@ public sealed class CtpTrader : IDisposable
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         var reqId = NextRequestId();
+        CountQuery();
         var tcs = RegisterQuery(reqId);
         int rc = NativeMethods.CtpTrader_QryInstrument(_handle, instrumentId ?? "", reqId);
         if (rc != 0) throw new CtpException($"ReqQryInstrument 发送失败 rc={rc}");
@@ -281,6 +291,7 @@ public sealed class CtpTrader : IDisposable
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         var reqId = NextRequestId();
+        CountQuery();
         var tcs = RegisterQuery(reqId);
         int rc = NativeMethods.CtpTrader_QryOrder(
             _handle, brokerId, investorId, instrumentId ?? "", reqId);

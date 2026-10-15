@@ -397,7 +397,7 @@ public class CtpSessionService : ICtpSession, IDisposable
     private void OnTraderFrontConnected(object? sender, EventArgs e)
     {
         if (_hadLoggedIn && !_socketAlive)
-            _ = Task.Run(ReconnectAsync);
+            _ = Task.Run(() => ReconnectAsync());
     }
 
     /// <summary>行情前置断线：标记失活（行情不影响交易状态机，仅清 tick 缓存避免脏数据）。</summary>
@@ -420,6 +420,8 @@ public class CtpSessionService : ICtpSession, IDisposable
     }
 
     /// <summary>安全定时器：30s 巡检。盘中失活 → 强制重建重登（兜底 SDK 放弃重连）；闭市 → 维持 Closed。</summary>
+    // E2 形态边界规避阈值（2026-10-15）：SDK 的查询族链路计数第 256 个起换编码形态，本地前置应答
+    // 无法满足客户端校验——计数达 220（36 余量）即主动重连交易腿（计数清零）。行情腿保留不动 ⇒
     private void OnSafetyTimer(object? state)
     {
         if (!_hadLoggedIn || _socketAlive || _reconnecting) return;

@@ -37,7 +37,10 @@ public sealed class QueryOrderStallReproTests : IDisposable
     }
 
     /// <summary>noise 节奏直驱：每轮 1 查询 + 1 报单（250ms 间隔 × 400 轮 ≈ 100s+；会话查询数远超
-    /// 实测停摆阈值 ~100）。停摆签名 = 查询 &gt;5s 未应答——立即失败并报告迭代序号与前端日志路径。</summary>
+    /// 实测停摆阈值 ~100）。停摆签名 = 查询 &gt;5s 未应答——立即失败并报告迭代序号与前端日志路径。
+    /// 600 轮跨 256 边界完整验证（2026-10-15 真前置实抓定案后修复：应答 instance = 前置自身 int
+    /// 计数器永不回卷，≤255 走 E3 单字节（转义区 E0..EF 转义对、FE/FF 裸值）、≥256 走 `E2 &lt;2B 大端&gt;`
+    /// ——`InstanceField` 统一编码，真前置 300 笔行为 1:1 复刻）。</summary>
     [Fact]
     public async Task 查询报单循环_无停摆()
     {
@@ -67,7 +70,7 @@ public sealed class QueryOrderStallReproTests : IDisposable
         trader.OrderReceived += (_, o) => orders.Add(o.OrderRef);
 
         var lastStatus = "";
-        for (var i = 1; i <= 400; i++)
+        for (var i = 1; i <= 600; i++)
         {
             if (withQueries)
             {
