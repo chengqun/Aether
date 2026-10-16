@@ -238,7 +238,7 @@ public class SessionAdapterTests
     // —— 下单 → 回报（异步泵） ——
 
     [Fact]
-    public async Task 市价单的回报序列为先状态推进后成交且状态级联到全成交()
+    public async Task 市价单的回报序列为受理先于成交_成交先于终态且回报级联到全成交()
     {
         using var sim = NewLoopback();
         var session = sim.Session;
@@ -257,7 +257,9 @@ public class SessionAdapterTests
 
         var statuses = orders.Snapshot.Select(o => (char)o.OrderStatusRaw).ToArray();
         Assert.Equal(new[] { '3', '0' }, statuses);                     // 已报入 → 全部成交
-        Assert.Equal(new[] { "order:3", "order:0", "trade:1" }, interleaved.Snapshot.ToArray());
+        // 受理 '3' 先于成交（OrderRef 配对）→ 成交先于终态 '0'（真 CTP 惯例——tracker 依赖 Trade 到齐再终态；
+        // 旧序终态先抛 ⇒ 攻击方高频幻影补齐，2026-10-17 换序修复）
+        Assert.Equal(new[] { "order:3", "trade:1", "order:0" }, interleaved.Snapshot.ToArray());
 
         // 成交前的报单回报已带正确的合约/方向/单号（UI 的委托列表靠它建行）
         var accepted = orders.Snapshot[0];
@@ -287,7 +289,7 @@ public class SessionAdapterTests
     }
 
     [Fact]
-    public async Task 部分成交时每笔成交前都有一个状态回报()
+    public async Task 部分成交时每笔成交后跟状态回报且终态最后()
     {
         // 部分成交由「对手方分批供给」驱动：GFD 限价买 3 在空簿静息入簿，
         // 对手方（lp 账户）每次插 1 张等价反向单 ⇒ 吃掉 1 手 ⇒ 逐笔推进到全成
@@ -310,8 +312,9 @@ public class SessionAdapterTests
         Assert.True(await Wait.UntilAsync(() => trades.Count >= 3), "3 手逐手成交");
         Assert.Equal(4, await Wait.QuiesceAsync(() => orders.Count));   // 已报入 + 3 次推进
 
-        // 3 手 × (状态 + 成交) 交错的完整序列——「成交必先见状态」在这条串上无处可藏（跨线保序）
-        Assert.Equal(new[] { "order", "order", "trade", "order", "trade", "order", "trade" }, interleaved.Snapshot.ToArray());
+        // 3 手 × (成交 + 状态) 交错的完整序列——受理先于每笔成交、每笔成交后跟状态推进、终态 '0' 收尾
+        //（真 CTP 惯例序：成交先于终态——tracker 依赖 Trade 到齐再终态；旧序 2026-10-17 换序修复）
+        Assert.Equal(new[] { "order", "trade", "order", "trade", "order", "trade", "order" }, interleaved.Snapshot.ToArray());
 
         var statuses = orders.Snapshot.Select(o => (char)o.OrderStatusRaw).ToArray();
         Assert.Equal(new[] { '3', '1', '1', '0' }, statuses);           // 已报入 → 部分成交 ×2 → 全成交

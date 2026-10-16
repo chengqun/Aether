@@ -992,8 +992,11 @@ public sealed class SimTradingCore : IDisposable
         if (updates.Count == 0) return;
         foreach (var u in updates)
         {
-            OrderChanged?.Invoke(accountId, u.Order);
+            // 成交先于订单状态（含终态 '0'）——真 CTP 惯例 OnRtnTrade 先到，客户端 tracker 依赖此序：
+            // 旧版 order('0') 先抛 ⇒ tracker 在终态时判「Trade 未到齐」按限价补齐 ⇒ 攻击方高频幻影补齐
+            // （双 bot 实测 25/36；成交帧实际全部到达、只是晚于终态——2026-10-17 本地全栈四层数字对齐定案）。
             if (u.Trade is not null) TradeFilled?.Invoke(accountId, u.Trade);
+            OrderChanged?.Invoke(accountId, u.Order);
         }
     }
 

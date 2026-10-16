@@ -106,6 +106,33 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
     }
 
     [Fact]
+    public async Task 多手成交的量回显_SDK读到真实手数()
+    {
+        // F002 量槽偏移回归钉（2026-10-17 双 bot 定案）：旧版量编辑写在 offset 184（E4 01，无关字段——
+        // 写错位还污染它），SDK 从模板 E8 槽读量 ⇒ 恒读原值 1——多手成交全被读成 1 手 ⇒ 客户端
+        // 「报单全成但成交回报缺 N 手」高频幻影补齐。此前 E2E 只测 1 手成交（01=1 恰好吻合）掩盖了偏移。
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        using var trader = Login(dir);
+        _sim.SeedMaker();   // 每边 20 手
+
+        var trades = new ConcurrentBag<Trade>();
+        trader.TradeReceived += (_, t) => trades.Add(t);
+
+        // 激进限价买 7@3100（≥ask 3001 ⇒ 一笔吃 7 手，maker 档量 20 足够）
+        await trader.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3100, Volume = 7, ExchangeId = "DCE",
+        });
+        Assert.True(await UntilAsync(() => trades.Count >= 1), "OnRtnTrade 未到达");
+        var trade = trades.Single();
+        Assert.Equal(7, trade.Volume);   // SDK 读到的量 = 真实成交手数（旧偏移下恒 1）
+        Assert.Equal(3001, trade.Price);
+    }
+
+    [Fact]
     public async Task 拒单路径_报单拒绝对_F003触发RspError()
     {
         var dir = NewFlowDir();

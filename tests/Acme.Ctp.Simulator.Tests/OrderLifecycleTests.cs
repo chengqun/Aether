@@ -55,9 +55,11 @@ public class OrderLifecycleTests
     }
 
     [Fact]
-    public async Task 成交回报晚于其报单回报()
+    public async Task 受理回报先于成交_成交先于终态()
     {
-        // 用一条共用时间线记录两类事件的相对次序（客户端按 OrderRef 配对，成交先到会配不上）
+        // 用一条共用时间线记录两类事件的相对次序（客户端按 OrderRef 配对——受理 '3' 必须先于成交；
+        // 成交先于终态 '0' 是真 CTP 惯例序——客户端 tracker 依赖「Trade 到齐再终态」判缺，
+        // 旧序 order('0') 先抛 ⇒ 攻击方高频幻影补齐，2026-10-17 换序修复）
         var timeline = new System.Collections.Generic.List<string>();
         var core = await SimHarness.NewLoggedInCoreAsync();
         core.OrderChanged += (a, o) => { if (a == SimHarness.Account) lock (timeline) timeline.Add($"order:{Status(o)}"); };
@@ -65,7 +67,7 @@ public class OrderLifecycleTests
 
         core.InsertOrder(SimHarness.Account, SimHarness.Market(CtpDirection.Buy, 2));
 
-        Assert.Equal(new[] { "order:3", "order:0", "trade:1" }, timeline);
+        Assert.Equal(new[] { "order:3", "trade:1", "order:0" }, timeline);
     }
 
     [Fact]

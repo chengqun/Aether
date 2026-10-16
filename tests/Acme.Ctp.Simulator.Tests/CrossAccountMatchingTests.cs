@@ -174,6 +174,36 @@ public class CrossAccountMatchingTests
         AssertConserved(core, "bob");
     }
 
+    [Fact]
+    public async Task 成交事件先于终态订单状态_真CTP惯例序()
+    {
+        var core = await SimHarness.NewLoggedInCoreAsync();
+
+        // alice 挂限价买静息入簿（挂单受理事件不参与断言——之后才订阅）
+        core.InsertOrder("alice", SimHarness.Limit(CtpDirection.Buy, 1, 7000));
+
+        var events = new Collector<(string Kind, string AccountId, string Detail)>();
+        core.OrderChanged += (a, o) => events.Add(("order", a, ((char)o.OrderStatusRaw).ToString()));
+        core.TradeFilled += (a, t) => events.Add(("trade", a, t.TradeId));
+
+        // bob 市价卖 ⇒ 吃 alice 挂单 ⇒ 双方各得「成交 + 终态 '0'」两个事件
+        core.InsertOrder("bob", SimHarness.Market(CtpDirection.Sell, 1));
+
+        // 真实 CTP 惯例：OnRtnTrade 先于终态 OnRtnOrder 到达——客户端 CtpOrderTracker 依赖此序判
+        // 「Trade 到齐再终态」；旧版核心 order('0') 先抛 ⇒ 攻击方高频幻影补齐（双 bot 实测 25/36 单、
+        // 成交帧实际全部到达只是晚于终态——2026-10-17 本地全栈四层数字对齐定案）。
+        foreach (var account in new[] { "alice", "bob" })
+        {
+            var mine = events.Snapshot.Where(e => e.AccountId == account).ToList();
+            var tradeIdx = mine.FindIndex(e => e.Kind == "trade");
+            var terminalIdx = mine.FindIndex(e => e.Kind == "order" && e.Detail == ((char)SimOrderStatus.AllTraded).ToString());
+            Assert.True(tradeIdx >= 0, $"{account} 应有成交事件");
+            Assert.True(terminalIdx >= 0, $"{account} 应有终态 '0' 事件");
+            Assert.True(tradeIdx < terminalIdx,
+                $"{account} 成交事件须先于终态订单状态（实际序: {string.Join(",", mine.Select(e => $"{e.Kind}:{e.Detail}"))}）");
+        }
+    }
+
     /// <summary>资金守恒断言（镜像 AccountingInvariantTests 的恒等式，容差 0.05；DTO 无 StaticBalance——用 Balance 展开式）。</summary>
     private static void AssertConserved(SimTradingCore core, string accountId)
     {

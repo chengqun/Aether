@@ -576,14 +576,18 @@ internal static class CtpFrontTemplates
     );
 
     /// <summary>OnRtnTrade（成交回报推送——方向/开平前缀保留捕获形状（边界：非买开成交的方向回显失真））。
-    /// 价格槽 PriceSlot 等宽（变宽即失步）；量槽捕获 1B——>255 手时 MinimalInt 2B 撑宽（bot 量级达不到，未实测边界）。</summary>
+    /// 价格槽 PriceSlot 等宽（变宽即失步）；<b>量槽 = offset 125（模板 `E8 01` 的值字节——2026-10-17 修正：
+    /// 旧版编辑 offset 184（`E4 01`，无关字段——量编辑写错位还污染该字段），SDK 从 E8 后读量 ⇒ 恒读模板
+    /// 原值 1——多手成交全被读成 1 手 ⇒ 客户端「报单全成但成交回报缺 N 手」高频幻影补齐（双 bot 实测）；
+    /// E2E 此前只测 1 手成交（01=1 恰好吻合）掩盖了偏移错误）</b>；量槽 1B——>255 手时 MinimalInt 2B 撑宽
+    /// （bot 量级达不到，未实测边界——等宽纪律下撑宽即失步，如实标注）。</summary>
     internal static byte[] BuildRtnTrade(int instance, string userId, string brokerId, string instrumentId, string orderRef, string tradeId, double price, int volume, string tradingDay) =>
         Apply(RtnTradeTemplate,
             new Edit(9, 2, InstanceField(instance)),
             new Edit(52, 12, F(orderRef, 12)),
             new Edit(76, 4, F(tradeId, 4)),
             new Edit(121, 3, PriceSlot(price)),
-            new Edit(184, 1, MinimalInt(volume)),
+            new Edit(125, 1, MinimalInt(volume)),
             new Edit(33, 6, F(userId, 6)),
             new Edit(65, 6, F(userId, 6)),
             new Edit(22, 4, F(brokerId, 4)),
