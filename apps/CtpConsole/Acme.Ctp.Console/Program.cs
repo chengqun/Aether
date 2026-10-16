@@ -318,9 +318,9 @@ async Task OrderAsync(string[] parts)
 
 async Task CancelAsync(string[] parts)
 {
-    if (parts.Length != 2) { HostLog.Line("用法：cancel <OrderRef>"); return; }
+    if (parts.Length is < 2 or > 3) { HostLog.Line("用法：cancel <OrderRef> [exchangeId]"); return; }
     var loginResult = session.LoginResult ?? throw new InvalidOperationException("未登录");
-    await session.OrderActionAsync(new CtpOrderRef(broker, user, loginResult.FrontId, loginResult.SessionId, parts[1], ""));
+    await session.OrderActionAsync(new CtpOrderRef(broker, user, loginResult.FrontId, loginResult.SessionId, parts[1], parts.Length == 3 ? parts[2] : ""));
     HostLog.Line("撤单请求已发（结果经报单回报推送）");
 }
 

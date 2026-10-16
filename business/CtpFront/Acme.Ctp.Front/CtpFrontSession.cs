@@ -560,10 +560,10 @@ internal sealed class CtpFrontSession : IDisposable
             var a = CtpOrderWireCodec.ParseOrderAction(body);
             if (a is null)
             {
-                _log($"[CTP-Front] 撤单解析失败: body前缀={HexPrefix(body)}");
+                _log($"[CTP-Front] 撤单解析失败: body={Convert.ToHexString(body)}");
                 return null;
             }
-            _log($"[CTP-Front] 撤单: ref={a.OrderRef} reqId={a.ReqId}");
+            _log($"[CTP-Front] 撤单: ref={a.OrderRef} reqId={a.ReqId} body={Convert.ToHexString(body)}");
             var inst = NextCmdInstance();   // 40 族严格序列——一次自增，OK/ERR 共用（空跳一格会被客户端拒收）
             try
             {

@@ -103,7 +103,13 @@ internal static class CtpOrderWireCodec
     internal static ParsedOrderAction? ParseOrderAction(ReadOnlySpan<byte> body)
     {
         var reqId = ByteAfter(body, "E101013BE3");
-        var orderRef = RunAfter(body, 0xEB, r => r.Length == 12 && r.ToArray().All(IsDigit));
+        // OrderRef 不锚 tag：㉒ 帧 OrderRef 前的 tag 随 user 长度/SessionID 形态漂移（实测对照——
+        // E2E m2user(6B)+SessionId=1 → EB；cancelp1(8B)+4B 大端 SessionId → E9）。旧版硬编码 EB 只在
+        // E2E 形状下成立，botmm(5B)/botnoise(7B)/真实会话全部失配 ⇒ 静默无应答 ⇒ 客户端 15s 撤单超时、
+        // 交易所侧撤单根本没发（2026-10-16 双 bot 换防全瘫根因）。改「任意 tag 的 12 位零填充数字 run」
+        // 形状匹配（帧内唯一——reqId/序号 1B、broker 4 位、user 混编、SessionID 大端非 ASCII 均不撞形；
+        // 与 DebugFields 探针同款）。
+        var orderRef = RunLast(body, 0, OrderRefShape);
         if (reqId is null || orderRef is null) return null;
         return new ParsedOrderAction(reqId.Value, Encoding.ASCII.GetString(orderRef));
     }

@@ -56,4 +56,29 @@ public class OrderCodecShapeTests
         Assert.Equal(vol, o.Volume);
         Assert.Equal(tc, (char)o.TimeCondition);
     }
+
+    // —— ㉑ 撤单 wire 解析的形状锚定回归钉（2026-10-16 双 bot 换防全瘫根因）——
+    // OrderRef 前的 tag 随 user 长度/SessionID 形态漂移（与 ⑲ 量/orderRef tag 漂移同族）：
+    // 旧版 ParseOrderAction 硬编码 0xEB 只在 E2E 形状（6 字符 user + 1 字节 SessionId）下成立，
+    // 其余形状失配 ⇒ 前置静默无应答 ⇒ 客户端 15s 撤单超时、交易所侧撤单未发。两帧均为实测字节。
+
+    // E2E 形状：user=m2user(6B)、sessionId=1（1 字节 E3 01）、exchangeId="DCE"——orderRef@EB（撤单成功形状）
+    private const string ActionFrameE2Eusr =
+        "E101E24006E306E101013BE3060404013739393939E76D3275736572EB303030303030303030303032E801E301444345EFEC30EC6D3275736572EFEFEFEFEFEFEFEFEFEFEFEFEFEE";
+
+    // console 形状：user=cancelp1(8B)、sessionId=766475010（4B 大端 2DAF7B02）、exchangeId 空——orderRef@E9
+    // （2026-10-16 本地全栈实测：撤活单 15s 超时、前置日志「撤单解析失败」——修前复现帧）
+    private const string ActionFrameCancelp1 =
+        "E101E24006E305E101013BE3050404013739393939E763616E63656C7031E9303030303030303030303035E8012DAF7B02EFEF30EC63616E63656C7031EFEFEFEFEFEFEFEFEFEFEFEFEFEC";
+
+    [Theory]
+    [InlineData(ActionFrameE2Eusr,   "000000000002", 6)]
+    [InlineData(ActionFrameCancelp1, "000000000005", 5)]
+    public void 撤单实测帧_形状锚定解析_tag漂移形状全覆盖(string hex, string refId, byte reqId)
+    {
+        var a = CtpOrderWireCodec.ParseOrderAction(Convert.FromHexString(hex));
+        Assert.NotNull(a);
+        Assert.Equal(refId, a.OrderRef);
+        Assert.Equal(reqId, a.ReqId);
+    }
 }
