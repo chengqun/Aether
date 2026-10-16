@@ -564,16 +564,16 @@ internal sealed class CtpFrontSession : IDisposable
                 return null;
             }
             _log($"[CTP-Front] 撤单: ref={a.OrderRef} reqId={a.ReqId}");
-            var inst = NextCmdInstance();
+            var inst = NextCmdInstance();   // 40 族严格序列——一次自增，OK/ERR 共用（空跳一格会被客户端拒收）
             try
             {
                 await _rpc.CancelOrderAsync(new CtpOrderRef(_brokerId, _userId, 0, 0, a.OrderRef, ""), ct);
-                return BuildFrame(CtpFrontTemplates.BuildOrderActionRspOk(NextCmdInstance(), a.ReqId, _userId, _brokerId, a.OrderRef));
+                return BuildFrame(CtpFrontTemplates.BuildOrderActionRspOk(inst, a.ReqId, _userId, _brokerId, a.OrderRef));
             }
             catch (CtpBusinessException ex)
             {
                 _log($"[CTP-Front] 撤单拒绝: [{ex.ErrorId}] {ex.ErrorMsg}");
-                var rsp = BuildFrame(CtpFrontTemplates.BuildOrderActionRspErr(NextCmdInstance(), a.ReqId, WireError(ex).Id, WireError(ex).Msg, _userId, _brokerId, a.OrderRef));
+                var rsp = BuildFrame(CtpFrontTemplates.BuildOrderActionRspErr(inst, a.ReqId, WireError(ex).Id, WireError(ex).Msg, _userId, _brokerId, a.OrderRef));
                 var rtn = BuildFrame(CtpFrontTemplates.BuildErrRtnOrderAction(NextRtnInstance(), WireError(ex).Id, WireError(ex).Msg, _userId, _brokerId, a.OrderRef));
                 var both = new byte[rsp.Length + rtn.Length];
                 rsp.CopyTo(both, 0); rtn.CopyTo(both, rsp.Length);
