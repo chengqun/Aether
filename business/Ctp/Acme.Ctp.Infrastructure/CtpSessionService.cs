@@ -39,6 +39,7 @@ public class CtpSessionService : ICtpSession, IDisposable
     private CtpConnectRequest? _cachedTraderCreds;          // 重登用缓存凭据
     private MdCreds? _cachedMdCreds;                          // 行情重订阅缓存
     private readonly List<string> _cachedSymbols = new();    // 重订阅缓存合约
+    private volatile bool _simFront;                          // 目标是否自建仿真前置（断线后跳过时段判断，见 ShouldAutoReconnect）
     private readonly SemaphoreSlim _reconnectLock = new(1, 1);
     private Timer? _safetyTimer;
     private volatile bool _reconnecting;
@@ -109,6 +110,7 @@ public class CtpSessionService : ICtpSession, IDisposable
             _brokerId = request.BrokerId;
             _userId = request.UserId;
             _cachedTraderCreds = request;
+            _simFront = IsSimFrontAddress(request.FrontAddress);
             _socketAlive = true;
             _hadLoggedIn = true;
         }
@@ -383,11 +385,31 @@ public class CtpSessionService : ICtpSession, IDisposable
 
     // —— 断线 / 重连 / 闭市 ——
 
+    /// <summary>断线后是否走「盘中重连」路径。真实前置维持交易时段判断（闭市躺平等开盘）；
+    /// <b>自建仿真前置（24 小时沙盒）恒 true</b>——服务器交易所从不因时段拒单
+    /// （<c>SimOptions.RejectOrdersOutsideTradingTime</c> 默认关），客户端若在周末/深夜断线后
+    /// 切 Closed 躺到下个交易时段，会把 bot 挂机打断（2026-10-17 用户定调：自己的前置要 24 小时可交易）。</summary>
+    private bool ShouldAutoReconnect() => _simFront || CtpTradingCalendar.IsTradingTime(DateTime.Now);
+
+    /// <summary>前置地址是否指向自建仿真柜台（镜像 <c>CtpConnectorViewModel.IsSimFront</c> 的纯文本判定——
+    /// Infrastructure 不引 apps 层；判据同步维护）：sim 哨兵 / 任意 host 的 :17801（本地与远程服务器部署形态
+    /// 统一按端口判）/ 127.0.0.1:17800（旧 JSON-RPC 形态）；容忍 tcp:// 前缀与 localhost。</summary>
+    internal static bool IsSimFrontAddress(string? frontAddress)
+    {
+        if (string.IsNullOrWhiteSpace(frontAddress)) return false;
+        var a = frontAddress.Trim();
+        if (string.Equals(a, "sim", StringComparison.OrdinalIgnoreCase)) return true;
+        var bare = a.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) ? a["tcp://".Length..] : a;
+        bare = bare.Replace("localhost", "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+        return bare.EndsWith(":17801", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(bare, "127.0.0.1:17800", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>交易前置断线（收盘/网络）。置 socket 失活，按交易时段切 Reconnecting/Closed。</summary>
     private void OnTraderFrontDisconnected(object? sender, int reason)
     {
         _socketAlive = false;
-        SetStatus(CtpTradingCalendar.IsTradingTime(DateTime.Now)
+        SetStatus(ShouldAutoReconnect()
             ? CtpConnectionStatus.Reconnecting
             : CtpConnectionStatus.Closed);
     }
@@ -425,7 +447,7 @@ public class CtpSessionService : ICtpSession, IDisposable
     private void OnSafetyTimer(object? state)
     {
         if (!_hadLoggedIn || _socketAlive || _reconnecting) return;
-        if (!CtpTradingCalendar.IsTradingTime(DateTime.Now))
+        if (!ShouldAutoReconnect())
         {
             SetStatus(CtpConnectionStatus.Closed);
             return;
@@ -494,7 +516,7 @@ public class CtpSessionService : ICtpSession, IDisposable
         {
             // 重登失败：保持失活。盘中定时器继续重试；闭市切 Closed。
             _socketAlive = false;
-            SetStatus(CtpTradingCalendar.IsTradingTime(DateTime.Now)
+            SetStatus(ShouldAutoReconnect()
                 ? CtpConnectionStatus.Reconnecting
                 : CtpConnectionStatus.Closed);
         }
