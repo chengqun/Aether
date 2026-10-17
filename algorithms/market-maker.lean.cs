@@ -65,6 +65,10 @@ public class MarketMakerAlgo : LeanAlgorithmBase
         _levels = GetIntParam("Levels", 5);
         _quoteVolume = GetDecimalParam("QuoteVolume", 5m);
         _positionCap = GetDecimalParam("PositionCap", 200m);
+        // 兜底重挂（2026-10-18 36h 长跑定案）：算法纯事件驱动（tick→维护）——撤光/吃光挂单后若市场
+        // 完全静止（无挂/撤/成事件 ⇒ 无 tick），「下一数据事件补挂」永不发生 ⇒ 簿空自锁、市场假死
+        // （实测 MM 撤光后 14h 不补挂、NT 吃陈旧价全作废）。定时器独立于行情，保证静止市场也会恢复深度。
+        Schedule.On(DateRules.EveryDay(), TimeRules.Every(TimeSpan.FromSeconds(30)), () => RefreshQuotes());
         BotLog($"[MM] 初始化 {_symbol.Value}: 上下各{_levels}档 点差{_spreadTicks}tick 档距{_levelStepTicks}tick 单档{_quoteVolume}手 仓限±{_positionCap}");
     }
 
