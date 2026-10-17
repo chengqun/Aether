@@ -50,7 +50,7 @@ public class CtpOrderRequestMapperTests
         Assert.Equal(CtpDirection.Buy, req.Direction);
         Assert.Equal(CtpOffsetFlag.Open, req.OffsetFlag);
         Assert.Equal(CtpOrderPriceType.Limit, req.PriceType);
-        Assert.Equal(7002, req.LimitPrice);       // 买用卖一（Ask）
+        Assert.Equal(7002.02, req.LimitPrice);       // 买用卖一（Ask）+ 跨越余量（量化防护，见 Pad钉）
         Assert.Equal(2, req.Volume);
         Assert.Equal("9999", req.BrokerId);
         Assert.Equal("user01", req.InvestorId);
@@ -98,7 +98,7 @@ public class CtpOrderRequestMapperTests
         var req = Assert.Single(r.Requests);
         Assert.Equal(CtpDirection.Sell, req.Direction);
         Assert.Equal(CtpOffsetFlag.Close, req.OffsetFlag);   // 非 SHFE 系直接 Close
-        Assert.Equal(7000, req.LimitPrice);                  // 卖用买一（Bid）
+        Assert.Equal(6999.98, req.LimitPrice);               // 卖用买一（Bid）− 跨越余量
         Assert.Equal(3, req.Volume);                         // 平仓不受手数上限（maxVolume=1 仍 3 手）
     }
 
@@ -235,7 +235,7 @@ public class CtpOrderRequestMapperTests
 
         Assert.Null(r.Error);
         var req = Assert.Single(r.Requests);
-        Assert.Equal(7002, req.LimitPrice);
+        Assert.Equal(7002.02, req.LimitPrice);
     }
 
     [Fact]
@@ -246,6 +246,28 @@ public class CtpOrderRequestMapperTests
         Assert.Null(r.Error);
         var req = Assert.Single(r.Requests);
         Assert.Equal(7050, req.LimitPrice);
+    }
+
+    [Fact]
+    public void 市价转对手价限价_加跨越余量_覆盖价格槽量化失真()
+    {
+        // 2026-10-17 本地长跑双 bot 定案：wire 价格槽 3B 量化在 [64,128) 区间 ulp=1/64 ⇒ 对手价
+        // 回显 ≤半 ulp（≈0.0078）失真——买 99.96 量化成 99.953125 ⇒ 限价低于对手价永不交叉 ⇒
+        // IOC 全作废 ⇒ 市场僵死（NT 吃不到 MM 挂单、无成交无 tick、双 bot 静止）。修复 = 对手价
+        // ±max(PriceTick, 0.02) 余量（2× 最大半 ulp，限价只是上限、成交按 maker 挂单价——无滑点代价）。
+        var r = CtpOrderRequestMapper.Map(Input(+1m, tick: Tick(bid: 99.94, ask: 99.96, last: 99.95), maxVolume: 3));
+        Assert.Null(r.Error);
+        Assert.Equal(99.98, r.Requests[0].LimitPrice, 5);   // 99.96 + 0.02——量化后（99.98→99.984375）仍 ≥ 99.96 ⇒ 交叉
+
+        var s = CtpOrderRequestMapper.Map(Input(-1m, tick: Tick(bid: 99.94, ask: 99.96, last: 99.95), maxVolume: 3));
+        Assert.Null(s.Error);
+        Assert.Equal(99.92, s.Requests[0].LimitPrice, 5);   // 99.94 − 0.02——量化后仍 ≤ 99.94 ⇒ 交叉
+
+        // PriceTick 更大时用 PriceTick（zx001 tick=1 场景）
+        var z = CtpOrderRequestMapper.Map(Input(+1m, tick: Tick(bid: 3799, ask: 3801, last: 3800), maxVolume: 3)
+            with { PriceTick = 1.0 });
+        Assert.Null(z.Error);
+        Assert.Equal(3802, z.Requests[0].LimitPrice);
     }
 
     [Fact]
@@ -263,12 +285,12 @@ public class CtpOrderRequestMapperTests
         // Ask/Bid 无效 → LastPrice
         var r1 = CtpOrderRequestMapper.Map(Input(+1m, tick: Tick(bid: 0, ask: 0, last: 7001), maxVolume: 5));
         Assert.Null(r1.Error);
-        Assert.Equal(7001, r1.Requests[0].LimitPrice);
+        Assert.Equal(7001.02, r1.Requests[0].LimitPrice);
 
         // Last 也无效 → PreSettlement
         var r2 = CtpOrderRequestMapper.Map(Input(+1m, tick: Tick(bid: 0, ask: 0, last: 0, preSettle: 6990), maxVolume: 5));
         Assert.Null(r2.Error);
-        Assert.Equal(6990, r2.Requests[0].LimitPrice);
+        Assert.Equal(6990.02, r2.Requests[0].LimitPrice);
 
         // 全无效 → 拒单
         var r3 = CtpOrderRequestMapper.Map(Input(+1m, tick: Tick(bid: 0, ask: 0, last: 0, preSettle: 0), maxVolume: 5));

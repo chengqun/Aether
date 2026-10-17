@@ -78,7 +78,7 @@ public class CtpBrokerageTradingTests : IDisposable
         Assert.Equal(CtpDirection.Buy, req.Direction);
         Assert.Equal(CtpOffsetFlag.Open, req.OffsetFlag);
         Assert.Equal(CtpOrderPriceType.Limit, req.PriceType);
-        Assert.Equal(FakeCtpSession.AskPrice, req.LimitPrice);   // 买用 Ask
+        Assert.Equal(FakeCtpSession.AskPrice + 0.02, req.LimitPrice, 5);   // 买用 Ask + 跨越余量（价格槽量化防护）
         Assert.Equal(2, req.Volume);
         Assert.Equal(CtpTimeCondition.IOC, req.TimeCondition);   // 市价模拟 = 吃单语义：残量立即作废不挂簿
         Assert.Contains(_session.NextOrderRef, order.BrokerId);
