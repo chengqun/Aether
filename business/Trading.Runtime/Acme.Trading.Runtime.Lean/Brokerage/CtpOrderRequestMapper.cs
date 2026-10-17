@@ -44,7 +44,8 @@ public static class CtpOrderRequestMapper
         string BrokerId,
         string InvestorId,
         int MaxOrderVolume,
-        bool PostOnly = false);      // Tag "post-only" ⇒ TC='4'（BTC 对标 2026-10-05，仅限价单）
+        bool PostOnly = false,      // Tag "post-only" ⇒ TC='4'（BTC 对标 2026-10-05，仅限价单）
+        double PriceTick = 0.01);   // 市价转对手价限价的跨越余量（见 Map 内注释）
 
     public sealed record MapResult(IReadOnlyList<CtpOrderRequest> Requests, string? Error);
 
@@ -75,6 +76,12 @@ public static class CtpOrderRequestMapper
                 if (price <= 0) price = tick.PreSettlement;
                 if (price <= 0)
                     return new MapResult(Array.Empty<CtpOrderRequest>(), "行情 Ask/Bid/Last/PreSettlement 均无效，拒单");
+                // 跨越余量（2026-10-17 本地长跑定案）：wire 价格槽 3B 量化在 [64,128) 区间 ulp=1/64 ⇒
+                // 对手价回显有 ≤半 ulp（≈0.0078）失真——买 99.96 量化成 99.953125 ⇒ 限价低于对手价
+                // 永不交叉 ⇒ IOC 全作废 ⇒ 市场僵死（NT 吃不到 MM 挂单、无成交无 tick）。加 max(PriceTick,0.02)
+                // 余量保证量化后仍跨越对手价；成交按 maker 挂单价（限价只是上限）——无滑点代价。
+                var pad = Math.Max(input.PriceTick, 0.02);
+                price = isBuy ? price + pad : price - pad;
                 // 吃单语义：IOC——未交叉的残量由交易所立即作废（'2' 部分成交不在队列），不挂簿。
                 // GFD 会把没吃到的"市价"单滞留成挂单（实测：噪声账户自己的买卖单同价互挂、自成交跳过、永不成交）。
                 timeCondition = CtpTimeCondition.IOC;

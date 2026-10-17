@@ -126,15 +126,25 @@ public sealed class CtpTrader : IDisposable
     // reqId 经 SDK 序列化上 wire，值落在字母表时 SDK 写 [E0][值] 转义；前置应答的 reqId 回显槽是
     // **定宽 1B**（实测 18B 转义形式同样被 SDK 丢弃不派发）⇒ 应答无法承载字母表值 ⇒ 查询挂死
     // rc=-2 ⇒ 4097 周期断连。reqId 只是对关联令牌（唯一即可、跳号无害）——在客户端源头永不产生
-    // 字母表值：1..0xDF → 0xF0..0xFD → 回卷 1（回卷时旧 reqId 的 pending 早已完成，安全）。
+    // 字母表值：1..0xDF → 0xF0..0xFD → 回卷 1。
+    // **回卷跳过 in-flight id**（2026-10-17 本地长跑定案）：跳字母表后可用空间仅 234 个号，做市商级
+    // 高频会话（每 tick 撤/挂/查询）60-120s 耗尽回卷——旧「回卷时 pending 早已完成」的假设在高频下
+    // 不成立（15s 超时的撤单/查询 pending 仍在等）⇒ 迟到应答错配给复用同 id 的新请求 ⇒ 查询挂死
+    // rc=-2 ⇒ ~70s 周期 4097 断连（实测 MM 9 分钟 8 次）。跳过仍在两张 pending 表中的 id——分配点
+    // 串行化（lock 内自增），空间余量 = 234 - in-flight（15s 超时封顶 ⇒ 请求速率 <15/s 时恒有余量）。
     private int NextRequestId()
     {
         while (true)
         {
-            var n = Interlocked.Increment(ref _nextRequestId);
-            var b = n & 0xFF;
-            if (b is (>= 0xE0 and <= 0xEF) or 0xFE) continue;   // 跳过字母表字节
-            if (n >= 0xFD) _nextRequestId = 0;                    // 回卷（下一轮从 1 起）
+            int n;
+            lock (_pendingLock)
+            {
+                n = ++_nextRequestId;
+                var b = n & 0xFF;
+                if (b is (>= 0xE0 and <= 0xEF) or 0xFE) continue;   // 跳过字母表字节
+                if (n >= 0xFD) _nextRequestId = 0;                    // 回卷（下一轮从 1 起）
+                if (_pending.ContainsKey(n) || _queryPending.ContainsKey(n)) continue;   // 跳过 in-flight
+            }
             return n;
         }
     }
