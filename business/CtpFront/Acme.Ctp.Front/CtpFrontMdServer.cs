@@ -59,7 +59,7 @@ public sealed class CtpFrontMdServer : IDisposable
             TcpClient client;
             try { client = await _listener!.AcceptTcpClientAsync(ct); }
             catch { break; }
-            var session = new CtpFrontMdSession(client, new SimRpcClient(_exchangeHost, _exchangePort), _log);
+            var session = new CtpFrontMdSession(client, () => new SimRpcClient(_exchangeHost, _exchangePort), _log);
             _ = Task.Run(() => session.RunAsync(ct), ct);
         }
     }

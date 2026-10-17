@@ -25,7 +25,7 @@ internal sealed class CtpFrontMdSession : IDisposable
     private enum State { WaitingHandshake, WaitingChallengeResponse, WaitingMdLogin, Ready, Closed }
 
     private readonly TcpClient _client;
-    private readonly SimRpcClient _rpc;
+    private readonly Func<SimRpcClient> _rpcFactory;
     private readonly Action<string> _log;
     private State _state = State.WaitingHandshake;
     private readonly CtpFrameParser _parser = new();
@@ -38,10 +38,15 @@ internal sealed class CtpFrontMdSession : IDisposable
     private readonly Channel<byte[]> _out = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
     private readonly object _writeGate = new();
 
-    public CtpFrontMdSession(TcpClient client, SimRpcClient rpc, Action<string> log)
+    // RPC 可替换（断连重建）——读侧快照访问
+    private SimRpcClient _rpc;
+    private readonly SemaphoreSlim _rebuildLock = new(1, 1);
+
+    public CtpFrontMdSession(TcpClient client, Func<SimRpcClient> rpcFactory, Action<string> log)
     {
         _client = client;
-        _rpc = rpc;
+        _rpcFactory = rpcFactory;
+        _rpc = rpcFactory();
         _log = log;
     }
 
@@ -151,10 +156,7 @@ internal sealed class CtpFrontMdSession : IDisposable
         {
             // 进程分离：行情无账户语义——连接交易所（Hello）取时钟（交易日/时间，tick 兜底用），不登录。
             // 交易所不可达（90012）⇒ 诚实失败：关会话（客户端见断线）。
-            await _rpc.ConnectAsync(ct);
-            var clock = await _rpc.GetQuotesAsync(null, ct);
-            _tradingDay = clock.TradingDay;
-            _timeOfDay = clock.TimeOfDay;
+            await ConnectRpcAsync(ct);
         }
         catch (CtpBusinessException ex)
         {
@@ -163,8 +165,52 @@ internal sealed class CtpFrontMdSession : IDisposable
             return null;
         }
         _state = State.Ready;
-        _rpc.TickPushed += OnTick;   // tick 按本连接订阅集路由（服务端 MatchesAccount/SubscribedTo 路由）
         return BuildFrame(CtpFrontTemplates.BuildMdLoginRsp(_tradingDay));
+    }
+
+    /// <summary>连接交易所 RPC + 取时钟 + 挂 tick/断连事件（登录与重建共用）。</summary>
+    private async Task ConnectRpcAsync(CancellationToken ct)
+    {
+        _rpc.ConnectionLost += OnRpcConnectionLost;
+        await _rpc.ConnectAsync(ct);
+        var clock = await _rpc.GetQuotesAsync(null, ct);
+        _tradingDay = clock.TradingDay;
+        _timeOfDay = clock.TimeOfDay;
+        _rpc.TickPushed += OnTick;   // tick 按本连接订阅集路由（服务端 MatchesAccount/SubscribedTo 路由）
+    }
+
+    /// <summary>交易所 RPC 死亡（host 重启/超时销毁）——不重建 ⇒ 本连接 tick 静默停、客户端无感知地看死行情
+    ///（2026-10-18 定案：MD 会话存活期间 tick 推送停更——桌面端/bot 行情假死，重连才恢复）。</summary>
+    private void OnRpcConnectionLost() => _ = RebuildRpcAsync();
+
+    /// <summary>重建交易所 RPC + 重订阅存量合约集。指数退避由固定 5s 间隔替代（交易所同机回环，恢复快）。</summary>
+    private async Task RebuildRpcAsync()
+    {
+        if (_state != State.Ready) return;
+        if (!await _rebuildLock.WaitAsync(0)) return;   // 已有重建在进行
+        try
+        {
+            for (var attempt = 1; _state == State.Ready; attempt++)
+            {
+                try
+                {
+                    _log($"MD RPC 断开——重建交易所连接（第 {attempt} 次）…");
+                    try { _rpc.TickPushed -= OnTick; _rpc.ConnectionLost -= OnRpcConnectionLost; _rpc.Dispose(); } catch { }
+                    _rpc = _rpcFactory();
+                    await ConnectRpcAsync(CancellationToken.None);
+                    if (_subscribed.Count > 0)
+                        await _rpc.SubscribeAsync(_subscribed.ToList(), CancellationToken.None);
+                    _log($"MD RPC 重建成功——重订阅 {string.Join(",", _subscribed)}");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _log($"MD RPC 重建失败（第 {attempt} 次）: {ex.Message}——5s 后重试");
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
+            }
+        }
+        finally { _rebuildLock.Release(); }
     }
 
     private async Task<byte[]?> HandleSubscribeAsync(CtpFrame frame, CancellationToken ct)
