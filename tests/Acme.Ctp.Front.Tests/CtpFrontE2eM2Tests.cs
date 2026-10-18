@@ -106,6 +106,74 @@ public sealed class CtpFrontE2eM2Tests : IDisposable
     }
 
     [Fact]
+    public async Task F0族推送序号达240_前置主动断开_新会话恢复()
+    {
+        // 2026-10-19 服务器长跑定案 + E2E 逐形态实证：F0 族推送 instance 的 SDK 可接受域为 1-251
+        // （224-239 转义对/240-251 裸值可过；E3 FC 起、E2 双字节区、回卷形态均被拒收——SDK 侧底层
+        // 限制，服务器无法扩域。此前双 bot「活跃 2-5 分钟假死」= 序号破界后推送全静默）。
+        // 前置策略：序号达 240 主动断开客户端（SDK 自动重连、新会话序号归零，客户端零改动——
+        // 生产链路 CtpSessionService 的 sim 前 24h 重连兜底接住）。本钉验证：
+        // ① 240 帧前推送正常；② 断开确实发生；③ 新会话（重登）推送恢复。
+        var dir = NewFlowDir();
+        Directory.CreateDirectory(dir);
+        var trader = Login(dir);
+        _sim.SeedMaker();
+
+        var orders = new ConcurrentBag<Order>();
+        var disconnected = new TaskCompletionSource();
+        trader.OrderReceived += (_, o) => orders.Add(o);
+        trader.FrontDisconnected += (_, _) => disconnected.TrySetResult();
+
+        // ① 安全区内（<240 帧）：每张静默单 1 帧 F001，全部到达
+        for (var i = 0; i < 235; i++)
+        {
+            var r = await trader.OrderInsertAsync(new OrderRequest
+            {
+                InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+                Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+                PriceType = OrderPriceType.Limit, LimitPrice = 2700 + (i % 50),   // 低于 bid 2999 全部静默
+                Volume = 1, ExchangeId = "DCE",
+            });
+            Assert.True(await UntilAsync(() => orders.Any(o => o.OrderRef == r.OrderRef)),
+                $"第 {i} 张静默单的受理推送未到达（安全区内，若失败与本钉无关）");
+        }
+
+        // ② 继续发单越过 240 阈值：前置主动断开（4097）——15s 未断即超时失败
+        for (var i = 235; i < 250 && !disconnected.Task.IsCompleted; i++)
+        {
+            await trader.OrderInsertAsync(new OrderRequest
+            {
+                InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+                Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+                PriceType = OrderPriceType.Limit, LimitPrice = 2700 + (i % 50),
+                Volume = 1, ExchangeId = "DCE",
+            });
+            await Task.Delay(100);
+        }
+        await disconnected.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        // ③ 新会话（镜像生产重连重登）：推送恢复 + 成交闭环
+        trader.Dispose();
+        var dir2 = NewFlowDir();
+        Directory.CreateDirectory(dir2);
+        using var trader2 = Login(dir2);
+        var trades = new ConcurrentBag<Trade>();
+        var orders2 = new ConcurrentBag<Order>();
+        trader2.OrderReceived += (_, o) => orders2.Add(o);
+        trader2.TradeReceived += (_, t) => trades.Add(t);
+        var fill = await trader2.OrderInsertAsync(new OrderRequest
+        {
+            InvestorId = User, BrokerId = FrontLoopback.Broker, InstrumentId = Instrument,
+            Direction = Direction.Buy, OffsetFlag = OffsetFlag.Open,
+            PriceType = OrderPriceType.Limit, LimitPrice = 3100, Volume = 1, ExchangeId = "DCE",
+        });
+        Assert.True(await UntilAsync(() => trades.Any(t => t.OrderRef == fill.OrderRef), 15000),
+            "新会话（重登后）OnRtnTrade 未恢复——序号归零未生效");
+        Assert.True(await UntilAsync(() => orders2.Any(o => o.OrderRef == fill.OrderRef && (char)o.OrderStatusRaw == '0')),
+            "新会话成交终态推送未到达");
+    }
+
+    [Fact]
     public async Task 多手成交的量回显_SDK读到真实手数()
     {
         // F002 量槽偏移回归钉（2026-10-17 双 bot 定案）：旧版量编辑写在 offset 184（E4 01，无关字段——

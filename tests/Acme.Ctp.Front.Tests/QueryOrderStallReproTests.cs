@@ -61,17 +61,35 @@ public sealed class QueryOrderStallReproTests : IDisposable
 
     private async Task DriveAsync(bool withOrders, bool withQueries)
     {
+        // 2026-10-19 F0 族定案适配：SDK 对 F0 推送序号的可接受域为 1-251（应答族 int 化救不了 F0——
+        // E3 FC/E2 双字节/回卷均被拒），前置在序号 240 主动断开客户端（SDK/上层重连、新会话序号归零）。
+        // 本驱动随之适配：检测断开后重登继续——「无停摆」的语义 = 每轮查询在 <5s 内应答
+        // （同一会话内）或经重连恢复后应答（跨会话）。
         var dir = NewFlowDir();
         Directory.CreateDirectory(dir);
-        using var trader = Login(dir);
+        var trader = Login(dir);
 
         var queries = new System.Collections.Concurrent.ConcurrentBag<string>();
         var orders = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var broken = false;
         trader.OrderReceived += (_, o) => orders.Add(o.OrderRef);
+        trader.FrontDisconnected += (_, _) => broken = true;
 
         var lastStatus = "";
         for (var i = 1; i <= 600; i++)
         {
+            if (broken)
+            {
+                // F0 序号回收断开（设计行为）——镜像生产链路重登继续
+                trader.Dispose();
+                var rdir = NewFlowDir();
+                Directory.CreateDirectory(rdir);
+                trader = Login(rdir);
+                trader.OrderReceived += (_, o) => orders.Add(o.OrderRef);
+                trader.FrontDisconnected += (_, _) => broken = true;
+                broken = false;
+            }
+
             if (withQueries)
             {
                 // ① 持仓查询（noise 引擎每笔单前查持仓的节奏）——停摆签名 = >5s
@@ -100,7 +118,7 @@ public sealed class QueryOrderStallReproTests : IDisposable
             await Task.Delay(250);
         }
 
-        // 全程无停摆：400 轮全应答 = 本层（wrapper/front/exchange wire）清白
+        // 全程无停摆：600 轮全应答 = 本层（wrapper/front/exchange wire）清白
         Assert.True(true, lastStatus);
     }
 }

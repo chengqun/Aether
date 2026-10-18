@@ -182,7 +182,18 @@ internal sealed class CtpFrontSession : IDisposable
     /// 跳变，客户端推送序列校验拒收 ⇒ 其后整流停摆（混合流 225 轮实测）。E0..EF 值由 builder 的
     /// EscapedValue 编码为转义对（镜像 SDK 请求侧同款）；FE/FF 裸值是数据（254 轮定案）。</summary>
     private int _rtnInstanceInt;
-    private int NextRtnInstance() => ++_rtnInstanceInt;
+    /// <summary>F0 族推送序号计数：到 240 标记回收（SDK 可接受域实测 1-251——E3 FC 起、E2 双字节区、
+    /// 回卷形态均被拒收（2026-10-19 F0 族 E2E 实证；224-239 转义对/240-251 裸值可过）。序号是 SDK 侧
+    /// 底层限制，服务器端无法扩域——临界限即主动断开客户端连接（SDK 自动重连、新会话序号归零，
+    /// 客户端零改动）。240 = 251 减余量。相关：被 5c6f9ff 退役的客户端 220 规避重连实质是在兜同一
+    /// 限制（应答族 int 化只救了 80 族，救不了 F0 推送族）。</summary>
+    private bool _rtnRecycleDue;
+    private int NextRtnInstance()
+    {
+        var n = ++_rtnInstanceInt;
+        if (n >= 240) _rtnRecycleDue = true;
+        return n;
+    }
 
     /// <summary>应答侧 80 族记录流水（⑯/⑱/查合约/查报单应答的 `E3` 后 1B）——**逐条递增，非请求回显**。
     /// 2026-10-03 SimNow 过滤查报单实证：请求 op `E104E280E4` 的计数在 op 字节里（03/04…），
@@ -260,6 +271,15 @@ internal sealed class CtpFrontSession : IDisposable
                 _captured.Add(frame);
             else
                 _out.Writer.TryWrite(frame);
+        }
+        // F0 族序号临界限（240）：本帧入队后主动断开——客户端 SDK 自动重连开新会话（序号归零）。
+        // 在 lock 外执行（Close 触发读循环退出 → finally 清理链安全）；最后一帧已在出站队列（写循环
+        // 先于 Close 生效的概率高，即便丢弃客户端重连后重查自愈）。
+        if (_rtnRecycleDue && _state != State.Closed)
+        {
+            _rtnRecycleDue = false;
+            _log("[CTP-Front] F0 推送序号达 240 上限——主动断开客户端（SDK 自动重连、序号归零）");
+            try { _client.Close(); } catch { }
         }
     }
 
