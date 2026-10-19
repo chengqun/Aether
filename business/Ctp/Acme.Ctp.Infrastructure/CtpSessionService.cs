@@ -35,6 +35,7 @@ public class CtpSessionService : ICtpSession, IDisposable
     private volatile bool _hadLoggedIn;          // 是否曾成功登录过（区分首次连接 vs 重连）
     private volatile bool _mdSocketAlive;        // 行情 socket 是否存活
     private volatile bool _mdHadSubscribed;      // 是否曾成功订阅过行情（区分首次连接 vs 重连）
+    private volatile bool _mdReconnecting;       // MD 重连进行中（重入守卫——见 ReconnectMdAsync 注释）
     private CtpConnectionStatus _status = CtpConnectionStatus.Disconnected;
     private CtpConnectRequest? _cachedTraderCreds;          // 重登用缓存凭据
     private MdCreds? _cachedMdCreds;                          // 行情重订阅缓存
@@ -530,6 +531,11 @@ public class CtpSessionService : ICtpSession, IDisposable
     /// <summary>重建行情前置 + 重新登录 + 重新订阅。行情失败不影响交易状态。</summary>
     private async Task ReconnectMdAsync(MdCreds creds, IReadOnlyList<string> symbols)
     {
+        // 重入守卫（2026-10-19 md 重连风暴根因）：LoginAsync 期间新连接的 FrontConnected 同样满足
+        // OnMdFrontConnected 的 `!_mdSocketAlive` 条件 ⇒ 立即重入本方法 ⇒ 开头 Dispose 刚登录的连接
+        // ⇒ 前置侧表现为「md 登录成功后立即断开」的每秒数十次风暴（F0 回收断交易腿触发首轮后自持）。
+        if (_mdReconnecting) return;
+        _mdReconnecting = true;
         try
         {
             lock (_lock)
@@ -553,7 +559,15 @@ public class CtpSessionService : ICtpSession, IDisposable
             await _md.SubscribeMarketDataAsync(symbols);
             _mdSocketAlive = true;
         }
-        catch { /* 行情重订阅失败：SDK 自动重连会再触发；忽略避免影响交易状态 */ }
+        catch (Exception ex)
+        {
+            // 订阅失败：退避重试（受控递归，替代事件风暴）。旧版吞异常——md 静默死且第一推动力不可见。
+            _mdSocketAlive = false;
+            Console.Error.WriteLine($"[CtpSession] MD 重连/重订阅失败（5s 后重试）: {ex.Message}");
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            _ = Task.Run(() => ReconnectMdAsync(creds, symbols));
+        }
+        finally { _mdReconnecting = false; }
     }
 
     private void SetStatus(CtpConnectionStatus newStatus)
